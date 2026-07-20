@@ -57,7 +57,7 @@ import {
 import { shouldSuppressTaskLoading } from './shouldSuppressTaskLoading';
 import { areRenderRelevantPartsEqual } from '../renderCompare';
 import { useI18n } from '@/lib/i18n';
-import { getDiffPatchEntries, getPatchText } from './toolDiffUtils';
+import { getDiffPatchEntries, getPatchText, getToolNavigationDiffEntries } from './toolDiffUtils';
 import { useDeferredToolHydration } from './deferredToolHydrationContext';
 import { scheduleAfterPaintTask } from '@/lib/afterPaintTaskQueue';
 import { DualLimitLru } from '@/lib/dualLimitLru';
@@ -595,7 +595,9 @@ const getPrimaryToolPath = (
             if (!isRecord(entry)) {
                 return false;
             }
-            return entry.type !== 'delete';
+            return typeof entry.movePath === 'string'
+                || typeof entry.filePath === 'string'
+                || typeof entry.relativePath === 'string';
         });
         if (isRecord(first)) {
             return typeof first.movePath === 'string'
@@ -605,6 +607,14 @@ const getPrimaryToolPath = (
                     : typeof first.relativePath === 'string'
                         ? first.relativePath
                         : fileDiffPath;
+        }
+        const fallbackDiff = getPatchText(metadata?.patch) ?? getPatchText(metadata?.diff);
+        const firstPatchEntry = fallbackDiff
+            ? getDiffPatchEntries(undefined, fallbackDiff, (path) => path)
+                .find((entry) => entry.renderMode === 'diff')
+            : undefined;
+        if (firstPatchEntry?.title) {
+            return firstPatchEntry.title;
         }
         return fileDiffPath;
     }
@@ -2373,30 +2383,36 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
             );
 
             if (isFileNavTool) {
+                const relativePath = getRelativePath(absolutePath, currentDirectory);
+                const supportsExactToolDiff = normalizedPartTool === 'edit'
+                    || normalizedPartTool === 'multiedit'
+                    || normalizedPartTool === 'apply_patch';
+                const selectedToolDiffs = toolDiff && supportsExactToolDiff
+                    ? getToolNavigationDiffEntries(
+                        normalizedPartTool,
+                        metadata,
+                        toolDiff,
+                        relativePath,
+                        (path) => getRelativePath(path, currentDirectory),
+                    )
+                    : [];
+                const toolPatches = selectedToolDiffs.map((entry) => ({
+                    path: entry.title,
+                    patch: entry.patch,
+                }));
+
                 if (runtime?.runtime.isVSCode && runtime.editor && toolDiff) {
-                    const label = `${getRelativePath(absolutePath, currentDirectory)} (changes)`;
+                    const label = `${relativePath} (changes)`;
                     void runtime.editor.openDiff('', absolutePath, label, { line: targetLine, patch: toolDiff });
                     return;
                 }
 
                 if (isFilePathWithinDirectory(absolutePath, currentDirectory)) {
-                    const relativePath = getRelativePath(absolutePath, currentDirectory);
-                    const supportsExactToolDiff = normalizedPartTool === 'edit'
-                        || normalizedPartTool === 'multiedit'
-                        || normalizedPartTool === 'apply_patch';
-                    const toolDiffEntries = toolDiff && supportsExactToolDiff
-                        ? getDiffPatchEntries(metadata, toolDiff, (path) => getRelativePath(path, currentDirectory))
-                        : [];
-                    const selectedToolDiff = toolDiffEntries.find((entry) => (
-                        entry.renderMode === 'diff'
-                        && normalizeDisplayPath(entry.title) === normalizeDisplayPath(relativePath)
-                    )) ?? toolDiffEntries.find((entry) => entry.renderMode === 'diff');
-
                     if (mobileActions) {
-                        if (selectedToolDiff) {
+                        if (toolPatches.length > 0) {
                             mobileActions.openToolDiff({
                                 diffPath: relativePath,
-                                patch: selectedToolDiff.patch,
+                                patches: toolPatches,
                                 targetLine,
                             });
                         } else if (normalizedPartTool === 'apply_patch') {
@@ -2407,11 +2423,11 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                     } else if (isMobile) {
                         navigateToDiff(relativePath, false, 'turn', targetLine);
                     } else {
-                        if (selectedToolDiff) {
+                        if (toolPatches.length > 0) {
                             openContextToolDiff(
                                 currentDirectory,
                                 relativePath,
-                                selectedToolDiff.patch,
+                                toolPatches,
                                 targetLine,
                                 messageId,
                             );

@@ -4,7 +4,13 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionWorktreeStore } from './session-worktree-store';
-import { routeMessage, useSessionUIStore, materializeOpenDraftSession } from './session-ui-store';
+import {
+  beginDraftEstablishingPaint,
+  clearDraftEstablishingPaint,
+  materializeOpenDraftSession,
+  routeMessage,
+  useSessionUIStore,
+} from './session-ui-store';
 import { setActionRefs, setOptimisticRefs } from './session-actions';
 import { setSyncRefs } from './sync-refs';
 import { queryClient } from '@/lib/queryRuntime';
@@ -644,6 +650,75 @@ describe('routeMessage skill invocation', () => {
     expect(sendCommandCalls).toHaveLength(1);
     expect(sendCommandCalls[0].command).toBe('retry-command');
     expect(sendMessageCalls).toHaveLength(0);
+  });
+});
+
+describe('draftEstablishing paint prelude', () => {
+  beforeEach(() => {
+    useSessionUIStore.setState({
+      currentSessionId: null,
+      currentSessionDirectory: null,
+      newSessionDraft: { open: false, draftID: null, directoryOverride: null, parentID: null, draftSubmitting: false, draftEstablishing: false, submissionToken: 0 },
+    });
+  });
+
+  test('beginDraftEstablishingPaint sets flag before claim', async () => {
+    useSessionUIStore.getState().openNewSessionDraft();
+    expect(await beginDraftEstablishingPaint()).toBe(true);
+    expect(useSessionUIStore.getState().newSessionDraft.draftEstablishing).toBe(true);
+    expect(useSessionUIStore.getState().newSessionDraft.draftSubmitting).toBe(false);
+  });
+
+  test('clearDraftEstablishingPaint drops the prelude', async () => {
+    useSessionUIStore.getState().openNewSessionDraft();
+    await beginDraftEstablishingPaint();
+    clearDraftEstablishingPaint();
+    expect(useSessionUIStore.getState().newSessionDraft.draftEstablishing).toBe(false);
+  });
+
+  test('second begin is rejected while establishing', async () => {
+    useSessionUIStore.getState().openNewSessionDraft();
+    expect(await beginDraftEstablishingPaint()).toBe(true);
+    expect(await beginDraftEstablishingPaint()).toBe(false);
+    expect(useSessionUIStore.getState().newSessionDraft.draftEstablishing).toBe(true);
+  });
+
+  test('materialize claim clears draftEstablishing and sets draftSubmitting', async () => {
+    const projectA = { id: 'proj-a', path: '/projects/alpha', label: 'Alpha' };
+    const childStore = {
+      getState: () => ({ session_status: {}, message: {}, session: [], part: {} }),
+      setState: () => {},
+    };
+    setActionRefs(opencodeClient, {
+      children: new Map(),
+      ensureChild: () => childStore,
+      getChild: () => childStore,
+    }, () => projectA.path);
+    setOptimisticRefs(() => {}, () => {});
+
+    let resolveCreate;
+    const originalCreateSession = opencodeClient.createSession;
+    opencodeClient.createSession = () => new Promise((resolve) => { resolveCreate = resolve; });
+
+    try {
+      useProjectsStore.setState({ projects: [projectA], activeProjectId: projectA.id });
+      useDirectoryStore.setState({ currentDirectory: projectA.path });
+      useSessionUIStore.getState().openNewSessionDraft();
+      await beginDraftEstablishingPaint();
+      expect(useSessionUIStore.getState().newSessionDraft.draftEstablishing).toBe(true);
+
+      const materializePromise = materializeOpenDraftSession({ providerID: 'p', modelID: 'm' });
+      // claimDraftSubmission promotes establishing → submitting before its paint await.
+      expect(useSessionUIStore.getState().newSessionDraft.draftEstablishing).toBe(false);
+      expect(useSessionUIStore.getState().newSessionDraft.draftSubmitting).toBe(true);
+
+      // claim's paint gate yields before createSession is invoked.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      resolveCreate({ id: 'ses-establishing-001', directory: projectA.path });
+      await materializePromise;
+    } finally {
+      opencodeClient.createSession = originalCreateSession;
+    }
   });
 });
 

@@ -2090,7 +2090,7 @@ type PendingMobileChangesDiff = {
   path: string;
   staged: boolean;
   targetLine?: number;
-  toolPatch?: string;
+  toolPatches?: ReadonlyArray<{ path: string; patch: string }>;
 };
 
 const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onActiveConnectionDeleted }) => {
@@ -2219,8 +2219,8 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       openChanges: ({ diffPath, staged, targetLine } = {}) => {
         openChangesSurface(diffPath ? { path: diffPath, staged: staged === true, targetLine } : null);
       },
-      openToolDiff: ({ diffPath, patch, targetLine }) => {
-        openChangesSurface({ path: diffPath, staged: false, targetLine, toolPatch: patch });
+      openToolDiff: ({ diffPath, patches, targetLine }) => {
+        openChangesSurface({ path: diffPath, staged: false, targetLine, toolPatches: patches });
       },
       openTurnDiff: openTurnDiffSurface,
       openFiles: () => openFilesSurface(),
@@ -2728,11 +2728,13 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
                         <DiffView hideStackedFileSidebar diffScope="turn" turnMessageId={turnDiffMessageId} flushContent />
                       </div>
                     </div>
-                  ) : pendingChangesDiff?.toolPatch ? (
+                  ) : pendingChangesDiff?.toolPatches?.length ? (
                     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
                       <header className="flex h-[var(--oc-header-height,56px)] shrink-0 items-center gap-2 border-b border-border/40 px-3">
                         <h2 className="min-w-0 flex-1 truncate typography-ui-label font-semibold text-foreground">
-                          {pendingChangesDiff.path}
+                          {pendingChangesDiff.toolPatches.length > 1
+                            ? t('mobile.nav.changes')
+                            : pendingChangesDiff.path}
                         </h2>
                         <Button
                           type="button"
@@ -2752,8 +2754,8 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
                           diffScope="turn"
                           targetFilePath={pendingChangesDiff.path}
                           targetLine={pendingChangesDiff.targetLine ?? null}
-                          toolPatch={pendingChangesDiff.toolPatch}
-                          singleFileView
+                          toolPatches={pendingChangesDiff.toolPatches}
+                          singleFileView={pendingChangesDiff.toolPatches.length === 1}
                           flushContent
                         />
                       </div>
@@ -2834,7 +2836,9 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
             }}
             title={(
               <h2 className="truncate typography-ui-label font-semibold text-foreground">
-                {pendingChangesDiff.path}
+                {pendingChangesDiff.toolPatches && pendingChangesDiff.toolPatches.length > 1
+                  ? t('mobile.nav.changes')
+                  : pendingChangesDiff.path}
               </h2>
             )}
             ariaLabel={t('mobile.menu.changes')}
@@ -2843,14 +2847,14 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
             initiallyExpanded
           >
             <ErrorBoundary>
-              {pendingChangesDiff.toolPatch ? (
+              {pendingChangesDiff.toolPatches?.length ? (
                 <DiffView
                   hideStackedFileSidebar
                   diffScope="turn"
                   targetFilePath={pendingChangesDiff.path}
                   targetLine={pendingChangesDiff.targetLine ?? null}
-                  toolPatch={pendingChangesDiff.toolPatch}
-                  singleFileView
+                  toolPatches={pendingChangesDiff.toolPatches}
+                  singleFileView={pendingChangesDiff.toolPatches.length === 1}
                   flushContent
                 />
               ) : (

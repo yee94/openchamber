@@ -455,7 +455,11 @@ uses it as the bounded operation key, so reconnect retries reuse the in-flight
 or completed operation instead of creating another session. Claiming a draft
 submission sets `draftSubmitting` and yields one frame so the chat surface can
 paint a full-screen establishing page (same visual pattern as fork transition)
-until a real session ID is returned.
+until a real session ID is returned. ChatInput also sets `draftEstablishing`
+before its response-style / snippet network preamble (composer text is already
+cleared) so the empty draft dialog is not left on screen while those awaits
+run; `claimDraftSubmission` clears `draftEstablishing` when the real claim
+takes over, and failed sends clear it via restore.
 
 After success, commit the real session to directory routing, global session
 state, selection state, and the optimistic shadow map. If SSE delivered the

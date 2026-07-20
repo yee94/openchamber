@@ -36,8 +36,12 @@ describe('useUIStore context panel tabs', () => {
   test('keeps a clicked tool patch transient and clears it for regular diff navigation', () => {
     const directory = '/repo';
     const patch = '--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1 +1 @@\n-old\n+new\n ';
+    const secondPatch = '--- a/src/test.ts\n+++ b/src/test.ts\n@@ -1 +1 @@\n-left\n+right\n ';
 
-    useUIStore.getState().openContextToolDiff(directory, 'src/app.ts', patch, 1, ' msg_tool_turn ');
+    useUIStore.getState().openContextToolDiff(directory, 'src/app.ts', [
+      { path: 'src/app.ts', patch },
+      { path: 'src/test.ts', patch: secondPatch },
+    ], 1, ' msg_tool_turn ');
 
     const tab = useUIStore.getState().contextPanelByDirectory[directory]?.tabs[0];
     expect(tab?.mode).toBe('diff');
@@ -46,7 +50,10 @@ describe('useUIStore context panel tabs', () => {
     expect(tab?.diffTurnMessageId).toBe('msg_tool_turn');
     expect(useUIStore.getState().contextToolDiffByDirectory[directory]).toEqual({
       targetPath: 'src/app.ts',
-      patch,
+      patches: [
+        { path: 'src/app.ts', patch },
+        { path: 'src/test.ts', patch: secondPatch },
+      ],
       turnMessageId: 'msg_tool_turn',
     });
     const partialize = useUIStore.persist.getOptions().partialize;

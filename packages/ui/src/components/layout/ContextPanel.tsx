@@ -2838,38 +2838,40 @@ export const ContextPanel: React.FC = () => {
             <BrowserPane initialUrl={tab.targetPath ?? ''} directory={directoryKey} tabID={tab.id} />
           </div>
         ))}
-        {diffTabs.map((tab) => (
-          <div
-            key={tab.id}
-            className={cn(
-              'absolute inset-0',
-              activeTab?.id !== tab.id && 'hidden'
-            )}
-          >
-            <DiffView
-              hideStackedFileSidebar
-              stackedDefaultCollapsedAll
-              pinSelectedFileHeaderToTopOnNavigate
-              showOpenInEditorAction
-              diffScope={tab.diffScope ?? (tab.stagedDiff ? 'staged' : 'working')}
-              turnMessageId={tab.diffTurnMessageId}
-              onDiffScopeChange={handleDiffScopeChange}
-              targetFilePath={tab.targetPath}
-              targetLine={tab.diffTargetLine ?? null}
-              toolPatch={
-                tab.mode === 'diff'
-                && contextToolDiff?.targetPath === tab.targetPath
-                && contextToolDiff.turnMessageId === tab.diffTurnMessageId
-                  ? contextToolDiff.patch
-                  : null
-              }
-              navigationRequestKey={tab.touchedAt}
-              flushContent
-              singleFileView={tab.mode === 'file-diff'}
-              preloadFullFiles={tab.mode === 'file-diff'}
-            />
-          </div>
-        ))}
+        {diffTabs.map((tab) => {
+          const toolPatches = tab.mode === 'diff'
+            && contextToolDiff?.targetPath === tab.targetPath
+            && contextToolDiff.turnMessageId === tab.diffTurnMessageId
+            ? contextToolDiff.patches
+            : null;
+
+          return (
+            <div
+              key={tab.id}
+              className={cn(
+                'absolute inset-0',
+                activeTab?.id !== tab.id && 'hidden'
+              )}
+            >
+              <DiffView
+                hideStackedFileSidebar
+                stackedDefaultCollapsedAll={!toolPatches}
+                pinSelectedFileHeaderToTopOnNavigate
+                showOpenInEditorAction
+                diffScope={tab.diffScope ?? (tab.stagedDiff ? 'staged' : 'working')}
+                turnMessageId={tab.diffTurnMessageId}
+                onDiffScopeChange={handleDiffScopeChange}
+                targetFilePath={tab.targetPath}
+                targetLine={tab.diffTargetLine ?? null}
+                toolPatches={toolPatches}
+                navigationRequestKey={tab.touchedAt}
+                flushContent
+                singleFileView={tab.mode === 'file-diff'}
+                preloadFullFiles={tab.mode === 'file-diff'}
+              />
+            </div>
+          );
+        })}
         {activeTab?.mode !== 'chat' && !isFileTabActive && activeTab?.mode !== 'browser' && activeTab?.mode !== 'diff' && activeTab?.mode !== 'file-diff' ? activeNonChatContent : null}
       </div>
     </aside>

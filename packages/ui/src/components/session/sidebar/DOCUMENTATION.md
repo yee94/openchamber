@@ -128,7 +128,8 @@
 ### Components
 
 - `SidebarHeader.tsx`: Optional session-search field only (action toolbar removed).
-- `TitlebarLeftControls.tsx`: Persistent brand, global-search, and sidebar-toggle controls with shared compact button chrome.
+- `GlobalSearchButton.tsx`: Shared command-palette trigger rendered in the Electron brand row while the sidebar is open and in the titlebar while it is collapsed.
+- `TitlebarLeftControls.tsx`: Persistent Web brand and sidebar-toggle controls, plus the Electron global-search fallback for a collapsed sidebar.
 - `SidebarTopBar.tsx`: Desktop titlebar strip with preserved window-drag regions beneath the persistent titlebar controls.
 - `SidebarDisplayModeMenu.tsx`: Display-mode equalizer menu; rendered on the first section title row.
 - `SidebarPinnedSessions.tsx`: Global top section renderer for pinned sessions.

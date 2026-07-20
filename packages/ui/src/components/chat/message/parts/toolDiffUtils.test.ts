@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { getDiffPatchEntries, getRenderablePatchInfo } from './toolDiffUtils';
+import { getDiffPatchEntries, getRenderablePatchInfo, getToolNavigationDiffEntries } from './toolDiffUtils';
 
 const identity = (path: string) => path;
 
@@ -81,5 +81,101 @@ describe('toolDiffUtils', () => {
         expect(entries).toHaveLength(1);
         expect(entries[0]?.renderMode).toBe('text');
         expect(entries[0]?.patch).toContain('@@');
+    });
+
+    test('keeps every file from one apply_patch call for Changes navigation', () => {
+        const metadata = {
+            files: [
+                {
+                    relativePath: 'src/a.ts',
+                    patch: '--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-old\n+new',
+                },
+                {
+                    relativePath: 'src/b.ts',
+                    patch: '--- a/src/b.ts\n+++ b/src/b.ts\n@@ -1 +1 @@\n-left\n+right',
+                },
+            ],
+        };
+
+        const entries = getToolNavigationDiffEntries(
+            'apply_patch',
+            metadata,
+            undefined,
+            'src/a.ts',
+            identity,
+        );
+
+        expect(entries.map((entry) => entry.title)).toEqual(['src/a.ts', 'src/b.ts']);
+    });
+
+    test('keeps every file from a top-level multi-file apply_patch diff', () => {
+        const entries = getToolNavigationDiffEntries(
+            'apply_patch',
+            undefined,
+            [
+                '--- a/src/a.ts',
+                '+++ b/src/a.ts',
+                '@@ -1 +1 @@',
+                '-old',
+                '+new',
+                '--- a/src/b.ts',
+                '+++ b/src/b.ts',
+                '@@ -1 +1 @@',
+                '-left',
+                '+right',
+            ].join('\n'),
+            'src/a.ts',
+            identity,
+        );
+
+        expect(entries.map((entry) => entry.title)).toEqual(['src/a.ts', 'src/b.ts']);
+    });
+
+    test('keeps edit navigation scoped to its selected file', () => {
+        const metadata = {
+            files: [
+                {
+                    relativePath: 'src/a.ts',
+                    patch: '--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-old\n+new',
+                },
+                {
+                    relativePath: 'src/b.ts',
+                    patch: '--- a/src/b.ts\n+++ b/src/b.ts\n@@ -1 +1 @@\n-left\n+right',
+                },
+            ],
+        };
+
+        const entries = getToolNavigationDiffEntries(
+            'edit',
+            metadata,
+            undefined,
+            'src/b.ts',
+            identity,
+        );
+
+        expect(entries.map((entry) => entry.title)).toEqual(['src/b.ts']);
+    });
+
+    test('falls back as a complete turn when one apply_patch file cannot render', () => {
+        const entries = getToolNavigationDiffEntries(
+            'apply_patch',
+            {
+                files: [
+                    {
+                        relativePath: 'src/a.ts',
+                        patch: '--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-old\n+new',
+                    },
+                    {
+                        relativePath: 'src/b.ts',
+                        patch: 'malformed patch',
+                    },
+                ],
+            },
+            undefined,
+            'src/a.ts',
+            identity,
+        );
+
+        expect(entries).toEqual([]);
     });
 });

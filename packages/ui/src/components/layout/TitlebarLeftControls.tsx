@@ -9,39 +9,39 @@ import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/short
 import { invokeDesktop, isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
 import { useDesktopWindowControlsLayout } from '@/hooks/useDesktopWindowControlsLayout';
 import { SidebarBrandMark } from './SidebarBrandMark';
+import { GlobalSearchButton } from './GlobalSearchButton';
 
 const ICON_BUTTON_CLASS =
   'app-region-no-drag inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary hover:bg-interactive-hover hover:text-foreground transition-colors';
 
 /**
- * Persistent top-left titlebar controls (sidebar toggle), with the Web
- * wordmark sharing the control row while the sidebar is open.
+ * Persistent top-left titlebar controls, with the Web wordmark sharing the
+ * control row while the sidebar is open. Electron keeps global search here
+ * while the sidebar is collapsed; the open sidebar renders it beside its brand.
  *
  * Rendered exactly once as an absolutely-positioned overlay above both the
- * sidebar and the header, so the buttons never migrate / re-mount between the
- * two while the sidebar animates open or closed — the panels slide *underneath*
- * a fixed control cluster instead. Its height tracks `--oc-header-height` and
- * its left padding clears the OS window controls via `--oc-titlebar-left-inset`.
- * The cluster's measured width is published as `--oc-titlebar-controls-width`
- * so the header can reserve matching space when the sidebar is collapsed.
+ * sidebar and the header, so native titlebar controls stay fixed while the
+ * sidebar animates open or closed — the panels slide *underneath* the control
+ * cluster instead. Its height tracks `--oc-header-height` and its left padding
+ * clears the OS window controls via `--oc-titlebar-left-inset`. The cluster's
+ * measured width is published as `--oc-titlebar-controls-width` so the header
+ * can reserve matching space when the sidebar is collapsed.
  */
 export const TitlebarLeftControls: React.FC = () => {
   const { t } = useI18n();
   const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
   const sidebarWidth = useUIStore((state) => state.sidebarWidth);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
-  const setCommandPaletteOpen = useUIStore((state) => state.setCommandPaletteOpen);
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
   const clusterRef = React.useRef<HTMLDivElement | null>(null);
 
   const toggleShortcut = formatShortcutForDisplay(getEffectiveShortcutCombo('toggle_sidebar', shortcutOverrides));
-  const searchShortcut = formatShortcutForDisplay(
-    getEffectiveShortcutCombo('open_command_palette', shortcutOverrides),
-  );
   const { usesFramelessChrome, side: windowControlsSide } = useDesktopWindowControlsLayout();
+  const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
+  const showGlobalSearchInTitlebar = !isDesktopShellRuntime || !isSidebarOpen;
   const usesWebSidebarHeader = React.useMemo(
-    () => isWebRuntime() && !isDesktopShell() && !isVSCodeRuntime(),
-    [],
+    () => isWebRuntime() && !isDesktopShellRuntime && !isVSCodeRuntime(),
+    [isDesktopShellRuntime],
   );
 
   const handleOpenWindowsAppMenu = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
@@ -127,27 +127,7 @@ export const TitlebarLeftControls: React.FC = () => {
         ) : null}
 
         <div className="flex shrink-0 items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => setCommandPaletteOpen(true)}
-                aria-label={t('commandPalette.title')}
-                className={cn(ICON_BUTTON_CLASS, 'group shrink-0')}
-              >
-                <Icon
-                  name="search"
-                  className="size-4 text-foreground/55 transition-colors group-hover:text-foreground group-focus-visible:text-foreground"
-                />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p className="flex items-center gap-2">
-                <span>{t('commandPalette.title')}</span>
-                <span className="text-muted-foreground">{searchShortcut}</span>
-              </p>
-            </TooltipContent>
-          </Tooltip>
+          {showGlobalSearchInTitlebar ? <GlobalSearchButton /> : null}
 
           <Tooltip>
             <TooltipTrigger asChild>

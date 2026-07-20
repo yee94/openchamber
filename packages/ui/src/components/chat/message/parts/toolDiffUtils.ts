@@ -297,11 +297,13 @@ const getFilePatch = (file: unknown): { patch: string; title: string } | null =>
         return null;
     }
 
-    const rawPath = typeof file.relativePath === 'string'
-        ? file.relativePath
-        : typeof file.filePath === 'string'
-            ? file.filePath
-            : '';
+    const rawPath = typeof file.movePath === 'string'
+        ? file.movePath
+        : typeof file.relativePath === 'string'
+            ? file.relativePath
+            : typeof file.filePath === 'string'
+                ? file.filePath
+                : '';
 
     return {
         patch,
@@ -334,4 +336,43 @@ export const getDiffPatchEntries = (
 
     const diff = typeof fallbackDiff === 'string' ? fallbackDiff : '';
     return getPatchEntriesFromText(diff, 'Diff', 'fallback', resolveTitle);
+};
+
+const normalizeComparablePath = (value: string): string =>
+    value.trim().replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/\/+$/, '');
+
+export const getToolNavigationDiffEntries = (
+    toolName: string,
+    metadata: Record<string, unknown> | undefined,
+    fallbackDiff: string | undefined,
+    preferredPath: string,
+    resolveTitle: (path: string) => string,
+): DiffPatchEntry[] => {
+    const entries = getDiffPatchEntries(metadata, fallbackDiff, resolveTitle);
+    if (entries.length === 0 || entries.some((entry) => entry.renderMode !== 'diff')) {
+        return [];
+    }
+
+    const metadataFiles = Array.isArray(metadata?.files) ? metadata.files : [];
+    if (toolName === 'apply_patch') {
+        if (metadataFiles.length > 0) {
+            const patchBearingFileCount = metadataFiles.reduce((count, file) => (
+                getFilePatch(file) ? count + 1 : count
+            ), 0);
+            if (patchBearingFileCount > 0 && patchBearingFileCount !== metadataFiles.length) {
+                return [];
+            }
+        }
+        const uniquePaths = new Set(entries.map((entry) => normalizeComparablePath(entry.title)));
+        if (uniquePaths.size !== entries.length) {
+            return [];
+        }
+        return entries;
+    }
+
+    const normalizedPreferredPath = normalizeComparablePath(preferredPath);
+    const selected = entries.find((entry) => (
+        normalizeComparablePath(entry.title) === normalizedPreferredPath
+    )) ?? entries[0];
+    return selected ? [selected] : [];
 };

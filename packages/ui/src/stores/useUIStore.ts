@@ -67,7 +67,7 @@ type ContextPanelDirectoryState = {
 
 type ContextToolDiffSnapshot = {
   targetPath: string;
-  patch: string;
+  patches: Array<{ path: string; patch: string }>;
   turnMessageId: string | null;
 };
 
@@ -670,7 +670,7 @@ interface UIStore {
   hasManuallyResizedRightSidebar: boolean;
   rightSidebarTab: RightSidebarTab;
   contextPanelByDirectory: Record<string, ContextPanelDirectoryState>;
-  /** In-memory tool patch selected from a chat row; excluded from persisted UI state. */
+  /** In-memory tool patches selected from one chat row; excluded from persisted UI state. */
   contextToolDiffByDirectory: Record<string, ContextToolDiffSnapshot>;
   /** In-memory session-scoped restore for right sidebar + context panel open state. */
   sessionWorkspacePanelById: Record<string, SessionWorkspacePanelState>;
@@ -831,7 +831,7 @@ interface UIStore {
   syncWorkspacePanelsForSessionSwitch: (args: SessionWorkspacePanelSwitchArgs) => void;
   openContextPanelTab: (directory: string, tab: ContextPanelTabDescriptor) => void;
   openContextDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null, targetLine?: number, turnMessageId?: string | null) => void;
-  openContextToolDiff: (directory: string, filePath: string, patch: string, targetLine?: number, turnMessageId?: string | null) => void;
+  openContextToolDiff: (directory: string, filePath: string, patches: ReadonlyArray<{ path: string; patch: string }>, targetLine?: number, turnMessageId?: string | null) => void;
   openContextFileDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null) => void;
   openContextFile: (directory: string, filePath: string) => void;
   openContextFileAtLine: (directory: string, filePath: string, line: number, column?: number) => void;
@@ -1378,11 +1378,15 @@ export const useUIStore = create<UIStore>()(
           });
         },
 
-        openContextToolDiff: (directory, filePath, patch, targetLine, turnMessageId) => {
+        openContextToolDiff: (directory, filePath, patches, targetLine, turnMessageId) => {
           const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
           const normalizedFilePath = (filePath || '').trim();
-          const toolPatch = typeof patch === 'string' ? patch : '';
-          if (!normalizedDirectory || !normalizedFilePath || !toolPatch.trim()) {
+          const normalizedPatches = patches.flatMap((entry) => {
+            const path = normalizeContextTargetPath(entry.path);
+            const patch = typeof entry.patch === 'string' ? entry.patch : '';
+            return path && patch.trim() ? [{ path, patch }] : [];
+          });
+          if (!normalizedDirectory || !normalizedFilePath || normalizedPatches.length === 0) {
             return;
           }
 
@@ -1409,7 +1413,7 @@ export const useUIStore = create<UIStore>()(
             );
             contextToolDiffByDirectory[normalizedDirectory] = {
               targetPath: normalizedFilePath,
-              patch: toolPatch,
+              patches: normalizedPatches,
               turnMessageId: normalizeContextDiffTurnMessageId(turnMessageId),
             };
 

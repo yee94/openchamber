@@ -34,3 +34,48 @@ export const getFirstChangedModifiedLineFromPatch = (patch: string): number | nu
 
   return null;
 };
+
+export type ToolPatchFile = {
+  path: string;
+  patch: string;
+};
+
+type ToolPatchTurnDiff = {
+  file: string;
+  patch: string;
+  status: 'added' | 'deleted' | 'modified';
+  additions: number;
+  deletions: number;
+};
+
+export const createToolPatchTurnDiffs = (files: readonly ToolPatchFile[]): ToolPatchTurnDiff[] => {
+  const result: ToolPatchTurnDiff[] = [];
+  const seen = new Set<string>();
+
+  for (const file of files) {
+    const path = file.path.trim();
+    const patch = file.patch;
+    if (!path || !patch.trim() || seen.has(path)) {
+      continue;
+    }
+
+    seen.add(path);
+    let additions = 0;
+    let deletions = 0;
+    for (const line of patch.split('\n')) {
+      if (line.startsWith('+++') || line.startsWith('---')) continue;
+      if (line.startsWith('+')) additions += 1;
+      if (line.startsWith('-')) deletions += 1;
+    }
+
+    const status = /^---\s+\/dev\/null(?:\s|$)/m.test(patch)
+      ? 'added'
+      : /^\+\+\+\s+\/dev\/null(?:\s|$)/m.test(patch)
+        ? 'deleted'
+        : 'modified';
+
+    result.push({ file: path, patch, status, additions, deletions });
+  }
+
+  return result;
+};

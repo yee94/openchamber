@@ -44,6 +44,7 @@ import { SidebarDisplayModeMenu } from './sidebar/SidebarDisplayModeMenu';
 import { SidebarFooter } from './sidebar/SidebarFooter';
 import { SidebarProjectsList } from './sidebar/SidebarProjectsList';
 import { SidebarBrandMark } from '@/components/layout/SidebarBrandMark';
+import { GlobalSearchButton } from '@/components/layout/GlobalSearchButton';
 import { SessionNodeItem } from './sidebar/SessionNodeItem';
 import type { SessionNodeRenderExtras } from './sidebar/sessionNodeItemUtils';
 import { useUpdateStore } from '@/stores/useUpdateStore';
@@ -2444,7 +2445,16 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const topContent =
     !isVSCode && !hasSessionSearchQuery ? (
       <>
-        {showBrandInContent ? <SidebarBrandMark /> : null}
+        {showBrandInContent ? (
+          isDesktopShellRuntime ? (
+            <div className="flex items-center justify-between">
+              <SidebarBrandMark className="min-w-0 flex-1" />
+              <GlobalSearchButton className="ml-auto shrink-0" />
+            </div>
+          ) : (
+            <SidebarBrandMark />
+          )
+        ) : null}
         <div className="space-y-0.5 py-1">
           <Button
             variant="ghost"

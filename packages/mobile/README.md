@@ -11,7 +11,7 @@ The mobile package reuses the web build, then rewrites `mobile.html` to `index.h
 - Connections are saved locally in the app and can be managed from the mobile overflow menu under `Instances`.
 - The connection screen and `Instances` menu item are Capacitor-only. Hosted `mobile.html` in a normal browser keeps the regular web behavior.
 - Password-protected OpenChamber servers can be unlocked from the mobile app. The app stores the issued client token with the saved connection.
-- Chat `edit`, `multiedit`, and `apply_patch` rows open their exact single-file tool patch in a resizable phone sheet or the iPad Changes panel and focus the first changed line. Apply-patch turn-snapshot records open the owning turn diff.
+- Chat `edit` and `multiedit` rows open their exact single-file tool patch in a resizable phone sheet or the iPad Changes panel. An `apply_patch` row opens every renderable file patch from that invocation. The initial target focuses its first changed line, and apply-patch turn-snapshot records open the owning turn diff.
 
 ## Native Haptics Hot Path
 

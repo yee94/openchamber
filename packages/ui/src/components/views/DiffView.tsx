@@ -40,7 +40,11 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import { startReviewFlow } from '@/lib/reviewFlow';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionMessages } from '@/sync/sync-context';
-import { getFirstChangedModifiedLineFromPatch } from './diffPatchUtils';
+import {
+    createToolPatchTurnDiffs,
+    getFirstChangedModifiedLineFromPatch,
+    type ToolPatchFile,
+} from './diffPatchUtils';
 import type { FileDiffMetadata } from '@pierre/diffs';
 
 // Minimum width for side-by-side diff view (px)
@@ -181,24 +185,6 @@ const listTurnDiffs = (value: unknown): TurnSnapshotDiff[] => {
         if (!diff || typeof diff !== 'object') return false;
         return typeof (diff as TurnSnapshotDiff).file === 'string';
     });
-};
-
-const createToolTurnDiff = (filePath: string, patch: string): TurnSnapshotDiff => {
-    let additions = 0;
-    let deletions = 0;
-    for (const line of patch.split('\n')) {
-        if (line.startsWith('+++') || line.startsWith('---')) continue;
-        if (line.startsWith('+')) additions += 1;
-        if (line.startsWith('-')) deletions += 1;
-    }
-
-    const status = /^---\s+\/dev\/null(?:\s|$)/m.test(patch)
-        ? 'added'
-        : /^\+\+\+\s+\/dev\/null(?:\s|$)/m.test(patch)
-            ? 'deleted'
-            : 'modified';
-
-    return { file: filePath, patch, status, additions, deletions };
 };
 
 const statusToGitCode = (status?: string): string => {
@@ -979,8 +965,8 @@ interface DiffViewProps {
     singleFileView?: boolean;
     /** Scroll the selected file's diff to this modified-file line. */
     targetLine?: number | null;
-    /** Exact single-file patch selected from an edit/apply_patch tool row. */
-    toolPatch?: string | null;
+    /** Exact file patches selected from one edit/apply_patch tool invocation. */
+    toolPatches?: readonly ToolPatchFile[] | null;
     /** Load complete file context when this view opens. */
     preloadFullFiles?: boolean;
     /** Changes whenever the surrounding tab is reopened for the same target. */
@@ -997,7 +983,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     onDiffScopeChange,
     targetFilePath = null,
     targetLine = null,
-    toolPatch = null,
+    toolPatches = null,
     flushContent = false,
     singleFileView = false,
     preloadFullFiles = false,
@@ -1058,6 +1044,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const shouldPinAfterAlignRef = React.useRef(false);
     const visibleSyncFrameRef = React.useRef<number | null>(null);
     const stackedStateScopeRef = React.useRef<string | null>(null);
+    const stackedToolPatchesRef = React.useRef<readonly ToolPatchFile[] | null>(null);
 
     const cancelPendingScrollAlignment = React.useCallback(() => {
         pendingScrollTargetRef.current = null;
@@ -1094,17 +1081,14 @@ export const DiffView: React.FC<DiffViewProps> = ({
         return [];
     }, [sessionMessages, turnMessageId]);
 
-    const selectedToolTurnDiff = React.useMemo(() => {
-        const filePath = targetFilePath?.trim();
-        if (!filePath || !toolPatch?.trim()) {
-            return null;
-        }
-        return createToolTurnDiff(filePath, toolPatch);
-    }, [targetFilePath, toolPatch]);
+    const selectedToolTurnDiffs = React.useMemo(
+        () => createToolPatchTurnDiffs(toolPatches ?? []),
+        [toolPatches],
+    );
 
-    const activeTurnDiffs = React.useMemo(
-        () => selectedToolTurnDiff ? [selectedToolTurnDiff] : lastTurnDiffs,
-        [lastTurnDiffs, selectedToolTurnDiff],
+    const activeTurnDiffs = React.useMemo<TurnSnapshotDiff[]>(
+        () => selectedToolTurnDiffs.length > 0 ? selectedToolTurnDiffs : lastTurnDiffs,
+        [lastTurnDiffs, selectedToolTurnDiffs],
     );
 
     const lastTurnDiffData = React.useMemo(() => {
@@ -1192,8 +1176,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
         const paths = changedFilePathsKey ? changedFilePathsKey.split('\0') : [];
         const pathSet = new Set(paths);
         const scopeKey = `${effectiveDirectory ?? ''}:${activeDiffScope}:${stackedDefaultCollapsedAll ? 'collapsed' : 'default'}`;
-        const shouldInitialize = stackedStateScopeRef.current !== scopeKey;
+        const toolPatchesChanged = toolPatches !== null && stackedToolPatchesRef.current !== toolPatches;
+        const shouldInitialize = stackedStateScopeRef.current !== scopeKey || toolPatchesChanged;
         stackedStateScopeRef.current = scopeKey;
+        stackedToolPatchesRef.current = toolPatches;
 
         setExpandedFiles((previous) => {
             if (shouldInitialize) {
@@ -1231,7 +1217,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
             }
             return changed ? next : previous;
         });
-    }, [activeDiffScope, changedFilePathsKey, effectiveDirectory, stackedDefaultCollapsedAll]);
+    }, [activeDiffScope, changedFilePathsKey, effectiveDirectory, stackedDefaultCollapsedAll, toolPatches]);
 
     const syncVisibleStackedFiles = React.useCallback(() => {
         visibleSyncFrameRef.current = null;

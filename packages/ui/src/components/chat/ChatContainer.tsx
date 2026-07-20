@@ -558,6 +558,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
     const setCurrentSession = useSessionUIStore((s) => s.setCurrentSession);
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);
     const draftSubmitting = useSessionUIStore((s) => s.newSessionDraft.draftSubmitting ?? false);
+    const draftEstablishing = useSessionUIStore((s) => s.newSessionDraft.draftEstablishing ?? false);
     const forkTransition = useSessionUIStore((s) => s.forkTransition);
     const projects = useProjectsStore((s) => s.projects);
     const activeProjectId = useProjectsStore((s) => s.activeProjectId);
@@ -1197,11 +1198,13 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 	}
 
 	if (!currentSessionId && draftOpen) {
-		// Match fork: once submission is claimed, leave the draft composer and
-		// show a full-screen establishing page until a real session ID arrives.
-		// Combined create+prompt can take a while; partial draft banners were
-		// easy to miss (especially desktop / expanded-input layouts).
-		if (draftSubmitting) {
+		// Match fork: leave the draft composer and show a full-screen
+		// establishing page until a real session ID arrives. ChatInput sets
+		// draftEstablishing before response-style/snippet prep; claim then
+		// promotes to draftSubmitting. Combined create+prompt can take a while;
+		// partial draft banners were easy to miss (especially desktop /
+		// expanded-input layouts).
+		if (draftSubmitting || draftEstablishing) {
 			return (
 				<div className="flex h-full flex-col items-center justify-center bg-background px-6 text-center">
 					<div

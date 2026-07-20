@@ -262,21 +262,63 @@ export type { SyntheticContextPart } from "./input-store"
 export type { SessionMemoryState } from "./viewport-store"
 
 export type NewSessionDraftState = {
+  /** Whether the new-session draft composer is currently open (no real session yet). */
   open: boolean
+  /**
+   * Stable identity for this open draft. Created on first open; retained across
+   * idle re-opens; rotated when opening while a submission is in flight; cleared on close.
+   */
   draftID: string | null
+  /** Project the draft is bound to (Welcome / sidebar / deep-link target). */
   selectedProjectId?: string | null
+  /** Explicit working directory for the session that will be created from this draft. */
   directoryOverride: string | null
+  /** When true, auto-accept permissions once the draft materializes into a session. */
   permissionAutoAcceptEnabled?: boolean
+  /**
+   * In-flight worktree creation request id. resolveDraftDirectory waits on it
+   * before create/prompt so the new session lands in the pending worktree.
+   */
   pendingWorktreeRequestId?: string | null
+  /**
+   * Directory that should become the draft target after async bootstrap
+   * (e.g. worktree prep) finishes; preferred over directoryOverride while set.
+   */
   bootstrapPendingDirectory?: string | null
+  /**
+   * When true, keep directoryOverride even if project selection would otherwise
+   * rewrite the draft directory (deep-link / explicit path targets).
+   */
   preserveDirectoryOverride?: boolean
+  /** Parent session id when this draft is a child/fork create, else null. */
   parentID: string | null
+  /** Optional title applied at session create time. */
   title?: string
+  /** Optional seed prompt retained with the draft (not the live composer text). */
   initialPrompt?: string
+  /**
+   * Synthetic context parts (conflict resolution, handoff, etc.) merged into
+   * the first send when the draft is claimed.
+   */
   syntheticParts?: SyntheticContextPart[]
+  /** Sidebar folder to place the created session into after materialization. */
   targetFolderId?: string
+  /**
+   * Monotonic claim token for this draftID. Incremented by claimDraftSubmission;
+   * CAS restore/finalization require draftID + token (+ runtime) to match.
+   */
   submissionToken?: number
+  /**
+   * True after claimDraftSubmission owns the send: full-screen establishing UI
+   * until a real session id is selected. Blocks concurrent draft sends.
+   */
   draftSubmitting?: boolean
+  /**
+   * UI-only prelude before claimDraftSubmission: ChatInput paints the
+   * establishing page while it still awaits response-style / snippet prep.
+   * Cleared when the real claim takes over or the send aborts.
+   */
+  draftEstablishing?: boolean
 }
 
 export type ForkTransitionStage = "preparing" | "copying" | "opening" | "loading"
@@ -288,7 +330,7 @@ export type ForkTransitionState = {
   stage: ForkTransitionStage
 }
 
-type OpenNewSessionDraftOptions = Omit<Partial<NewSessionDraftState>, "draftID" | "open" | "submissionToken" | "draftSubmitting"> & {
+type OpenNewSessionDraftOptions = Omit<Partial<NewSessionDraftState>, "draftID" | "open" | "submissionToken" | "draftSubmitting" | "draftEstablishing"> & {
   /**
    * An explicit directory from an external deep link represents a project
    * target. If it is not already covered by a project or worktree, register
@@ -491,6 +533,7 @@ const DEFAULT_DRAFT: NewSessionDraftState = {
   directoryOverride: null,
   parentID: null,
   draftSubmitting: false,
+  draftEstablishing: false,
 }
 
 const activeSessionByRuntime = new Map<string, string | null>()
@@ -581,15 +624,53 @@ const isCurrentClaimDraft = (draft: NewSessionDraftState, claim: DraftSubmission
   hasClaimDraftIdentity(draft, claim)
     && sameRuntimeCapture(useInputStore.getState().captureDraftRuntime(), claim.runtime)
 
+/**
+ * Paint the full-screen "establishing conversation" page before ChatInput's
+ * network preamble (response-style fetch / snippet expand). Does not claim
+ * submission — claimDraftSubmission still owns idempotency.
+ */
+export async function beginDraftEstablishingPaint(): Promise<boolean> {
+  let started = false
+  useSessionUIStore.setState((s) => {
+    const d = s.newSessionDraft
+    if (!d?.open || !d.draftID || d.draftSubmitting || d.draftEstablishing) return {}
+    started = true
+    const nextDraft: NewSessionDraftState = { ...d, draftEstablishing: true }
+    writeRuntimeSessionMemory(runtimeMemoryKey(), { draft: nextDraft })
+    return { newSessionDraft: nextDraft }
+  })
+  if (!started) return false
+  // Same paint gate as claimDraftSubmission / forkTransition.
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  const currentDraft = useSessionUIStore.getState().newSessionDraft
+  return currentDraft.open === true && currentDraft.draftEstablishing === true
+}
+
+export function clearDraftEstablishingPaint(): void {
+  useSessionUIStore.setState((s) => {
+    const d = s.newSessionDraft
+    if (!d?.draftEstablishing) return {}
+    const nextDraft: NewSessionDraftState = { ...d, draftEstablishing: false }
+    writeRuntimeSessionMemory(runtimeMemoryKey(), { draft: nextDraft })
+    return { newSessionDraft: nextDraft }
+  })
+}
+
 async function claimDraftSubmission(): Promise<DraftSubmissionClaim | null> {
   let draftID: string | null = null
   let token: number | null = null
   let memoryKey: string | null = null
   useSessionUIStore.setState((s) => {
     const d = s.newSessionDraft
+    // draftEstablishing is UI prelude only — still allow the real claim.
     if (!d?.open || d.draftSubmitting || !d.draftID) return {}
     const nextToken = (d.submissionToken ?? 0) + 1
-    const nextDraft: NewSessionDraftState = { ...d, draftSubmitting: true, submissionToken: nextToken }
+    const nextDraft: NewSessionDraftState = {
+      ...d,
+      draftSubmitting: true,
+      draftEstablishing: false,
+      submissionToken: nextToken,
+    }
     memoryKey = runtimeMemoryKey()
     draftID = nextDraft.draftID
     token = nextToken
@@ -627,7 +708,7 @@ function restoreDraftSubmission(claim: DraftSubmissionClaim): void {
   useSessionUIStore.setState((s) => {
     const d = s.newSessionDraft
     if (isCurrentClaimDraft(d, claim)) {
-      const restored: NewSessionDraftState = { ...d, draftSubmitting: false }
+      const restored: NewSessionDraftState = { ...d, draftSubmitting: false, draftEstablishing: false }
       const memory = runtimeSessionMemory.get(claim.runtimeMemoryKey)
       if (memory && hasClaimDraftIdentity(memory.draft, claim)) {
         writeRuntimeSessionMemory(claim.runtimeMemoryKey, { draft: restored })
@@ -638,7 +719,7 @@ function restoreDraftSubmission(claim: DraftSubmissionClaim): void {
   })
   const memory = runtimeSessionMemory.get(claim.runtimeMemoryKey)
   if (memory && hasClaimDraftIdentity(memory.draft, claim)) {
-    writeRuntimeSessionMemory(claim.runtimeMemoryKey, { draft: { ...memory.draft, draftSubmitting: false } })
+    writeRuntimeSessionMemory(claim.runtimeMemoryKey, { draft: { ...memory.draft, draftSubmitting: false, draftEstablishing: false } })
   }
 }
 
@@ -1192,7 +1273,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
     const nextDraft: NewSessionDraftState = {
       open: true,
-      draftID: existingDraft.open && !existingDraft.draftSubmitting
+      draftID: existingDraft.open && !existingDraft.draftSubmitting && !existingDraft.draftEstablishing
         ? existingDraft.draftID ?? createUuid()
         : createUuid(),
       selectedProjectId: selectedProject?.id ?? null,
@@ -1206,10 +1287,11 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       initialPrompt: options?.initialPrompt,
       syntheticParts: options?.syntheticParts,
       targetFolderId: options?.targetFolderId,
-      submissionToken: existingDraft.open && !existingDraft.draftSubmitting
+      submissionToken: existingDraft.open && !existingDraft.draftSubmitting && !existingDraft.draftEstablishing
         ? existingDraft.submissionToken
         : 0,
       draftSubmitting: false,
+      draftEstablishing: false,
     }
 
     // Capture before clearing so right-side workspace panels can hide/restore
@@ -1288,6 +1370,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         syntheticParts: undefined,
         targetFolderId: undefined,
         draftSubmitting: false,
+        draftEstablishing: false,
       }
     set({
       newSessionDraft: nextDraft,
@@ -1758,8 +1841,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       const session = await createSessionAction(title, dir, parentID ?? null, metadata)
       if (!session) {
         if (draftSnapshot && !get().newSessionDraft.open && !get().currentSessionId) {
-          set({ newSessionDraft: { ...draftSnapshot, draftSubmitting: false } })
-          writeRuntimeSessionMemory(runtimeMemoryKey(), { draft: { ...draftSnapshot, draftSubmitting: false } })
+          set({ newSessionDraft: { ...draftSnapshot, draftSubmitting: false, draftEstablishing: false } })
+          writeRuntimeSessionMemory(runtimeMemoryKey(), { draft: { ...draftSnapshot, draftSubmitting: false, draftEstablishing: false } })
         }
         return null
       }
@@ -1775,8 +1858,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     } catch (e) {
       console.error("[session-ui-store] createSession failed", e)
       if (draftSnapshot && !get().newSessionDraft.open && !get().currentSessionId) {
-        set({ newSessionDraft: { ...draftSnapshot, draftSubmitting: false } })
-        writeRuntimeSessionMemory(runtimeMemoryKey(), { draft: { ...draftSnapshot, draftSubmitting: false } })
+        set({ newSessionDraft: { ...draftSnapshot, draftSubmitting: false, draftEstablishing: false } })
+        writeRuntimeSessionMemory(runtimeMemoryKey(), { draft: { ...draftSnapshot, draftSubmitting: false, draftEstablishing: false } })
       }
       return null
     }

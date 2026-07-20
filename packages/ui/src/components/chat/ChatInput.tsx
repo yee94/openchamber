@@ -12,7 +12,7 @@ import { useMessageQueueStore, getQueueForScope, legacyQueueScope, queueScopeKey
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
 import { usePermissionStore } from '@/stores/permissionStore';
 import { autoRespondsPermission } from '@/stores/utils/permissionAutoAccept';
-import { useSessionUIStore } from '@/sync/session-ui-store';
+import { beginDraftEstablishingPaint, clearDraftEstablishingPaint, useSessionUIStore } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useInputStore } from '@/sync/input-store';
 import { newSessionDraftKey, sessionDraftKey, type DraftKey, type DraftMention } from '@/sync/input-draft-types';
@@ -936,6 +936,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);
     const newSessionDraftOpen = Boolean(newSessionDraft?.open);
     const draftSubmitting = useSessionUIStore((s) => s.newSessionDraft.draftSubmitting ?? false);
+    const draftEstablishing = useSessionUIStore((s) => s.newSessionDraft.draftEstablishing ?? false);
+    // Establishing prelude + claimed submission both own the draft send surface.
+    const draftBusy = draftSubmitting || draftEstablishing;
     const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
     const setDraftPermissionAutoAcceptEnabled = useSessionUIStore((s) => s.setDraftPermissionAutoAcceptEnabled);
     const permissionAutoAccept = usePermissionStore((s) => s.autoAccept);
@@ -1789,7 +1792,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         // The store's materializeOpenDraftSession also guards against concurrent
         // calls, but this early return avoids the full async preamble and
         // prevents the UI from looking like it accepted a second send.
-        if (!currentSessionId && draftSubmitting) return;
+        if (!currentSessionId && draftBusy) return;
 
         const capturedSendConfig = queuedOnly ? queuedMessagesToSend[0]?.sendConfig : undefined;
         const sendConfig = capturedSendConfig
@@ -1969,6 +1972,19 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
         if (!primaryText && primaryAttachments.length === 0 && additionalParts.length === 0) return;
 
+        // New-session draft: paint "establishing conversation" before clearing
+        // the composer. Otherwise the draft dialog stays visible with an empty
+        // input while response-style / snippet prep (and later createWithPrompt)
+        // still run — claimDraftSubmission is too late for that gap.
+        if (!currentSessionId && newSessionDraftOpen && !queuedOnly && !resourcePolicy) {
+            const painted = await beginDraftEstablishingPaint();
+            if (!painted) {
+                const draft = useSessionUIStore.getState().newSessionDraft;
+                if (draft.draftSubmitting || draft.draftEstablishing) return;
+                return;
+            }
+        }
+
         // Clear queue and input
         if (!resourcePolicy && currentSessionId && queuedMessageId) {
             const queuedItem = currentQueueScope
@@ -1993,6 +2009,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
 
         const restoreFailedSubmission = () => {
+            // Drop the establishing prelude if claim never took over (or send aborted).
+            clearDraftEstablishingPaint();
             if (currentQueueScope && queuedMessagesToSend.length > 0) {
                 useMessageQueueStore.setState((state) => {
                     const scopeKey = queueScopeKey(currentQueueScope);
@@ -2215,6 +2233,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 return;
             }
             else if (commandName === 'goal' && (currentSessionId || newSessionDraftOpen)) {
+                // /goal only arms the next send — drop the establishing prelude.
+                clearDraftEstablishingPaint();
                 useSessionGoalArmStore.getState().setArmed(true);
                 return;
             }
@@ -2240,6 +2260,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     );
                     scrollToBottom?.();
                 } catch (error) {
+                    restoreFailedSubmission();
                     toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.craftGoalFailed'));
                 }
                 return;
@@ -5290,7 +5311,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                 hasContent={false}
                                 currentSessionId={currentSessionId}
                                 newSessionDraftOpen={newSessionDraftOpen}
-                                draftSubmitting={draftSubmitting}
+                                draftSubmitting={draftBusy}
                                 submissionBlocked={submissionBlocked}
                                 queueFrozen={queueFrozen}
                                 onPrimaryAction={handlePrimaryAction}
@@ -5677,7 +5698,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         ? t('chat.chatInput.placeholder.shell')
                                         : t(useCompactChatPlaceholder ? 'chat.chatInput.placeholder.chatCompact' : 'chat.chatInput.placeholder.chat')
                                     : t('chat.chatInput.placeholder.selectSession')}
-                                disabled={(!currentSessionId && !newSessionDraftOpen) || draftSubmitting}
+                                disabled={(!currentSessionId && !newSessionDraftOpen) || draftBusy}
                                 enterKeyHint={isMobile ? "send" : undefined}
                                 autoCorrect={isMobile ? "on" : "off"}
                                 autoCapitalize={isMobile ? "sentences" : "off"}
@@ -5767,7 +5788,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                                 hasContent={!!hasContent}
                                                 currentSessionId={currentSessionId}
                                                 newSessionDraftOpen={newSessionDraftOpen}
-                                                draftSubmitting={draftSubmitting}
+                                                draftSubmitting={draftBusy}
                                                 submissionBlocked={submissionBlocked}
                                                 queueFrozen={queueFrozen}
                                                 onPrimaryAction={handlePrimaryAction}
@@ -5849,7 +5870,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         hasContent={!!hasContent}
                                         currentSessionId={currentSessionId}
                                         newSessionDraftOpen={newSessionDraftOpen}
-                                        draftSubmitting={draftSubmitting}
+                                        draftSubmitting={draftBusy}
                                         submissionBlocked={submissionBlocked}
                                         queueFrozen={queueFrozen}
                                         onPrimaryAction={handlePrimaryAction}
