@@ -42,6 +42,7 @@ import { createDictationRuntime } from './lib/dictation/runtime.js';
 import {
   createGlobalUiEventBroadcaster,
   createGlobalMessageStreamHub,
+  confirmMessageQueueEvent,
   createMessageStreamWsRuntime,
   DEFAULT_UPSTREAM_STALL_TIMEOUT_MS,
   UPSTREAM_STALL_TIMEOUT_CONCURRENT_MS,
@@ -79,6 +80,8 @@ import { createSessionIndexService } from './lib/session-index/service.js';
 import { createSessionIndexSyncRuntime } from './lib/session-index/sync-runtime.js';
 import { resolveSessionIndexDbPath } from './lib/session-index/resolve-db-path.js';
 import { applySessionIndexEvent } from './lib/session-index/event-ingest.js';
+import { createMessageQueueRuntime } from './lib/message-queue/runtime.js';
+import { resolveMessageQueueDbPath } from './lib/message-queue/resolve-db-path.js';
 import { createSessionGoalRuntime } from './lib/session-goal/runtime.js';
 import { createScheduledTasksRuntime } from './lib/scheduled-tasks/runtime.js';
 import { createServerStartupRuntime } from './lib/opencode/server-startup-runtime.js';
@@ -1353,6 +1356,24 @@ async function main(options = {}) {
     dbPath: resolveSessionIndexDbPath({ sessionIndexDbPath }, OPENCHAMBER_DATA_DIR),
     getRuntimeConfig: () => getDesktopRuntimeConfig?.() ?? null,
   });
+  const messageQueueDbPath = options.messageQueueDbPath !== undefined
+    ? options.messageQueueDbPath
+    : process.env.OPENCHAMBER_MESSAGE_QUEUE_DB_PATH;
+  const messageQueueRuntime = createMessageQueueRuntime({
+    dbPath: resolveMessageQueueDbPath({ messageQueueDbPath }, OPENCHAMBER_DATA_DIR),
+    attachmentRoot: options.messageQueueAttachmentRoot,
+    getRuntimeConfig: () => getDesktopRuntimeConfig?.() ?? null,
+    buildOpenCodeUrl,
+    getOpenCodeAuthHeaders,
+    waitForReady: waitForOpenCodeReady,
+  });
+  const messageQueueService = messageQueueRuntime?.service ?? null;
+  globalMessageStreamHub.setRuntimeIdentityProvider(() => {
+    if (!messageQueueService) return null;
+    const runtimeKey = messageQueueService.getRuntimeKey();
+    return { runtimeKey };
+  });
+  await messageQueueRuntime?.start();
   const sessionIndexSyncRuntime = createSessionIndexSyncRuntime({
     sessionIndexService,
     buildOpenCodeUrl,
@@ -1363,6 +1384,12 @@ async function main(options = {}) {
     if (applySessionIndexEvent(sessionIndexService, event)) {
       sessionIndexSyncRuntime?.publishChange();
     }
+  });
+  const unsubscribeMessageQueueEvents = globalMessageStreamHub.subscribeEvent((event) => {
+    const payload = event?.payload?.payload ?? event?.payload;
+    if (!payload || typeof payload !== 'object' || !messageQueueRuntime) return;
+    confirmMessageQueueEvent(messageQueueService, event);
+    if (payload.type === 'session.status' || payload.type === 'session.idle') void messageQueueRuntime.wake();
   });
 
   console.log(`Starting OpenChamber on port ${port === 0 ? 'auto' : port}`);
@@ -1607,6 +1634,8 @@ async function main(options = {}) {
     getOpenChamberEventClients: () => uiOpenChamberEventClients,
     writeSseEvent,
     permissionAutoAcceptRuntime,
+    messageQueueService,
+    messageQueueRuntime,
   });
 
   const previewProxyRuntime = createPreviewProxyRuntime({
@@ -1728,13 +1757,19 @@ async function main(options = {}) {
         port: managed ? openCodePort : null,
       };
     },
-    stop: (shutdownOptions = {}) => {
+    stop: async (shutdownOptions = {}) => {
       try {
         unsubscribeSessionIndexEvents();
+        unsubscribeMessageQueueEvents();
         sessionIndexSyncRuntime?.stop();
         sessionIndexService?.close();
       } catch {
         // The index is a local cache; a failed close must not block shutdown.
+      }
+      try {
+        await messageQueueRuntime?.stop();
+      } catch {
+        console.warn('[message-queue] Failed to close durable database during shutdown');
       }
       realtimeProxyRuntime.stop();
       clearInterval(relayReconcileTimer);

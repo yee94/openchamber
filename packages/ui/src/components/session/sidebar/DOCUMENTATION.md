@@ -53,6 +53,9 @@
 - Project collapse state controls presentation only; Electron session-summary
   refresh targets come from the persisted project index, so no collapse/re-expand
   gesture is required to make a project appear.
+- Renderer-level worktree catalog reconciliation runs after event-stream ready,
+  topology changes, and deduplicated unknown session directories. The sidebar
+  consumes that catalog and retains `oc.worktreeMap` as its cold-start snapshot.
 - Each project menu provides a session-sync action. It refreshes the project's
   root and known worktree directories through the Electron server-owned index
   queue, while Web and VS Code use the bounded SDK refresh fallback.

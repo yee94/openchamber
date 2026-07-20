@@ -188,6 +188,8 @@ export const registerOpenCodeProxy = (app, deps) => {
     path,
     OPEN_CODE_READY_GRACE_MS,
     LONG_REQUEST_TIMEOUT_MS,
+    SSE_UPSTREAM_CONNECT_TIMEOUT_MS,
+    SSE_UPSTREAM_STALL_TIMEOUT_MS,
     getRuntime,
     getOpenCodeAuthHeaders,
     buildOpenCodeUrl,
@@ -307,6 +309,9 @@ export const registerOpenCodeProxy = (app, deps) => {
   };
 
   const PROXY_REQUEST_TIMEOUT_MS = normalizeProxyTimeout(LONG_REQUEST_TIMEOUT_MS);
+  const resolveSseTimeout = (value, fallback) => Number.isFinite(value) && value > 0 ? value : fallback;
+  const SSE_UPSTREAM_CONNECT_TIMEOUT = resolveSseTimeout(SSE_UPSTREAM_CONNECT_TIMEOUT_MS, 15_000);
+  const SSE_UPSTREAM_STALL_TIMEOUT = resolveSseTimeout(SSE_UPSTREAM_STALL_TIMEOUT_MS, 20_000);
   const PROXY_TIMEOUT_MARKER = Symbol('openchamberProxyTimedOut');
 
   const isProxyTimeoutError = (error) => {
@@ -347,10 +352,30 @@ export const registerOpenCodeProxy = (app, deps) => {
     let upstream = null;
     let reader = null;
     let heartbeatTimer = null;
+    let connectTimer = null;
+    let stallTimer = null;
+    let connectTimedOut = false;
     let writeQueue = Promise.resolve(true);
     const sseBoundary = createSseBoundaryTracker();
 
     req.on('close', closeUpstream);
+
+    const clearConnectTimer = () => {
+      if (connectTimer) {
+        clearTimeout(connectTimer);
+        connectTimer = null;
+      }
+    };
+    const clearStallTimer = () => {
+      if (stallTimer) {
+        clearTimeout(stallTimer);
+        stallTimer = null;
+      }
+    };
+    const resetStallTimer = () => {
+      clearStallTimer();
+      stallTimer = setTimeout(() => abortController.abort(), SSE_UPSTREAM_STALL_TIMEOUT);
+    };
 
     try {
       const requestUrl = typeof req.originalUrl === 'string' && req.originalUrl.length > 0
@@ -363,11 +388,19 @@ export const registerOpenCodeProxy = (app, deps) => {
       headers.accept ??= 'text/event-stream';
       headers['cache-control'] ??= 'no-cache';
 
-      upstream = await fetch(buildOpenCodeUrl(upstreamPath, ''), {
-        method: 'GET',
-        headers,
-        signal: abortController.signal,
-      });
+      connectTimer = setTimeout(() => {
+        connectTimedOut = true;
+        abortController.abort();
+      }, SSE_UPSTREAM_CONNECT_TIMEOUT);
+      try {
+        upstream = await fetch(buildOpenCodeUrl(upstreamPath, ''), {
+          method: 'GET',
+          headers,
+          signal: abortController.signal,
+        });
+      } finally {
+        clearConnectTimer();
+      }
 
       res.status(upstream.status);
       applyForwardProxyResponseHeaders(upstream.headers, res);
@@ -399,7 +432,7 @@ export const registerOpenCodeProxy = (app, deps) => {
         res.socket.setNoDelay(true);
       }
 
-      const SSE_HEARTBEAT_INTERVAL_MS = 20_000;
+      const SSE_HEARTBEAT_INTERVAL_MS = 10_000;
 
       const scheduleHeartbeat = () => {
         heartbeatTimer = setTimeout(async () => {
@@ -432,12 +465,14 @@ export const registerOpenCodeProxy = (app, deps) => {
       scheduleHeartbeat();
 
       reader = upstream.body.getReader();
+      resetStallTimer();
       while (!abortController.signal.aborted) {
         const { done, value } = await reader.read();
         if (done) {
           break;
         }
         if (value && value.length > 0) {
+          resetStallTimer();
           sseBoundary.observe(value);
           const canContinue = await enqueueSseWrite(value);
           if (!canContinue) {
@@ -448,7 +483,14 @@ export const registerOpenCodeProxy = (app, deps) => {
 
       res.end();
     } catch (error) {
+      if (connectTimedOut && !res.headersSent) {
+        res.status(504).json({ error: 'OpenCode upstream timed out' });
+        return;
+      }
       if (isAbortError(error)) {
+        if (res.headersSent && !res.writableEnded) {
+          res.end();
+        }
         return;
       }
       console.error('[proxy] OpenCode SSE proxy error:', error?.message ?? error);
@@ -458,6 +500,8 @@ export const registerOpenCodeProxy = (app, deps) => {
         res.end();
       }
     } finally {
+      clearConnectTimer();
+      clearStallTimer();
       if (heartbeatTimer) {
         clearTimeout(heartbeatTimer);
         heartbeatTimer = null;

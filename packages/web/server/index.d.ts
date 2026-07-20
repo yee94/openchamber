@@ -18,6 +18,8 @@ export interface StartWebUiServerOptions {
   exitOnShutdown?: boolean;
   uiPassword?: string | null;
   sessionIndexDbPath?: string | null;
+  messageQueueDbPath?: string | null;
+  messageQueueAttachmentRoot?: string | null;
 }
 
 export declare function startWebUiServer(

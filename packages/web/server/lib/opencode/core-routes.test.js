@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
+import { Readable } from 'node:stream';
 import { createTunnelAuth } from './tunnel-auth.js';
 import { registerAuthAndAccessRoutes, registerCommonRequestMiddleware, registerServerStatusRoutes, registerSettingsUtilityRoutes } from './core-routes.js';
 import { registerSessionIndexRoutes } from '../session-index/routes.js';
+import { registerMessageQueueRoutes } from '../message-queue/routes.js';
 
 describe('core-routes', () => {
   afterEach(() => {
@@ -221,6 +223,123 @@ describe('core-routes', () => {
       cursor: null,
       hasMore: false,
     });
+  });
+
+  it('should parse JSON bodies for bounded message queue routes', async () => {
+    const app = express();
+    registerCommonRequestMiddleware(app, { express });
+    app.post('/api/openchamber/message-queue/items', (req, res) => {
+      res.json({ body: req.body });
+    });
+
+    const payload = { requestID: 'request_1', item: { content: 'queued message' } };
+    await request(app)
+      .post('/api/openchamber/message-queue/items')
+      .send(payload)
+      .expect(200, { body: payload });
+  });
+
+  it('should parse JSON bodies for message queue scope and worktree order updates', async () => {
+    const app = express();
+    const reorder = vi.fn(() => ({ updated: 'scope' }));
+    const setWorktreeOrder = vi.fn(() => ({ updated: 'worktree' }));
+    registerCommonRequestMiddleware(app, { express });
+    registerMessageQueueRoutes(app, {
+      messageQueueService: {
+        reorder,
+        setWorktreeOrder,
+      },
+    });
+
+    const scopePayload = { queueItemIDs: ['item_2', 'item_1'], expectedRevision: 4 };
+    await request(app)
+      .put('/api/openchamber/message-queue/scopes/scope_1/order')
+      .send(scopePayload)
+      .expect(200, { updated: 'scope' });
+    expect(reorder).toHaveBeenCalledWith({ ...scopePayload, scopeID: 'scope_1' });
+
+    const worktreePayload = { projectDirectory: '/repo', worktreePaths: ['/repo/a', '/repo/b'] };
+    await request(app)
+      .put('/api/openchamber/message-queue/worktrees/order')
+      .send(worktreePayload)
+      .expect(200, { updated: 'worktree' });
+    expect(setWorktreeOrder).toHaveBeenCalledWith(worktreePayload);
+  });
+
+  it('should pass message queue upload bytes directly to the upload handler', async () => {
+    const app = express();
+    const received = [];
+    const getAttachmentUpload = vi.fn();
+    const markAttachmentReady = vi.fn(() => ({ ready: true }));
+    const attachmentStore = {
+      writeUpload: vi.fn(async ({ stream, expectedSize, onStored }) => {
+        for await (const chunk of stream) received.push(Buffer.from(chunk));
+        const object = { storageKey: 'object_1', size: expectedSize }; onStored(object); return object;
+      }),
+    };
+    registerCommonRequestMiddleware(app, { express });
+    const getRuntimeKey = vi.fn(() => 'a'.repeat(64));
+    registerMessageQueueRoutes(app, {
+      messageQueueService: { getAttachmentUpload, markAttachmentReady, getRuntimeKey },
+      messageQueueRuntime: { service: { getAttachmentUpload, markAttachmentReady, getRuntimeKey }, attachmentStore },
+    });
+
+    const payload = Buffer.from(JSON.stringify({ content: 'a'.repeat(1024 * 1024) }));
+    const uploadRequest = request(app)
+      .put('/api/openchamber/message-queue/attachments/uploads/upload_1')
+      .set('Content-Type', 'application/json')
+      .set('Content-Length', String(payload.length))
+      .set('x-message-queue-upload-token', 'upload-token');
+    uploadRequest.write(payload);
+    await uploadRequest.expect(200, { ready: true });
+
+    expect(Buffer.concat(received)).toEqual(payload);
+    expect(attachmentStore.writeUpload).toHaveBeenCalledWith(expect.objectContaining({
+      uploadID: 'upload_1',
+      expectedSize: payload.length,
+      stream: expect.anything(),
+    }));
+    expect(markAttachmentReady).toHaveBeenCalledWith({
+      uploadID: 'upload_1',
+      uploadToken: 'upload-token',
+      objectHash: 'object_1',
+      storageKey: 'object_1',
+      sizeBytes: payload.length,
+    }, { runtimeKey: 'a'.repeat(64) });
+  });
+
+  it('should stream validated message queue attachment content', async () => {
+    const app = express();
+    const getItemAttachment = vi.fn(() => ({ attachment: { attachmentID: 'attachment_1' }, item: { runtimeKey: 'a'.repeat(64), directory: '/repo' } }));
+    const openAttachment = vi.fn(async () => ({ stream: Readable.from([Buffer.from('attachment bytes')]), size: 16, mime: 'text/plain', filename: 'notes.txt' }));
+    const getRuntimeKey = vi.fn(() => 'a'.repeat(64));
+    registerMessageQueueRoutes(app, { messageQueueService: { getItemAttachment, getRuntimeKey }, messageQueueRuntime: { service: { getItemAttachment, getRuntimeKey }, attachmentStore: { openAttachment } } });
+    await request(app).get('/api/openchamber/message-queue/items/item_1/attachments/attachment_1/content').expect('Content-Type', /text\/plain/).expect('Content-Disposition', 'attachment; filename="notes.txt"').expect(200, 'attachment bytes');
+    expect(getItemAttachment).toHaveBeenCalledWith('item_1', 'attachment_1', { runtimeKey: 'a'.repeat(64) });
+    expect(openAttachment).toHaveBeenCalledWith({ attachmentID: 'attachment_1' }, { runtimeKey: 'a'.repeat(64), directory: '/repo' });
+  });
+
+  it('should enforce the 1 MiB JSON limit for similar and other message queue PUT paths', async () => {
+    const app = express();
+    const reached = vi.fn((_req, res) => res.sendStatus(204));
+    registerCommonRequestMiddleware(app, { express });
+    app.put('/api/openchamber/message-queue/attachments/uploads/:uploadID/metadata', reached);
+    app.put('/api/openchamber/message-queue/items', reached);
+    app.use((error, _req, res, _next) => res.status(error.status || 500).json({ error: error.type }));
+
+    const oversizedJson = JSON.stringify({ content: 'a'.repeat(1024 * 1024) });
+    await request(app)
+      .put('/api/openchamber/message-queue/attachments/uploads/upload_1/metadata')
+      .set('Content-Type', 'application/json')
+      .send(oversizedJson)
+      .expect(413);
+    await request(app)
+      .put('/api/openchamber/message-queue/items')
+      .set('Content-Type', 'application/json')
+      .send(oversizedJson)
+      .expect(413);
+
+    expect(reached).not.toHaveBeenCalled();
   });
 
   it('should parse JSON bodies for conversation creation', async () => {

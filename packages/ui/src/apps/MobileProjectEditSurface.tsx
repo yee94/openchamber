@@ -207,6 +207,7 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
     setOrderedWorktrees(next);
     setWorktreeOrder(
       project.id,
+      project.path,
       next.map((worktree) => normalizePath(worktree.path)),
     );
   };

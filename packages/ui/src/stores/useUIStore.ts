@@ -65,6 +65,12 @@ type ContextPanelDirectoryState = {
   touchedAt: number;
 };
 
+type ContextToolDiffSnapshot = {
+  targetPath: string;
+  patch: string;
+  turnMessageId: string | null;
+};
+
 /** Session-scoped snapshot of workspace panels that should follow the left chat session. */
 type SessionWorkspacePanelState = {
   isRightSidebarOpen: boolean;
@@ -664,6 +670,8 @@ interface UIStore {
   hasManuallyResizedRightSidebar: boolean;
   rightSidebarTab: RightSidebarTab;
   contextPanelByDirectory: Record<string, ContextPanelDirectoryState>;
+  /** In-memory tool patch selected from a chat row; excluded from persisted UI state. */
+  contextToolDiffByDirectory: Record<string, ContextToolDiffSnapshot>;
   /** In-memory session-scoped restore for right sidebar + context panel open state. */
   sessionWorkspacePanelById: Record<string, SessionWorkspacePanelState>;
   contextPanelsOpenBeforeRightSidebarCollapse: string[];
@@ -823,6 +831,7 @@ interface UIStore {
   syncWorkspacePanelsForSessionSwitch: (args: SessionWorkspacePanelSwitchArgs) => void;
   openContextPanelTab: (directory: string, tab: ContextPanelTabDescriptor) => void;
   openContextDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null, targetLine?: number, turnMessageId?: string | null) => void;
+  openContextToolDiff: (directory: string, filePath: string, patch: string, targetLine?: number, turnMessageId?: string | null) => void;
   openContextFileDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null) => void;
   openContextFile: (directory: string, filePath: string) => void;
   openContextFileAtLine: (directory: string, filePath: string, line: number, column?: number) => void;
@@ -1002,6 +1011,7 @@ export const useUIStore = create<UIStore>()(
         hasManuallyResizedRightSidebar: false,
         rightSidebarTab: 'git',
         contextPanelByDirectory: {},
+        contextToolDiffByDirectory: {},
         sessionWorkspacePanelById: {},
         contextPanelsOpenBeforeRightSidebarCollapse: [],
         isBottomTerminalOpen: false,
@@ -1336,6 +1346,15 @@ export const useUIStore = create<UIStore>()(
               [normalizedDirectory]: upsertContextPanelTab(current, tab),
             };
 
+            if (tab.mode === 'diff' || tab.mode === 'file-diff') {
+              const contextToolDiffByDirectory = { ...state.contextToolDiffByDirectory };
+              delete contextToolDiffByDirectory[normalizedDirectory];
+              return {
+                contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20),
+                contextToolDiffByDirectory,
+              };
+            }
+
             return { contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20) };
           });
         },
@@ -1356,6 +1375,48 @@ export const useUIStore = create<UIStore>()(
             diffScope,
             diffTargetLine: targetLine,
             diffTurnMessageId: turnMessageId,
+          });
+        },
+
+        openContextToolDiff: (directory, filePath, patch, targetLine, turnMessageId) => {
+          const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
+          const normalizedFilePath = (filePath || '').trim();
+          const toolPatch = typeof patch === 'string' ? patch : '';
+          if (!normalizedDirectory || !normalizedFilePath || !toolPatch.trim()) {
+            return;
+          }
+
+          const descriptor: ContextPanelTabDescriptor = {
+            mode: 'diff',
+            targetPath: normalizedFilePath,
+            stagedDiff: false,
+            diffScope: 'turn',
+            diffTargetLine: targetLine,
+            diffTurnMessageId: turnMessageId,
+          };
+
+          set((state) => {
+            const prev = state.contextPanelByDirectory[normalizedDirectory];
+            const current = touchContextPanelState(prev);
+            const byDirectory = clampContextPanelRoots({
+              ...state.contextPanelByDirectory,
+              [normalizedDirectory]: upsertContextPanelTab(current, descriptor),
+            }, 20);
+            const retainedDirectories = new Set(Object.keys(byDirectory));
+            const contextToolDiffByDirectory = Object.fromEntries(
+              Object.entries(state.contextToolDiffByDirectory)
+                .filter(([entryDirectory]) => retainedDirectories.has(entryDirectory)),
+            );
+            contextToolDiffByDirectory[normalizedDirectory] = {
+              targetPath: normalizedFilePath,
+              patch: toolPatch,
+              turnMessageId: normalizeContextDiffTurnMessageId(turnMessageId),
+            };
+
+            return {
+              contextPanelByDirectory: byDirectory,
+              contextToolDiffByDirectory,
+            };
           });
         },
 
@@ -1558,6 +1619,15 @@ export const useUIStore = create<UIStore>()(
               [normalizedDirectory]: closeContextPanelTab(current, normalizedTabID),
             };
 
+            if (normalizedTabID === 'diff') {
+              const contextToolDiffByDirectory = { ...state.contextToolDiffByDirectory };
+              delete contextToolDiffByDirectory[normalizedDirectory];
+              return {
+                contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20),
+                contextToolDiffByDirectory,
+              };
+            }
+
             return { contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20) };
           });
         },
@@ -1749,6 +1819,7 @@ export const useUIStore = create<UIStore>()(
 
         prepareForRuntimeSwitch: (runtimeKey?: string | null) => {
           activeMainTabByRuntime.set(runtimeMemoryKey(runtimeKey), get().activeMainTab);
+          set({ contextToolDiffByDirectory: {} });
         },
 
         restoreForRuntimeSwitch: (runtimeKey?: string | null) => {

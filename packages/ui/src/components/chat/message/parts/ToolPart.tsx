@@ -1961,6 +1961,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
     const showSubagentTaskDetails = useUIStore((s) => s.showSubagentTaskDetails);
     const openContextPanelTab = useUIStore((s) => s.openContextPanelTab);
     const openContextDiff = useUIStore((s) => s.openContextDiff);
+    const openContextToolDiff = useUIStore((s) => s.openContextToolDiff);
     const navigateToDiff = useUIStore((s) => s.navigateToDiff);
     const currentDirectory = useEffectiveDirectory() ?? '';
     const setCurrentSession = useSessionUIStore((s) => s.setCurrentSession);
@@ -2338,12 +2339,6 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
             return;
         }
 
-        if (normalizedPartTool === 'apply_patch' && mobileActions) {
-            e.stopPropagation();
-            mobileActions.openTurnDiff(messageId);
-            return;
-        }
-
         let filePath: unknown;
         let targetLine: number | undefined;
         let toolDiff: string | undefined;
@@ -2386,12 +2381,43 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
 
                 if (isFilePathWithinDirectory(absolutePath, currentDirectory)) {
                     const relativePath = getRelativePath(absolutePath, currentDirectory);
+                    const supportsExactToolDiff = normalizedPartTool === 'edit'
+                        || normalizedPartTool === 'multiedit'
+                        || normalizedPartTool === 'apply_patch';
+                    const toolDiffEntries = toolDiff && supportsExactToolDiff
+                        ? getDiffPatchEntries(metadata, toolDiff, (path) => getRelativePath(path, currentDirectory))
+                        : [];
+                    const selectedToolDiff = toolDiffEntries.find((entry) => (
+                        entry.renderMode === 'diff'
+                        && normalizeDisplayPath(entry.title) === normalizeDisplayPath(relativePath)
+                    )) ?? toolDiffEntries.find((entry) => entry.renderMode === 'diff');
+
                     if (mobileActions) {
-                        mobileActions.openChanges({ diffPath: relativePath, staged: false, targetLine });
+                        if (selectedToolDiff) {
+                            mobileActions.openToolDiff({
+                                diffPath: relativePath,
+                                patch: selectedToolDiff.patch,
+                                targetLine,
+                            });
+                        } else if (normalizedPartTool === 'apply_patch') {
+                            mobileActions.openTurnDiff(messageId);
+                        } else {
+                            mobileActions.openChanges({ diffPath: relativePath, staged: false, targetLine });
+                        }
                     } else if (isMobile) {
                         navigateToDiff(relativePath, false, 'turn', targetLine);
                     } else {
-                        openContextDiff(currentDirectory, relativePath, false, 'turn', targetLine, messageId);
+                        if (selectedToolDiff) {
+                            openContextToolDiff(
+                                currentDirectory,
+                                relativePath,
+                                selectedToolDiff.patch,
+                                targetLine,
+                                messageId,
+                            );
+                        } else {
+                            openContextDiff(currentDirectory, relativePath, false, 'turn', targetLine, messageId);
+                        }
                     }
                     return;
                 }
@@ -2448,6 +2474,12 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                 runtime.editor.openFile(absolutePath, targetLine);
                 return;
             }
+        }
+
+        if (normalizedPartTool === 'apply_patch' && mobileActions) {
+            e.stopPropagation();
+            mobileActions.openTurnDiff(messageId);
+            return;
         }
 
         if (normalizedPartTool === 'apply_patch' && currentDirectory && !mobileActions && !isMobile && !runtime?.runtime.isVSCode) {

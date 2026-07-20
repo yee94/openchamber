@@ -14,9 +14,13 @@ import {
     verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useEvent } from '@reactuses/core';
 import { getQueueForScope, legacyQueueScope, queueScopeKey, useMessageQueueStore, type QueueItem, type QueueScope, type QueuedMessage } from '@/stores/messageQueueStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useInputStore } from '@/sync/input-store';
+import type { DraftKey } from '@/sync/input-draft-types';
+import { useMessageQueueServerScope } from '@/sync/use-message-queue-server';
+import type { MessageQueueItem } from '@/lib/message-queue-server';
 import { useI18n } from '@/lib/i18n';
 import { getRuntimeTransportIdentity, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
@@ -25,27 +29,32 @@ import { useUIStore } from '@/stores/useUIStore';
 import { Icon } from "@/components/icon/Icon";
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { canSendQueuedMessage, mergeQueuedMessageScopes, popQueuedMessageForEdit } from './queuedMessageChipsState';
+import { createUuid } from '@/lib/uuid';
+import { toast } from '@/components/ui';
+import { canSendQueuedMessage, canSendServerQueuedMessage, mergeQueuedMessageScopes, popQueuedMessageForEdit, queueModeAllowsMutations, reorderServerQueueItems, serverQueueEditInput, serverQueueItemMutationInput } from './queuedMessageChipsState';
 
 type BoundQueueScope = Extract<QueueScope, { state: 'bound' }>;
 
 interface QueuedMessageChipProps {
-    message: QueuedMessage;
+    message: QueuedMessage | MessageQueueItem;
+    server: boolean;
+    frozen: boolean;
     hasDispatchLock: boolean;
     isMobile: boolean;
-    onEdit: (message: QueuedMessage) => void;
-    onSend: (message: QueuedMessage) => void;
+    onEdit: (message: QueuedMessage | MessageQueueItem) => void;
+    onSend: (message: QueuedMessage | MessageQueueItem) => void;
+    onRemove: (message: QueuedMessage | MessageQueueItem) => void;
 }
 
-const QueuedMessageChip = memo(({ message, hasDispatchLock, isMobile, onEdit, onSend }: QueuedMessageChipProps) => {
+const QueuedMessageChip = memo(({ message, server, frozen, hasDispatchLock, isMobile, onEdit, onSend, onRemove }: QueuedMessageChipProps) => {
     const { t } = useI18n();
-    const removeFromQueue = useMessageQueueStore((state) => state.removeFromQueue);
     const status = message.status ?? 'queued';
-    const isReadOnly = status === 'sending' || status === 'reconciling';
-    const isDragDisabled = message.owner?.state === 'unbound-legacy' || isReadOnly;
-    const canSend = canSendQueuedMessage(message, hasDispatchLock);
-    const queueItemID = message.queueItemID ?? message.id;
-    const recovery = message.failure?.recovery;
+    const isReadOnly = frozen || status === 'sending' || status === 'reconciling';
+    const legacyMessage = server ? undefined : message as QueuedMessage;
+    const isDragDisabled = legacyMessage?.owner?.state === 'unbound-legacy' || isReadOnly;
+    const canSend = !frozen && (server ? canSendServerQueuedMessage(message as MessageQueueItem, hasDispatchLock) : canSendQueuedMessage(message as QueuedMessage, hasDispatchLock));
+    const queueItemID = message.queueItemID || (message as QueuedMessage).id;
+    const recovery = legacyMessage?.failure?.recovery;
     const visibleContent = recovery?.content ?? message.content;
     const visibleAttachments = recovery?.attachments ?? message.attachments;
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -100,7 +109,7 @@ const QueuedMessageChip = memo(({ message, hasDispatchLock, isMobile, onEdit, on
                         variant="ghost"
                         size="icon"
                         className="-ml-0.5 !h-6 !w-4 !min-h-6 !min-w-4 rounded-md bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground active:bg-transparent"
-                        onClick={() => message.owner && removeFromQueue(message.owner, queueItemID, message.operationID)}
+                        onClick={() => onRemove(message)}
                         disabled={isReadOnly}
                         aria-label={t('chat.queuedMessage.removeAria')}
                     >
@@ -170,7 +179,7 @@ const QueuedMessageChip = memo(({ message, hasDispatchLock, isMobile, onEdit, on
                         </Button>
                         <button
                             type="button"
-                            onClick={() => message.owner && removeFromQueue(message.owner, queueItemID, message.operationID)}
+                            onClick={() => onRemove(message)}
                             disabled={isReadOnly}
                             className={cn(
                                 'flex flex-shrink-0 items-center justify-center text-muted-foreground transition-colors',
@@ -194,22 +203,22 @@ QueuedMessageChip.displayName = 'QueuedMessageChip';
 interface QueuedMessageChipsProps {
     onEditMessage: (content: string, attachments?: QueuedMessage['attachments'], composerDocument?: QueuedMessage['composerDocument'], composerMentions?: QueuedMessage['composerMentions']) => void;
     onSendMessage: (messageId: string) => void;
+    draftKey: DraftKey | null;
 }
 
 const EMPTY_QUEUE: QueueItem[] = [];
 const subscribeRuntimeTransport = (notify: () => void) => subscribeRuntimeEndpointChanged(() => notify());
 
-export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: QueuedMessageChipsProps) => {
+export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage, draftKey }: QueuedMessageChipsProps) => {
     const { t } = useI18n();
     const isMobile = useUIStore((state) => state.isMobile);
     const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
     const fallbackDirectory = useEffectiveDirectory();
-    const currentSessionDirectory = useSessionUIStore(
-        React.useCallback(
-            (state) => currentSessionId ? state.getDirectoryForSession(currentSessionId) : null,
-            [currentSessionId],
-        ),
+    const currentSessionDirectorySelector = React.useMemo(
+        () => (state: ReturnType<typeof useSessionUIStore.getState>) => currentSessionId ? state.getDirectoryForSession(currentSessionId) : null,
+        [currentSessionId],
     );
+    const currentSessionDirectory = useSessionUIStore(currentSessionDirectorySelector);
     const transportIdentity = React.useSyncExternalStore(
         subscribeRuntimeTransport,
         getRuntimeTransportIdentity,
@@ -225,27 +234,28 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
             sessionID: currentSessionId,
         };
     }, [currentSessionDirectory, currentSessionId, fallbackDirectory, transportIdentity]);
+    const serverQueue = useMessageQueueServerScope({
+        transportIdentity,
+        directory: queueScope?.directory ?? '',
+        sessionID: queueScope?.sessionID ?? '',
+    });
     const legacyScope = React.useMemo(() => currentSessionId ? legacyQueueScope(currentSessionId) : null, [currentSessionId]);
-    const boundQueuedMessages = useMessageQueueStore(
-        React.useCallback(
-            (state) => {
-                return queueScope ? getQueueForScope(state, queueScope) : EMPTY_QUEUE;
-            },
-            [queueScope]
-        )
+    const boundQueueSelector = React.useMemo(
+        () => (state: ReturnType<typeof useMessageQueueStore.getState>) => queueScope ? getQueueForScope(state, queueScope) : EMPTY_QUEUE,
+        [queueScope],
     );
-    const legacyQueuedMessages = useMessageQueueStore(
-        React.useCallback(
-            (state) => {
-                return legacyScope ? getQueueForScope(state, legacyScope) : EMPTY_QUEUE;
-            },
-            [legacyScope]
-        )
+    const boundQueuedMessages = useMessageQueueStore(boundQueueSelector);
+    const legacyQueueSelector = React.useMemo(
+        () => (state: ReturnType<typeof useMessageQueueStore.getState>) => legacyScope ? getQueueForScope(state, legacyScope) : EMPTY_QUEUE,
+        [legacyScope],
     );
-    const queuedMessages = React.useMemo(
+    const legacyQueuedMessages = useMessageQueueStore(legacyQueueSelector);
+    const legacyMessages = React.useMemo(
         () => mergeQueuedMessageScopes(legacyQueuedMessages, boundQueuedMessages),
         [boundQueuedMessages, legacyQueuedMessages],
     );
+    const queuedMessages = serverQueue.mode === 'server' ? serverQueue.items : legacyMessages;
+    const frozen = !queueModeAllowsMutations(serverQueue.mode);
     const hasScopeDispatchFlight = useQueueScopeDispatchFlight(queueScope);
     const hasDispatchLock = React.useMemo(
         () => hasScopeDispatchFlight || queuedMessages.some((item) => item.status === 'sending' || item.status === 'reconciling'),
@@ -261,20 +271,37 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
         useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
     );
 
-    const handleDragEnd = React.useCallback((event: DragEndEvent) => {
+    const handleDragEnd = useEvent((event: DragEndEvent) => {
+        if (frozen) return;
         const { active, over } = event;
         if (!over || active.id === over.id) return;
-        const activeMessage = queuedMessages.find((message) => (message.queueItemID ?? message.id) === active.id);
-        const overMessage = queuedMessages.find((message) => (message.queueItemID ?? message.id) === over.id);
+        if (serverQueue.mode === 'server') {
+            if (!serverQueue.scope) return;
+            const input = reorderServerQueueItems(serverQueue.scope, String(active.id), String(over.id), createUuid());
+            if (input) void serverQueue.actions.reorder(input).catch(() => toast.error(t('chat.chatInput.toast.messageSendFailed')));
+            return;
+        }
+        const legacyQueueMessages = queuedMessages as QueuedMessage[];
+        const activeMessage = legacyQueueMessages.find((message) => (message.queueItemID ?? message.id) === active.id);
+        const overMessage = legacyQueueMessages.find((message) => (message.queueItemID ?? message.id) === over.id);
         if (!activeMessage || !overMessage) return;
         const activeScope = activeMessage.owner;
         const overScope = overMessage.owner;
         if (activeScope?.state !== 'bound' || overScope?.state !== 'bound' || queueScopeKey(activeScope) !== queueScopeKey(overScope)) return;
         reorderQueue(activeScope, String(active.id), String(over.id), activeMessage.operationID);
-    }, [queuedMessages, reorderQueue]);
+    });
 
-    const handleEdit = React.useCallback((message: QueuedMessage) => {
-        const popped = popQueuedMessageForEdit(message, popToInput);
+    const handleEdit = useEvent((message: QueuedMessage | MessageQueueItem) => {
+        if (frozen) return;
+        if (serverQueue.mode === 'server') {
+            if (!serverQueue.scope || !draftKey) return;
+            const currentDraft = useInputStore.getState().getDraft(draftKey);
+            void serverQueue.actions.editIntoDraft(serverQueueEditInput(serverQueue.scope, message as MessageQueueItem, draftKey, currentDraft?.revision ?? 'absent')).then((result) => {
+                if (result.status !== 'committed') toast.error(t('chat.chatInput.toast.messageSendFailed'));
+            }).catch(() => toast.error(t('chat.chatInput.toast.messageSendFailed')));
+            return;
+        }
+        const popped = popQueuedMessageForEdit(message as QueuedMessage, popToInput);
         if (popped) {
             const recovery = popped.failure?.recovery;
             const content = recovery?.content ?? popped.content;
@@ -285,11 +312,29 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
             }
             onEditMessage(content, attachments, recovery?.composerDocument ?? popped.composerDocument, recovery?.composerMentions ?? popped.composerMentions);
         }
-    }, [popToInput, onEditMessage]);
+    });
 
-    const handleSend = React.useCallback((message: QueuedMessage) => {
-        onSendMessage(message.queueItemID ?? message.id);
-    }, [onSendMessage]);
+    const handleSend = useEvent((message: QueuedMessage | MessageQueueItem) => {
+        if (frozen) return;
+        if (serverQueue.mode === 'server') {
+            if (!serverQueue.scope) return;
+            void serverQueue.actions.manualSend(serverQueueItemMutationInput(serverQueue.scope, message as MessageQueueItem, createUuid())).catch(() => toast.error(t('chat.chatInput.toast.messageSendFailed')));
+            return;
+        }
+        const legacyMessage = message as QueuedMessage;
+        onSendMessage(legacyMessage.queueItemID ?? legacyMessage.id);
+    });
+
+    const handleRemove = useEvent((message: QueuedMessage | MessageQueueItem) => {
+        if (frozen) return;
+        if (serverQueue.mode === 'server') {
+            if (!serverQueue.scope) return;
+            void serverQueue.actions.remove(serverQueueItemMutationInput(serverQueue.scope, message as MessageQueueItem, createUuid())).catch(() => toast.error(t('chat.chatInput.toast.messageSendFailed')));
+            return;
+        }
+        const legacyMessage = message as QueuedMessage;
+        if (legacyMessage.owner) useMessageQueueStore.getState().removeFromQueue(legacyMessage.owner, legacyMessage.queueItemID ?? legacyMessage.id, legacyMessage.operationID);
+    });
 
     if (queuedMessages.length === 0 || !queueScope) {
         return null;
@@ -327,7 +372,7 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
                     onDragEnd={handleDragEnd}
                 >
                     <SortableContext
-                        items={queuedMessages.map((message) => message.queueItemID ?? message.id)}
+                        items={queuedMessages.map((message) => message.queueItemID || (message as QueuedMessage).id)}
                         strategy={verticalListSortingStrategy}
                     >
                         <div className={cn(
@@ -338,12 +383,15 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
                         )}>
                             {queuedMessages.map((message) => (
                                 <QueuedMessageChip
-                                    key={message.queueItemID ?? message.id}
+                                    key={message.queueItemID || (message as QueuedMessage).id}
                                     message={message}
+                                    server={serverQueue.mode === 'server'}
+                                    frozen={frozen}
                                     hasDispatchLock={hasDispatchLock}
                                     isMobile={isMobile}
                                     onEdit={handleEdit}
                                     onSend={handleSend}
+                                    onRemove={handleRemove}
                                 />
                             ))}
                         </div>

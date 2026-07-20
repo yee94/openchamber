@@ -16,7 +16,7 @@ export type MaterializedState = {
 
 export type MaterializeSessionSnapshotsOptions = {
   skipPartTypes?: ReadonlySet<string>
-  mode?: "merge" | "prepend"
+  mode?: "merge" | "prepend" | "recovery"
 }
 
 export type MaterializeSessionSnapshotsResult = {
@@ -154,6 +154,25 @@ function mergeMaterializedParts(
   return [...mergedParts, ...missingLiveParts].sort((a, b) => cmp(a.id, b.id))
 }
 
+function mergeRecoveryMessages(existing: Message[], snapshots: Message[]): Message[] {
+  const nextByID = new Map(snapshots.map((message) => [message.id, message]))
+  let changed = false
+  const merged = existing.map((message) => {
+    const snapshot = nextByID.get(message.id)
+    if (!snapshot) return message
+    nextByID.delete(message.id)
+    if (JSON.stringify(message) === JSON.stringify(snapshot)) return message
+    changed = true
+    return snapshot
+  })
+  if (nextByID.size > 0) {
+    changed = true
+    merged.push(...nextByID.values())
+    merged.sort((left, right) => cmp(left.id, right.id))
+  }
+  return changed ? merged : existing
+}
+
 export function materializeSessionSnapshots(
   state: MaterializedState,
   sessionID: string,
@@ -167,7 +186,9 @@ export function materializeSessionSnapshots(
   const nextMessages = snapshots.map((record) => record.info)
   const existingMessages = state.message[sessionID]
   const currentMessages = existingMessages ?? []
-  const messages = mergeMessages(currentMessages, nextMessages)
+  const messages = options.mode === "recovery"
+    ? mergeRecoveryMessages(currentMessages, nextMessages)
+    : mergeMessages(currentMessages, nextMessages)
   const messagesChanged = messages !== currentMessages || (existingMessages === undefined && snapshots.length === 0)
 
   let partsChanged = false

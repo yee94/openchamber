@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { createEventPipeline } from '../event-pipeline';
+import { setRuntimeUrlAuthToken } from '../../lib/runtime-auth';
 
 const originalDocument = globalThis.document;
 const originalWindow = globalThis.window;
@@ -50,7 +51,7 @@ class FakeWebSocket {
 
   emitClose() {
     this.readyState = 3;
-    this.onclose?.();
+    this.onclose?.({ code: 1006, reason: '' });
   }
 }
 
@@ -58,6 +59,7 @@ afterEach(() => {
   globalThis.document = originalDocument;
   globalThis.window = originalWindow;
   globalThis.WebSocket = originalWebSocket;
+  setRuntimeUrlAuthToken(null, null);
   FakeWebSocket.instances = [];
 });
 
@@ -98,6 +100,11 @@ function createSdkWithEvents(events, hold) {
   };
 }
 
+function installFakeWebSocket() {
+  globalThis.WebSocket = FakeWebSocket;
+  setRuntimeUrlAuthToken('test-url-token', Date.now() + 60_000);
+}
+
 // Run a pipeline against a pre-seeded event stream, collect every dispatched
 // event, wait long enough for the 16ms flush window to elapse, then tear it
 // down. Returns the list of { directory, payload } that onEvent saw.
@@ -113,6 +120,7 @@ async function runPipelineWithEvents(events, waitMs = 80) {
   const sdk = createSdkWithEvents(events, hold);
   const { cleanup } = createEventPipeline({
     sdk,
+    transport: 'sse',
     onEvent: (directory, payload) => {
       received.push({ directory, payload });
     },
@@ -536,7 +544,7 @@ describe('createEventPipeline', () => {
 
   it('consumes websocket message stream frames when transport is ws', async () => {
     installDomStubs();
-    globalThis.WebSocket = FakeWebSocket;
+    installFakeWebSocket();
 
     const received = [];
     const sdk = {
@@ -595,7 +603,7 @@ describe('createEventPipeline', () => {
 
   it('falls back to SSE when websocket closes before ready in auto mode', async () => {
     installDomStubs();
-    globalThis.WebSocket = FakeWebSocket;
+    installFakeWebSocket();
 
     let releaseStream;
     const hold = new Promise((resolve) => {
@@ -642,7 +650,7 @@ describe('createEventPipeline', () => {
 
   it('falls back to SSE when websocket does not become ready in auto mode', async () => {
     installDomStubs();
-    globalThis.WebSocket = FakeWebSocket;
+    installFakeWebSocket();
 
     let releaseStream;
     const hold = new Promise((resolve) => {
@@ -695,7 +703,7 @@ describe('createEventPipeline', () => {
 
   it('passes the last websocket event id when falling back to SSE', async () => {
     installDomStubs();
-    globalThis.WebSocket = FakeWebSocket;
+    installFakeWebSocket();
     const originalConsoleError = console.error;
     console.error = () => {};
 
@@ -774,7 +782,7 @@ describe('createEventPipeline', () => {
 
   it('marks the pipeline disconnected on heartbeat timeout and recovers on the next websocket connect', async () => {
     installDomStubs();
-    globalThis.WebSocket = FakeWebSocket;
+    installFakeWebSocket();
 
     const disconnectReasons = [];
     let reconnectCount = 0;
@@ -826,6 +834,158 @@ describe('createEventPipeline', () => {
 
     expect(disconnectReasons).toEqual(['ws_heartbeat_timeout']);
     expect(reconnectCount).toBe(2);
+  });
+
+  it('aborts a permanently pending SSE response on heartbeat timeout and retries', async () => {
+    installDomStubs();
+    let calls = 0;
+    const disconnectReasons = [];
+    let cleanup;
+    const recovered = new Promise((resolve) => {
+      const pipeline = createEventPipeline({
+        sdk: {
+          global: {
+            event: () => {
+              calls += 1;
+              if (calls === 1) return new Promise(() => {});
+              return Promise.resolve({ stream: (async function* () { await new Promise(() => {}); })() });
+            },
+          },
+        },
+        transport: 'sse',
+        heartbeatTimeoutMs: 20,
+        reconnectDelayMs: 0,
+        onEvent: () => {},
+        onDisconnect: (reason) => disconnectReasons.push(reason),
+        onReconnect: () => {
+          if (calls >= 2) resolve();
+        },
+      });
+      cleanup = pipeline.cleanup;
+    });
+
+    try {
+      await withTimeout(recovered, 500, 'timed out waiting for pending SSE retry');
+      expect(disconnectReasons).toEqual(['sse_heartbeat_timeout']);
+      expect(calls).toBeGreaterThanOrEqual(2);
+    } finally {
+      cleanup?.();
+    }
+  });
+
+  it('reports natural SSE EOF as a disconnect before the next connection', async () => {
+    installDomStubs();
+    const originalConsoleError = console.error;
+    console.error = () => {};
+    const callbacks = [];
+    let calls = 0;
+    let cleanup;
+    const secondConnected = new Promise((resolve) => {
+      const pipeline = createEventPipeline({
+        sdk: {
+          global: {
+            event: async () => {
+              calls += 1;
+              if (calls === 1) {
+                return {
+                  stream: (async function* () {
+                    callbacks.push('eof');
+                  })(),
+                };
+              }
+              return { stream: (async function* () { await new Promise(() => {}); })() };
+            },
+          },
+        },
+        transport: 'sse',
+        reconnectDelayMs: 0,
+        onEvent: () => {},
+        onReconnect: () => {
+          callbacks.push('connected');
+          if (calls === 2) resolve();
+        },
+        onDisconnect: (reason) => callbacks.push(`disconnected:${reason}`),
+      });
+      cleanup = pipeline.cleanup;
+    });
+
+    try {
+      await withTimeout(secondConnected, 500, 'timed out waiting for SSE EOF reconnect');
+      expect(callbacks).toEqual([
+        'connected',
+        'eof',
+        'disconnected:sse_stream_closed',
+        'connected',
+      ]);
+    } finally {
+      cleanup?.();
+      console.error = originalConsoleError;
+    }
+  });
+
+  it('reports SSE heartbeats as transport activity without dispatching a domain event', async () => {
+    installDomStubs();
+    let cleanup;
+    let activityCount = 0;
+    const activity = new Promise((resolve) => {
+      const pipeline = createEventPipeline({
+        sdk: {
+          global: {
+            event: async (options) => {
+              options.onSseEvent({ id: 'heartbeat-1' });
+              return { stream: (async function* () { await new Promise(() => {}); })() };
+            },
+          },
+        },
+        transport: 'sse',
+        onEvent: () => { throw new Error('heartbeat dispatched as domain event'); },
+        onTransportActivity: () => {
+          activityCount += 1;
+          if (activityCount >= 2) resolve();
+        },
+      });
+      cleanup = pipeline.cleanup;
+    });
+
+    try {
+      await withTimeout(activity, 200, 'timed out waiting for SSE heartbeat activity');
+      expect(activityCount).toBeGreaterThanOrEqual(2);
+    } finally {
+      cleanup?.();
+    }
+  });
+
+  it('waits for fallback SSE connection before reporting reconnect after a transport switch', async () => {
+    installDomStubs();
+    installFakeWebSocket();
+    let releaseStream;
+    const hold = new Promise((resolve) => { releaseStream = resolve; });
+    const callbacks = [];
+    let cleanup;
+    const connected = new Promise((resolve) => {
+      const pipeline = createEventPipeline({
+        sdk: { global: { event: async () => ({ stream: (async function* () { await hold; })() }) } },
+        transport: 'auto',
+        reconnectDelayMs: 0,
+        onEvent: () => {},
+        onTransportSwitch: () => callbacks.push('switch'),
+        onReconnect: () => {
+          callbacks.push('reconnect');
+          if (callbacks.includes('switch')) resolve();
+        },
+      });
+      cleanup = pipeline.cleanup;
+    });
+
+    try {
+      await Promise.resolve();
+      FakeWebSocket.instances[0].emitClose();
+      await withTimeout(connected, 500, 'timed out waiting for fallback SSE connection');
+      expect(callbacks).toEqual(['switch', 'reconnect']);
+    } finally {
+      cleanup?.();
+      releaseStream();
+    }
   });
 });
 

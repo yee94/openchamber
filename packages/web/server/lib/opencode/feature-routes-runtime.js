@@ -13,6 +13,7 @@ import { registerProjectIconRoutes } from './project-icon-routes.js';
 import { registerScheduledTaskRoutes } from '../scheduled-tasks/routes.js';
 import { registerScheduledTaskToolRoute } from '../scheduled-tasks/managed-tool-route.js';
 import { registerConversationRoutes } from '../conversations/routes.js';
+import { registerMessageQueueRoutes } from '../message-queue/routes.js';
 import { registerSkillRoutes } from './skill-routes.js';
 import { registerPluginRoutes } from './plugin-routes.js';
 import { getNpmInfo, clearCache as clearNpmCache } from './npm-registry.js';
@@ -45,6 +46,17 @@ import { scanSkillsRepository } from '../skills-catalog/scan.js';
 import { installSkillsFromRepository } from '../skills-catalog/install.js';
 import { scanClawdHubPage } from '../skills-catalog/clawdhub/scan.js';
 import { installSkillsFromClawdHub } from '../skills-catalog/clawdhub/install.js';
+
+export const createWorktreeTopologyBroadcaster = ({ getOpenChamberEventClients, writeSseEvent }) => (event) => {
+  const clients = getOpenChamberEventClients();
+  for (const client of clients) {
+    try {
+      writeSseEvent(client, event);
+    } catch {
+      clients.delete(client);
+    }
+  }
+};
 
 export const createFeatureRoutesRuntime = (dependencies) => {
   const {
@@ -106,6 +118,8 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       getOpenChamberEventClients,
       writeSseEvent,
       permissionAutoAcceptRuntime,
+      messageQueueService,
+      messageQueueRuntime,
     } = routeDependencies;
 
     registerSettingsUtilityRoutes(app, {
@@ -175,6 +189,8 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       markUserMessageSent,
       waitForOpenCodeReady,
     });
+
+    registerMessageQueueRoutes(app, { messageQueueService, messageQueueRuntime });
 
     registerConfigEntityRoutes(app, {
       resolveProjectDirectory,
@@ -269,7 +285,13 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerSmallModelRoutes(app, { getSmallModelService });
     registerSessionGoalRoutes(app);
     registerGitHubRoutes(app);
-    registerGitRoutes(app);
+    registerGitRoutes(app, {
+      messageQueueService,
+      broadcastWorktreeTopologyChanged: createWorktreeTopologyBroadcaster({
+        getOpenChamberEventClients,
+        writeSseEvent,
+      }),
+    });
     registerMagicPromptRoutes(app, {
       fsPromises,
       path,

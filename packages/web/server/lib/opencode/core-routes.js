@@ -1079,6 +1079,8 @@ export const registerCommonRequestMiddleware = (app, dependencies) => {
         return res.status(413).json({ error: 'Content exceeds maximum size of 1048576 bytes' });
       }
       express.json({ limit: '1mb' })(req, res, next);
+    } else if (!(req.method === 'PUT' && req.path.match(/^\/api\/openchamber\/message-queue\/attachments\/uploads\/[^/]+\/?$/)) && req.path.startsWith('/api/openchamber/message-queue')) {
+      express.json({ limit: '1mb' })(req, res, next);
     } else if (
       req.path.startsWith('/api/openchamber/session-index') ||
       req.path.startsWith('/api/openchamber/conversations')

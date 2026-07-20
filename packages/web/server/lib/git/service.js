@@ -3597,7 +3597,7 @@ export async function previewWorktreeCreate(directory, input = {}) {
   };
 }
 
-async function attachGitWorktreeToCandidate(context, candidate, input = {}) {
+async function attachGitWorktreeToCandidate(context, candidate, input = {}, { onWorktreeAdded } = {}) {
   const mode = input?.mode === 'existing' ? 'existing' : 'new';
   const preferredBranchName = cleanBranchName(String(input?.branchName || '').trim());
   const startRef = normalizeStartRef(input?.startRef);
@@ -3679,6 +3679,12 @@ async function attachGitWorktreeToCandidate(context, candidate, input = {}) {
   await runGitCommandOrThrow(context.primaryWorktree, worktreeAddArgs, 'Failed to create git worktree');
 
   try {
+    await onWorktreeAdded?.(candidate.directory);
+  } catch {
+    console.warn('Failed to notify worktree topology change');
+  }
+
+  try {
     await syncProjectSandboxAdd(context.projectID, context.primaryWorktree, candidate.directory);
   } catch (error) {
     console.warn('Failed to sync OpenCode sandbox metadata (add):', error instanceof Error ? error.message : String(error));
@@ -3721,7 +3727,7 @@ async function attachGitWorktreeToCandidate(context, candidate, input = {}) {
   };
 }
 
-export async function createWorktree(directory, input = {}) {
+export async function createWorktree(directory, input = {}, { onWorktreeAdded } = {}) {
   const mode = input?.mode === 'existing' ? 'existing' : 'new';
   const context = await resolveWorktreeProjectContext(directory);
 
@@ -3760,7 +3766,7 @@ export async function createWorktree(directory, input = {}) {
       ? cleanBranchName(String(input?.branchName || input?.existingBranch || candidate.branch || '').trim())
       : candidate.branch;
 
-    void attachGitWorktreeToCandidate(context, candidate, input).catch((error) => {
+    void attachGitWorktreeToCandidate(context, candidate, input, { onWorktreeAdded }).catch((error) => {
       setWorktreeBootstrapState(
         candidate.directory,
         WORKTREE_BOOTSTRAP_FAILED,
@@ -3780,7 +3786,7 @@ export async function createWorktree(directory, input = {}) {
     };
   }
 
-  return attachGitWorktreeToCandidate(context, candidate, input);
+  return attachGitWorktreeToCandidate(context, candidate, input, { onWorktreeAdded });
 }
 
 export async function getWorktreeBootstrapStatus(directory) {

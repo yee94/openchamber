@@ -10,7 +10,15 @@ type ScheduledTaskRanEvent = {
   sessionId?: string;
 };
 
-type OpenChamberEvent = ScheduledTaskRanEvent;
+type EventStreamReadyEvent = { type: 'event-stream-ready' };
+type WorktreeTopologyChangedEvent = {
+  type: 'worktree-topology-changed';
+  projectDirectory: string;
+  directory: string;
+  operation: 'added' | 'removed';
+  occurredAt: number;
+};
+type OpenChamberEvent = ScheduledTaskRanEvent | EventStreamReadyEvent | WorktreeTopologyChangedEvent;
 type Listener = (event: OpenChamberEvent) => void;
 
 let eventSource: EventSource | null = null;
@@ -80,30 +88,41 @@ const parseEnvelope = (raw: string): { type: string; properties: unknown } | nul
   }
 };
 
-const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) => {
+export const parseOpenchamberEventEnvelope = (envelope: { type: string; properties: unknown }): OpenChamberEvent | null => {
   if (envelope.type === 'openchamber:event-stream-ready') {
-    reconnectAttempt = 0;
-    return;
+    return envelope.properties === undefined || envelope.properties === null || (typeof envelope.properties === 'object' && !Array.isArray(envelope.properties))
+      ? { type: 'event-stream-ready' }
+      : null;
   }
 
   if (envelope.type === 'openchamber:heartbeat') {
-    return;
+    return null;
+  }
+
+  const parsed = envelope.properties && typeof envelope.properties === 'object' && !Array.isArray(envelope.properties)
+    ? envelope.properties as Record<string, unknown>
+    : null;
+
+  if (envelope.type === 'openchamber:worktree-topology-changed') {
+    const projectDirectory = typeof parsed?.projectDirectory === 'string' ? parsed.projectDirectory.trim() : '';
+    const directory = typeof parsed?.directory === 'string' ? parsed.directory.trim() : '';
+    const operation = parsed?.operation;
+    const occurredAt = parsed?.occurredAt;
+    if (!projectDirectory || !directory || (operation !== 'added' && operation !== 'removed') || typeof occurredAt !== 'number' || !Number.isFinite(occurredAt)) return null;
+    return { type: 'worktree-topology-changed', projectDirectory, directory, operation, occurredAt };
   }
 
   if (envelope.type !== 'openchamber:scheduled-task-ran') {
-    return;
+    return null;
   }
 
-  const parsed = envelope.properties && typeof envelope.properties === 'object'
-    ? envelope.properties as Record<string, unknown>
-    : null;
   const projectId = typeof parsed?.projectId === 'string' ? parsed.projectId : '';
   const taskId = typeof parsed?.taskId === 'string' ? parsed.taskId : '';
   const ranAt = typeof parsed?.ranAt === 'number' ? parsed.ranAt : Date.now();
   const rawStatus = parsed?.status;
   const status = rawStatus === 'running' || rawStatus === 'error' ? rawStatus : 'success';
   if (!projectId || !taskId) {
-    return;
+    return null;
   }
 
   const nextEvent: ScheduledTaskRanEvent = {
@@ -114,9 +133,14 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
     status,
     ...(typeof parsed?.sessionId === 'string' && parsed.sessionId.length > 0 ? { sessionId: parsed.sessionId } : {}),
   };
-  for (const listener of listeners) {
-    listener(nextEvent);
-  }
+  return nextEvent;
+};
+
+const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) => {
+  const nextEvent = parseOpenchamberEventEnvelope(envelope);
+  if (!nextEvent) return;
+  if (nextEvent.type === 'event-stream-ready') reconnectAttempt = 0;
+  for (const listener of listeners) listener(nextEvent);
 };
 
 const connect = () => {
@@ -135,9 +159,11 @@ const connect = () => {
 
   const source = new EventSource(getRuntimeUrlResolver().sse('/api/openchamber/events'));
   source.onopen = () => {
+    if (eventSource !== source) return;
     resetHeartbeatTimer();
   };
   source.onmessage = (event) => {
+    if (eventSource !== source) return;
     resetHeartbeatTimer();
     const envelope = parseEnvelope(event.data);
     if (!envelope) {
@@ -147,6 +173,7 @@ const connect = () => {
   };
 
   source.onerror = () => {
+    if (eventSource !== source) return;
     cleanupSource();
     scheduleReconnect();
   };

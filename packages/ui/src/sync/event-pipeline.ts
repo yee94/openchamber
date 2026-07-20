@@ -46,6 +46,8 @@ export type EventPipelineInput = {
   onReconnect?: () => void
   /** Called when the stream disconnects (heartbeat timeout, network error, or transport failure). */
   onDisconnect?: (reason: string) => void
+  /** Called for every transport frame, including SSE comments and heartbeats. */
+  onTransportActivity?: () => void
   /** Called when transport switches (e.g. WS timeout → SSE fallback) without actual disconnection. */
   onTransportSwitch?: () => void
   transport?: "auto" | "ws" | "sse"
@@ -244,6 +246,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
     onEvent,
     onReconnect,
     onDisconnect,
+    onTransportActivity,
     onTransportSwitch,
     routeDirectory,
     transport = "auto",
@@ -500,7 +503,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
     scheduleDir(routedDirectory)
   }
 
-  const resetHeartbeat = () => {
+  const armHeartbeat = () => {
     lastEventAt = Date.now()
     if (heartbeat) clearTimeout(heartbeat)
     heartbeat = setTimeout(() => {
@@ -509,18 +512,38 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
     }, heartbeatTimeoutMs)
   }
 
+  const reportTransportActivity = () => {
+    armHeartbeat()
+    onTransportActivity?.()
+  }
+
   const clearHeartbeat = () => {
     if (!heartbeat) return
     clearTimeout(heartbeat)
     heartbeat = undefined
   }
 
+  const awaitWithAttemptAbort = async <T,>(promise: Promise<T>, signal: AbortSignal): Promise<T> => {
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError")
+    let onAbort: (() => void) | undefined
+    const abortPromise = new Promise<never>((_, reject) => {
+      onAbort = () => reject(new DOMException("Aborted", "AbortError"))
+      signal.addEventListener("abort", onAbort, { once: true })
+    })
+    try {
+      return await Promise.race([promise, abortPromise])
+    } finally {
+      if (onAbort) signal.removeEventListener("abort", onAbort)
+    }
+  }
+
   const runSseAttempt = async (signal: AbortSignal) => {
-    const events = await sdk.global.event({
+    armHeartbeat()
+    const events = await awaitWithAttemptAbort(sdk.global.event({
       signal,
       ...(lastEventId && lastEventId.length > 0 ? { headers: { "Last-Event-ID": lastEventId } } : {}),
       onSseEvent: (event: { id?: unknown }) => {
-        resetHeartbeat()
+        reportTransportActivity()
         if (typeof event.id === "string" && event.id.length > 0) {
           lastEventId = event.id
         }
@@ -531,15 +554,15 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
         streamErrorLogged = true
         console.error("[event-pipeline] SSE stream error", error)
       },
-    })
+    }), signal)
 
     markConnected()
 
     let yielded = Date.now()
-    resetHeartbeat()
+    reportTransportActivity()
 
     for await (const event of events.stream) {
-      resetHeartbeat()
+      reportTransportActivity()
       streamErrorLogged = false
 
       const payload = resolveEventPayload((event as { payload?: Event }).payload ?? event)
@@ -552,6 +575,11 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
       if (Date.now() - yielded < STREAM_YIELD_MS) continue
       yielded = Date.now()
       await wait(0)
+    }
+    if (!signal.aborted) {
+      const error = new Error("Global event SSE stream closed")
+      ;(error as Error & { reason?: string }).reason = "sse_stream_closed"
+      throw error
     }
   }
 
@@ -646,7 +674,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
       }
 
       socket.onmessage = (messageEvent) => {
-        resetHeartbeat()
+        reportTransportActivity()
         streamErrorLogged = false
 
         let frame: MessageStreamWsFrame | null = null
@@ -836,7 +864,8 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
       if (abort.signal.aborted) return
       if (attemptAbortReason && attemptAbortReason !== "pipeline_stopped") {
         notifyDisconnected(attemptAbortReason)
-        retryDelayMs = 0
+        consecutiveFailures += 1
+        retryDelayMs = reconnectDelayMs > 0 ? computeRetryDelay(consecutiveFailures) : 0
         attemptAbortReason = null
       }
       if (retryDelayMs > 0) {
@@ -912,6 +941,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
       globalThis.window.removeEventListener("offline", onOffline)
     }
     abort.abort()
+    clearHeartbeat()
     flushAll()
   }
 

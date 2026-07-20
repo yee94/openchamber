@@ -95,6 +95,8 @@ These stores coordinate visible app state, navigation, selected tabs, dialogs, a
 
 `useUIStore` keeps context-panel tab *content* directory-scoped (`contextPanelByDirectory`), but the *open* state of the right workspace (context panel for subagent/file preview/diff, plus right sidebar git/files) is session-correlated. `syncWorkspacePanelsForSessionSwitch()` captures the previous session snapshot into in-memory `sessionWorkspacePanelById` and restores the next session (or closes panels when there is no snapshot). Callers that leave a real session must invoke it: `setCurrentSession()` on session id change, and `openNewSessionDraft()` when clearing the current session for Welcome/draft (it does not go through `setCurrentSession`).
 
+Exact single-file patches selected from `edit`, `multiedit`, and `apply_patch` rows live in the transient `contextToolDiffByDirectory` map. The persisted tab keeps only its target path, turn message, and focus line; regular diff navigation, scope changes, tab close, and runtime switches clear the transient patch.
+
 ContextPanel chat navigation stays component-local and is keyed by normalized
 directory plus tab ID. It owns its anchor/current/stack and retained transcript
 view metadata; `useUIStore` owns tab content, active tab, close, and reorder.
@@ -122,6 +124,19 @@ Examples:
 - `useSessionFocusStore.ts`
 
 These stores coordinate persistent project/session metadata across multiple views.
+
+`useWorktreeOrderStore.ts` persists worktree display order and pending write
+intent in runtime-scoped partitions. Server revision maps stay transient because
+the sync layer owns runtime reconciliation. Worktree order is shared across
+surfaces; expansion, selection, and session navigation state remain locally owned
+by their respective stores.
+Server responses advance a project's transient revision only. Equal and older
+revisions preserve the current authoritative paths; pending local intent retains
+its local paths while recording a newer server revision. Pending resolution always
+clears its matching intent while retaining the greatest observed revision. A
+pending project keeps its greatest remote order in transient runtime memory; an
+older mutation acknowledgement applies that deferred order, while a newer
+acknowledgement retains the local order and clears the deferred record.
 
 `useSessionFocusStore.ts` is intentionally transient and narrow. It records the
 exact sidebar attention identity (`recent` or `project`, session, and project)
@@ -286,8 +301,7 @@ while the global scheduler wakes once at the earliest persisted next check. A
 max-check or deadline terminal result becomes unresolved and triggers no auto
 POST.
 Legacy migration preserves known bound owners and places unresolved entries in
-an unbound legacy scope until an explicit bulk send bind at the dispatch boundary. Legacy rows remain
-visible in that scope. Queue UI selects one scope or one item at a time; it
+an unbound legacy scope until an explicit bulk send bind at the dispatch boundary. Cutover resolves every legacy session through authoritative session-directory state, plans every binding before one atomic apply, then flushes the fully bound snapshot for v4 migration. A missing directory leaves every legacy scope in place and keeps cutover blocked. Queue UI selects one scope or one item at a time; it
 avoids broad ledger subscriptions, cross-scope scans in render paths, and
 selector allocations that amplify queue updates.
 

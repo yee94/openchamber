@@ -1,14 +1,18 @@
 import React from 'react';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { usePwaManifestSync } from '@/hooks/usePwaManifestSync';
-import { useQueuedMessageAutoSend } from '@/hooks/useQueuedMessageAutoSend';
+import { getQueuedMessageOwnershipGate, subscribeQueuedMessageOwnershipGate, useQueuedMessageAutoSend } from '@/hooks/useQueuedMessageAutoSend';
 import { useSessionAutoCleanup } from '@/hooks/useSessionAutoCleanup';
 import { useWindowControlsOverlayLayout } from '@/hooks/useWindowControlsOverlayLayout';
 import { setOptimisticRefs } from '@/sync/session-actions';
 import { markSessionViewed } from '@/sync/notification-store';
+import { getMessageQueueServerRuntime, installMessageQueueServerRuntimeSwitch } from '@/sync/message-queue-server-runtime';
+import { getMessageQueueCutover } from '@/sync/message-queue-cutover';
 import { setExternallyViewedSession } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
+import { useWorktreeOrderSync } from '@/sync/worktree-order-sync';
 import { restoreWebviewZoomFactor } from '@/lib/webviewZoom';
+import { startWorktreeTopologySync } from '@/lib/worktrees/worktreeTopologySync';
 
 const MINI_CHAT_PRESENCE_CHANNEL = 'openchamber:mini-chat-presence';
 
@@ -35,6 +39,8 @@ const SyncOptimisticBridge: React.FC = () => {
       (input) => confirmRef.current(input),
     );
   }, []);
+
+  React.useEffect(() => startWorktreeTopologySync(), []);
 
   return null;
 };
@@ -69,7 +75,21 @@ export function SyncRuntimeEffects({ embeddedBackgroundWorkEnabled }: {
   // Retention remains available from Settings, but never triggers a broad
   // catalog fetch during normal startup.
   useSessionAutoCleanup({ enabled: embeddedBackgroundWorkEnabled, autoRun: false });
-  useQueuedMessageAutoSend(embeddedBackgroundWorkEnabled);
+  const queueOwnershipGate = React.useSyncExternalStore(subscribeQueuedMessageOwnershipGate, getQueuedMessageOwnershipGate, getQueuedMessageOwnershipGate);
+  useQueuedMessageAutoSend(embeddedBackgroundWorkEnabled && queueOwnershipGate === 'legacy-enabled');
+
+  React.useEffect(() => {
+    const runtime = getMessageQueueServerRuntime();
+    const cutover = getMessageQueueCutover();
+    runtime.start();
+    cutover.start();
+    const uninstallRuntimeSwitch = installMessageQueueServerRuntimeSwitch(runtime);
+    return () => {
+      uninstallRuntimeSwitch();
+      cutover.stop();
+      runtime.stop();
+    };
+  }, []);
 
   return <SyncOptimisticBridge />;
 }
@@ -80,6 +100,7 @@ export function SyncAppEffects({ embeddedBackgroundWorkEnabled }: {
   usePwaManifestSync();
   useWindowControlsOverlayLayout();
   useKeyboardShortcuts();
+  useWorktreeOrderSync();
 
   React.useEffect(() => {
     restoreWebviewZoomFactor();

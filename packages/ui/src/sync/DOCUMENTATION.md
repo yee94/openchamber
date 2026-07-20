@@ -43,6 +43,10 @@ So:
 
 ## Ownership map
 
+### Worktree topology catalog reconciliation
+
+`worktreeTopologySync.ts` owns renderer-level worktree catalog reconciliation. It starts from `AppEffects`, remains shared through a realm ref-count, and skips VS Code. Event-stream ready envelopes, topology changes, registry topology changes, and deduplicated unknown session directories force per-project catalog enumeration. Successful empty results authoritatively clear that project, failed reads preserve its prior catalog, and only added worktree directories start global session synchronization. Unknown-directory suppression begins only after every registered project completes successfully for its recovery epoch; failures retain bounded retry and lifecycle/runtime changes discard stale work.
+
 | Layer / Store | Owns | Scope |
 |---|---|---|
 | child directory stores in `sync-context.tsx` | `session`, `message`, `part`, `permission`, `question`, etc. | One directory |
@@ -217,6 +221,25 @@ becoming the cached startup result consumed by the session coordinator.
   but it materializes `session.get + session.messages` only for the currently
   viewed session. Background busy/incomplete sessions wait until selection and
   continue receiving live events without fetching their bodies.
+- The client stall timer starts before SSE response headers arrive. Transport
+  activity includes SSE comments and heartbeats, iterator events, and every
+  WebSocket message frame. A transport stale watchdog reconnects after this
+  activity expires; quiet heartbeat streams remain healthy.
+- A viewed `busy` or `retry` session records message and part domain activity.
+  Fresh transport with no such activity for 60 seconds triggers one directory
+  recovery per minute. Recovery reuses reconnect materialization, so only the
+  viewed session receives `session.get + session.messages(30)`.
+- Domain activity and recovery revisions resolve only from an event's explicit
+  session identity or an indexed message identity. Orphan materialization keeps
+  its active-session fallback without affecting domain health or recovery
+  freshness. Recovery captures a monotonic per-session live revision and skips
+  its session/message commit when a newer live event arrives before HTTP settles.
+- Recovery replaces fetched-tail message metadata with the authoritative server
+  snapshot, including completion, finish, and token fields. Local messages
+  outside the bounded tail remain intact, and part merging retains live streaming
+  fields until an authoritative completed part arrives.
+- A WebSocket-to-SSE fallback enters connecting or reconnecting state. Connected
+  state publishes after the fallback SSE stream reports its real connection.
 - A successful directory status snapshot records its conservative request-start
   time. Historical assistant/tool activity that started before that boundary and
   is absent from the active-only snapshot resolves as idle. Activity created
@@ -258,6 +281,16 @@ becoming the cached startup result consumed by the session coordinator.
   successful provider results while exposing a failed provider error.
 
 ### Queue transport and admission invariants
+
+### Queue server shared-UI lane (Phase 2)
+
+`messageQueueQueries.ts` owns server queue catalog, revision-pinned scope pages, and capability reads through TanStack Query. Queue query keys start with transport identity; scope pages contain at most eight items and fetch every `nextOffset` under the first-page revision. Failed page sequences retain the prior complete scope snapshot. `message-queue-server-runtime.ts` is a headless attachment surface with exact-scope reads only. Successful status, catalog, and scope reads write their transport-scoped Query keys. Descriptor state and stable scope snapshots bind their captured transport identity, and a direct identity read clears them before a delayed runtime-switch callback runs. `getScope()` reads a stable complete current-scope reference from Query data. A successful empty catalog clears queue scope cache, and removal of one catalog scope clears every revision key for that transport and scope; failed polls and failed later pages preserve prior complete data. Local attachments upload bytes, server attachments retain their canonical server path and authoritative byte size, and VS Code attachments close server admission. Long-poll change descriptors load only scopes with a changed revision and use abortable exponential backoff. Its lazy singleton performs no fetch or storage work at import; AppEffects starts it, installs one ref-counted runtime-switch observer, and releases both on cleanup. `useMessageQueueServerScope()` subscribes to its exact scope and returns capability, authority, import state, hydration, scope items, and actions. Available active authority selects server mode directly; `canActivate` remains the Phase 3 activation gate. Shadow and unsupported states expose legacy mode. Phase 2 keeps v3 production authority and auto-send active.
+
+The server observer captures runtime generation for each snapshot, long poll, upload, and mutation. Runtime changes abort its observer and isolate Query cache identity. Web, Electron, hosted mobile, and Capacitor use the server-capable route; `501` marks capability unsupported, and VS Code retains its legacy fallback. Active and paused server authority use the manual-send CAS endpoint; paused promotion moves the item to the queued head with a due time of now while the worker remains stopped, and resume dispatches that promoted head. Shadow and unsupported authority delegate to the explicit legacy callback. Server authority stays `shadow` and its worker stays paused throughout Phase 2. The v3 production queue remains authoritative until Phase 3 activation.
+
+`message-queue-shadow-import.ts` hydrates the v4 runtime read-only and constructs stable scope/item ordinals, canonical payload hashes, snapshot hashes, and manifests without mutating the local ledger. It materializes or uploads canonical attachment payloads, creates a protocol-4 import, stages every payload, and seals the manifest. Payload tokens release through one `finally` path. `message-queue-cutover.ts` owns the headless external-store cutover lifecycle: probing, legacy-unsupported, server-active, server-paused, and blocked ownership; freezing, staging, activating, late-importing, complete, and error migration states. It freezes admission while shadow staging, calls injected quiesce/flush barriers, activates sealed shadow imports, and commits late imports after active or paused ownership. A lost commit response confirms through status epoch and manifest. Only HTTP 501 enables legacy ownership; transport and authorization failures remain blocked with backoff. Runtime switches abort the old flow and isolate the next transport. Phase 3 binds every cutover publication to the v3 ownership gate and mutation fence. The module starts quiescing; only HTTP 501 enables v3 dispatch and user mutations. Quiescing blocks new dispatch before begin and immediately before POST, waits for dispatch and reconciliation flights, resolves and atomically binds every unbound legacy scope, then flushes persistence and captures the final v3 ledger. A server-active or server-paused transport enters the retired transport set, so its bound scopes remain read-only while a newly selected HTTP 501 transport opens its own v3 queue. Existing sending rows retain internal confirmation and failure settlement before retirement.
+
+Cutover refreshes are single-flight. A committed import response completes directly without staging or committing again. Importer pending, degraded, and transient failures preserve the current shadow or server-authoritative source and retry with exponential backoff. Activation conflicts re-read authority, retain server ownership, prepare the current local snapshot, and append it as a late import.
 
 - `message-queue-runtime-controller.ts` owns the v4 queue runtime snapshot,
   hydration state, mutation serialization, and scope-reference stability.
@@ -496,6 +529,27 @@ for both committed and cleanup-failed outcomes because its send acquisition has
 ended; stale keeps the reservation for its matching token. Owner throw handling
 clears the local fence and reports cleanup diagnostics. Hydrate and disable
 attempt old reservation release before rebuilding or fencing runtime state.
+
+`message-queue-server-edit-bridge.ts` owns the server-authority edit path. It captures matching server and input runtime generations, reserves the exact queue row by revision and row version, downloads every canonical attachment through the authenticated queue content route, validates its occurrence tuple, MIME type, and byte size, then durably commits the draft. One awaitable renewal flight serves heartbeat and pre-commit freshness; each acknowledgement must match the item, token, generation, and a strictly future expiry before draft commit. Attachment metadata above 50 MiB fails before download, and downloads preserve canonical order with four concurrent requests. Reserved removal uses the reservation generation and CAS values; a durable draft with a retained queue reports `queue-retained`. Runtime-stale work releases its reservation and never commits or removes. Server attachment paths remain server-owned and reach the UI only as downloaded `Blob` values.
+
+### Shared worktree ordering
+
+`worktree-order-sync.ts` reconciles the worktree display order with the
+message-queue server. Local order and pending write intent persist by runtime for
+startup continuity and unsupported-runtime fallback; server revisions remain
+runtime memory. Server records are mapped by normalized project directory and
+advance settled local order only with a greater project revision. Equal and older
+records preserve the current paths. Pending local edits retain their optimistic
+order while receiving a greater server revision, then write through per-project
+latest-wins CAS flights. A pending project holds the greatest remote order in
+runtime memory; an acknowledgement behind that revision resolves to the deferred
+remote order, while a newer acknowledgement retains the local order. Observer recovery replays every persisted pending project,
+including an empty order, and seeds non-empty local-only orders. Retry-classified
+transport failures back off; unsupported and permanent failures stop the observer.
+Transport retries reuse one request ID, revision-conflict retries use a new request
+ID, and runtime changes abort both observers and writes.
+Shared ordering covers worktree row order; expanded groups, selected sessions,
+and other local navigation state retain their existing local ownership.
 
 ## The golden rule
 

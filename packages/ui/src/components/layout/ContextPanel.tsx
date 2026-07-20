@@ -2088,6 +2088,7 @@ export const ContextPanel: React.FC = () => {
   const directoryKey = React.useMemo(() => normalizeDirectoryKey(effectiveDirectory), [effectiveDirectory]);
 
   const panelState = useUIStore((state) => (directoryKey ? state.contextPanelByDirectory[directoryKey] : undefined));
+  const contextToolDiff = useUIStore((state) => (directoryKey ? state.contextToolDiffByDirectory[directoryKey] : undefined));
   const closeContextPanel = useUIStore((state) => state.closeContextPanel);
   const closeContextPanelTab = useUIStore((state) => state.closeContextPanelTab);
   const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
@@ -2855,6 +2856,13 @@ export const ContextPanel: React.FC = () => {
               onDiffScopeChange={handleDiffScopeChange}
               targetFilePath={tab.targetPath}
               targetLine={tab.diffTargetLine ?? null}
+              toolPatch={
+                tab.mode === 'diff'
+                && contextToolDiff?.targetPath === tab.targetPath
+                && contextToolDiff.turnMessageId === tab.diffTurnMessageId
+                  ? contextToolDiff.patch
+                  : null
+              }
               navigationRequestKey={tab.touchedAt}
               flushContent
               singleFileView={tab.mode === 'file-diff'}

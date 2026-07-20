@@ -214,6 +214,7 @@ const state = {
   quitInProgress: false,
   quitConfirmationPending: false,
   backgroundShutdownComplete: false,
+  shutdownPromise: null,
   sshShutdownPromise: null,
   installingUpdate: false,
   pendingUpdate: null,
@@ -338,16 +339,7 @@ const quitConfirmationMessage = () => {
   return `OpenChamber detected ${reasons.join(', ')}. Quitting now will stop sidecar/background processes and may interrupt pending work.`;
 };
 
-const shutdownBackgroundServices = () => {
-  if (state.backgroundShutdownComplete) return;
-  state.backgroundShutdownComplete = true;
-  setDesktopKeepAwakeActive(false);
-  if (state.installingUpdate) return;
-  killSidecar();
-  setImmediate(() => {
-    void shutdownSshSessions();
-  });
-};
+const shutdownBackgroundServices = () => shutdownInProcessServer();
 
 const shutdownSshSessions = async () => {
   if (state.sshShutdownPromise) {
@@ -387,35 +379,27 @@ const prepareForQuit = ({ installingUpdate = false } = {}) => {
 
   setDesktopKeepAwakeActive(false);
 
-  if (installingUpdate) {
-    state.backgroundShutdownComplete = true;
-    return;
-  }
-
-  shutdownBackgroundServices();
 };
 
-const performConfirmedQuit = () => {
-  if (state.quitInProgress) return;
+const performConfirmedQuit = async () => {
+  if (state.quitInProgress) return state.shutdownPromise;
   state.quitInProgress = true;
 
   prepareForQuit();
+  await shutdownBackgroundServices();
   app.exit(0);
 };
 
 // Hard-stop signals (`Ctrl+C` on `electron:dev`, an external `kill`/SIGTERM,
-// terminal close) bypass the normal app-quit flow — which would orphan the
-// in-process web server's managed OpenCode child. Run the same background
-// teardown the quit path uses (which kills the sidecar), then exit. The startup
-// reaper remains the backstop for an unhandled hard crash (SIGKILL).
+// terminal close) await the shared in-process server teardown before exiting.
+// The startup reaper remains the backstop for an unhandled hard crash (SIGKILL).
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
   process.on(signal, () => {
-    try {
-      shutdownBackgroundServices();
-    } catch (error) {
+    void shutdownBackgroundServices().catch((error) => {
       log.warn(`[electron] ${signal} shutdown failed:`, error);
-    }
-    app.exit(0);
+    }).finally(() => {
+      app.exit(0);
+    });
   });
 }
 
@@ -423,7 +407,7 @@ const requestQuitWithConfirmation = async () => {
   await refreshQuitRiskFlags();
 
   if (!shouldRequireQuitConfirmation()) {
-    performConfirmedQuit();
+    void performConfirmedQuit();
     return;
   }
 
@@ -454,7 +438,7 @@ const requestQuitWithConfirmation = async () => {
     });
     state.quitConfirmationPending = false;
     if (result.response === 0) {
-      performConfirmedQuit();
+      void performConfirmedQuit();
     }
   } catch (error) {
     state.quitConfirmationPending = false;
@@ -1442,6 +1426,7 @@ const spawnLocalServer = async () => {
       requestHeaders: sanitizeRuntimeRequestHeaders(state.requestHeaders || {}),
     }),
     sessionIndexDbPath: path.join(app.getPath('userData'), 'session-index.sqlite'),
+    messageQueueDbPath: path.join(app.getPath('userData'), 'message-queue.sqlite'),
   });
 
   const port = handle.getPort();
@@ -1538,17 +1523,40 @@ Stop-ProcessTree $targetPid $true
   child.unref();
 };
 
-const killSidecar = () => {
+const shutdownInProcessServer = () => {
+  if (state.shutdownPromise) return state.shutdownPromise;
+
   const handle = state.serverHandle;
   state.serverHandle = null;
   state.sidecarUrl = null;
-  if (!handle) return;
+  setDesktopKeepAwakeActive(false);
 
+  let processInfo;
   try {
-    launchDetachedOpenCodeKiller(handle.getOpenCodeProcessInfo?.());
+    processInfo = handle?.getOpenCodeProcessInfo?.();
   } catch (error) {
-    log.warn('[electron] failed to launch OpenCode killer:', error);
+    log.warn('[electron] failed to capture managed OpenCode process info:', error);
   }
+
+  state.shutdownPromise = (async () => {
+    try {
+      if (handle) {
+        await handle.stop({ exitProcess: false });
+      }
+    } catch (error) {
+      log.warn('[electron] graceful in-process web server shutdown failed:', error);
+      try {
+        launchDetachedOpenCodeKiller(processInfo);
+      } catch (killerError) {
+        log.warn('[electron] failed to launch OpenCode killer:', killerError);
+      }
+    } finally {
+      await shutdownSshSessions();
+      state.backgroundShutdownComplete = true;
+    }
+  })();
+
+  return state.shutdownPromise;
 };
 
 const macosMajorVersion = () => {
@@ -2282,8 +2290,9 @@ const copyFromMenuTarget = () => {
   dispatchMenuAction('copy');
 };
 
-const relaunchFromMenu = () => {
+const relaunchFromMenu = async () => {
   prepareForQuit();
+  await shutdownBackgroundServices();
   app.relaunch();
   app.exit(0);
 };
@@ -2509,7 +2518,7 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {} }
         if (state.installingUpdate) {
           app.quit();
         } else {
-          performConfirmedQuit();
+          void performConfirmedQuit();
         }
       }
     }
@@ -4115,13 +4124,16 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
         root.desktopVibrancy = enabled;
       });
       setImmediate(() => {
-        try {
-          prepareForQuit();
-          app.relaunch();
-          app.exit(0);
-        } catch (err) {
-          log.error('[electron] desktop_set_vibrancy relaunch failed', err);
-        }
+        void (async () => {
+          try {
+            prepareForQuit();
+            await shutdownBackgroundServices();
+            app.relaunch();
+            app.exit(0);
+          } catch (err) {
+            log.error('[electron] desktop_set_vibrancy relaunch failed', err);
+          }
+        })();
       });
       return { enabled, requiresRestart: true };
     }
@@ -4231,18 +4243,22 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       // Without this, quitAndInstall() can race with the renderer's pending
       // invoke and the restart appears to do nothing from the UI side.
       setImmediate(() => {
-        try {
-          if (applyUpdate) {
-            killSidecar();
-            autoUpdater.quitAndInstall();
-          } else {
-            prepareForQuit();
-            app.relaunch();
-            app.exit(0);
+        void (async () => {
+          try {
+            if (applyUpdate) {
+              prepareForQuit({ installingUpdate: true });
+              await shutdownBackgroundServices();
+              autoUpdater.quitAndInstall();
+            } else {
+              prepareForQuit();
+              await shutdownBackgroundServices();
+              app.relaunch();
+              app.exit(0);
+            }
+          } catch (err) {
+            log.error('[electron] desktop_restart failed', err);
           }
-        } catch (err) {
-          log.error('[electron] desktop_restart failed', err);
-        }
+        })();
       });
       return null;
     }
@@ -5056,7 +5072,7 @@ app.on('window-all-closed', () => {
     if (state.installingUpdate) {
       app.quit();
     } else {
-      performConfirmedQuit();
+      void performConfirmedQuit();
     }
   }
 });
@@ -5065,6 +5081,10 @@ app.on('before-quit', (event) => {
   state.quitRequested = true;
 
   if (state.installingUpdate) {
+    if (!state.backgroundShutdownComplete) {
+      event.preventDefault();
+      void shutdownBackgroundServices();
+    }
     return;
   }
 
@@ -5076,7 +5096,7 @@ app.on('before-quit', (event) => {
 
   if (!state.backgroundShutdownComplete) {
     event.preventDefault();
-    performConfirmedQuit();
+    void performConfirmedQuit();
   }
 });
 

@@ -138,6 +138,6 @@ export const migrateLegacyMessageQueue = async (sink: QueueLedgerMetadataSink, b
   if (issues.length) snapshot.migration.v3State = "degraded"
   const written = await writeQueueLedgerSnapshot(sink, snapshot)
   if (!written.ok) { await cleanup(); return { status: "failed", error: written.error, issues, cleanupErrors } }
-  if (snapshot.migration.v3State === "complete") { const removed = await sink.remove(LEGACY_MESSAGE_QUEUE_KEY); if (!removed.ok) cleanupErrors.push({ scopeKey: "", queueItemID: "", path: "$", reason: `legacy-remove-${removed.error.code}` }) }
+  // Phase 2 retains the v3 ledger as a read-only recovery receipt through activation.
   return { status: snapshot.migration.v3State === "complete" ? "committed" : "degraded", snapshot, issues, cleanupErrors }
 }

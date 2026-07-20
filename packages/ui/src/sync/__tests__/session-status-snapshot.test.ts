@@ -7,6 +7,9 @@ import type { DirectoryStore } from "../child-store"
 import {
   applySessionStatusSnapshot,
   needsSnapshotAfterStatusPoll,
+  isLiveRevisionCurrent,
+  resolveStrictDomainSessionID,
+  shouldTriggerDomainRecovery,
   shouldTriggerStaleResync,
 } from "../sync-context"
 
@@ -204,9 +207,64 @@ describe("shouldTriggerStaleResync", () => {
 
   test("uses default thresholds when omitted", () => {
     const now = 100_000
-    // 25s since last activity (> 20s default), 20s since last resync (> 15s default)
-    expect(shouldTriggerStaleResync(now - 25_000, now - 20_000, now)).toBe(true)
-    // 10s since last activity (< 20s default)
+    // 45s since last activity (> 40s default), 20s since last resync (> 15s default)
+    expect(shouldTriggerStaleResync(now - 45_000, now - 20_000, now)).toBe(true)
+    // 10s since last activity (< 40s default)
     expect(shouldTriggerStaleResync(now - 10_000, 0, now)).toBe(false)
+  })
+})
+
+describe("shouldTriggerDomainRecovery", () => {
+  const now = 100_000
+  const base = {
+    isViewed: true,
+    status: BUSY,
+    lastTransportActivityAt: now - 1_000,
+    lastDomainActivityAt: now - 60_001,
+    lastFullResyncAt: 0,
+    now,
+  }
+
+  test("triggers for a viewed busy session with fresh transport and stale domain activity", () => {
+    expect(shouldTriggerDomainRecovery(base)).toBe(true)
+  })
+
+  test("requires an active local status", () => {
+    expect(shouldTriggerDomainRecovery({ ...base, status: { type: "idle" } })).toBe(false)
+  })
+
+  test("requires the currently viewed session", () => {
+    expect(shouldTriggerDomainRecovery({ ...base, isViewed: false })).toBe(false)
+  })
+
+  test("leaves transport-stale recovery to the reconnect path", () => {
+    expect(shouldTriggerDomainRecovery({ ...base, lastTransportActivityAt: now - 40_000 })).toBe(false)
+  })
+
+  test("respects the directory recovery cooldown", () => {
+    expect(shouldTriggerDomainRecovery({ ...base, lastFullResyncAt: now - 30_000 })).toBe(false)
+  })
+})
+
+describe("domain recovery event ownership and freshness", () => {
+  test("does not assign an unknown message event to the viewed session", () => {
+    const payload = {
+      type: "message.part.delta",
+      properties: { messageID: "msg_unknown", partID: "prt_1", field: "text", delta: "x" },
+    } as never
+    expect(resolveStrictDomainSessionID(payload, new Map([["msg_known", "ses_viewed"]]))).toBe(undefined)
+  })
+
+  test("resolves a known message event through the routing index", () => {
+    const payload = {
+      type: "message.part.delta",
+      properties: { messageID: "msg_known", partID: "prt_1", field: "text", delta: "x" },
+    } as never
+    expect(resolveStrictDomainSessionID(payload, new Map([["msg_known", "ses_viewed"]]))).toBe("ses_viewed")
+  })
+
+  test("skips a recovery snapshot after its live revision changes", () => {
+    expect(isLiveRevisionCurrent(4, 5)).toBe(false)
+    expect(isLiveRevisionCurrent(4, 4)).toBe(true)
   })
 })

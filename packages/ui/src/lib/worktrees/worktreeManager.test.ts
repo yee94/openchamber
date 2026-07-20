@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { SessionWorktreeAttachment } from '@/stores/types/sessionTypes';
 import type { WorktreeMetadata } from '@/types/worktree';
+import * as runtimeSwitch from '@/lib/runtime-switch';
 
 type WorktreeListEntry = {
   path?: string;
@@ -11,6 +12,9 @@ type WorktreeListEntry = {
 
 const listCalls: string[] = [];
 const listResolvers: Array<(value: WorktreeListEntry[]) => void> = [];
+const listRejectors: Array<(reason?: unknown) => void> = [];
+let runtimeIdentity = 'runtime-0';
+let runtimeSequence = 0;
 const createdWorktree = {
   name: 'feature',
   branch: 'feature',
@@ -44,6 +48,7 @@ mock.module('@/lib/openchamberConfig', () => ({
 
 mock.module('@/lib/worktrees/worktreeBootstrap', () => ({
   clearWorktreeBootstrapState: mock(),
+  getWorktreeBootstrapState: () => null,
   markWorktreeBootstrapPending: mock(),
   setWorktreeBootstrapState: mock(),
   startWorktreeBootstrapWatcher: mock(),
@@ -52,6 +57,11 @@ mock.module('@/lib/worktrees/worktreeBootstrap', () => ({
 mock.module('@/lib/worktrees/worktreeStatus', () => ({
   invalidateResolvedProjectRootCache: mock(),
   resolveProjectRoot: (directory: string) => Promise.resolve(directory),
+}));
+
+mock.module('@/lib/runtime-switch', () => ({
+  ...runtimeSwitch,
+  getRuntimeTransportIdentity: () => runtimeIdentity,
 }));
 
 mock.module('@/sync/session-ui-store', () => ({
@@ -76,8 +86,9 @@ mock.module('@/lib/gitApi', () => ({
     worktree: {
       list: (directory: string) => {
         listCalls.push(directory);
-        return new Promise<WorktreeListEntry[]>((resolve) => {
+        return new Promise<WorktreeListEntry[]>((resolve, reject) => {
           listResolvers.push(resolve);
+          listRejectors.push(reject);
         });
       },
       create: mock(() => Promise.resolve(createdWorktree)),
@@ -86,7 +97,7 @@ mock.module('@/lib/gitApi', () => ({
   },
 }));
 
-const { createWorktree, listProjectWorktrees, removeProjectWorktree, worktreeMapsEqual } = await import('./worktreeManager');
+const { createWorktree, forceRefreshProjectWorktreeCatalog, listProjectWorktrees, removeProjectWorktree, worktreeMapsEqual } = await import('./worktreeManager');
 
 const waitForListCallCount = async (count: number): Promise<void> => {
   for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -102,6 +113,8 @@ describe('worktreeManager list invalidation', () => {
   beforeEach(() => {
     listCalls.length = 0;
     listResolvers.length = 0;
+    listRejectors.length = 0;
+    runtimeIdentity = `runtime-${++runtimeSequence}`;
     sessionState.availableWorktreesByProject = new Map();
     sessionState.availableWorktrees = [];
     sessionState.worktreeMetadata = new Map();
@@ -144,6 +157,70 @@ describe('worktreeManager list invalidation', () => {
 
     expect(metadata.worktreeStatus).toBe('pending');
     expect(sessionState.availableWorktrees[0]?.worktreeStatus).toBe('pending');
+  });
+
+  test('force refresh bypasses cache, clears successful empty catalogs, and preserves other project references', async () => {
+    const existing = [{ path: '/repo/feature', branch: 'feature', projectDirectory: '/repo', label: 'feature' }];
+    const other = [{ path: '/other/feature', branch: 'feature', projectDirectory: '/other', label: 'feature' }];
+    sessionState.availableWorktreesByProject = new Map([['/repo', existing], ['/other', other]]);
+    const refresh = forceRefreshProjectWorktreeCatalog({ id: 'project-1', path: '/repo' });
+    await waitForListCallCount(1);
+    listResolvers[0]([]);
+    const result = await refresh;
+    expect(result.removedDirectories).toEqual(['/repo/feature']);
+    expect(sessionState.availableWorktreesByProject.get('/repo')).toEqual([]);
+    expect(sessionState.availableWorktreesByProject.get('/other')).toBe(other);
+  });
+
+  test('path-upserts an already discovered worktree as one pending entry', async () => {
+    const existing = { path: '/repo-feature', branch: 'feature', projectDirectory: '/repo', label: 'feature', worktreeStatus: 'ready' as const };
+    sessionState.availableWorktreesByProject = new Map([['/repo', [existing]]]);
+    await createWorktree({ id: 'project-1', path: '/repo' }, { preferredName: 'feature', mode: 'new', branchName: 'feature', worktreeName: 'feature', returnAfterDirectoryCreated: true });
+    const entries = sessionState.availableWorktreesByProject.get('/repo') ?? [];
+    expect(entries).toHaveLength(1); expect(entries[0]?.path).toBe('/repo-feature'); expect(entries[0]?.worktreeStatus).toBe('pending');
+  });
+
+  test('keeps a pending create as one entry through force-refresh invalidation races', async () => {
+    const project = { id: 'project-1', path: '/repo' };
+    const refresh = forceRefreshProjectWorktreeCatalog(project);
+    await waitForListCallCount(1);
+    await createWorktree(project, { preferredName: 'feature', mode: 'new', branchName: 'feature', worktreeName: 'feature', returnAfterDirectoryCreated: true });
+    listResolvers[0]([]);
+    await waitForListCallCount(2);
+    listResolvers[1]([createdWorktree]);
+    const result = await refresh;
+    const entries = sessionState.availableWorktreesByProject.get('/repo') ?? [];
+    expect(entries).toHaveLength(1); expect(entries[0]?.worktreeStatus).toBe('pending'); expect(result.addedDirectories).toEqual([]);
+  });
+
+  test('clears metadata and matching attachments after a successful empty force refresh', async () => {
+    const removed = { path: '/repo/feature', branch: 'feature', projectDirectory: '/repo', label: 'feature' };
+    const retained = { path: '/other/feature', branch: 'feature', projectDirectory: '/other', label: 'feature' };
+    sessionState.availableWorktreesByProject = new Map([['/repo', [removed]], ['/other', [retained]]]);
+    sessionState.worktreeMetadata = new Map([['removed', removed], ['retained', retained]]);
+    sessionWorktreeState.attachments = new Map([
+      ['removed', { worktreeRoot: '/repo/feature', cwd: '/repo/feature', branch: 'feature', headState: 'branch', worktreeStatus: 'ready', worktreeSource: 'existing', legacy: false, degraded: false }],
+      ['retained', { worktreeRoot: '/other/feature', cwd: '/other/feature', branch: 'feature', headState: 'branch', worktreeStatus: 'ready', worktreeSource: 'existing', legacy: false, degraded: false }],
+    ]);
+    const refresh = forceRefreshProjectWorktreeCatalog({ id: 'project-1', path: '/repo' }); await waitForListCallCount(1); listResolvers[0]([]); await refresh;
+    expect(sessionState.worktreeMetadata).toEqual(new Map([['retained', retained]])); expect([...sessionWorktreeState.attachments.keys()]).toEqual(['retained']); expect(clearedAttachmentSessions).toEqual(['removed']);
+  });
+
+  test('commits matching path and branch when discovered head state or name changes', async () => {
+    const current = { path: '/repo/feature', branch: '', name: 'old', label: 'old', projectDirectory: '/repo', headState: 'unborn' as const, worktreeRoot: '/repo/feature', worktreeStatus: 'ready' as const, worktreeSource: 'existing' as const, source: 'sdk' as const };
+    sessionState.availableWorktreesByProject = new Map([['/repo', [current]]]);
+    const refresh = forceRefreshProjectWorktreeCatalog({ id: 'project-1', path: '/repo' }); await waitForListCallCount(1); listResolvers[0]([{ path: '/repo/feature', branch: '', head: 'abc', name: 'new' }]); await refresh;
+    expect(sessionState.availableWorktreesByProject.get('/repo')?.[0]?.name).toBe('new'); expect(sessionState.availableWorktreesByProject.get('/repo')?.[0]?.headState).toBe('detached');
+  });
+
+  test('isolates cache and stale completions by runtime transport identity', async () => {
+    const project = { id: 'project-1', path: '/repo' };
+    runtimeIdentity = 'A'; const requestA = listProjectWorktrees(project); await waitForListCallCount(1);
+    runtimeIdentity = 'B'; const requestB = listProjectWorktrees(project); await waitForListCallCount(2);
+    listResolvers[0]([{ path: '/repo/a', branch: 'a' }]); await requestA;
+    listResolvers[1]([{ path: '/repo/b', branch: 'b' }]); await requestB;
+    runtimeIdentity = 'A'; const requestAAgain = listProjectWorktrees(project); await waitForListCallCount(3); listResolvers[2]([{ path: '/repo/a2', branch: 'a2' }]);
+    expect((await requestAAgain).map((entry) => entry.path)).toEqual(['/repo/a2']);
   });
 });
 

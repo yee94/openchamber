@@ -162,6 +162,7 @@ export type SessionMaterializationReason =
   | "stream-reconnect"
   | "transport-switch"
   | "stale-status-resync"
+  | "domain-stale-resync"
 
 export type DirectoryEventResult = boolean | {
   changed: boolean

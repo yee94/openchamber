@@ -72,7 +72,7 @@ describe('shared expanded tool layout', () => {
 });
 
 describe('apply_patch navigation', () => {
-    test('routes dedicated mobile clicks to the complete owning-turn diff', () => {
+    test('routes dedicated mobile clicks to an exact tool patch with an owning-turn fallback', () => {
         const clickHandlerStart = toolPartSource.indexOf('const handleMainClick');
         const fileNavigationStart = toolPartSource.indexOf('let filePath: unknown;', clickHandlerStart);
         const fileNavigationEnd = toolPartSource.indexOf('if (!isFileNavTool)', fileNavigationStart);
@@ -80,10 +80,13 @@ describe('apply_patch navigation', () => {
 
         expect(clickHandlerStart).toBeGreaterThan(-1);
         expect(fileNavigationStart).toBeGreaterThan(clickHandlerStart);
-        expect(toolPartSource).toContain("if (normalizedPartTool === 'apply_patch' && mobileActions)");
+        expect(fileNavigation).toContain('mobileActions.openToolDiff({');
+        expect(fileNavigation).toContain("else if (normalizedPartTool === 'apply_patch')");
         expect(toolPartSource).toContain('mobileActions.openTurnDiff(messageId);');
-        expect(mobileAppSource).toContain('const openTurnDiffSurface = React.useCallback((messageId?: string) => {');
+        expect(mobileAppSource).toContain('const openTurnDiffSurface = useEvent((messageId?: string) => {');
         expect(mobileAppSource).toContain('setTurnDiffMessageId(messageId ?? null);');
+        expect(mobileAppSource).toContain('openToolDiff: ({ diffPath, patch, targetLine }) => {');
+        expect(mobileAppSource).toContain('openChangesSurface({ path: diffPath, staged: false, targetLine, toolPatch: patch });');
         expect(fileNavigation).toContain('mobileActions.openChanges({ diffPath: relativePath, staged: false, targetLine });');
         expect(fileNavigation.indexOf('mobileActions.openChanges')).toBeLessThan(fileNavigation.indexOf("navigateToDiff(relativePath, false, 'turn', targetLine)"));
     });
@@ -96,6 +99,11 @@ describe('apply_patch navigation', () => {
         expect(toolPartSource).toContain('getPatchText((fileDiff as { patch?: unknown }).patch)');
         expect(toolPartSource).toContain("openContextDiff(currentDirectory, relativePath, false, 'turn', targetLine, messageId);");
         expect(toolPartSource).toContain("openContextPanelTab(currentDirectory, { mode: 'diff', diffScope: 'turn', diffTurnMessageId: messageId });");
+        expect(toolPartSource).toContain('openContextToolDiff(');
+        expect(contextPanelSource).toContain('contextToolDiff?.targetPath === tab.targetPath');
+        expect(contextPanelSource).toContain('toolPatch={');
+        expect(diffViewSource).toContain('const activeTurnDiffs = React.useMemo(');
+        expect(diffViewSource).toContain('selectedToolTurnDiff ? [selectedToolTurnDiff] : lastTurnDiffs');
     });
 
     test('keeps the owning assistant message id when memoized tool rows update', () => {
@@ -131,6 +139,10 @@ describe('apply_patch navigation', () => {
         expect(directDiffPresentation).toContain('<MobileResizableSheet');
         expect(directDiffPresentation).toContain('resizeAriaLabel={t(\'mobile.changes.sheet.resizeAria\')}');
         expect(directDiffPresentation).toContain('initiallyExpanded');
+        expect(directDiffPresentation).toContain('pendingChangesDiff.toolPatch ? (');
+        expect(directDiffPresentation).toContain('toolPatch={pendingChangesDiff.toolPatch}');
+        expect(directDiffPresentation).toContain('singleFileView');
+        expect(mobileAppSource).toContain(') : pendingChangesDiff?.toolPatch ? (');
         expect(directDiffPresentation).toContain('hideDiffHeader');
         expect(mobileChangesSurfaceSource).toContain('hideHeader={hideDiffHeader}');
         expect(mobileChangesSurfaceSource).toContain('p-3 pwa-overlay-scroll');

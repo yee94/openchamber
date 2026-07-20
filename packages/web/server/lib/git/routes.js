@@ -1,4 +1,43 @@
-export function registerGitRoutes(app) {
+export function registerGitRoutes(app, { messageQueueService = null, createRequestID = () => globalThis.crypto.randomUUID(), broadcastWorktreeTopologyChanged = () => {} } = {}) {
+  const normalizeWorktreePath = (value) => typeof value === 'string' ? value.trim().replace(/\\/g, '/').replace(/\/+$/, '') : '';
+  const lifecycleOperations = new Map();
+  const acquireWorktreeLifecycleOperation = (runtimeKey, directory) => {
+    const key = `${runtimeKey}\u0000${normalizeWorktreePath(directory)}`;
+    const operations = lifecycleOperations.get(key);
+    if (operations?.size) return null;
+    const operation = Symbol('worktree-lifecycle-operation');
+    lifecycleOperations.set(key, new Set([operation]));
+    return { key, operation };
+  };
+  const releaseWorktreeLifecycleOperation = ({ key, operation }) => {
+    const operations = lifecycleOperations.get(key);
+    operations?.delete(operation);
+    if (!operations?.size) lifecycleOperations.delete(key);
+  };
+  const isWorktreeLifecycleStale = (result) => result === 'scope_locked'
+    || result === 'not_found'
+    || result?.code === 'scope_locked'
+    || result?.code === 'not_found';
+  const queueActivationRepair = (projectDirectory, directory) => ({
+    method: 'POST',
+    path: '/api/git/worktrees/queue-activation',
+    body: { projectDirectory, directory },
+  });
+  const notifyWorktreeTopologyChanged = (projectDirectory, directory, operation) => {
+    try {
+      broadcastWorktreeTopologyChanged({
+        type: 'openchamber:worktree-topology-changed',
+        properties: {
+          projectDirectory,
+          directory,
+          operation,
+          occurredAt: Date.now(),
+        },
+      });
+    } catch {
+      console.warn('Failed to broadcast worktree topology change');
+    }
+  };
   let gitLibraries = null;
   const getGitLibraries = async () => {
     if (!gitLibraries) {
@@ -970,12 +1009,9 @@ export function registerGitRoutes(app) {
 
       const worktrees = await getWorktrees(directory);
       res.json(worktrees);
-    } catch (error) {
-      // Worktrees are an optional feature. Avoid repeated 500s (and repeated client retries)
-      // when the directory isn't a git repo or uses shell shorthand like "~/".
-      console.warn('Failed to get worktrees, returning empty list:', error?.message || error);
-      res.setHeader('X-OpenChamber-Warning', 'git worktrees unavailable');
-      res.json([]);
+    } catch {
+      console.warn('Failed to get worktree catalog');
+      res.status(503).json({ code: 'worktree_catalog_unavailable' });
     }
   });
 
@@ -1011,11 +1047,98 @@ export function registerGitRoutes(app) {
         return res.status(400).json({ error: 'directory parameter is required' });
       }
 
-      const created = await createWorktree(directory, req.body || {});
+      const queueRuntimeKey = messageQueueService?.getRuntimeKey();
+      const created = await createWorktree(directory, req.body || {}, {
+        onWorktreeAdded: (worktreeDirectory) => notifyWorktreeTopologyChanged(directory, worktreeDirectory, 'added'),
+      });
+      if (messageQueueService) {
+        try {
+          await messageQueueService.markWorktreeActive({
+            requestID: createRequestID(),
+            directory: created.path,
+          }, { runtimeKey: queueRuntimeKey });
+        } catch {
+          console.error('Failed to activate message queue worktree state');
+          return res.status(503).json({
+            code: 'message_queue_activation_pending',
+            worktree: created,
+            repair: queueActivationRepair(directory, created.path),
+          });
+        }
+      }
       res.json(created);
     } catch (error) {
-      console.error('Failed to create worktree:', error);
+      console.error('Failed to create worktree');
       res.status(500).json({ error: error.message || 'Failed to create worktree' });
+    }
+  });
+
+  app.post('/api/git/worktrees/queue-activation', async (req, res) => {
+    if (!messageQueueService || typeof messageQueueService.markWorktreeActive !== 'function' || typeof messageQueueService.getWorktreeLifecycle !== 'function') {
+      return res.status(501).json({ error: 'Message queue service is not available' });
+    }
+
+    const projectDirectory = typeof req.body?.projectDirectory === 'string' ? req.body.projectDirectory.trim() : '';
+    if (!projectDirectory) {
+      return res.status(400).json({ error: 'projectDirectory is required' });
+    }
+
+    const directory = typeof req.body?.directory === 'string' ? req.body.directory.trim() : '';
+    if (!directory) {
+      return res.status(400).json({ error: 'directory is required' });
+    }
+
+    const queueRuntimeKey = messageQueueService.getRuntimeKey();
+    const operation = acquireWorktreeLifecycleOperation(queueRuntimeKey, directory);
+    if (!operation) {
+      return res.status(409).json({ code: 'worktree_lifecycle_busy' });
+    }
+
+    try {
+      try {
+        const { getWorktrees } = await getGitLibraries();
+        const worktrees = await getWorktrees(projectDirectory);
+        const target = normalizeWorktreePath(directory);
+        const exists = Array.isArray(worktrees) && worktrees.some((worktree) => normalizeWorktreePath(worktree?.path ?? worktree?.directory) === target);
+        if (!exists) {
+          return res.status(409).json({ code: 'worktree_activation_stale' });
+        }
+      } catch {
+        console.error('Failed to list worktrees for message queue activation');
+        return res.status(503).json({
+          code: 'message_queue_activation_pending',
+          repair: queueActivationRepair(projectDirectory, directory),
+        });
+      }
+
+      try {
+        const lifecycle = messageQueueService.getWorktreeLifecycle(directory, { runtimeKey: queueRuntimeKey });
+        const activation = lifecycle?.state === 'deleting' && typeof lifecycle.token === 'string' && lifecycle.token
+          ? await messageQueueService.rollbackWorktreeDeletion({
+            requestID: createRequestID(),
+            directory,
+            token: lifecycle.token,
+          }, { runtimeKey: queueRuntimeKey })
+          : await messageQueueService.markWorktreeActive({
+            requestID: createRequestID(),
+            directory,
+          }, { runtimeKey: queueRuntimeKey });
+        if (isWorktreeLifecycleStale(activation)) {
+          return res.status(409).json({ code: 'worktree_activation_stale' });
+        }
+        res.json({ directory, state: 'active' });
+      } catch (error) {
+        console.error('Failed to activate message queue worktree state');
+        if (isWorktreeLifecycleStale(error)) {
+          return res.status(409).json({ code: 'worktree_activation_stale' });
+        }
+        res.status(503).json({
+          code: 'message_queue_activation_pending',
+          repair: queueActivationRepair(projectDirectory, directory),
+        });
+      }
+    } finally {
+      releaseWorktreeLifecycleOperation(operation);
     }
   });
 
@@ -1060,7 +1183,7 @@ export function registerGitRoutes(app) {
   });
 
   app.delete('/api/git/worktrees', async (req, res) => {
-    const { removeWorktree } = await getGitLibraries();
+    const { removeWorktree, getWorktrees } = await getGitLibraries();
     if (typeof removeWorktree !== 'function') {
       return res.status(501).json({ error: 'Worktree removal is not available' });
     }
@@ -1076,13 +1199,98 @@ export function registerGitRoutes(app) {
         return res.status(400).json({ error: 'worktree directory is required' });
       }
 
-      const result = await removeWorktree(directory, {
-        directory: worktreeDirectory,
-        deleteLocalBranch: req.body?.deleteLocalBranch === true,
-      });
-      res.json({ success: Boolean(result) });
+      const queueRuntimeKey = messageQueueService?.getRuntimeKey();
+      const operation = acquireWorktreeLifecycleOperation(queueRuntimeKey, worktreeDirectory);
+      if (!operation) {
+        return res.status(409).json({ code: 'worktree_lifecycle_busy' });
+      }
+
+      try {
+        let deletionToken = null;
+        if (messageQueueService) {
+          try {
+            const prepared = await messageQueueService.prepareWorktreeDeletion({
+              requestID: createRequestID(),
+              directory: worktreeDirectory,
+            }, { runtimeKey: queueRuntimeKey });
+            deletionToken = prepared.token;
+          } catch {
+            console.error('Failed to prepare message queue worktree deletion');
+            return res.status(500).json({ error: 'Failed to prepare worktree queue deletion' });
+          }
+        }
+
+        let result;
+        try {
+          result = await removeWorktree(directory, {
+            directory: worktreeDirectory,
+            deleteLocalBranch: req.body?.deleteLocalBranch === true,
+          });
+        } catch (error) {
+          if (messageQueueService) {
+            try {
+              await messageQueueService.rollbackWorktreeDeletion({
+                requestID: createRequestID(),
+                directory: worktreeDirectory,
+                token: deletionToken,
+              }, { runtimeKey: queueRuntimeKey });
+            } catch {
+              console.warn('Failed to roll back message queue worktree deletion');
+            }
+          }
+          throw error;
+        }
+
+        let removed = Boolean(result);
+        if (!removed) {
+          try {
+            const worktrees = await getWorktrees(directory);
+            const target = normalizeWorktreePath(worktreeDirectory);
+            removed = Array.isArray(worktrees) && !worktrees.some((worktree) => normalizeWorktreePath(worktree?.path ?? worktree?.directory) === target);
+          } catch (error) {
+            if (messageQueueService) {
+              try { await messageQueueService.rollbackWorktreeDeletion({ requestID: createRequestID(), directory: worktreeDirectory, token: deletionToken }, { runtimeKey: queueRuntimeKey }); } catch { console.warn('Failed to roll back message queue worktree deletion'); }
+            }
+            throw error;
+          }
+        }
+
+        if (!removed) {
+          if (messageQueueService) {
+            try {
+              await messageQueueService.rollbackWorktreeDeletion({
+                requestID: createRequestID(),
+                directory: worktreeDirectory,
+                token: deletionToken,
+              }, { runtimeKey: queueRuntimeKey });
+            } catch {
+              console.warn('Failed to roll back message queue worktree deletion');
+            }
+          }
+          return res.json({ success: false });
+        }
+
+        notifyWorktreeTopologyChanged(directory, worktreeDirectory, 'removed');
+
+        if (messageQueueService) {
+          try {
+            await messageQueueService.commitWorktreeDeletion({
+              requestID: createRequestID(),
+              directory: worktreeDirectory,
+              projectDirectory: directory,
+              token: deletionToken,
+            }, { runtimeKey: queueRuntimeKey });
+          } catch {
+            console.error('Failed to commit message queue worktree deletion');
+            return res.status(500).json({ error: 'Failed to commit worktree queue deletion' });
+          }
+        }
+        res.json({ success: true });
+      } finally {
+        releaseWorktreeLifecycleOperation(operation);
+      }
     } catch (error) {
-      console.error('Failed to remove worktree:', error);
+      console.error('Failed to remove worktree');
       res.status(500).json({ error: error.message || 'Failed to remove worktree' });
     }
   });

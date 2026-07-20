@@ -98,6 +98,27 @@ const sameIdentity = (item: QueueItem, identity: Identity) => item.queueItemID =
 const locked = (item: QueueItem) => item.status === 'sending' || item.status === 'reconciling';
 const messageQueueStorage = createDeferredSafeJSONStorage<Pick<MessageQueueState, 'queuedMessages' | 'followUpBehavior'>>();
 export const flushMessageQueuePersistence = (): boolean => messageQueueStorage?.flush() ?? true;
+export type MessageQueueMutationFence = 'open' | 'quiescing' | 'recovery-read-only';
+let mutationFence: MessageQueueMutationFence = 'quiescing';
+const retiredTransportIdentities = new Set<string>();
+const mutationFenceListeners = new Set<() => void>();
+export const getMessageQueueMutationFence = (): MessageQueueMutationFence => mutationFence;
+export const setMessageQueueMutationFence = (next: MessageQueueMutationFence): void => {
+  if (mutationFence === next) return;
+  mutationFence = next;
+  for (const listener of mutationFenceListeners) listener();
+};
+export const markMessageQueueTransportRetired = (transportIdentity: string): void => {
+  if (!transportIdentity || retiredTransportIdentities.has(transportIdentity)) return;
+  retiredTransportIdentities.add(transportIdentity);
+  for (const listener of mutationFenceListeners) listener();
+};
+export const subscribeMessageQueueMutationFence = (listener: () => void): (() => void) => {
+  mutationFenceListeners.add(listener);
+  return () => mutationFenceListeners.delete(listener);
+};
+const retiredScope = (scope: QueueScope) => scope.state === 'bound' && retiredTransportIdentities.has(scope.transportIdentity);
+const userMutationAllowed = (scope?: QueueScope) => mutationFence === 'open' && (!scope || !retiredScope(scope));
 
 const reconciliationFields = (message: QueuedMessage, now = Date.now()) => ({
   reconciliationStartedAt: message.reconciliationStartedAt ?? now,
@@ -140,6 +161,7 @@ export const migrateMessageQueueState = (persistedState: unknown): Pick<MessageQ
 };
 
 const update = (set: (fn: (state: Store) => Store | Partial<Store>) => void, scope: QueueScope, identity: Identity, fn: (item: QueueItem) => QueueItem) => {
+  if (retiredScope(scope)) return;
   const key = queueScopeKey(scope);
   set((state) => {
     const queue = state.queuedMessages[key]; const index = queue?.findIndex((item) => queueScopeKey(item.owner) === key && sameIdentity(item, identity)) ?? -1;
@@ -153,6 +175,7 @@ const update = (set: (fn: (state: Store) => Store | Partial<Store>) => void, sco
 export const useMessageQueueStore = create<Store>()(devtools(persist((set, get) => ({
   queuedMessages: {}, followUpBehavior: DEFAULT_FOLLOW_UP_BEHAVIOR,
   addToQueue: (scope, message) => {
+    if (!userMutationAllowed(scope)) return { ok: false, reason: 'invalid-composer-document' };
     const composerDocument = validComposerDocument(message.composerDocument, message.content, message.attachments);
     if (message.composerDocument !== undefined && !composerDocument) return { ok: false, reason: 'invalid-composer-document' };
     const composerMentions = validComposerMentions(message.composerMentions, composerDocument);
@@ -162,23 +185,25 @@ export const useMessageQueueStore = create<Store>()(devtools(persist((set, get) 
     item.queueItemID = item.id;
     const key = queueScopeKey(scope); set((state) => ({ queuedMessages: { ...state.queuedMessages, [key]: [...(state.queuedMessages[key] ?? []), item] } })); return { ok: true, item };
   },
-  removeFromQueue: (scope, queueItemID, operationID) => { if (!operationID) return; const key = queueScopeKey(scope); set((state) => { const queue = state.queuedMessages[key]; const item = queue?.find((candidate) => (candidate.queueItemID === queueItemID || candidate.id === queueItemID) && candidate.operationID === operationID && queueScopeKey(candidate.owner) === key); if (!item || locked(item)) return state; const next = queue.filter((candidate) => candidate !== item); if (next.length) return { queuedMessages: { ...state.queuedMessages, [key]: next } }; const { [key]: removed, ...queuedMessages } = state.queuedMessages; void removed; return { queuedMessages }; }); },
-  reorderQueue: (scope, fromID, toID, operationID) => { if (!operationID) return; const key = queueScopeKey(scope); set((state) => { const queue = state.queuedMessages[key]; const from = queue?.findIndex((item) => (item.id === fromID || item.queueItemID === fromID) && item.operationID === operationID && queueScopeKey(item.owner) === key) ?? -1; const to = queue?.findIndex((item) => (item.id === toID || item.queueItemID === toID) && queueScopeKey(item.owner) === key) ?? -1; if (!queue || from < 0 || to < 0 || from === to || locked(queue[from]!) || locked(queue[to]!)) return state; const next = queue.slice(); const [item] = next.splice(from, 1); next.splice(to, 0, item!); return { queuedMessages: { ...state.queuedMessages, [key]: next } }; }); },
-  popToInput: (scope, id, operationID) => { if (!operationID) return null; const item = getQueueForScope(get(), scope).find((candidate) => (candidate.id === id || candidate.queueItemID === id) && candidate.operationID === operationID && queueScopeKey(candidate.owner) === queueScopeKey(scope)); if (!item || locked(item)) return null; get().removeFromQueue(scope, item.queueItemID, item.operationID); return item; },
-  clearQueue: (scope) => { const key = queueScopeKey(scope); set((state) => { const queue = state.queuedMessages[key]; if (!queue || queue.some(locked)) return state; const { [key]: removed, ...queuedMessages } = state.queuedMessages; void removed; return { queuedMessages }; }); },
-  clearAllQueues: () => set((state) => {
+  removeFromQueue: (scope, queueItemID, operationID) => { if (!userMutationAllowed(scope) || !operationID) return; const key = queueScopeKey(scope); set((state) => { const queue = state.queuedMessages[key]; const item = queue?.find((candidate) => (candidate.queueItemID === queueItemID || candidate.id === queueItemID) && candidate.operationID === operationID && queueScopeKey(candidate.owner) === key); if (!item || locked(item)) return state; const next = queue.filter((candidate) => candidate !== item); if (next.length) return { queuedMessages: { ...state.queuedMessages, [key]: next } }; const { [key]: removed, ...queuedMessages } = state.queuedMessages; void removed; return { queuedMessages }; }); },
+  reorderQueue: (scope, fromID, toID, operationID) => { if (!userMutationAllowed(scope) || !operationID) return; const key = queueScopeKey(scope); set((state) => { const queue = state.queuedMessages[key]; const from = queue?.findIndex((item) => (item.id === fromID || item.queueItemID === fromID) && item.operationID === operationID && queueScopeKey(item.owner) === key) ?? -1; const to = queue?.findIndex((item) => (item.id === toID || item.queueItemID === toID) && queueScopeKey(item.owner) === key) ?? -1; if (!queue || from < 0 || to < 0 || from === to || locked(queue[from]!) || locked(queue[to]!)) return state; const next = queue.slice(); const [item] = next.splice(from, 1); next.splice(to, 0, item!); return { queuedMessages: { ...state.queuedMessages, [key]: next } }; }); },
+  popToInput: (scope, id, operationID) => { if (!userMutationAllowed(scope) || !operationID) return null; const item = getQueueForScope(get(), scope).find((candidate) => (candidate.id === id || candidate.queueItemID === id) && candidate.operationID === operationID && queueScopeKey(candidate.owner) === queueScopeKey(scope)); if (!item || locked(item)) return null; get().removeFromQueue(scope, item.queueItemID, item.operationID); return item; },
+  clearQueue: (scope) => { if (!userMutationAllowed(scope)) return; const key = queueScopeKey(scope); set((state) => { const queue = state.queuedMessages[key]; if (!queue || queue.some(locked)) return state; const { [key]: removed, ...queuedMessages } = state.queuedMessages; void removed; return { queuedMessages }; }); },
+  clearAllQueues: () => { if (!userMutationAllowed()) return; set((state) => {
     const queuedMessages: Record<string, QueueItem[]> = {};
     let changed = false;
     for (const [key, queue] of Object.entries(state.queuedMessages)) {
+      if (queue[0] && retiredScope(queue[0].owner)) { queuedMessages[key] = queue; continue; }
       const retained = queue.filter(locked);
       if (retained.length) queuedMessages[key] = retained;
       if (retained.length !== queue.length) changed = true;
     }
     return changed ? { queuedMessages } : state;
-  }),
-  setFollowUpBehavior: (behavior) => { set({ followUpBehavior: behavior }); void updateDesktopSettings({ followUpBehavior: behavior }); },
+  }); },
+  setFollowUpBehavior: (behavior) => { if (!userMutationAllowed()) return; set({ followUpBehavior: behavior }); void updateDesktopSettings({ followUpBehavior: behavior }); },
   getQueueForScope: (scope) => getQueueForScope(get(), scope),
   bindLegacyQueue: (legacy, target) => {
+    if (!userMutationAllowed(legacy) || !userMutationAllowed(target)) return [];
     if (legacy.state !== 'unbound-legacy' || target.state !== 'bound' || legacy.sessionID !== target.sessionID) return [];
     const legacyKey = queueScopeKey(legacy); const targetKey = queueScopeKey(target); let moved: QueueItem[] = [];
     set((state) => {
@@ -192,13 +217,13 @@ export const useMessageQueueStore = create<Store>()(devtools(persist((set, get) 
     });
     return moved.map((item) => ({ ...item, owner: target }));
   },
-  markQueueItemSendAttempt: (scope, identity) => update(set, scope, identity, (item) => item.status === 'queued' || (item.status === 'retrying' && (item.nextAttemptAt ?? 0) <= Date.now()) ? { ...item, status: 'sending', attemptCount: item.attemptCount + 1, nextAttemptAt: undefined, failure: undefined } : item),
+  markQueueItemSendAttempt: (scope, identity) => { if (userMutationAllowed(scope)) update(set, scope, identity, (item) => item.status === 'queued' || (item.status === 'retrying' && (item.nextAttemptAt ?? 0) <= Date.now()) ? { ...item, status: 'sending', attemptCount: item.attemptCount + 1, nextAttemptAt: undefined, failure: undefined } : item); },
   markQueueItemPreDispatchRetry: (scope, identity, nextAttemptAt, failure) => update(set, scope, identity, (item) => item.status === 'sending' ? { ...item, status: 'retrying', nextAttemptAt, failure: { kind: 'pre-dispatch', recovery: failure?.recovery ?? recoveryFor(item) } } : item),
   markQueueItemReconciling: (scope, identity, failure) => update(set, scope, identity, (item) => item.status === 'sending' ? { ...item, status: 'reconciling', nextAttemptAt: undefined, ...reconciliationFields(item), reconciliationNextCheckAt: undefined, failure: { kind: 'ambiguous-dispatch', recovery: failure?.recovery ?? recoveryFor(item) } } : item),
   recordQueueItemReconciliationCheck: (scope, identity) => update(set, scope, identity, (item) => item.status === 'reconciling' && sameIdentity(item, identity) ? { ...item, reconciliationChecks: (item.reconciliationChecks ?? 0) + 1, reconciliationNextCheckAt: Date.now() + 2000 } : item),
   resolveQueueItemReconciliation: (scope, identity) => update(set, scope, identity, (item) => item.status === 'reconciling' && sameIdentity(item, identity) ? { ...item, status: 'unresolved', nextAttemptAt: undefined } : item),
   markQueueItemDefinitiveFailure: (scope, identity, failure) => update(set, scope, identity, (item) => item.status === 'sending' ? { ...item, status: 'failed', nextAttemptAt: undefined, failure: { kind: 'definitive', recovery: failure?.recovery ?? recoveryFor(item) } } : item),
-  resetQueueItemForDispatch: (scope, identity) => update(set, scope, identity, (item) => {
+  resetQueueItemForDispatch: (scope, identity) => { if (!userMutationAllowed(scope)) return; update(set, scope, identity, (item) => {
     if (item.status !== 'failed' && item.status !== 'unresolved' && item.status !== 'retrying') return item;
     return {
       ...item,
@@ -210,8 +235,9 @@ export const useMessageQueueStore = create<Store>()(devtools(persist((set, get) 
       reconciliationChecks: undefined,
       reconciliationNextCheckAt: undefined,
     };
-  }),
+  }); },
   beginQueueItemDispatch: (scope, expectedIdentity, freshMessageID, manual, now = Date.now()) => {
+    if (!userMutationAllowed(scope)) return null;
     if (!freshMessageID.startsWith('msg_')) return null;
     const key = queueScopeKey(scope);
     let dispatched: QueueItem | null = null;
@@ -244,5 +270,31 @@ export const useMessageQueueStore = create<Store>()(devtools(persist((set, get) 
     });
     return dispatched;
   },
-  confirmQueueItem: (scope, identity) => { const key = queueScopeKey(scope); set((state) => { const queue = state.queuedMessages[key]; const item = queue?.find((candidate) => { const operationMatch = identity.operationID ? candidate.operationID === identity.operationID : true; const messageMatch = identity.messageID ? candidate.messageID === identity.messageID : true; const itemMatch = identity.queueItemID ? candidate.queueItemID === identity.queueItemID : true; return operationMatch && messageMatch && itemMatch; }); if (!item || (!identity.operationID && !identity.messageID)) return state; const next = queue!.filter((candidate) => candidate !== item); if (next.length) return { queuedMessages: { ...state.queuedMessages, [key]: next } }; const { [key]: removed, ...queuedMessages } = state.queuedMessages; void removed; return { queuedMessages }; }); },
+  confirmQueueItem: (scope, identity) => { if (retiredScope(scope)) return; const key = queueScopeKey(scope); set((state) => { const queue = state.queuedMessages[key]; const item = queue?.find((candidate) => { const operationMatch = identity.operationID ? candidate.operationID === identity.operationID : true; const messageMatch = identity.messageID ? candidate.messageID === identity.messageID : true; const itemMatch = identity.queueItemID ? candidate.queueItemID === identity.queueItemID : true; return operationMatch && messageMatch && itemMatch; }); if (!item || (!identity.operationID && !identity.messageID)) return state; const next = queue!.filter((candidate) => candidate !== item); if (next.length) return { queuedMessages: { ...state.queuedMessages, [key]: next } }; const { [key]: removed, ...queuedMessages } = state.queuedMessages; void removed; return { queuedMessages }; }); },
 }), { name: 'message-queue-store', version: 4, storage: messageQueueStorage, partialize: (state) => ({ queuedMessages: state.queuedMessages, followUpBehavior: state.followUpBehavior }), migrate: migrateMessageQueueState, merge: (persisted, current) => ({ ...current, ...migrateMessageQueueState(persisted) }) }), { name: 'message-queue-store' }));
+
+export type LegacyQueueCutoverPreparation = { ok: true; moved: number } | { ok: false; unresolvedSessionIDs: string[] };
+export const prepareLegacyQueuesForCutover = (transportIdentity: string, resolveDirectory: (sessionID: string) => string | null | undefined): LegacyQueueCutoverPreparation => {
+  const queuedMessages = useMessageQueueStore.getState().queuedMessages;
+  const plan: Array<{ sourceKey: string; target: Extract<QueueScope, { state: 'bound' }>; items: QueueItem[] }> = [];
+  const unresolvedSessionIDs: string[] = [];
+  for (const [sourceKey, items] of Object.entries(queuedMessages)) {
+    const owner = items[0]?.owner;
+    if (!owner || owner.state !== 'unbound-legacy') continue;
+    const directory = resolveDirectory(owner.sessionID);
+    if (!directory) { unresolvedSessionIDs.push(owner.sessionID); continue; }
+    plan.push({ sourceKey, target: { state: 'bound', transportIdentity, directory, sessionID: owner.sessionID }, items });
+  }
+  if (!transportIdentity || unresolvedSessionIDs.length) return { ok: false, unresolvedSessionIDs };
+  if (!plan.length) return { ok: true, moved: 0 };
+  useMessageQueueStore.setState((state) => {
+    const next = { ...state.queuedMessages };
+    for (const entry of plan) {
+      const targetKey = queueScopeKey(entry.target);
+      next[targetKey] = [...entry.items.map((item) => ({ ...item, owner: entry.target })), ...(next[targetKey] ?? [])];
+      delete next[entry.sourceKey];
+    }
+    return { queuedMessages: next };
+  });
+  return { ok: true, moved: plan.reduce((count, entry) => count + entry.items.length, 0) };
+};
