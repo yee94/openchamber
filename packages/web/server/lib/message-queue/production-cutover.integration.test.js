@@ -33,7 +33,7 @@ const fixture = async ({ adapter = {}, runtimeConfig = { apiBaseUrl: 'http://run
   const sent = [];
   const fake = {
     captureRuntime: () => ({ token: config.current.apiBaseUrl }),
-    checkEligibility: async () => ({ idle: true, settled: true, latestMessageID: 'msg_0000000000' }),
+    checkEligibility: async () => ({ available: true, idle: true, settled: true, latestMessageID: 'msg_0000000000' }),
     createMessageID: (() => { let number = 0; return () => `msg_${String(++number).padStart(10, '0')}`; })(),
     materializeAttachments: async () => [],
     send: async (context) => { sent.push(context); return { ok: true }; },
@@ -194,6 +194,14 @@ describe('Phase 2 decisive production cutover fixture', () => {
     const f = await fixture();
     try {
       const first = f.service.admit(item('head')); f.service.admit(item('tail')); let scope = f.service.getScope(first.scopeID); const tail = scope.items[1]; f.service.manualSend({ requestID: 'promote', queueItemID: tail.queueItemID, expectedRevision: scope.revision, expectedRowVersion: tail.rowVersion }); scope = f.service.getScope(first.scopeID); expect(scope.items.map((entry) => entry.queueItemID)).toEqual(['item-tail', 'item-head']);
+    } finally { await f.close(); }
+  }, 10_000);
+
+  it('manual busy promotion sends once and completes from a durable intent', async () => {
+    const f = await fixture({ adapter: { checkEligibility: async () => ({ available: true, idle: false, settled: false, latestMessageID: 'msg_0000000000' }) } });
+    try {
+      const admitted = f.service.admit(item('manual-busy')); const scope = f.service.getScope(admitted.scopeID); f.service.manualSend({ requestID: 'manual-busy-send', queueItemID: 'item-manual-busy', expectedRevision: scope.revision, expectedRowVersion: scope.items[0].rowVersion }); f.service.setAuthority({ authority: 'active', expectedGeneration: 0 });
+      await f.runtime.startActive(); await eventually(() => expect(f.sent).toHaveLength(1)); await f.runtime.wake(); expect(f.sent).toHaveLength(1); expect(f.service.snapshot().scopes[0].itemCount).toBe(0);
     } finally { await f.close(); }
   }, 10_000);
 

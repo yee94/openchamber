@@ -86,3 +86,25 @@ test('sends paused authority through the server CAS and reserves legacy send for
   expect((await shadow.manualSend({ requestID: 'shadow-send', scopeID: descriptor.scopeID, revision: 1, item })).status).toBe('committed');
   expect({ serverCalls, legacyCalls }).toEqual({ serverCalls: 1, legacyCalls: 1 });
 });
+
+test('does not repeat a committed mutation when the worker advances the scope before refresh', async () => {
+  const cache = new Map<string, unknown>();
+  const client = { setQueryData: (key: readonly unknown[], value: unknown) => cache.set(JSON.stringify(key), value), getQueryData: <T>(key: readonly unknown[]) => cache.get(JSON.stringify(key)) as T | undefined, removeQueries: () => {}, invalidateQueries: async () => {} };
+  let scopeRevision = 1, mutationCalls = 0;
+  const runtime = createMessageQueueServerRuntime({
+    client: client as never,
+    capture: () => ({ transportIdentity: 'device-a', generation: 1 }),
+    current: () => true,
+    status: async () => ({ capability: true, authority: 'paused' }),
+    snapshot: async () => ({ revision: scopeRevision, scopes: [{ ...descriptor, revision: scopeRevision }], worktreeOrders: [] }),
+    scope: async () => ({ ...descriptor, revision: scopeRevision, items: [{ ...item, rowVersion: scopeRevision }] }),
+    manualSend: async () => { mutationCalls++; scopeRevision = 2; queueMicrotask(() => { scopeRevision = 3; }); return { revision: 2 }; },
+  });
+  await runtime.refresh();
+
+  const result = await runtime.manualSend({ requestID: 'send-once', scopeID: descriptor.scopeID, revision: 1, item });
+
+  expect(result.status).toBe('committed');
+  expect(result.scope?.revision).toBe(3);
+  expect(mutationCalls).toBe(1);
+});

@@ -22,15 +22,18 @@ export const createOpenCodeMessageQueueAdapter = ({
     try {
       const api = client(runtime); const status = getSessionEligibility ? await getSessionEligibility(scope, { signal }) : await api.session.status({ directory: scope.directory }, { signal });
       const messages = getLatestMessageID ? null : await api.session.messages({ sessionID: scope.sessionID, directory: scope.directory }, { signal });
-      if (status?.error || messages?.error || (!getSessionEligibility && !Array.isArray(messages?.data))) return { idle: false, settled: false };
+      const injectedStatus = getSessionEligibility && status && typeof status === 'object' && typeof status.idle === 'boolean' && typeof status.settled === 'boolean';
+      const apiStatus = !getSessionEligibility && status?.data && typeof status.data === 'object' && !Array.isArray(status.data);
+      if (status?.error || messages?.error || (!injectedStatus && !apiStatus) || (!getSessionEligibility && !Array.isArray(messages?.data))) return { available: false, idle: false, settled: false };
       const latestMessageID = getLatestMessageID ? await getLatestMessageID(scope, { signal }) : (messages?.data ?? []).at(-1)?.info?.id ?? (messages?.data ?? []).at(-1)?.id;
+      if (latestMessageID !== undefined && latestMessageID !== null && typeof latestMessageID !== 'string') return { available: false, idle: false, settled: false };
       const last = (messages?.data ?? []).at(-1);
       const settled = getSessionEligibility ? status?.settled === true : !last || (last?.info?.role === 'assistant' && Boolean(last?.info?.time?.completed));
       const statusMap = status?.data;
       const statusValue = statusMap && typeof statusMap === 'object' && !Array.isArray(statusMap) ? statusMap[scope.sessionID] : statusMap;
       const missingSessionStatus = statusMap && typeof statusMap === 'object' && !Array.isArray(statusMap) && !Object.hasOwn(statusMap, scope.sessionID);
-      return { idle: missingSessionStatus || statusValue?.type === 'idle' || statusValue?.status === 'idle' || status?.idle === true, settled: settled === true, latestMessageID };
-    } catch { return { idle: false, settled: false }; }
+      return { available: true, idle: getSessionEligibility ? status.idle : missingSessionStatus || statusValue?.type === 'idle' || statusValue?.status === 'idle' || status?.idle === true, settled: settled === true, latestMessageID };
+    } catch { return { available: false, idle: false, settled: false }; }
   };
   const createMessageID = (floor) => createAscendingMessageID(floor);
   const materializeAttachments = async (item, { signal } = {}) => {
@@ -74,5 +77,5 @@ export const createOpenCodeMessageQueueAdapter = ({
       return { found: false };
     } catch { return { unavailable: true }; }
   };
-  return { captureRuntime, isCurrent, checkEligibility, createMessageID, send, findMessage, materializeAttachments, waitForReady };
+  return { captureRuntime, isCurrent, checkEligibility, createMessageID, send, findMessage, materializeAttachments, waitForReady: typeof waitForReady === 'function' ? () => waitForReady() : undefined };
 };

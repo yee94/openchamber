@@ -5,11 +5,16 @@ const { createOpencodeClient } = await import('@opencode-ai/sdk/v2');
 const { createOpenCodeMessageQueueAdapter } = await import('./opencode-adapter.js');
 
 describe('OpenCode message queue adapter', () => {
+  it('waits for readiness without forwarding worker options', async () => {
+    const waitForReady = vi.fn(); const adapter = createOpenCodeMessageQueueAdapter({ waitForReady });
+    await adapter.waitForReady({ signal: new AbortController().signal });
+    expect(waitForReady).toHaveBeenCalledWith();
+  });
   it('captures runtime, materializes text and files, and sends the captured configuration', async () => {
     const promptAsync = vi.fn(() => ({ data: {} })); createOpencodeClient.mockReturnValue({ session: { promptAsync, messages: vi.fn(() => ({ data: [] })) } });
     let generation = 1;
     const adapter = createOpenCodeMessageQueueAdapter({ waitForReady: vi.fn(), buildOpenCodeUrl: () => 'http://open.code/', getOpenCodeAuthHeaders: () => ({ Authorization: 'secret' }), getRuntimeConfig: () => ({ apiBaseUrl: 'http://open.code' }), getRuntimeGeneration: () => generation, getSessionEligibility: () => ({ idle: true, settled: true }), getLatestMessageID: () => 'old', readAttachment: () => ({ type: 'file', url: 'file:///attachment' }) });
-    const runtime = adapter.captureRuntime(); const scope = { sessionID: 'session', directory: '/repo' }; expect(await adapter.checkEligibility(scope)).toMatchObject({ idle: true, settled: true });
+    const runtime = adapter.captureRuntime(); const scope = { sessionID: 'session', directory: '/repo' }; expect(await adapter.checkEligibility(scope)).toMatchObject({ available: true, idle: true, settled: true, latestMessageID: 'old' });
     const parts = await adapter.materializeAttachments({ content: 'text', attachments: [{}] }); expect(parts).toEqual([{ type: 'text', text: 'text' }, { type: 'file', url: 'file:///attachment' }]);
     await adapter.send({ scope, messageID: 'message', runtime, sendConfig: { providerID: 'p', modelID: 'm', agent: 'a', variant: 'v' }, parts }); expect(promptAsync).toHaveBeenCalledWith(expect.objectContaining({ sessionID: 'session', directory: '/repo', messageID: 'message', parts }), expect.any(Object));
     generation = 2; expect(await adapter.send({ scope, runtime, sendConfig: { providerID: 'p', modelID: 'm' } })).toMatchObject({ code: 'runtime_stale' });
@@ -25,5 +30,10 @@ describe('OpenCode message queue adapter', () => {
     expect(await adapter.checkEligibility({ sessionID: 's', directory: '/d' })).toMatchObject({ idle: true, settled: true });
     messages.mockReturnValueOnce({ data: [{ info: { role: 'user' } }] }); expect((await adapter.checkEligibility({ sessionID: 's', directory: '/d' })).settled).toBe(false);
     messages.mockReturnValueOnce({ data: [{ info: { role: 'assistant', time: { completed: 1 } } }] }); expect((await adapter.checkEligibility({ sessionID: 's', directory: '/d' })).settled).toBe(true);
+  });
+  it('marks malformed or failed authoritative eligibility reads unavailable', async () => {
+    createOpencodeClient.mockReturnValue({ session: { messages: vi.fn(() => ({ data: [] })), status: vi.fn(() => ({ error: {} })) } });
+    const adapter = createOpenCodeMessageQueueAdapter({ buildOpenCodeUrl: () => 'http://open.code/', getOpenCodeAuthHeaders: () => ({}), readAttachment: () => null });
+    await expect(adapter.checkEligibility({ sessionID: 's', directory: '/d' })).resolves.toEqual({ available: false, idle: false, settled: false });
   });
 });

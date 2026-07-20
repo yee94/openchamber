@@ -23,6 +23,7 @@ import {
     estimateContextPanelSessionBytes,
     normalizeContextPanelDirectory,
     resolveContextPanelEnsureForce,
+    resolveContextPanelConfirmedParentViewKey,
     resolveContextPanelPartialErrorRetry,
     resolveContextPanelPrependAnchor,
     resolveContextPanelPrependScrollTop,
@@ -100,6 +101,13 @@ const ContextPanelSessionTranscriptContent: React.FC<ContextPanelSessionTranscri
         (state) => Boolean(state.session.find((session) => session.id === sessionId)?.parentID),
         [sessionId],
     ), syncDirectory);
+    const [confirmedParentViewKey, setConfirmedParentViewKey] = React.useState<string | null>(null);
+    React.useLayoutEffect(() => {
+        setConfirmedParentViewKey((previousViewKey) => (
+            resolveContextPanelConfirmedParentViewKey(previousViewKey, viewportKey, hasConfirmedParent)
+        ));
+    }, [hasConfirmedParent, viewportKey]);
+    const showReadOnlyPromptBanner = hasConfirmedParent || confirmedParentViewKey === viewportKey;
     const prefetch = React.useSyncExternalStore(
         React.useCallback((notify) => subscribeSessionPrefetch(syncDirectory, sessionId, notify, runtimeKey), [runtimeKey, sessionId, syncDirectory]),
         React.useCallback(() => getSessionPrefetch(syncDirectory, sessionId, runtimeKey), [runtimeKey, sessionId, syncDirectory]),
@@ -213,7 +221,7 @@ const ContextPanelSessionTranscriptContent: React.FC<ContextPanelSessionTranscri
                         </>
                     )}
                 </div>
-                {hasConfirmedParent ? <ReadOnlyPromptBanner agentName={execution.agentName} providerId={execution.providerId} modelId={execution.modelId} modelName={executionModelName} /> : null}
+                {showReadOnlyPromptBanner ? <ReadOnlyPromptBanner agentName={execution.agentName} providerId={execution.providerId} modelId={execution.modelId} modelName={executionModelName} /> : null}
             </div>
         </SessionSurfaceContext.Provider>
     );

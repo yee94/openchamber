@@ -9,7 +9,7 @@ const setup = ({ result = { ok: true }, service: serviceOverrides = {}, adapter:
     getRuntimeKey: vi.fn(() => 'runtime'), getAuthority: vi.fn(() => ({ authority: 'active', generation: 1 })), claimDueReconcile: vi.fn(() => null), claimNext: vi.fn().mockReturnValueOnce(claim).mockReturnValue(null), renewLease: vi.fn(), releaseIneligible: vi.fn(), beginAttempt: vi.fn(() => ({ messageID: 'msg_0000000001', attemptCount: 1 })), completeAttempt: vi.fn(), scheduleRetry: vi.fn(), markAmbiguous: vi.fn(), markFailed: vi.fn(), recordReconcileUnavailable: vi.fn(), recordReconcileMiss: vi.fn(), recordReconcileConfirmed: vi.fn(), confirmByMessage: vi.fn(), close: vi.fn(), ...serviceOverrides,
   };
   const adapter = {
-    captureRuntime: vi.fn(() => ({ token: 'r' })), checkEligibility: vi.fn(() => ({ idle: true, settled: true, latestMessageID: 'msg_0000000000' })), createMessageID: vi.fn(() => 'msg_0000000001'), materializeAttachments: vi.fn(() => []), send: vi.fn(() => result), findMessage: vi.fn(), ...adapterOverrides,
+    captureRuntime: vi.fn(() => ({ token: 'r' })), checkEligibility: vi.fn(() => ({ available: true, idle: true, settled: true, latestMessageID: 'msg_0000000000' })), createMessageID: vi.fn(() => 'msg_0000000001'), materializeAttachments: vi.fn(() => []), send: vi.fn(() => result), findMessage: vi.fn(), ...adapterOverrides,
   };
   return { service, adapter, worker: createMessageQueueWorker({ service, adapter, workerID: 'worker', ...workerOptions }) };
 };
@@ -72,6 +72,29 @@ describe('message queue worker', () => {
       expect(service[method]).toHaveBeenCalledWith(expect.objectContaining({ queueItemID: 'item', leaseToken: 'lease', fenceGeneration: 1, runtimeKey: 'runtime' }));
       await worker.stop();
     }
+  });
+
+  it('releases automatic busy and unsettled claims before send', async () => {
+    const { worker, service, adapter } = setup({ adapter: { checkEligibility: vi.fn(() => ({ available: true, idle: false, settled: false })) } });
+    worker.start(); await worker.wake();
+    expect(service.releaseIneligible).toHaveBeenCalledTimes(1); expect(adapter.send).toHaveBeenCalledTimes(0); expect(service.beginAttempt).toHaveBeenCalledTimes(0);
+    await worker.stop();
+  });
+
+  it('sends a manual available claim once while busy and unsettled', async () => {
+    const manualClaim = { ...claim, dispatchMode: 'manual' };
+    const { worker, service, adapter } = setup({ service: { claimNext: vi.fn().mockReturnValueOnce(manualClaim).mockReturnValue(null) }, adapter: { checkEligibility: vi.fn(() => ({ available: true, idle: false, settled: false, latestMessageID: 'msg_0000000000' })) } });
+    worker.start(); await worker.wake();
+    expect(service.beginAttempt).toHaveBeenCalledTimes(1); expect(adapter.send).toHaveBeenCalledTimes(1); expect(service.releaseIneligible).toHaveBeenCalledTimes(0);
+    await worker.stop();
+  });
+
+  it('releases an unavailable manual claim before send', async () => {
+    const manualClaim = { ...claim, dispatchMode: 'manual' };
+    const { worker, service, adapter } = setup({ service: { claimNext: vi.fn().mockReturnValueOnce(manualClaim).mockReturnValue(null) }, adapter: { checkEligibility: vi.fn(() => ({ available: false, idle: true, settled: true })) } });
+    worker.start(); await worker.wake();
+    expect(service.releaseIneligible).toHaveBeenCalledTimes(1); expect(adapter.send).toHaveBeenCalledTimes(0); expect(service.beginAttempt).toHaveBeenCalledTimes(0);
+    await worker.stop();
   });
 
   it('confirms event messages through the service API', async () => {

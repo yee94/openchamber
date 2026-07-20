@@ -209,8 +209,9 @@ export function useAllSessionStatuses(): Record<string, SessionStatus> {
 }
 
 export function useAllLiveSessions(): Session[] {
+  const pendingDeletionIds = useGlobalSessionsStore((state) => state.pendingDeletionIds)
   return useLiveSyncSelector(
-    useCallback((states) => aggregateLiveSessions(states), []),
+    useMemo(() => (states: State[]) => aggregateLiveSessions(states, pendingDeletionIds), [pendingDeletionIds]),
     areSessionListsEquivalent,
     useCallback(
       (childStores: ChildStoreManager, notify: () => void) => childStores.subscribeAllSelected(

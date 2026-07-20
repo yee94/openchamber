@@ -15,3 +15,24 @@ export const resolveChatPromptAvailability = (input: {
         blockSubmission: input.sessionIdentityPending,
     };
 };
+
+export const resolveComposerActionAvailability = (input: {
+    canSend: boolean;
+    hasSessionTarget: boolean;
+    draftSubmitting: boolean;
+    submissionBlocked: boolean;
+    queueFrozen: boolean;
+}) => {
+    const sendDisabled = !input.canSend
+        || !input.hasSessionTarget
+        || input.draftSubmitting
+        || input.submissionBlocked;
+    const queueDisabled = !input.hasSessionTarget
+        || input.submissionBlocked
+        || input.queueFrozen;
+    return {
+        sendDisabled,
+        queueDisabled,
+        disabledClass: 'opacity-30 pointer-events-none',
+    };
+};

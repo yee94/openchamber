@@ -56,6 +56,7 @@ import { Button } from '@/components/ui/button';
 import { getElectronPathForFile, isVSCodeRuntime } from '@/lib/desktop';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { StopIcon } from '@/components/icons/StopIcon';
+import { resolveComposerActionAvailability } from './chatPromptAvailability';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getCycledPrimaryAgentName, type MobileControlsPanel } from './mobileControlsUtils';
 import {
@@ -716,11 +717,18 @@ const ComposerActionButtons = React.memo(function ComposerActionButtons(props: C
         onAbort,
     } = props;
     const { t } = useI18n();
+    const actionAvailability = resolveComposerActionAvailability({
+        canSend,
+        hasSessionTarget: Boolean(currentSessionId || newSessionDraftOpen),
+        draftSubmitting: Boolean(draftSubmitting),
+        submissionBlocked,
+        queueFrozen,
+    });
 
     const sendButton = (
         <button
             type={isMobile ? 'button' : 'submit'}
-            disabled={!canSend || (!currentSessionId && !newSessionDraftOpen) || draftSubmitting || submissionBlocked}
+            disabled={actionAvailability.sendDisabled}
             onClick={(event) => {
                 if (!isMobile) {
                     return;
@@ -731,9 +739,9 @@ const ComposerActionButtons = React.memo(function ComposerActionButtons(props: C
             }}
             className={cn(
                 footerIconButtonClass,
-                canSend && (currentSessionId || newSessionDraftOpen)
+                !actionAvailability.sendDisabled
                     ? 'text-primary hover:text-primary'
-                    : 'opacity-30'
+                    : actionAvailability.disabledClass
             )}
             aria-label={t('chat.chatInput.actions.sendMessageAria')}
         >
@@ -750,7 +758,7 @@ const ComposerActionButtons = React.memo(function ComposerActionButtons(props: C
             {hasContent ? (
                 <button
                     type="button"
-                    disabled={!currentSessionId || submissionBlocked || queueFrozen}
+                    disabled={actionAvailability.queueDisabled}
                     onClick={(event) => {
                         if (isMobile) {
                             event.preventDefault();
@@ -760,7 +768,9 @@ const ComposerActionButtons = React.memo(function ComposerActionButtons(props: C
                     className={cn(
                         footerIconButtonClass,
                         'absolute z-20 bottom-full left-1/2 -translate-x-1/2 mb-1',
-                        currentSessionId ? 'text-primary hover:text-primary' : 'opacity-30'
+                        !actionAvailability.queueDisabled
+                            ? 'text-primary hover:text-primary'
+                            : actionAvailability.disabledClass
                     )}
                     aria-label={t('chat.chatInput.actions.queueMessageAria')}
                 >

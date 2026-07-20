@@ -14,7 +14,8 @@ export const createMessageQueueWorker = ({ service, adapter, workerID, concurren
     const heartbeat = setInterval(renew, Math.max(1, Math.floor(leaseMs / 3)));
     try {
       const eligibility = await settle(adapter.checkEligibility({ scopeID: item.scopeID, directory: item.directory, sessionID: item.sessionID }, runtime, { signal: controller.signal }));
-      if (!eligibility?.idle || !eligibility?.settled) return settle(service.releaseIneligible({ ...args, dueAt: clock() + 1_000 }));
+      const dispatchable = claim.dispatchMode === 'manual' ? eligibility?.available === true : eligibility?.available === true && eligibility.idle === true && eligibility.settled === true;
+      if (!dispatchable) return settle(service.releaseIneligible({ ...args, dueAt: clock() + 1_000 }));
       const messageID = adapter.createMessageID(eligibility.latestMessageID);
       const preflight = { ...item, messageID, scope: { scopeID: item.scopeID, directory: item.directory, sessionID: item.sessionID }, runtime, runtimeKey };
       await settle(adapter.waitForReady?.({ signal: controller.signal }));

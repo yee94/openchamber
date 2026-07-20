@@ -134,12 +134,15 @@ export const areStatusMapsEquivalent = (
   return true
 }
 
-export function aggregateLiveSessions(states: Iterable<LiveStateSlice>): Session[] {
+export function aggregateLiveSessions(
+  states: Iterable<LiveStateSlice>,
+  excludedSessionIds?: ReadonlySet<string>,
+): Session[] {
   const sessionsById = new Map<string, Session>()
 
   for (const state of states) {
     for (const session of state.session) {
-      if (!session?.id) {
+      if (!session?.id || excludedSessionIds?.has(session.id)) {
         continue
       }
       const current = sessionsById.get(session.id)

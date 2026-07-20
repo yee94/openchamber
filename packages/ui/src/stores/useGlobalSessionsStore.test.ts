@@ -51,6 +51,7 @@ describe('useGlobalSessionsStore', () => {
       hasLoadedFullCatalog: false,
       fullCatalogSessionIds: new Set(),
       fullCatalogGeneration: 0,
+      pendingDeletionIds: new Set(),
       hasLoaded: false,
       status: 'idle',
       startupSyncProgress: { active: false, phase: 'idle', completed: 0, total: 0 },
@@ -100,6 +101,27 @@ describe('useGlobalSessionsStore', () => {
     }));
 
     expect(useGlobalSessionsStore.getState().activeSessions).toEqual([]);
+  });
+
+  test('keeps pending deletes hidden through snapshots and live upserts until cleared', () => {
+    const session = buildSession('https://share.example/pending', { id: 'ses_pending' });
+    const store = useGlobalSessionsStore.getState();
+
+    expect(store.pendingDeletionIds).toEqual(new Set());
+    store.markSessionsPendingDeletion([session.id]);
+    store.applySnapshot([session], []);
+    store.upsertSession(session);
+
+    expect(useGlobalSessionsStore.getState().activeSessions).toEqual([]);
+    expect(useGlobalSessionsStore.getState().pendingDeletionIds).toEqual(new Set([session.id]));
+
+    useGlobalSessionsStore.getState().clearSessionsPendingDeletion([session.id]);
+    useGlobalSessionsStore.getState().upsertSession(session);
+    expect(useGlobalSessionsStore.getState().activeSessions).toEqual([session]);
+
+    useGlobalSessionsStore.getState().markSessionsPendingDeletion([session.id]);
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+    expect(useGlobalSessionsStore.getState().pendingDeletionIds).toEqual(new Set());
   });
 
   test('starts with three cold directory summaries before adaptive recovery', async () => {

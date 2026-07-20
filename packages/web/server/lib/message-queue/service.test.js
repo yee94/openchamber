@@ -140,6 +140,13 @@ describe('message queue service', () => {
     repaired.close();
   });
 
+  it('adds the manual dispatch marker to old v3 databases and defaults it on new rows', () => {
+    const pathname = dbPath(); const fresh = createService(pathname); fresh.close();
+    let raw = new Database(pathname); expect(raw.prepare("SELECT dflt_value FROM pragma_table_info('queue_item') WHERE name='manual_dispatch_requested'").get().dflt_value).toBe('0'); raw.exec('ALTER TABLE queue_item DROP COLUMN manual_dispatch_requested'); raw.close();
+    const repaired = createService(pathname); repaired.close(); raw = new Database(pathname);
+    expect(raw.prepare("SELECT dflt_value FROM pragma_table_info('queue_item') WHERE name='manual_dispatch_requested'").get().dflt_value).toBe('0'); raw.close();
+  });
+
   it('uses the v4 text-only composer document and rejects unsupported payload shapes', () => {
     const service = createService(dbPath());
     expect(() => service.admit({ ...admission(), item: { ...admission().item, composerDocument: { text: 'different', references: [] } } })).toThrow(expect.objectContaining({ code: 'validation_error' }));
@@ -434,6 +441,16 @@ describe('message queue service', () => {
     expect(done.completed).toBe(true);
     expect(service.completeAttempt({ queueItemID: 'item-1', operationID: 'operation-1', messageID: fresh.messageID }).duplicate).toBe(true);
     service.close();
+  });
+
+  it('persists one manual dispatch intent through release and consumes it at beginAttempt', () => {
+    let time = 1_000; const pathname = dbPath(); const service = createMessageQueueService({ dbPath: pathname, getRuntimeConfig: () => ({ apiBaseUrl: 'http://runtime' }), clock: () => time });
+    const admitted = service.admit({ ...admission(), item: { ...admission().item, dueAt: time } }); service.setAuthority({ authority: 'active', expectedGeneration: 0 });
+    const promoted = service.manualSend({ requestID: 'manual-intent', queueItemID: 'item-1', expectedRevision: admitted.revision, expectedRowVersion: admitted.rowVersion });
+    expect(service.manualSend({ requestID: 'manual-intent', queueItemID: 'item-1', expectedRevision: admitted.revision, expectedRowVersion: admitted.rowVersion })).toEqual(promoted);
+    const first = service.claimNext({ owner: 'worker' }); expect(first.dispatchMode).toBe('manual'); service.releaseIneligible({ queueItemID: 'item-1', leaseToken: first.leaseToken, fenceGeneration: first.fenceGeneration, dueAt: time });
+    const second = service.claimNext({ owner: 'worker' }); expect(second.dispatchMode).toBe('manual'); service.beginAttempt({ queueItemID: 'item-1', leaseToken: second.leaseToken, fenceGeneration: second.fenceGeneration, messageID: 'msg_0000000001' }); service.scheduleRetry({ queueItemID: 'item-1', leaseToken: second.leaseToken, fenceGeneration: second.fenceGeneration, dueAt: time, errorCode: 'retry' });
+    expect(service.claimNext({ owner: 'worker' }).dispatchMode).toBe('automatic'); service.close();
   });
 
   it('renews edit reservations without advancing queue revisions and fences worker wakes', async () => {

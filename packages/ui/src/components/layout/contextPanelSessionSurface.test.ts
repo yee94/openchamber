@@ -15,6 +15,7 @@ import {
     resolveContextPanelActiveNavigation,
     requestContextPanelNavigation,
     resolveContextPanelChatRenderMode,
+    resolveContextPanelConfirmedParentViewKey,
     resolveContextPanelEnsureForce,
     resolveContextPanelPartialErrorRetry,
     resolveContextPanelPrependAnchor,
@@ -106,6 +107,15 @@ describe('context panel session navigation', () => {
 });
 
 describe('context panel transcript state', () => {
+    test('keeps confirmed subagent footer ownership across temporary session identity gaps', () => {
+        const viewKey = 'subagent-view';
+        const confirmed = resolveContextPanelConfirmedParentViewKey(null, viewKey, true);
+
+        expect(confirmed).toBe(viewKey);
+        expect(resolveContextPanelConfirmedParentViewKey(confirmed, viewKey, false)).toBe(viewKey);
+        expect(resolveContextPanelConfirmedParentViewKey(confirmed, 'other-view', false)).toBeNull();
+    });
+
     test('uses ordinary ensure for activation and force only for explicit retry', () => {
         expect(resolveContextPanelEnsureForce('active')).toBe(false);
         expect(resolveContextPanelEnsureForce('retry')).toBe(true);

@@ -8,6 +8,18 @@ let updateSessionImpl: (sessionId: string, changes: Record<string, unknown>, dir
 const globalState = {
   activeSessions: [] as Session[],
   archivedSessions: [] as Session[],
+  pendingDeletionIds: new Set<string>(),
+}
+
+function upsertGlobalSession(session: Session): void {
+  if (globalState.pendingDeletionIds.has(session.id)) return
+  const isArchived = Boolean(session.time?.archived)
+  globalState.activeSessions = isArchived
+    ? globalState.activeSessions.filter((item) => item.id !== session.id)
+    : [session, ...globalState.activeSessions.filter((item) => item.id !== session.id)]
+  globalState.archivedSessions = isArchived
+    ? [session, ...globalState.archivedSessions.filter((item) => item.id !== session.id)]
+    : globalState.archivedSessions.filter((item) => item.id !== session.id)
 }
 
 const uiState = {
@@ -92,20 +104,13 @@ mock.module("@/stores/useGlobalSessionsStore", () => ({
     getState: () => ({
       activeSessions: globalState.activeSessions,
       archivedSessions: globalState.archivedSessions,
-      upsertSession: (session: Session) => {
-        const isArchived = Boolean(session.time?.archived)
-        globalState.activeSessions = isArchived
-          ? globalState.activeSessions.filter((item) => item.id !== session.id)
-          : [
-              session,
-              ...globalState.activeSessions.filter((item) => item.id !== session.id),
-            ]
-        globalState.archivedSessions = isArchived
-          ? [
-              session,
-              ...globalState.archivedSessions.filter((item) => item.id !== session.id),
-            ]
-          : globalState.archivedSessions.filter((item) => item.id !== session.id)
+      pendingDeletionIds: globalState.pendingDeletionIds,
+      upsertSession: upsertGlobalSession,
+      markSessionsPendingDeletion: (ids: Iterable<string>) => {
+        for (const id of ids) globalState.pendingDeletionIds.add(id)
+      },
+      clearSessionsPendingDeletion: (ids: Iterable<string>) => {
+        for (const id of ids) globalState.pendingDeletionIds.delete(id)
       },
       removeSessions: (ids: Iterable<string>) => {
         const idSet = new Set(ids)
@@ -160,6 +165,7 @@ describe("session delete undo window", () => {
     uiState.currentSessionId = "ses_1"
     uiState.setCurrentSessionCalls = []
     clearScheduledSessionDeletesForTests()
+    globalState.pendingDeletionIds.clear()
   })
 
   afterEach(() => {
@@ -201,10 +207,34 @@ describe("session delete undo window", () => {
     const cancelled = cancelScheduledSessionDeletes(batchId)
     expect(cancelled).toBe(true)
     expect(globalState.activeSessions.map((session) => session.id).sort()).toEqual(["ses_1", "ses_2"])
+    expect(globalState.pendingDeletionIds).toEqual(new Set())
     expect(uiState.setCurrentSessionCalls.some((call) => call.id === "ses_1")).toBe(true)
 
     await new Promise((resolve) => setTimeout(resolve, 80))
     expect(replyCalls.some((call) => call.method === "session.delete")).toBe(false)
+  })
+
+  test("keeps a server upsert hidden during the undo window", () => {
+    const { batchId } = scheduleSessionDeletes(["ses_1"], { delayMs: 50 })
+    upsertGlobalSession(makeSession("ses_1"))
+
+    expect(globalState.activeSessions.map((session) => session.id)).toEqual(["ses_2"])
+    expect(globalState.pendingDeletionIds).toEqual(new Set(["ses_1"]))
+
+    cancelScheduledSessionDeletes(batchId)
+    expect(globalState.activeSessions.map((session) => session.id).sort()).toEqual(["ses_1", "ses_2"])
+    expect(globalState.pendingDeletionIds).toEqual(new Set())
+  })
+
+  test("restores a failed delayed delete and clears its pending state", async () => {
+    deleteSessionResult = new Error("delete failed")
+    const settled = new Promise<{ deletedIds: string[]; failedIds: string[] }>((resolve) => {
+      scheduleSessionDeletes(["ses_1"], { delayMs: 5, onSettled: resolve })
+    })
+
+    expect(await settled).toEqual({ deletedIds: [], failedIds: ["ses_1"] })
+    expect(globalState.activeSessions.map((session) => session.id).sort()).toEqual(["ses_1", "ses_2"])
+    expect(globalState.pendingDeletionIds).toEqual(new Set())
   })
 
   test("unarchiveSession clears archived timestamp via updateSession(0)", async () => {

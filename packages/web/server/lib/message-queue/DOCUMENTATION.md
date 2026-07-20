@@ -22,6 +22,8 @@ Worktree order is shared server state keyed by runtime and normalized project di
 
 The root snapshot and long-poll changes contain a catalog of scope identity, revision, lifecycle state, and item count plus worktree orders. Scope reads return metadata with one item page of at most eight items, itemCount, and nextOffset when another page exists. The first page supplies the scope revision; each later page supplies that revision as `expectedRevision`, which preserves one consistent scope view. Clients fetch scope pages when a catalog revision changes.
 
+Manual send stores a one-time internal dispatch intent and exposes its mode only on the worker claim. A manual claim proceeds after an authoritative available eligibility read, including busy and unsettled sessions. `beginAttempt` consumes the intent atomically with its message ID and attempt history; pre-attempt release and retry preserve it. Pause, expired-sending recovery, and ambiguity reconciliation clear the intent because the persisted attempt owns delivery certainty.
+
 ## Import HTTP DTOs
 
 Status responses use camelCase fields and include `activatedAt` after activation. Create, stage, seal, activate, late commit, abandon, pause, and resume each expose their own exact DTO; seal always includes `itemCount`. Import attempts key by runtime, kind, device client ID, and logical snapshot hash. `GET /imports/:importID` exposes state, manifest, count, staged ordinals and hashes, plus a persisted committed result; it excludes upload tokens and payload bodies. Committed replay returns that durable result after pause/resume generations advance.

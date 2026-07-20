@@ -37,6 +37,15 @@ export const createContextPanelSessionViewKey = (
     sessionId: string,
 ): string => JSON.stringify([runtimeKey, surfaceId, normalizeContextPanelDirectory(directory), sessionId]);
 
+export const resolveContextPanelConfirmedParentViewKey = (
+    previousViewKey: string | null,
+    currentViewKey: string,
+    hasConfirmedParent: boolean,
+): string | null => {
+    if (hasConfirmedParent) return currentViewKey;
+    return previousViewKey === currentViewKey ? previousViewKey : null;
+};
+
 const sameTarget = (left: ContextPanelSessionTarget, right: ContextPanelSessionTarget): boolean => (
     left.sessionId === right.sessionId
     && normalizeContextPanelDirectory(left.directory) === normalizeContextPanelDirectory(right.directory)

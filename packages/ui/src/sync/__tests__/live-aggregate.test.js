@@ -35,6 +35,15 @@ describe('live aggregate', () => {
     expect(findLiveSession(states, 'ses-1')?.title).toBe('new')
   })
 
+  it('excludes pending deletions while aggregating live child stores', () => {
+    const states = [{
+      session: [session('ses-1', '/a', 10), session('ses-2', '/b', 20)],
+      session_status: {},
+    }]
+
+    expect(aggregateLiveSessions(states, new Set(['ses-2'])).map((item) => item.id)).toEqual(['ses-1'])
+  })
+
   it('prefers busy/retry statuses over stale idle snapshots', () => {
     const states = [
       {

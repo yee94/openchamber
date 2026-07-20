@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Message, Part } from '@opencode-ai/sdk/v2/client'
 
-import { shouldFetchSessionForRenderableSync, hasUserMessage } from './use-sync'
+import { commitSessionIdentity, getConstrainedCacheStateAfterPrefetchEviction, shouldFetchSessionForRenderableSync, hasUserMessage } from './use-sync'
 import { mergeOptimisticPage } from './optimistic'
 import { materializeSessionSnapshots } from './materialization'
 
@@ -28,6 +28,47 @@ describe('shouldFetchSessionForRenderableSync', () => {
       shouldLoadMessages: false,
       force: false,
     })).toBe(true)
+  })
+
+  test('fetches identity when a message TTL remains ready', () => {
+    expect(shouldFetchSessionForRenderableSync({
+      hasSession: false,
+      shouldLoadMessages: false,
+      force: false,
+    })).toBe(true)
+  })
+})
+
+describe('commitSessionIdentity', () => {
+  test('commits exact session identity into the target directory store', () => {
+    const providerState = { session: [{ id: 'ses_provider' }] }
+    const targetState = { session: [] as Array<{ id: string; title?: string }> }
+    const targetStore = {
+      getState: () => targetState,
+      setState: (next: Partial<typeof targetState>) => Object.assign(targetState, next),
+    } as unknown as Parameters<typeof commitSessionIdentity>[0]
+
+    commitSessionIdentity(targetStore, 'ses_target', { id: 'ses_target', title: 'Target' } as never)
+
+    expect(targetState.session).toEqual([{ id: 'ses_target', title: 'Target' }])
+    expect(providerState.session).toEqual([{ id: 'ses_provider' }])
+  })
+})
+
+describe('getConstrainedCacheStateAfterPrefetchEviction', () => {
+  test('continues constrained cache eviction from the target directory store', () => {
+    const providerState = { message: { ses_provider: [] } }
+    const targetState = { message: { ses_target: [] } }
+
+    const resolved = getConstrainedCacheStateAfterPrefetchEviction({
+      prefetched: ['ses_prefetched'],
+      state: targetState,
+      targetStore: { getState: () => targetState },
+    })
+
+    expect(resolved).toBe(targetState)
+    expect(resolved.message).toEqual({ ses_target: [] })
+    expect(providerState.message).toEqual({ ses_provider: [] })
   })
 })
 

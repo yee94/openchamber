@@ -80,6 +80,7 @@ import { normalizeUserDisplayParts } from './message/normalizeUserDisplayParts';
 import { findShellCommandForMessage, isUserShellMarkerMessage } from './lib/shellBridge';
 import { resolveContextPanelSessionExecution } from '@/components/layout/contextPanelSessionExecution';
 import { resolveChatPromptAvailability } from './chatPromptAvailability';
+import { shouldEnsureChatSessionRenderable } from './chatSessionMaterialization';
 
 const EMPTY_MESSAGES: Array<{ info: Message; parts: Part[] }> = [];
 const IDLE_SESSION_STATUS = { type: 'idle' as const };
@@ -567,8 +568,8 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
     const syncDirectory = useSyncDirectory();
     const effectiveSessionDirectory = currentSessionDirectory ?? syncDirectory;
     const ensureSessionRenderable = React.useCallback(
-        (sessionId: string) => sync.ensureSessionRenderable(sessionId),
-        [sync],
+        (sessionId: string) => sync.ensureSessionRenderable(sessionId, { directory: effectiveSessionDirectory }),
+        [effectiveSessionDirectory, sync],
     );
     const loadMoreMessages = React.useCallback(
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1118,10 +1119,11 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
     }, [sessionIdentityEnsureKey]);
 
     React.useEffect(() => {
-        if (!currentSessionId || sessionIdentityEnsureRetry.key !== sessionIdentityEnsureKey) return;
-        if (hasRenderableSessionSnapshot && currentSessionEntity) return;
-        if (effectiveSessionDirectory !== syncDirectory) return;
-
+        if (!currentSessionId || sessionIdentityEnsureRetry.key !== sessionIdentityEnsureKey || !shouldEnsureChatSessionRenderable({
+            sessionId: currentSessionId,
+            hasRenderableSessionSnapshot,
+            hasCurrentSessionEntity: Boolean(currentSessionEntity),
+        })) return;
         void ensureSessionRenderable(currentSessionId);
         if (currentSessionEntity || sessionIdentityEnsureRetry.attempt >= 2) return;
 
@@ -1144,7 +1146,6 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
         hasRenderableSessionSnapshot,
         sessionIdentityEnsureKey,
         sessionIdentityEnsureRetry,
-        syncDirectory,
     ]);
 
 	if (forkTransition) {

@@ -8,7 +8,7 @@ import {
   mergeOptimisticPage,
   type OptimisticItem,
 } from "./optimistic"
-import { dropCachedSessionMessageRecordsSnapshots, useDirectoryStore, useSyncSDK, useSyncDirectory, useChildStoreManager } from "./sync-context"
+import { dropCachedSessionMessageRecordsSnapshots, useDirectoryStore, useSyncDirectory, useChildStoreManager } from "./sync-context"
 import { dropSessionCaches, getProtectedSessionCacheIds } from "./session-cache"
 import { stripMessageDiffSnapshots, stripSessionDiffSnapshots } from "./sanitize"
 import { isVSCodeRuntime } from "@/lib/desktop"
@@ -136,13 +136,36 @@ export function shouldFetchSessionForRenderableSync(input: {
   return Boolean(input.force) || !input.hasSession || input.shouldLoadMessages
 }
 
+export function getConstrainedCacheStateAfterPrefetchEviction<T>(input: {
+  prefetched: string[]
+  state: T
+  targetStore: { getState: () => T }
+}): T {
+  return input.prefetched.length > 0 ? input.targetStore.getState() : input.state
+}
+
+export function commitSessionIdentity(
+  store: ReturnType<typeof useDirectoryStore>,
+  sessionID: string,
+  session: State["session"][number],
+): void {
+  const current = store.getState()
+  const sessions = [...current.session]
+  const index = Binary.search(sessions, sessionID, (item) => item.id)
+  if (index.found) {
+    sessions[index.index] = session
+  } else {
+    sessions.splice(index.index, 0, session)
+  }
+  store.setState({ session: sessions })
+}
+
 // ---------------------------------------------------------------------------
 // useSync — message loading, pagination, optimistic updates
 // Message loading, pagination, optimistic updates
 // ---------------------------------------------------------------------------
 
 export function useSync() {
-  const sdk = useSyncSDK()
   const directory = useSyncDirectory()
   const store = useDirectoryStore()
   const childStores = useChildStoreManager()
@@ -152,22 +175,22 @@ export function useSync() {
   const meta = useRef(new Map<string, SyncMeta>())
 
   const keyFor = useCallback(
-    (sessionID: string) => `${directory}\n${sessionID}`,
+    (sessionID: string, targetDirectory = directory) => `${targetDirectory}\n${sessionID}`,
     [directory],
   )
 
   const getMetaFor = useCallback(
-    (sessionID: string) => {
-      const key = keyFor(sessionID)
-      return meta.current.get(key) ?? getPrefetchMeta(directory, sessionID) ?? getDefaultMeta()
+    (sessionID: string, targetDirectory = directory) => {
+      const key = keyFor(sessionID, targetDirectory)
+      return meta.current.get(key) ?? getPrefetchMeta(targetDirectory, sessionID) ?? getDefaultMeta()
     },
     [directory, keyFor],
   )
 
   const setMetaFor = useCallback(
-    (sessionID: string, patch: Partial<{ limit: number; cursor: string | undefined; complete: boolean; loading: boolean }>) => {
-      const key = keyFor(sessionID)
-      const current = meta.current.get(key) ?? getPrefetchMeta(directory, sessionID) ?? getDefaultMeta()
+    (sessionID: string, patch: Partial<{ limit: number; cursor: string | undefined; complete: boolean; loading: boolean }>, targetDirectory = directory) => {
+      const key = keyFor(sessionID, targetDirectory)
+      const current = meta.current.get(key) ?? getPrefetchMeta(targetDirectory, sessionID) ?? getDefaultMeta()
       meta.current.set(key, { ...current, ...patch })
     },
     [directory, keyFor],
@@ -211,16 +234,16 @@ export function useSync() {
   // Get or create the seen-set for a directory. LRU reorder on access.
   // When seen directories exceed MAX_SEEN_DIRS, evict the oldest directory's caches.
   // LRU reorder on access. Evicts oldest directory when exceeding MAX_SEEN_DIRS.
-  const seenFor = useCallback(() => {
-    const existing = seenByDirectory.get(directory)
+  const seenFor = useCallback((targetDirectory = directory) => {
+    const existing = seenByDirectory.get(targetDirectory)
     if (existing) {
       // LRU reorder: delete + re-insert moves to end (most recent)
-      seenByDirectory.delete(directory)
-      seenByDirectory.set(directory, existing)
+      seenByDirectory.delete(targetDirectory)
+      seenByDirectory.set(targetDirectory, existing)
       return existing
     }
     const created = new Set<string>()
-    seenByDirectory.set(directory, created)
+    seenByDirectory.set(targetDirectory, created)
 
     // Evict oldest directories if over limit
     while (seenByDirectory.size > MAX_SEEN_DIRS) {
@@ -236,9 +259,12 @@ export function useSync() {
 
   // Touch a session — triggers both directory-level and session-level eviction
   const touch = useCallback(
-    (sessionID: string) => {
-      const s = seenFor()
-      const protectedIds = getProtectedSessionCacheIds(store.getState())
+    (sessionID: string, targetDirectory = directory) => {
+      const targetStore = targetDirectory === directory
+        ? store
+        : childStores.ensureChild(targetDirectory, { bootstrap: false })
+      const s = seenFor(targetDirectory)
+      const protectedIds = getProtectedSessionCacheIds(targetStore.getState())
       const cacheLimit = getEffectiveSessionCacheLimit()
       const stale = pickSessionCacheEvictions({
         seen: s,
@@ -246,29 +272,33 @@ export function useSync() {
         limit: cacheLimit,
         preserve: protectedIds,
       })
-      evict(directory, stale)
+      evict(targetDirectory, stale)
 
       if (isConstrainedSessionRuntime()) {
-        const state = store.getState()
+        const state = targetStore.getState()
         const keep = new Set([sessionID, ...s, ...protectedIds])
         const prefetched = Object.keys(state.message).filter((id) => !keep.has(id))
-        evict(directory, prefetched)
+        evict(targetDirectory, prefetched)
 
         // One very large inactive session can create memory/GC pressure that
         // makes later small-session switches feel slow. Keep it while active,
         // but do not retain it as a warm cache in constrained shells.
-        const afterPrefetchEviction = prefetched.length > 0 ? store.getState() : state
+        const afterPrefetchEviction = getConstrainedCacheStateAfterPrefetchEviction({
+          prefetched,
+          state,
+          targetStore,
+        })
         const heavyInactive = Object.keys(afterPrefetchEviction.message).filter((id) => {
           if (id === sessionID || protectedIds.has(id)) return false
           return isHeavyConstrainedSessionCache(afterPrefetchEviction, id)
         })
         if (heavyInactive.length > 0) {
           for (const id of heavyInactive) s.delete(id)
-          evict(directory, heavyInactive)
+          evict(targetDirectory, heavyInactive)
         }
       }
     },
-    [directory, seenFor, evict, store],
+    [childStores, directory, seenFor, evict, store],
   )
 
   // Optimistic operations
@@ -319,17 +349,18 @@ export function useSync() {
 
   // Fetch messages from API
   const fetchMessages = useCallback(
-    async (sessionID: string, limit: number, before?: string, runtimeKey = getRuntimeKey()) => {
+    async (sessionID: string, limit: number, before?: string, runtimeKey = getRuntimeKey(), targetDirectory = directory) => {
       const startedAt = performance.now()
-      sessionLoadDebug("reactive-request-start", { sessionID, directory, limit, before: before ?? null })
+      const scopedClient = opencodeClient.getScopedSdkClient(targetDirectory)
+      sessionLoadDebug("reactive-request-start", { sessionID, directory: targetDirectory, limit, before: before ?? null })
       const result = await loadSessionMessagePage({
         runtimeKey,
-        directory,
+        directory: targetDirectory,
         sessionID,
         limit,
         before,
         request: () => retry(async () => {
-          const response = await sdk.session.messages({ sessionID, directory, limit, before })
+          const response = await scopedClient.session.messages({ sessionID, directory: targetDirectory, limit, before })
           assertSdkSuccess(response, "session.messages")
           return response
         }),
@@ -345,7 +376,7 @@ export function useSync() {
       const cursor = result.response?.headers?.get?.("x-next-cursor") ?? undefined
       sessionLoadDebug("reactive-request-response", {
         sessionID,
-        directory,
+        directory: targetDirectory,
         limit,
         before: before ?? null,
         records: session.length,
@@ -354,20 +385,23 @@ export function useSync() {
       })
       return { session, part, cursor, complete: !cursor }
     },
-    [sdk, directory],
+    [directory],
   )
 
   // Load messages for a session
   const loadMessages = useCallback(
-    async (sessionID: string, options?: { before?: string; mode?: "replace" | "prepend"; isStale?: () => boolean }) => {
-      const m = getMetaFor(sessionID)
+    async (sessionID: string, options?: { before?: string; mode?: "replace" | "prepend"; isStale?: () => boolean; directory?: string }) => {
+      const targetDirectory = options?.directory ?? directory
+      const targetStore = targetDirectory === directory ? store : childStores.ensureChild(targetDirectory, { bootstrap: false })
+      const scopedClient = opencodeClient.getScopedSdkClient(targetDirectory)
+      const m = getMetaFor(sessionID, targetDirectory)
       if (m.loading) {
-        sessionLoadDebug("reactive-load-deduped", { sessionID, directory, before: options?.before ?? null })
+        sessionLoadDebug("reactive-load-deduped", { sessionID, directory: targetDirectory, before: options?.before ?? null })
         return
       }
-      setMetaFor(sessionID, { loading: true })
+      setMetaFor(sessionID, { loading: true }, targetDirectory)
       const runtimeKey = getRuntimeKey()
-      beginSessionMessageLoad(directory, sessionID, runtimeKey)
+      beginSessionMessageLoad(targetDirectory, sessionID, runtimeKey)
       const startedAt = performance.now()
 
       try {
@@ -386,13 +420,13 @@ export function useSync() {
             return { messages: [], cursor: page.cursor, complete: page.complete }
           }
 
-          const items = getOptimistic(sessionID)
+          const items = getOptimistic(sessionID, targetDirectory)
           const merged = mergeOptimisticPage(page, items)
           for (const messageID of merged.confirmed) {
-            clearOptimistic(sessionID, messageID)
+            clearOptimistic(sessionID, messageID, targetDirectory)
           }
 
-          const current = store.getState()
+          const current = targetStore.getState()
           const materialized = materializeSessionSnapshots(
             current,
             sessionID,
@@ -411,7 +445,7 @@ export function useSync() {
           }
 
           if (materialized.messagesChanged || materialized.partsChanged) {
-            store.setState({
+            targetStore.setState({
               ...(materialized.messagesChanged ? { message: materialized.message } : {}),
               ...(materialized.partsChanged ? { part: materialized.part } : {}),
             })
@@ -422,9 +456,9 @@ export function useSync() {
         // Live events can append messages without growing m.limit. A resync
         // must cover everything already rendered or it can manufacture an
         // "older" cursor for history that is already on screen.
-        const storeMessageCount = store.getState().message[sessionID]?.length ?? 0
+        const storeMessageCount = targetStore.getState().message[sessionID]?.length ?? 0
         const limit = options?.before ? HISTORY_MESSAGE_PAGE_SIZE : Math.max(m.limit, storeMessageCount)
-        const page = await fetchMessages(sessionID, limit, options?.before, runtimeKey)
+        const page = await fetchMessages(sessionID, limit, options?.before, runtimeKey, targetDirectory)
         const recovered = options?.before || page.complete
           ? page
           : await recoverAssistantTailBoundary({
@@ -436,11 +470,11 @@ export function useSync() {
               requestMessage: async (messageID) => {
                 const response = await loadSessionMessage({
                   runtimeKey,
-                  directory,
+                  directory: targetDirectory,
                   sessionID,
                   messageID,
                   request: async () => {
-                    const result = await sdk.session.message({ sessionID, messageID, directory })
+                    const result = await scopedClient.session.message({ sessionID, messageID, directory: targetDirectory })
                     assertSdkSuccess(result, "session.message")
                     return result
                   },
@@ -461,9 +495,9 @@ export function useSync() {
         const committed = commitMessagesToStore(resolvedPage, options?.mode, options?.isStale)
 
         if (options?.isStale?.()) {
-          setMetaFor(sessionID, { loading: false })
+          setMetaFor(sessionID, { loading: false }, targetDirectory)
           setSessionPrefetch({
-            directory,
+            directory: targetDirectory,
             sessionID,
             runtimeKey,
             limit: resolvedPage.session.length,
@@ -478,16 +512,16 @@ export function useSync() {
           cursor: committed.cursor,
           complete: committed.complete,
           loading: false,
-        })
+        }, targetDirectory)
         sessionLoadDebug("reactive-committed", {
           sessionID,
-          directory,
+          directory: targetDirectory,
           messages: committed.messages.length,
           mode: options?.mode ?? "replace",
           durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
         })
         setSessionPrefetch({
-          directory,
+          directory: targetDirectory,
           sessionID,
           runtimeKey,
           limit: committed.messages.length,
@@ -497,33 +531,37 @@ export function useSync() {
       } catch (error) {
         sessionLoadDebug("reactive-error", {
           sessionID,
-          directory,
+          directory: targetDirectory,
           durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
           error: error instanceof Error ? error.message : String(error),
         })
-        setMetaFor(sessionID, { loading: false })
-        failSessionMessageLoad(directory, sessionID, formatSdkError(error), runtimeKey)
+        setMetaFor(sessionID, { loading: false }, targetDirectory)
+        failSessionMessageLoad(targetDirectory, sessionID, formatSdkError(error), runtimeKey)
       }
     },
-    [store, sdk, fetchMessages, getMetaFor, setMetaFor, getOptimistic, clearOptimistic, directory],
+    [childStores, store, fetchMessages, getMetaFor, setMetaFor, getOptimistic, clearOptimistic, directory],
   )
 
   // Sync a session (load if not cached)
   const syncSession = useCallback(
-    async (sessionID: string, force?: boolean) => {
+    async (sessionID: string, options?: boolean | { force?: boolean; directory?: string }) => {
       await waitForSessionStartupBarrier()
-      touch(sessionID)
-      const key = keyFor(sessionID)
+      const force = typeof options === "boolean" ? options : options?.force
+      const targetDirectory = typeof options === "object" ? options.directory ?? directory : directory
+      const targetStore = childStores.ensureChild(targetDirectory, { bootstrap: false })
+      const scopedClient = opencodeClient.getScopedSdkClient(targetDirectory)
+      touch(sessionID, targetDirectory)
+      const key = keyFor(sessionID, targetDirectory)
       return sessionSyncCoordinator.run({
-        scope: store,
+        scope: targetStore,
         key,
         request: async (isStale) => {
-          const current = store.getState()
-          const m = getMetaFor(sessionID)
+          const current = targetStore.getState()
+          const m = getMetaFor(sessionID, targetDirectory)
           const materialization = getSessionMaterializationStatus(current, sessionID)
           const cached = materialization.hasMessages && materialization.renderable && m.limit > 0
           const cachedReady = cached && hasSessionMessageBoundary(current.message[sessionID], m.complete)
-          const prefetchInfo = !force ? getSessionPrefetch(directory, sessionID) : undefined
+          const prefetchInfo = !force ? getSessionPrefetch(targetDirectory, sessionID) : undefined
           const hasSession = Binary.search(current.session, sessionID, (s) => s.id).found
           if (cachedReady && hasSession && !force) return
 
@@ -539,7 +577,7 @@ export function useSync() {
           const shouldFetchSession = shouldFetchSessionForRenderableSync({ hasSession, shouldLoadMessages, force: Boolean(force) })
           sessionLoadDebug("reactive-sync-decision", {
             sessionID,
-            directory,
+            directory: targetDirectory,
             cached,
             cachedReady,
             hasSession,
@@ -552,22 +590,14 @@ export function useSync() {
               ? (async () => {
                   try {
                     const result = await retry(async () => {
-                      const response = await sdk.session.get({ sessionID, directory })
+                      const response = await scopedClient.session.get({ sessionID, directory: targetDirectory })
                       assertSdkSuccess(response, "session.get")
                       return response
                     })
                     if (result.data && !isStale()) {
                       const nextSession = stripSessionDiffSnapshots(result.data)
-                      const s = store.getState()
-                      const sessions = [...s.session]
-                      const idx = Binary.search(sessions, sessionID, (s) => s.id)
-                      if (idx.found) {
-                        sessions[idx.index] = nextSession
-                      } else {
-                        sessions.splice(idx.index, 0, nextSession)
-                      }
                       if (!isStale()) {
-                        store.setState({ session: sessions })
+                        commitSessionIdentity(targetStore, sessionID, nextSession)
                       }
                     }
                   } catch (e) {
@@ -575,12 +605,12 @@ export function useSync() {
                   }
                 })()
               : Promise.resolve(),
-            shouldLoadMessages ? loadMessages(sessionID, { isStale }) : Promise.resolve(),
+            shouldLoadMessages ? loadMessages(sessionID, { isStale, directory: targetDirectory }) : Promise.resolve(),
           ])
         },
       })
     },
-    [store, sdk, keyFor, touch, getMetaFor, loadMessages, directory],
+    [childStores, keyFor, touch, getMetaFor, loadMessages, directory],
   )
 
   // Load more (pagination)

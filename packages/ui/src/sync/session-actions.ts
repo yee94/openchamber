@@ -787,6 +787,7 @@ function clearArchivedTimestamp(session: Session): Session {
 }
 
 function restorePendingDeleteEntry(entry: PendingDeleteEntry): void {
+  useGlobalSessionsStore.getState().clearSessionsPendingDeletion([entry.sessionId])
   restoreSessionListSnapshots(entry.listSnapshots)
   restoreGlobalSessionSnapshot(entry.globalSnapshot)
   if (entry.wasCurrent) {
@@ -796,6 +797,7 @@ function restorePendingDeleteEntry(entry: PendingDeleteEntry): void {
 
 function optimisticallyRemoveSessionForDelete(sessionId: string, directory?: string): PendingDeleteEntry {
   const sessionDirectory = directory ?? getSessionDirectory(sessionId)
+  useGlobalSessionsStore.getState().markSessionsPendingDeletion([sessionId])
   const listSnapshots = optimisticRemoveSession(sessionId, sessionDirectory)
   const globalSnapshot = getGlobalSessionSnapshot(sessionId)
   useGlobalSessionsStore.getState().removeSessions([sessionId])
@@ -821,8 +823,10 @@ async function commitRemovedSessionDelete(sessionId: string, directory?: string)
     if (deleted !== true) {
       throw new Error("session.delete failed: server did not confirm deletion")
     }
+    optimisticRemoveSession(sessionId, directory)
     useGlobalSessionsStore.getState().removeSessions([sessionId])
     cleanupSessionWorktreeMetadata(sessionId)
+    useGlobalSessionsStore.getState().clearSessionsPendingDeletion([sessionId])
     return true
   } catch (error) {
     console.error("[session-actions] commitRemovedSessionDelete failed", error)
@@ -830,7 +834,10 @@ async function commitRemovedSessionDelete(sessionId: string, directory?: string)
     // Subsequent delete attempts for those children return 404; treat as
     // success since the session was already deleted by the cascade.
     if ((error as { status?: number })?.status === 404) {
+      optimisticRemoveSession(sessionId, directory)
+      useGlobalSessionsStore.getState().removeSessions([sessionId])
       cleanupSessionWorktreeMetadata(sessionId)
+      useGlobalSessionsStore.getState().clearSessionsPendingDeletion([sessionId])
       return true
     }
     return false
@@ -924,6 +931,9 @@ export function cancelScheduledSessionDeletes(batchId: string): boolean {
 export function clearScheduledSessionDeletesForTests(): void {
   for (const batch of pendingDeleteBatches.values()) {
     clearTimeout(batch.timer)
+    useGlobalSessionsStore.getState().clearSessionsPendingDeletion(
+      batch.entries.map((entry) => entry.sessionId),
+    )
   }
   pendingDeleteBatches.clear()
 }

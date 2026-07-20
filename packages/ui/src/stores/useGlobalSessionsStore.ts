@@ -71,6 +71,8 @@ type GlobalSessionsState = {
   fullCatalogSessionIds: Set<string>;
   /** Increments only when a complete catalog result replaces `fullCatalogSessionIds`. */
   fullCatalogGeneration: number;
+  /** Session IDs hidden locally while a delayed delete can still be undone. */
+  pendingDeletionIds: Set<string>;
   hasLoaded: boolean;
   status: GlobalSessionsStatus;
   /** Blocking session-index cold-start refresh progress for persisted directories. */
@@ -96,6 +98,8 @@ type GlobalSessionsState = {
   startSessionIndexStartup: (directories: Iterable<string>) => Promise<LoadResult>;
   applySnapshot: (activeSessions: Session[], archivedSessions: Session[], status?: GlobalSessionsStatus) => void;
   upsertSession: (session: Session) => void;
+  markSessionsPendingDeletion: (ids: Iterable<string>) => void;
+  clearSessionsPendingDeletion: (ids: Iterable<string>) => void;
   removeSessions: (ids: Iterable<string>) => void;
   archiveSessions: (ids: Iterable<string>, archivedAt?: number) => void;
   /** Drop every session from the previous runtime instance and go back to the
@@ -337,6 +341,13 @@ const sameSessionList = (prev: Session[], next: Session[]): boolean => {
   return true;
 };
 
+const filterPendingDeletionSessions = (sessions: Session[], pendingDeletionIds: ReadonlySet<string>): Session[] => {
+  if (pendingDeletionIds.size === 0) return sessions;
+  const firstPendingIndex = sessions.findIndex((session) => pendingDeletionIds.has(session.id));
+  if (firstPendingIndex === -1) return sessions;
+  return sessions.filter((session, index) => index !== firstPendingIndex && !pendingDeletionIds.has(session.id));
+};
+
 const sortSessionsByUpdated = (sessions: Session[]): Session[] => {
   return [...sessions].sort((left, right) => {
     const timeDelta = getSessionActivityUpdatedAt(right) - getSessionActivityUpdatedAt(left);
@@ -405,7 +416,10 @@ const applySessionIndexSnapshotState = (
   authoritative: boolean,
 ): Partial<GlobalSessionsState> => {
   const snapshotDirectories = new Set(snapshot.directories.map((entry) => entry.directory));
-  const cachedSessions = snapshot.directories.flatMap((entry) => entry.sessions);
+  const cachedSessions = filterPendingDeletionSessions(
+    snapshot.directories.flatMap((entry) => entry.sessions),
+    state.pendingDeletionIds,
+  );
   const activeSessions = authoritative
     ? replaceSessionsForDirectories(state.activeSessions, cachedSessions, snapshotDirectories)
     : sortSessionsByUpdated(mergeSessionLists(state.activeSessions, cachedSessions));
@@ -469,23 +483,28 @@ const applyDirectoryRefreshPatch = (
     mergeOnly?: boolean;
   },
 ): Partial<GlobalSessionsState> | GlobalSessionsState => {
+  const incomingActiveSessions = filterPendingDeletionSessions(input.activeSessions, state.pendingDeletionIds);
+  const fallbackActive = filterPendingDeletionSessions(input.fallbackActive ?? [], state.pendingDeletionIds);
   let nextActiveSessions = input.mergeOnly
-    ? sortSessionsByUpdated(mergeSessionLists(state.activeSessions, input.activeSessions))
+    ? sortSessionsByUpdated(mergeSessionLists(state.activeSessions, incomingActiveSessions))
     : replaceSessionsForDirectories(
         state.activeSessions,
-        input.activeSessions,
+        incomingActiveSessions,
         input.directories,
       );
-  nextActiveSessions = mergeSessionLists(nextActiveSessions, input.fallbackActive);
+  nextActiveSessions = mergeSessionLists(nextActiveSessions, fallbackActive);
   if (sameSessionList(state.activeSessions, nextActiveSessions)) {
     nextActiveSessions = state.activeSessions;
   }
 
-  let nextArchivedSessions = input.archivedSessions === undefined
+  const incomingArchivedSessions = input.archivedSessions === undefined
+    ? undefined
+    : filterPendingDeletionSessions(input.archivedSessions, state.pendingDeletionIds);
+  let nextArchivedSessions = incomingArchivedSessions === undefined
     ? state.archivedSessions
     : replaceSessionsForDirectories(
         state.archivedSessions,
-        input.archivedSessions,
+        incomingArchivedSessions,
         input.directories,
       );
   if (sameSessionList(state.archivedSessions, nextArchivedSessions)) {
@@ -609,12 +628,14 @@ const applySnapshot = (
   archivedSessions: Session[],
   status: GlobalSessionsStatus,
 ): Partial<GlobalSessionsState> | GlobalSessionsState => {
-  const nextActiveSessions = sameSessionList(state.activeSessions, activeSessions)
+  const filteredActiveSessions = filterPendingDeletionSessions(activeSessions, state.pendingDeletionIds);
+  const filteredArchivedSessions = filterPendingDeletionSessions(archivedSessions, state.pendingDeletionIds);
+  const nextActiveSessions = sameSessionList(state.activeSessions, filteredActiveSessions)
     ? state.activeSessions
-    : activeSessions;
-  const nextArchivedSessions = sameSessionList(state.archivedSessions, archivedSessions)
+    : filteredActiveSessions;
+  const nextArchivedSessions = sameSessionList(state.archivedSessions, filteredArchivedSessions)
     ? state.archivedSessions
-    : archivedSessions;
+    : filteredArchivedSessions;
   const nextSessionsByDirectory = nextActiveSessions === state.activeSessions
     ? state.sessionsByDirectory
     : buildSessionsByDirectory(nextActiveSessions);
@@ -676,6 +697,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   hasLoadedFullCatalog: false,
   fullCatalogSessionIds: new Set(),
   fullCatalogGeneration: 0,
+  pendingDeletionIds: new Set(),
   hasLoaded: false,
   status: 'idle',
   startupSyncProgress: { active: false, phase: 'idle', completed: 0, total: 0 },
@@ -715,6 +737,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       hasLoadedFullCatalog: false,
       fullCatalogSessionIds: new Set(),
       fullCatalogGeneration: 0,
+      pendingDeletionIds: new Set(),
       hasLoaded: false,
       status: 'idle',
       startupSyncProgress: { active: false, phase: 'idle', completed: 0, total: 0 },
@@ -956,7 +979,10 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     // their own directory, so stale rows remain visible until authoritative data
     // for that directory arrives.
     set((state) => {
-      const nextActiveSessions = mergeSessionLists(state.activeSessions, fallbackActive);
+      const nextActiveSessions = mergeSessionLists(
+        state.activeSessions,
+        filterPendingDeletionSessions(fallbackActive ?? [], state.pendingDeletionIds),
+      );
       const nextLoading = new Set(state.loadingDirectories);
       const nextRefreshing = new Set(state.refreshingDirectories);
       for (const directory of directorySet) {
@@ -1178,7 +1204,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
             (session) => resolveGlobalSessionDirectory(session) === directory,
           );
           const byId = new Map(existingForDirectory.map((session) => [session.id, session]));
-          page.forEach((session) => {
+          filterPendingDeletionSessions(page, state.pendingDeletionIds).forEach((session) => {
             byId.set(session.id, mergeSessionDirectoryMetadata(session, byId.get(session.id)));
           });
           const mergedDirectorySessions = sortSessionsByUpdated([...byId.values()]);
@@ -1265,7 +1291,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
           set((state) => {
             const nextArchived = replaceSessionsForDirectories(
               state.archivedSessions,
-              archivedSessions,
+              filterPendingDeletionSessions(archivedSessions, state.pendingDeletionIds),
               new Set([directory]),
             );
             const nextLoaded = new Set(state.archivedLoadedDirectories);
@@ -1312,6 +1338,9 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       return;
     }
     set((state) => {
+      if (state.pendingDeletionIds.has(session.id)) {
+        return state;
+      }
       const existingSession = state.activeSessions.find((candidate) => candidate.id === session.id)
         ?? state.archivedSessions.find((candidate) => candidate.id === session.id)
         ?? null;
@@ -1341,6 +1370,30 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
           ? state.reviewTransferBySessionId
           : buildReviewTransferMap(nextActiveSessions),
       };
+    });
+  },
+
+  markSessionsPendingDeletion: (ids) => {
+    set((state) => {
+      let next: Set<string> | null = null;
+      for (const id of ids) {
+        if (!id || state.pendingDeletionIds.has(id)) continue;
+        next ??= new Set(state.pendingDeletionIds);
+        next.add(id);
+      }
+      return next ? { pendingDeletionIds: next } : state;
+    });
+  },
+
+  clearSessionsPendingDeletion: (ids) => {
+    set((state) => {
+      let next: Set<string> | null = null;
+      for (const id of ids) {
+        if (!state.pendingDeletionIds.has(id)) continue;
+        next ??= new Set(state.pendingDeletionIds);
+        next.delete(id);
+      }
+      return next ? { pendingDeletionIds: next } : state;
     });
   },
 

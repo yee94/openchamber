@@ -117,17 +117,32 @@ export const createMessageQueueServerRuntime = (dependencies: Partial<Dependenci
     if (!isCaptureCurrent(capture)) return;
     const next = new Map(state.scopes); next.set(scopeID, { ...descriptor, revision }); setDescriptors([...next.values()], capture);
   };
+  const reloadScope = async (scopeID: string, capture: MessageQueueServerRuntimeCapture, originalError: unknown): Promise<MessageQueueScope | undefined> => {
+    const snapshot = await deps.snapshot(controller?.signal); if (!isCaptureCurrent(capture)) return undefined;
+    const descriptor = snapshot.scopes.find((entry) => entry.scopeID === scopeID); if (!descriptor) throw originalError;
+    const current = await loadScope(descriptor, capture, controller?.signal ?? new AbortController().signal); if (!isCaptureCurrent(capture)) return undefined;
+    setDescriptors(snapshot.scopes, capture); replaceMessageQueueSnapshot(deps.client, snapshot, capture.transportIdentity); return current;
+  };
   const mutate = async (scopeID: string, revision: number, action: (expectedRevision: number, scope: MessageQueueScope | undefined) => Promise<{ revision: number }>): Promise<MessageQueueServerMutationResult> => {
     const capture = synchronizeTransport(); let expected = revision;
-    for (let attempt = 0; attempt < 2; attempt++) try {
+    for (let attempt = 0; attempt < 2; attempt++) {
       const descriptor = state.scopes.get(scopeID); const current = descriptor ? readMessageQueueScope(deps.client, scopeID, descriptor.revision, capture.transportIdentity) : undefined;
-      const result = await action(expected, current); if (!isCaptureCurrent(capture)) return { status: 'stale' };
-      await applyScope(scopeID, result.revision, capture); await invalidateMessageQueueScope(deps.client, scopeID, capture.transportIdentity); return { status: 'committed', scope: readMessageQueueScope(deps.client, scopeID, result.revision, capture.transportIdentity) };
-    } catch (error) {
-      if (!isConflict(error) || attempt) throw error;
-      const snapshot = await deps.snapshot(controller?.signal); if (!isCaptureCurrent(capture)) return { status: 'stale' };
-      const descriptor = snapshot.scopes.find((entry) => entry.scopeID === scopeID); if (!descriptor) throw error;
-      const current = await loadScope(descriptor, capture, controller?.signal ?? new AbortController().signal); if (!isCaptureCurrent(capture)) return { status: 'stale' }; setDescriptors(snapshot.scopes, capture); replaceMessageQueueSnapshot(deps.client, snapshot, capture.transportIdentity); expected = current.revision;
+      let result: { revision: number };
+      try { result = await action(expected, current); }
+      catch (error) {
+        if (!isConflict(error) || attempt) throw error;
+        const reloaded = await reloadScope(scopeID, capture, error); if (!reloaded) return { status: 'stale' };
+        expected = reloaded.revision; continue;
+      }
+      if (!isCaptureCurrent(capture)) return { status: 'stale' };
+      try { await applyScope(scopeID, result.revision, capture); }
+      catch (error) {
+        if (!isConflict(error)) throw error;
+        if (!await reloadScope(scopeID, capture, error)) return { status: 'stale' };
+      }
+      await invalidateMessageQueueScope(deps.client, scopeID, capture.transportIdentity);
+      const latest = state.scopes.get(scopeID);
+      return { status: 'committed', scope: latest ? readMessageQueueScope(deps.client, scopeID, latest.revision, capture.transportIdentity) : undefined };
     }
     throw new MessageQueueServerError(409, 'revision_conflict');
   };

@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { confirmMessageQueueEvent, createGlobalMessageStreamHub } from '../event-stream/global-hub.js';
+import { createAscendingMessageID } from './message-id.js';
 import { createMessageQueueRuntime } from './runtime.js';
 
 const roots = new Set();
@@ -33,7 +34,7 @@ const confirmThroughGlobalHub = async (service, runtimeKey, payload) => {
 };
 const fixture = async ({ send = async () => ({ ok: true }), apiBaseUrl = 'http://runtime' } = {}) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-authority-import-')); roots.add(root); const sent = [];
-  const adapter = { captureRuntime: () => ({}), checkEligibility: async () => ({ idle: true, settled: true, latestMessageID: 'msg_0000000000' }), createMessageID: (() => { let value = 0; return () => `msg_${String(++value).padStart(10, '0')}`; })(), materializeAttachments: async () => [], send: async (context, options) => { sent.push(context); return send(context, options); }, findMessage: async () => ({ found: false }) };
+  const adapter = { captureRuntime: () => ({}), checkEligibility: async () => ({ available: true, idle: true, settled: true, latestMessageID: 'msg_00000000000000000000000000' }), createMessageID: createAscendingMessageID, materializeAttachments: async () => [], send: async (context, options) => { sent.push(context); return send(context, options); }, findMessage: async () => ({ found: false }) };
   let currentApiBaseUrl = apiBaseUrl;
   const runtime = createMessageQueueRuntime({ dbPath: path.join(root, 'queue.sqlite'), attachmentRoot: path.join(root, 'attachments'), adapter, workerID: `authority-${process.pid}`, getRuntimeConfig: () => ({ apiBaseUrl: currentApiBaseUrl }) }); await runtime.start();
   return { root, runtime, service: runtime.service, adapter, sent, setApiBaseUrl: (value) => { currentApiBaseUrl = value; } };

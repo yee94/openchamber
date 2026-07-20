@@ -151,6 +151,11 @@ one complete active+archived catalog result; retention cleanup consumes that sna
 Directory refreshes preserve it, failed catalog loads preserve the prior snapshot,
 and runtime switches clear it. Initial loading and background refreshing are separate
 sets so an in-flight refresh never hides an existing session snapshot.
+Pending session deletions are runtime-memory UI orchestration state. Their IDs filter
+session-index snapshots, directory refreshes, direct upserts, pagination, archived
+refreshes, and aggregated live child-store sessions throughout the undo window;
+cancellation or delete settlement clears the matching IDs, and runtime switches clear
+the complete set.
 
 Electron cache refresh uses two timestamps per directory. Recent restarts query
 the Electron Web Server, which performs `session.list(start=lastSyncedAt)` and
