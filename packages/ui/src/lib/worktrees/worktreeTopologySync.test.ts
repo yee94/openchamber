@@ -63,6 +63,24 @@ describe('worktree topology coordinator', () => {
     expect(refreshed.sort()).toEqual(['/a', '/b']); expect(synced).toEqual([]); coordinator.stop();
   });
 
+  test('syncs persisted catalog worktrees whose session directories are still unloaded', async () => {
+    const timers = fakeTimers(); const synced: string[][] = [];
+    const coordinator = createWorktreeTopologyCoordinator({
+      isVSCode: () => false, getProjects: () => [{ id: 'a', path: '/a' }], getCatalog: () => new Map(), getActiveDirectories: () => [],
+      needsSessionSync: (directory) => directory === '/a/feature',
+      refresh: async () => ({ worktrees: [
+        { path: '/a/feature', projectDirectory: '/a', branch: 'feature', label: 'feature' },
+        { path: '/a/loaded', projectDirectory: '/a', branch: 'loaded', label: 'loaded' },
+      ], addedDirectories: [], removedDirectories: [] }),
+      syncAdded: async (directories) => { synced.push(directories); },
+      subscribeProjects: () => () => {}, subscribeCatalog: () => () => {}, subscribeSessions: () => () => {}, subscribeEvents: () => () => {}, subscribeRuntime: () => () => {}, generation: () => 1, setTimer: timers.setTimer, clearTimer: timers.clearTimer,
+    });
+
+    coordinator.start(); timers.flush(); await settle();
+
+    expect(synced).toEqual([['/a/feature']]); coordinator.stop();
+  });
+
   test('catalog notifications only reevaluate unknown directories', async () => {
     const timers = fakeTimers(); let catalogListener: (() => void) | undefined; let refreshes = 0;
     const coordinator = createWorktreeTopologyCoordinator({

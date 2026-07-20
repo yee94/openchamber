@@ -6,7 +6,11 @@ import {
   releaseSessionStartupBarrier,
 } from '@/lib/session-startup-barrier';
 
-import { runSessionStartup, runSessionStartupAfterSettingsHydration } from './runSessionStartup';
+import {
+  collectSessionStartupDirectories,
+  runSessionStartup,
+  runSessionStartupAfterSettingsHydration,
+} from './runSessionStartup';
 
 describe('runSessionStartup', () => {
   afterEach(() => {
@@ -23,6 +27,18 @@ describe('runSessionStartup', () => {
     await runSessionStartup(['/repo/a', '/repo/b'], start);
 
     expect(calls).toEqual([['/repo/a', '/repo/b']]);
+  });
+
+  test('collects persisted worktree directories for registered projects', () => {
+    const directories = collectSessionStartupDirectories(
+      ['/repo/a/', '/repo/b'],
+      new Map([
+        ['/repo/a', [{ path: '/repo/a-feature/' }, { path: '/repo/a-feature' }]],
+        ['/stale', [{ path: '/stale/feature' }]],
+      ]),
+    );
+
+    expect(directories).toEqual(['/repo/a', '/repo/a-feature', '/repo/b']);
   });
 
   test('reads project directories after settings hydration completes', async () => {

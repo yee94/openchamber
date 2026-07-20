@@ -13,6 +13,7 @@ type WorktreeTopologyCoordinatorDependencies = {
   getProjects: () => ProjectRef[];
   getCatalog: () => Map<string, Array<{ path: string }>>;
   getActiveDirectories: () => string[];
+  needsSessionSync?: (directory: string) => boolean;
   refresh: (project: ProjectRef, options: { isCurrent: () => boolean }) => Promise<WorktreeCatalogRefreshResult>;
   syncAdded: (directories: string[]) => Promise<unknown>;
   subscribeProjects: (listener: () => void) => () => void;
@@ -21,8 +22,8 @@ type WorktreeTopologyCoordinatorDependencies = {
   subscribeEvents: (listener: (event: { type: string; projectDirectory?: string }) => void) => () => void;
   subscribeRuntime: (listener: (identityChanged: boolean) => void) => () => void;
   generation: () => number;
-  setTimer: typeof setTimeout;
-  clearTimer: typeof clearTimeout;
+  setTimer: (handler: () => void, timeout?: number) => ReturnType<typeof setTimeout>;
+  clearTimer: (timer: ReturnType<typeof setTimeout>) => void;
 };
 
 export const createWorktreeTopologyCoordinator = (dependencies: WorktreeTopologyCoordinatorDependencies) => {
@@ -70,6 +71,12 @@ export const createWorktreeTopologyCoordinator = (dependencies: WorktreeTopology
         if (!started || epoch !== lifecycleEpoch || generation !== dependencies.generation()) return;
         completedProjects.add(key);
         for (const directory of result.addedDirectories) pendingSessionSync.add(normalizePath(directory));
+        if (dependencies.needsSessionSync) {
+          for (const worktree of result.worktrees) {
+            const directory = normalizePath(worktree.path);
+            if (dependencies.needsSessionSync(directory)) pendingSessionSync.add(directory);
+          }
+        }
         flushPendingSessionSync(epoch, generation);
         suppressRecoveredUnknowns();
       }).then(() => {
@@ -199,6 +206,7 @@ export const startWorktreeTopologySync = (): (() => void) => {
       getProjects: () => useProjectsStore.getState().projects,
       getCatalog: () => useSessionUIStore.getState().availableWorktreesByProject,
       getActiveDirectories: () => useGlobalSessionsStore.getState().activeSessions.map((session) => session.directory).filter((directory): directory is string => typeof directory === 'string'),
+      needsSessionSync: (directory) => !useGlobalSessionsStore.getState().loadedDirectories.has(normalizePath(directory)),
       refresh: forceRefreshProjectWorktreeCatalog,
       syncAdded: (directories) => syncGlobalSessionsForDirectories(directories, useGlobalSessionsStore.getState().activeSessions),
       subscribeProjects: (listener) => useProjectsStore.subscribe(listener),
@@ -207,8 +215,8 @@ export const startWorktreeTopologySync = (): (() => void) => {
       subscribeEvents: subscribeOpenchamberEvents,
       subscribeRuntime: (listener) => subscribeRuntimeEndpointChanged((detail) => listener(isRuntimeEndpointIdentityChange(detail))),
       generation: getRuntimeGeneration,
-      setTimer: setTimeout,
-      clearTimer: clearTimeout,
+      setTimer: (handler, timeout) => globalThis.setTimeout(handler, timeout),
+      clearTimer: (timer) => globalThis.clearTimeout(timer),
     });
   }
   references += 1;
