@@ -36,7 +36,7 @@ const fixture = async (options: { send?: (context: any) => Promise<any>; beforeR
     dbPath: path.join(root, 'queue.sqlite'), attachmentRoot: path.join(root, 'attachments'), workerID: `reservation-${process.pid}`,
     getRuntimeConfig: () => runtimeConfig.current, isServerPathAllowed: () => true,
     adapter: {
-      captureRuntime: () => ({ key: runtimeConfig.current.apiBaseUrl }), checkEligibility: async () => ({ idle: true, settled: true, latestMessageID: 'msg_0000000000' }),
+      captureRuntime: () => ({ key: runtimeConfig.current.apiBaseUrl }), checkEligibility: async () => ({ available: true, idle: true, settled: true, latestMessageID: 'msg_0000000000' }),
       createMessageID: (() => { let id = 0; return () => `msg_${String(++id).padStart(10, '0')}`; })(), materializeAttachments: async () => [],
       send: options.send ?? (async () => ({ ok: true })), findMessage: async () => ({ found: false }),
     },
@@ -53,8 +53,8 @@ afterEach(() => { for (const root of roots) fs.rmSync(root, { recursive: true, f
 
 describe('UI scope dispatch and edit reservation integration', () => {
   it('通过真实 HTTP/UI 锁住 sending scope 的 tail，同时保持跨 scope 并发与 FIFO', async () => {
-    const releases: Array<() => void> = [], sent: string[] = [];
-    const f = await fixture({ send: async (context) => { sent.push(context.queueItemID); await new Promise<void>((resolve) => releases.push(resolve)); return { ok: true }; } });
+    const releases: Array<() => void> = [], sent: string[] = [], messageIDs = new Map<string, string>();
+    const f = await fixture({ send: async (context) => { sent.push(context.queueItemID); messageIDs.set(context.queueItemID, context.messageID); await new Promise<void>((resolve) => releases.push(resolve)); return { ok: true }; } });
     const ui = surface(new QueryClient());
     try {
       await ui.admit(admission('a-head')); await ui.admit(admission('a-tail')); await ui.admit(admission('b-head', '/scope-b', 'b'));
@@ -64,7 +64,7 @@ describe('UI scope dispatch and edit reservation integration', () => {
       await expect(ui.manualSend({ requestID: 'ui-send-tail', scopeID: scopeA.scopeID, revision: scopeA.revision, item: tail })).rejects.toMatchObject({ status: 409, code: 'scope_locked' });
       await expect(ui.reorder({ requestID: 'ui-reorder-tail', scopeID: scopeA.scopeID, revision: scopeA.revision, queueItemIDs: scopeA.items.map((item: any) => item.queueItemID).reverse() })).rejects.toMatchObject({ status: 409, code: 'scope_locked' });
       expect(sent).toEqual(expect.arrayContaining(['item-a-head', 'item-b-head'])); expect(sent).not.toContain('item-a-tail');
-      releases.splice(0).forEach((release) => release()); await eventually(() => expect(sent).toContain('item-a-tail'));
+      releases.splice(0).forEach((release) => release()); f.runtime.worker.confirmByMessage({ directory: '/repo', sessionID: 'session', messageID: messageIDs.get('item-a-head')! }); f.runtime.worker.confirmByMessage({ directory: '/scope-b', sessionID: 'b', messageID: messageIDs.get('item-b-head')! }); await f.runtime.wake(); await eventually(() => expect(sent).toContain('item-a-tail'));
       expect(sent.indexOf('item-a-head')).toBeLessThan(sent.indexOf('item-a-tail')); releases.splice(0).forEach((release) => release()); await run;
     } finally { ui.stop(); await f.close(); }
   }, 15_000);

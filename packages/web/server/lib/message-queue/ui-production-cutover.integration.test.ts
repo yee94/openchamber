@@ -41,7 +41,7 @@ const fixture = async (options: { send?: (context: any) => Promise<any>; failSco
     dbPath: path.join(root, 'queue.sqlite'), attachmentRoot: path.join(root, 'attachments'), workerID: `gate2-${process.pid}`,
     getRuntimeConfig: () => runtimeConfig.current, isServerPathAllowed: () => true,
     adapter: {
-      captureRuntime: () => ({ key: runtimeConfig.current.apiBaseUrl }), checkEligibility: async () => ({ idle: true, settled: true, latestMessageID: 'msg_0000000000' }),
+      captureRuntime: () => ({ key: runtimeConfig.current.apiBaseUrl }), checkEligibility: async () => ({ available: true, idle: true, settled: true, latestMessageID: 'msg_0000000000' }),
       createMessageID: (() => { let id = 0; return () => `msg_${String(++id).padStart(10, '0')}`; })(), materializeAttachments: async () => [],
       send: options.send ?? (async () => ({ ok: true })), findMessage: async () => ({ found: false }),
     },

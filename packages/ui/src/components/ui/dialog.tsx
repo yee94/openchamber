@@ -95,8 +95,12 @@ function DialogContent({
       <DialogOverlay className={cn("rounded-none", overlayClassName)} />
       <div
         className={cn(
-          "fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4",
-          containerClassName,
+          "fixed inset-0 z-50 flex justify-center pointer-events-none",
+          // Default: vertically centered with uniform padding.
+          // Callers can opt into top-offset layouts (e.g. command palette)
+          // via containerClassName — avoid merging with `p-4`/`items-center`
+          // so top padding utilities are not overridden by the padding shorthand.
+          containerClassName ?? "items-center p-4",
         )}
       >
         <BaseDialog.Popup

@@ -98,7 +98,7 @@ describe('Phase 2 decisive production cutover fixture', () => {
       f.service.setAuthority({ authority: 'active', expectedGeneration: 0 });
       const running = f.runtime.startActive(); await eventually(() => expect(releases).toHaveLength(2));
       expect(dispatched.map((entry) => entry.queueItemID)).toEqual(expect.arrayContaining(['item-one', 'item-other'])); expect(dispatched.map((entry) => entry.queueItemID)).not.toContain('item-two'); expect(maximum).toBe(2);
-      releases.splice(0).forEach((release) => release()); await running; void f.runtime.wake(); await eventually(() => expect(dispatched.map((entry) => entry.queueItemID)).toContain('item-two'));
+      releases.splice(0).forEach((release) => release()); await running; dispatched.forEach((entry) => f.runtime.worker.confirmByMessage({ directory: entry.directory, sessionID: entry.sessionID, messageID: entry.messageID })); void f.runtime.wake(); await eventually(() => expect(dispatched.map((entry) => entry.queueItemID)).toContain('item-two'));
       releases.splice(0).forEach((release) => release());
     } finally { await f.close(); }
   }, 10_000);
@@ -164,12 +164,30 @@ describe('Phase 2 decisive production cutover fixture', () => {
     } finally { await f.close(); }
   }, 10_000);
 
-  it('runtime A 到 B 切换时旧完成只写入 A', async () => {
+  it('POST accepted 后持久化保留 reconciling 行', async () => {
+    const f = await fixture();
+    try {
+      const admitted = f.service.admit(item('accepted')); f.service.setAuthority({ authority: 'active', expectedGeneration: 0 }); await f.runtime.startActive(); await eventually(() => expect(f.sent).toHaveLength(1));
+      expect(f.service.getScope(admitted.scopeID).items).toMatchObject([{ queueItemID: admitted.queueItemID, status: 'reconciling', messageID: expect.stringMatching(/^msg_/) }]);
+    } finally { await f.close(); }
+  }, 10_000);
+
+  it('精确 message.updated 确认 accepted 行后完成删除', async () => {
+    const f = await fixture();
+    try {
+      const admitted = f.service.admit(item('accepted-event')); f.service.setAuthority({ authority: 'active', expectedGeneration: 0 }); await f.runtime.startActive(); await eventually(() => expect(f.sent).toHaveLength(1));
+      const current = f.service.getScope(admitted.scopeID).items[0];
+      f.runtime.worker.confirmByMessage({ directory: current.directory, sessionID: current.sessionID, messageID: current.messageID });
+      expect(f.service.snapshot().scopes).toMatchObject([{ scopeID: admitted.scopeID, itemCount: 0 }]);
+    } finally { await f.close(); }
+  }, 10_000);
+
+  it('runtime A 到 B 切换时 accepted attempt 保留在 A 的 reconciliation', async () => {
     let release;
     const f = await fixture({ adapter: { send: async () => new Promise((resolve) => { release = () => resolve({ ok: true }); }) } });
     try {
       f.service.admit(item('switch')); f.service.setAuthority({ authority: 'active', expectedGeneration: 0 }); await f.runtime.startActive(); await eventually(() => expect(release).toBeTypeOf('function')); f.config.current = { apiBaseUrl: 'http://runtime-b' }; release(); await f.runtime.wake();
-      expect(f.service.snapshot().scopes).toEqual([]); f.config.current = { apiBaseUrl: 'http://runtime-a' }; expect(f.service.snapshot().scopes[0].itemCount).toBe(0);
+      expect(f.service.snapshot().scopes).toEqual([]); f.config.current = { apiBaseUrl: 'http://runtime-a' }; expect(f.service.snapshot().scopes[0].itemCount).toBe(1);
     } finally { await f.close(); }
   }, 10_000);
 
@@ -197,11 +215,11 @@ describe('Phase 2 decisive production cutover fixture', () => {
     } finally { await f.close(); }
   }, 10_000);
 
-  it('manual busy promotion sends once and completes from a durable intent', async () => {
+  it('manual busy promotion sends once and persists reconciliation from its durable intent', async () => {
     const f = await fixture({ adapter: { checkEligibility: async () => ({ available: true, idle: false, settled: false, latestMessageID: 'msg_0000000000' }) } });
     try {
       const admitted = f.service.admit(item('manual-busy')); const scope = f.service.getScope(admitted.scopeID); f.service.manualSend({ requestID: 'manual-busy-send', queueItemID: 'item-manual-busy', expectedRevision: scope.revision, expectedRowVersion: scope.items[0].rowVersion }); f.service.setAuthority({ authority: 'active', expectedGeneration: 0 });
-      await f.runtime.startActive(); await eventually(() => expect(f.sent).toHaveLength(1)); await f.runtime.wake(); expect(f.sent).toHaveLength(1); expect(f.service.snapshot().scopes[0].itemCount).toBe(0);
+      await f.runtime.startActive(); await eventually(() => expect(f.sent).toHaveLength(1)); await f.runtime.wake(); expect(f.sent).toHaveLength(1); expect(f.service.snapshot().scopes[0].itemCount).toBe(1);
     } finally { await f.close(); }
   }, 10_000);
 

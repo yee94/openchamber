@@ -17,14 +17,15 @@ const setup = ({ result = { ok: true }, service: serviceOverrides = {}, adapter:
 afterEach(() => vi.useRealTimers());
 
 describe('message queue worker', () => {
-  it('starts paused then claims, sends, and completes with captured fencing', async () => {
+  it('starts paused then claims, sends, and reconciles accepted delivery with captured fencing', async () => {
     const { worker, service } = setup();
     await worker.runOnce();
     expect(service.claimNext).toHaveBeenCalledTimes(0);
     worker.start();
     await worker.wake();
     expect(service.claimNext).toHaveBeenCalledWith({ runtimeKey: 'runtime', owner: 'worker', leaseMs: 15000 });
-    expect(service.completeAttempt).toHaveBeenCalledWith(expect.objectContaining({ queueItemID: 'item', leaseToken: 'lease', fenceGeneration: 1, runtimeKey: 'runtime' }));
+    expect(service.completeAttempt).not.toHaveBeenCalled();
+    expect(service.markAmbiguous).toHaveBeenCalledWith(expect.objectContaining({ queueItemID: 'item', leaseToken: 'lease', fenceGeneration: 1, runtimeKey: 'runtime', dueAt: expect.any(Number) }));
     await worker.stop();
   });
 
@@ -116,7 +117,8 @@ describe('message queue worker', () => {
     expect(service.renewLease).toHaveBeenLastCalledWith({ queueItemID: 'item', leaseToken: 'lease', fenceGeneration: 1, runtimeKey: 'runtime', leaseMs: 3 });
     release({ ok: true });
     await flush();
-    expect(service.completeAttempt).toHaveBeenCalledTimes(1);
+    expect(service.completeAttempt).toHaveBeenCalledTimes(0);
+    expect(service.markAmbiguous).toHaveBeenCalledTimes(1);
     await worker.stop();
   });
 

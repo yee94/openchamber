@@ -1363,6 +1363,7 @@ async function main(options = {}) {
     dbPath: resolveMessageQueueDbPath({ messageQueueDbPath }, OPENCHAMBER_DATA_DIR),
     attachmentRoot: options.messageQueueAttachmentRoot,
     getRuntimeConfig: () => getDesktopRuntimeConfig?.() ?? null,
+    getOpenCodeRuntimeConfig: () => ({ apiBaseUrl: buildOpenCodeUrl('/', '') }),
     buildOpenCodeUrl,
     getOpenCodeAuthHeaders,
     waitForReady: waitForOpenCodeReady,

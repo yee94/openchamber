@@ -19,6 +19,17 @@ describe('OpenCode message queue adapter', () => {
     await adapter.send({ scope, messageID: 'message', runtime, sendConfig: { providerID: 'p', modelID: 'm', agent: 'a', variant: 'v' }, parts }); expect(promptAsync).toHaveBeenCalledWith(expect.objectContaining({ sessionID: 'session', directory: '/repo', messageID: 'message', parts }), expect.any(Object));
     generation = 2; expect(await adapter.send({ scope, runtime, sendConfig: { providerID: 'p', modelID: 'm' } })).toMatchObject({ code: 'runtime_stale' });
   });
+  it('uses the injected upstream runtime URL and detects its changes', async () => {
+    const promptAsync = vi.fn(() => ({ data: {} }));
+    createOpencodeClient.mockReturnValue({ session: { promptAsync, messages: vi.fn(() => ({ data: [] })) } });
+    let upstreamUrl = 'http://opencode-upstream:4096/';
+    const adapter = createOpenCodeMessageQueueAdapter({ buildOpenCodeUrl: () => upstreamUrl, getOpenCodeAuthHeaders: () => ({}), getRuntimeConfig: () => ({ apiBaseUrl: upstreamUrl }), readAttachment: () => null });
+    const runtime = adapter.captureRuntime();
+    await adapter.send({ scope: { sessionID: 's', directory: '/repo' }, messageID: 'msg_1', runtime, sendConfig: { providerID: 'p', modelID: 'm' }, parts: [] });
+    expect(createOpencodeClient).toHaveBeenCalledWith(expect.objectContaining({ baseUrl: 'http://opencode-upstream:4096' }));
+    upstreamUrl = 'http://opencode-upstream:4097/';
+    expect(adapter.isCurrent(runtime)).toBe(false);
+  });
   it('classifies SDK results and exact reconciliation matches without exposing transport details', async () => {
     const messages = vi.fn(() => ({ data: [{ id: 'other' }, { id: 'wanted' }] })); createOpencodeClient.mockReturnValue({ session: { promptAsync: vi.fn(() => ({ error: {}, response: { status: 503 } })), messages } });
     const adapter = createOpenCodeMessageQueueAdapter({ buildOpenCodeUrl: () => 'http://open.code/', getOpenCodeAuthHeaders: () => ({}), getSessionEligibility: () => ({ idle: true, settled: true }), getLatestMessageID: () => null, readAttachment: () => null });

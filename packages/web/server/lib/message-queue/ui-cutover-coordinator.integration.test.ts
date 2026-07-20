@@ -40,7 +40,7 @@ const fixture = async (send: (context: any) => Promise<any> = async () => ({ ok:
   const runtime = createMessageQueueRuntime({
     dbPath: path.join(root, 'queue.sqlite'), attachmentRoot: path.join(root, 'attachments'), workerID: `cutover-${process.pid}`,
     getRuntimeConfig: () => config.current, isServerPathAllowed: () => true,
-    adapter: { captureRuntime: () => ({ runtime: config.current.apiBaseUrl }), checkEligibility: async () => ({ idle: true, settled: true, latestMessageID: 'msg_0000000000' }), createMessageID: (() => { let value = 0; return () => `msg_${String(++value).padStart(10, '0')}`; })(), materializeAttachments: async () => [], send, findMessage: async () => ({ found: false }) },
+    adapter: { captureRuntime: () => ({ runtime: config.current.apiBaseUrl }), checkEligibility: async () => ({ available: true, idle: true, settled: true, latestMessageID: 'msg_0000000000' }), createMessageID: (() => { let value = 0; return () => `msg_${String(++value).padStart(10, '0')}`; })(), materializeAttachments: async () => [], send, findMessage: async () => ({ found: false }) },
   })!;
   await runtime.startPaused();
   const app: any = express(); app.use(express.json()); registerMessageQueueRoutes(app, { messageQueueService: runtime.service, messageQueueRuntime: runtime });
@@ -129,7 +129,7 @@ describe('UI cutover coordinator integration', () => {
     let calls = 0; const f = await fixture(async () => ({ ok: ++calls > 0 }));
     try {
       f.service.admit(item('restart')); f.service.setAuthority({ authority: 'active', expectedGeneration: 0 }); await f.runtime.stop();
-      const reopened = createMessageQueueRuntime({ dbPath: path.join(f.root, 'queue.sqlite'), attachmentRoot: path.join(f.root, 'attachments'), workerID: 'reopened', getRuntimeConfig: () => f.config.current, adapter: { captureRuntime: () => ({}), checkEligibility: async () => ({ idle: true, settled: true, latestMessageID: 'msg_0' }), createMessageID: () => 'msg_1', materializeAttachments: async () => [], send: async () => ({ ok: ++calls > 0 }), findMessage: async () => ({ found: false }) } })!;
+      const reopened = createMessageQueueRuntime({ dbPath: path.join(f.root, 'queue.sqlite'), attachmentRoot: path.join(f.root, 'attachments'), workerID: 'reopened', getRuntimeConfig: () => f.config.current, adapter: { captureRuntime: () => ({}), checkEligibility: async () => ({ available: true, idle: true, settled: true, latestMessageID: 'msg_0' }), createMessageID: () => 'msg_1', materializeAttachments: async () => [], send: async () => ({ ok: ++calls > 0 }), findMessage: async () => ({ found: false }) } })!;
       await reopened.start(); await eventually(() => expect(calls).toBeGreaterThan(0)); await reopened.stop();
     } finally { await f.close(); }
   }, 15_000);

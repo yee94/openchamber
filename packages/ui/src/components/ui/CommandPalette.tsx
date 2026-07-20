@@ -511,8 +511,8 @@ export const CommandPalette: React.FC = () => {
         <DialogDescription>{t('commandPalette.description')}</DialogDescription>
       </DialogHeader>
       <DialogContent
-        className="max-h-[min(32rem,calc(100vh-2rem))] w-[min(40rem,calc(100vw-1.5rem))] max-w-none gap-0 overflow-hidden rounded-2xl border border-[var(--interactive-border)]/55 bg-[color:color-mix(in_srgb,var(--surface-elevated)_80%,transparent)] p-0 shadow-2xl backdrop-blur-2xl supports-[backdrop-filter]:bg-[color:color-mix(in_srgb,var(--surface-elevated)_72%,transparent)] sm:max-h-[min(32rem,calc(100vh-4rem))] sm:w-[min(40rem,calc(100vw-3rem))]"
-        containerClassName="items-start pt-[12vh] sm:pt-[14vh]"
+        className="fixed left-1/2 top-[12vh] z-50 max-h-[min(32rem,calc(100vh-2rem))] w-[min(40rem,calc(100vw-1.5rem))] max-w-none -translate-x-1/2 translate-y-0 gap-0 overflow-hidden rounded-2xl border border-[var(--interactive-border)]/55 bg-[color:color-mix(in_srgb,var(--surface-elevated)_80%,transparent)] p-0 shadow-2xl backdrop-blur-2xl supports-[backdrop-filter]:bg-[color:color-mix(in_srgb,var(--surface-elevated)_72%,transparent)] sm:top-[14vh] sm:max-h-[min(32rem,calc(100vh-4rem))] sm:w-[min(40rem,calc(100vw-3rem))]"
+        containerClassName="block p-0"
         showCloseButton={false}
       >
         <Command
@@ -585,11 +585,13 @@ export const CommandPalette: React.FC = () => {
                         >
                           <CommandPaletteResult
                             title={title}
-                            trailing={branch ? (
-                              <span className="max-w-40 truncate typography-micro leading-none opacity-70">
-                                {branch}
-                              </span>
-                            ) : undefined}
+                            trailing={
+                              branch ? (
+                                <span className="max-w-40 truncate typography-micro leading-none opacity-70">
+                                  {branch}
+                                </span>
+                              ) : undefined
+                            }
                           />
                         </CommandItem>
                       );
@@ -635,7 +637,7 @@ export const CommandPalette: React.FC = () => {
                           onSelect={() => handleOpenProject(project.id, project.path)}
                           className={ITEM_CLASS}
                         >
-                          <CommandPaletteResult title={displayName} description={project.path} />
+                          <CommandPaletteResult title={displayName} />
                         </CommandItem>
                       );
                     })}

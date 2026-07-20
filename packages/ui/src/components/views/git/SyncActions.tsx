@@ -32,6 +32,7 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
   const blocksRebaseSync = behindCount > 0 && hasUncommittedChanges;
   const isPrimaryDisabled = disabled || syncAction !== null || !trackingRemote || blocksRebaseSync;
   const hasKnownSyncWork = aheadCount > 0 || behindCount > 0;
+  const syncWorkCount = aheadCount + behindCount;
   const tooltipLabel = blocksRebaseSync
     ? t('gitView.sync.commitOrStashTooltip')
     : trackingRemote
@@ -54,7 +55,7 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
           type="button"
           onClick={handleSync}
           disabled={isPrimaryDisabled}
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-6 min-w-6 items-center justify-center gap-0.5 rounded px-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50"
           aria-label={t('gitView.sync.syncChanges')}
         >
           {syncAction === 'sync' ? (
@@ -62,6 +63,11 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
           ) : (
             <Icon name="refresh" className="size-3.5" />
           )}
+          {hasKnownSyncWork ? (
+            <span aria-hidden="true" className="typography-micro font-medium leading-none tabular-nums">
+              {syncWorkCount}
+            </span>
+          ) : null}
         </button>
       </TooltipTrigger>
       <TooltipContent sideOffset={8}>{tooltipLabel}</TooltipContent>

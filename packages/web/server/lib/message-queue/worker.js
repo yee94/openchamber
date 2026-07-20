@@ -24,7 +24,7 @@ export const createMessageQueueWorker = ({ service, adapter, workerID, concurren
       const context = { ...preflight, messageID: attempt.messageID };
       const result = await settle(adapter.send({ ...context, parts }, { signal: controller.signal })); const status = statusOf(result);
       if (leaseLost) return;
-      if (result?.ok || result?.accepted) return settle(service.completeAttempt({ ...args, operationID: item.operationID, messageID: context.messageID, source: 'send' }));
+      if (result?.ok || result?.accepted) return settle(service.markAmbiguous({ ...args, dueAt: clock() }));
       if (Number.isInteger(status) && status >= 400 && status < 500 && status !== 408 && status !== 429) return settle(service.markFailed({ ...args, errorCode: `http_${status}` }));
       if (result?.ambiguous || result?.kind === 'ambiguous' || status === 408 || status === 429 || status >= 500) return settle(service.markAmbiguous({ ...args, errorCode: result?.code ?? 'transport', dueAt: clock() }));
       return settle(service.scheduleRetry({ ...args, dueAt: clock() + retryDelay(attempt.attemptCount), errorCode: result?.code ?? 'pre_dispatch' }));

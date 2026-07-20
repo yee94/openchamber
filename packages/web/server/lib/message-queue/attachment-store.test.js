@@ -120,7 +120,7 @@ describe('attachment store', () => {
     reopened.setAuthority({ authority: 'active', expectedGeneration: 0 });
     const sent = [];
     const adapter = {
-      captureRuntime: () => ({ token: 'runtime' }), checkEligibility: () => ({ idle: true, settled: true, latestMessageID: 'msg_0' }), createMessageID: () => 'msg_1',
+      captureRuntime: () => ({ token: 'runtime' }), checkEligibility: () => ({ available: true, idle: true, settled: true, latestMessageID: 'msg_0' }), createMessageID: () => 'msg_1',
       materializeAttachments: async (item) => [{ type: 'text', text: item.content }, await store.readAttachment(item.attachments[0], item)],
       send: async (context) => { sent.push(context.parts); return { ok: true }; }, findMessage: async () => ({ found: false }),
     };
@@ -130,7 +130,7 @@ describe('attachment store', () => {
     expect(sent).toHaveLength(1);
     expect(sent[0][1]).toMatchObject({ type: 'file', filename: 'image.png', mime: 'image/png' });
     expect(Buffer.from(sent[0][1].url.split(',')[1], 'base64').toString()).toBe('PNG-bytes');
-    reopened.close();
+    await worker.stop(); reopened.close();
   });
 
   it('keeps database metadata until the object file deletion succeeds', async () => {

@@ -4,11 +4,11 @@ import { createOpenCodeMessageQueueAdapter } from './opencode-adapter.js';
 import { createMessageQueueService } from './service.js';
 import { createMessageQueueWorker } from './worker.js';
 
-export const createMessageQueueRuntime = ({ dbPath, attachmentRoot, service, attachmentStore, adapter, worker, ...dependencies } = {}) => {
+export const createMessageQueueRuntime = ({ dbPath, attachmentRoot, service, attachmentStore, adapter, worker, getOpenCodeRuntimeConfig, ...dependencies } = {}) => {
   const queue = service ?? createMessageQueueService({ dbPath, ...dependencies });
   if (!queue) return null;
   const store = attachmentStore ?? createAttachmentStore({ rootDir: attachmentRoot ?? path.join(path.dirname(dbPath), 'message-queue-attachments'), maxBytes: 25 * 1024 * 1024, isServerPathAllowed: dependencies.isServerPathAllowed });
-  const openCodeAdapter = adapter ?? createOpenCodeMessageQueueAdapter({ ...dependencies, readAttachment: async (attachment, item, options) => store.readAttachment(attachment, item, options) });
+  const openCodeAdapter = adapter ?? createOpenCodeMessageQueueAdapter({ ...dependencies, getRuntimeConfig: getOpenCodeRuntimeConfig ?? (() => null), readAttachment: async (attachment, item, options) => store.readAttachment(attachment, item, options) });
   const queueWorker = worker ?? createMessageQueueWorker({ service: queue, adapter: openCodeAdapter, workerID: dependencies.workerID ?? `queue-${process.pid}` });
   let stopped = false; let gcTimer;
   const gc = async () => { queue.expireAttachmentUploadsAll?.(); const stale = queue.listAttachmentObjectsForGC(); for (const object of stale) { await Promise.resolve(store.deleteObjectIf?.(object.storageKey, () => queue.removeAttachmentObjectForGC?.(object))).catch(() => {}); } await store.gc({ liveStorageKeys: queue.listLiveAttachmentStorageKeys?.() ?? new Set(), isStorageKeyLive: (storageKey) => queue.isAttachmentStorageKeyLive?.(storageKey) ?? false }); };
