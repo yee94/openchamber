@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createGracefulShutdownRuntime } from './shutdown-runtime.js';
 
-const createRuntime = (server) => createGracefulShutdownRuntime({
+const createRuntime = (server, shutdownTimeoutMs = 1000) => createGracefulShutdownRuntime({
   process: { exit: vi.fn() },
-  shutdownTimeoutMs: 1000,
+  shutdownTimeoutMs,
   getExitOnShutdown: () => false,
   getIsShuttingDown: () => false,
   setIsShuttingDown: vi.fn(),
@@ -45,6 +45,7 @@ describe('graceful shutdown runtime', () => {
       close: vi.fn((callback) => {
         callback();
       }),
+      closeAllConnections: vi.fn(),
     };
 
     const runtime = createRuntime(server);
@@ -53,6 +54,28 @@ describe('graceful shutdown runtime', () => {
     await vi.advanceTimersByTimeAsync(1000);
 
     expect(warnSpy).not.toHaveBeenCalledWith('Server close timeout reached, forcing shutdown');
+    expect(vi.getTimerCount()).toBe(0);
+    expect(server.closeAllConnections).not.toHaveBeenCalled();
+  });
+
+  it('force closes remaining HTTP connections after initiating server close', async () => {
+    vi.useFakeTimers();
+    let closeCallback;
+    const server = {
+      close: vi.fn((callback) => {
+        closeCallback = callback;
+      }),
+      closeAllConnections: vi.fn(() => {
+        closeCallback();
+      }),
+    };
+
+    const runtime = createRuntime(server, 10000);
+    await runtime.gracefulShutdown({ exitProcess: false, forceCloseConnections: true });
+
+    expect(server.close).toHaveBeenCalledOnce();
+    expect(server.closeAllConnections).toHaveBeenCalledOnce();
+    expect(server.close.mock.invocationCallOrder[0]).toBeLessThan(server.closeAllConnections.mock.invocationCallOrder[0]);
     expect(vi.getTimerCount()).toBe(0);
   });
 });

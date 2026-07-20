@@ -1,4 +1,5 @@
 import React from 'react';
+import { useEvent } from '@reactuses/core';
 import { cn, truncatePathMiddle } from '@/lib/utils';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -14,9 +15,9 @@ import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
-import { useSessions } from '@/sync/sync-context';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getDirectoryState } from '@/sync/sync-refs';
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import type { Session } from '@opencode-ai/sdk/v2';
 
 type FileInfo = ProjectFileSearchHit;
@@ -50,24 +51,18 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   const { t } = useI18n();
   const currentDirectory = useChatSearchDirectory() ?? '';
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
-  const sessions = useSessions(currentDirectory);
+  const activeSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
-  const activeProjectPath = useProjectsStore(
-    React.useCallback(
-      (state) => state.projects.find((project) => project.id === activeProjectId)?.path ?? null,
-      [activeProjectId],
-    ),
+  const projects = useProjectsStore((state) => state.projects);
+  const activeProjectPath = React.useMemo(
+    () => projects.find((project) => project.id === activeProjectId)?.path ?? null,
+    [activeProjectId, projects],
   );
   const projectRoot = React.useMemo(() => {
     const candidate = activeProjectPath || currentDirectory;
     return candidate ? candidate.replace(/\\/g, '/').replace(/\/+$/, '') : null;
   }, [activeProjectPath, currentDirectory]);
-  const projectTabs = useFilesViewTabsStore(
-    React.useCallback(
-      (state) => (projectRoot ? state.byRoot[projectRoot] : undefined),
-      [projectRoot],
-    ),
-  );
+  const projectTabs = useFilesViewTabsStore((state) => projectRoot ? state.byRoot[projectRoot] : undefined);
   const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents);
   const searchFiles = useFileSearchStore((state) => state.searchFiles);
   const debouncedQuery = useDebouncedValue(searchQuery, 180);
@@ -135,17 +130,23 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     if (!onSessionSelect) return [];
 
     const queryLower = normalizedSearchQuery.toLowerCase();
-    const loadedMessageState = getDirectoryState(currentDirectory)?.message;
-    return sessions
+    return activeSessions
       .filter((session) => session.id !== currentSessionId)
-      .filter((session) => Boolean(loadedMessageState && Object.prototype.hasOwnProperty.call(loadedMessageState, session.id)))
+      .filter((session) => {
+        const directory = resolveGlobalSessionDirectory(session);
+        const state = directory ? getDirectoryState(directory) : undefined;
+        return Boolean(
+          state?.session.some((candidate) => candidate.id === session.id)
+          && Object.prototype.hasOwnProperty.call(state.message, session.id),
+        );
+      })
       .filter((session) => {
         if (!queryLower) return true;
         return `${session.title ?? ''} ${session.id}`.toLowerCase().includes(queryLower);
       })
       .sort((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
       .slice(0, normalizedSearchQuery ? 10 : 3);
-  }, [currentDirectory, currentSessionId, normalizedSearchQuery, onSessionSelect, sessions]);
+  }, [activeSessions, currentSessionId, normalizedSearchQuery, onSessionSelect]);
   const visibleDirectories = directories;
   const visibleRecentFiles = recentFiles;
   const visibleFiles = files;
@@ -383,17 +384,17 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     };
   }, [selectedIndex]);
 
-  const handleFileSelect = React.useCallback((file: FileInfo) => {
+  const handleFileSelect = useEvent((file: FileInfo) => {
     onFileSelect(file);
-  }, [onFileSelect]);
+  });
 
-  const handleAgentPick = React.useCallback((agentName: string) => {
+  const handleAgentPick = useEvent((agentName: string) => {
     onAgentSelect?.(agentName);
-  }, [onAgentSelect]);
+  });
 
-  const handleSessionPick = React.useCallback((session: Session) => {
+  const handleSessionPick = useEvent((session: Session) => {
     onSessionSelect?.(session);
-  }, [onSessionSelect]);
+  });
 
   React.useImperativeHandle(ref, () => ({
     handleKeyDown: (key: string) => {

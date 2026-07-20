@@ -1783,7 +1783,10 @@ async function main(options = {}) {
       } catch {
         // best-effort shutdown of the dictation worker
       }
-      return gracefulShutdown({ exitProcess: shutdownOptions.exitProcess ?? false });
+      return gracefulShutdown({
+        exitProcess: shutdownOptions.exitProcess ?? false,
+        forceCloseConnections: shutdownOptions.forceCloseConnections === true,
+      });
     }
   };
 }

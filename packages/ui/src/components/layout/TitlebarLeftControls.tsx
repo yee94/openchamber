@@ -30,10 +30,14 @@ export const TitlebarLeftControls: React.FC = () => {
   const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
   const sidebarWidth = useUIStore((state) => state.sidebarWidth);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
+  const setCommandPaletteOpen = useUIStore((state) => state.setCommandPaletteOpen);
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
   const clusterRef = React.useRef<HTMLDivElement | null>(null);
 
   const toggleShortcut = formatShortcutForDisplay(getEffectiveShortcutCombo('toggle_sidebar', shortcutOverrides));
+  const searchShortcut = formatShortcutForDisplay(
+    getEffectiveShortcutCombo('open_command_palette', shortcutOverrides),
+  );
   const { usesFramelessChrome, side: windowControlsSide } = useDesktopWindowControlsLayout();
   const usesWebSidebarHeader = React.useMemo(
     () => isWebRuntime() && !isDesktopShell() && !isVSCodeRuntime(),
@@ -122,24 +126,48 @@ export const TitlebarLeftControls: React.FC = () => {
           </Tooltip>
         ) : null}
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={toggleSidebar}
-              aria-label={t('header.actions.openSessionsAria')}
-              className={cn(ICON_BUTTON_CLASS, 'group shrink-0')}
-            >
-              <Icon
-                name="layout-left-rounded"
-                className="size-4 text-foreground/55 transition-colors group-hover:text-foreground group-focus-visible:text-foreground"
-              />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{t('header.actions.openSessionsWithShortcut', { shortcut: toggleShortcut })}</p>
-          </TooltipContent>
-        </Tooltip>
+        <div className="flex shrink-0 items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => setCommandPaletteOpen(true)}
+                aria-label={t('commandPalette.title')}
+                className={cn(ICON_BUTTON_CLASS, 'group shrink-0')}
+              >
+                <Icon
+                  name="search"
+                  className="size-4 text-foreground/55 transition-colors group-hover:text-foreground group-focus-visible:text-foreground"
+                />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="flex items-center gap-2">
+                <span>{t('commandPalette.title')}</span>
+                <span className="text-muted-foreground">{searchShortcut}</span>
+              </p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                aria-label={t('header.actions.openSessionsAria')}
+                className={cn(ICON_BUTTON_CLASS, 'group shrink-0')}
+              >
+                <Icon
+                  name="layout-left-rounded"
+                  className="size-4 text-foreground/55 transition-colors group-hover:text-foreground group-focus-visible:text-foreground"
+                />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{t('header.actions.openSessionsWithShortcut', { shortcut: toggleShortcut })}</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
     </div>
   );

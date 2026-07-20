@@ -1,32 +1,17 @@
 import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Icon } from '@/components/icon/Icon';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useUIStore } from '@/stores/useUIStore';
-import { useI18n } from '@/lib/i18n';
-import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 
 /**
  * Strip at the top of the desktop left sidebar that reserves room for the
- * persistent {@link TitlebarLeftControls} overlay and owns the global-search
- * action at the opposite edge. Its height tracks the header via
- * `--oc-header-height`.
+ * persistent {@link TitlebarLeftControls} overlay. Its height tracks the
+ * header via `--oc-header-height`.
  *
  * Split into three regions so the strip stays a window drag area while the
  * overlay buttons remain clickable: a `no-drag` carve matching the overlay
  * footprint (the overlay sits on top of it; an OS drag region here would steal
  * the buttons' clicks, since a separate-subtree `no-drag` can't carve a drag
- * region in Electron/macOS), a `drag` remainder for window dragging, and a
- * dedicated `no-drag` search control.
+ * region in Electron/macOS), plus a `drag` remainder for window dragging.
  */
 export const SidebarTopBar: React.FC = () => {
-  const { t } = useI18n();
-  const setCommandPaletteOpen = useUIStore((state) => state.setCommandPaletteOpen);
-  const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
-  const searchShortcut = formatShortcutForDisplay(
-    getEffectiveShortcutCombo('open_command_palette', shortcutOverrides),
-  );
-
   return (
     <div
       className="flex shrink-0"
@@ -46,27 +31,6 @@ export const SidebarTopBar: React.FC = () => {
       />
       {/* Draggable remainder of the strip. */}
       <div aria-hidden className="app-region-drag flex-1" />
-      <div className="app-region-no-drag flex shrink-0 items-center pr-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setCommandPaletteOpen(true)}
-              aria-label={t('commandPalette.title')}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <Icon name="search" className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p className="flex items-center gap-2">
-              <span>{t('commandPalette.title')}</span>
-              <span className="text-muted-foreground">{searchShortcut}</span>
-            </p>
-          </TooltipContent>
-        </Tooltip>
-      </div>
     </div>
   );
 };

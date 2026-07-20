@@ -106,6 +106,9 @@ export const createGracefulShutdownRuntime = (dependencies) => {
               console.log('HTTP server closed');
               resolve();
             });
+            if (options.forceCloseConnections === true) {
+              server.closeAllConnections?.();
+            }
           }),
           new Promise((resolve) => {
             closeTimeout = setTimeout(() => {

@@ -117,6 +117,29 @@ export function getAllSyncSessionMap(): ReadonlyMap<string, State["session"][num
   return cachedSessionsById
 }
 
+export type MaterializedSessionDirectorySnapshot = Pick<State, "session" | "message">
+
+/** Resolve a loaded session snapshot without creating stores or fetching data. */
+export function resolveMaterializedSessionDirectory(
+  sessionID: string,
+  preferredDirectory?: string,
+  snapshots?: Iterable<readonly [string, MaterializedSessionDirectorySnapshot]>,
+): string | undefined {
+  const loadedSnapshots = snapshots ?? (_childStores
+    ? Array.from(_childStores.children, ([directory, store]) => [directory, store.getState()] as const)
+    : [])
+  const matches: string[] = []
+
+  for (const [directory, state] of loadedSnapshots) {
+    if (!state.session.some((session) => session.id === sessionID)) continue
+    if (!Object.prototype.hasOwnProperty.call(state.message, sessionID)) continue
+    if (directory === preferredDirectory) return directory
+    matches.push(directory)
+  }
+
+  return matches.length === 1 ? matches[0] : undefined
+}
+
 /** Read messages for a session from current directory's child store */
 export function getSyncMessages(sessionId: string, directory?: string) {
   return getDirectoryState(directory)?.message[sessionId] ?? []

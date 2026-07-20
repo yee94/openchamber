@@ -207,10 +207,11 @@ becoming the cached startup result consumed by the session coordinator.
   commits a shared transport response into its own store.
 - Older history is user-driven pagination (`loadMore`) only. Desktop and VS Code
   must not automatically prepend a 100-message page after initial render.
-- Composer session mentions list only other sessions whose message state is
-  already materialized in the current directory store. Sending a mention reads
-  that bounded local message/part snapshot and adds a size-limited hidden context
-  part; opening the mention menu and sending perform no referenced-session fetch.
+- Composer session mentions list only other global active sessions whose owning
+  directory store is already initialized and has materialized that session's
+  identity and message snapshot. Sending a mention reads that bounded owning
+  directory message/part snapshot and adds a size-limited hidden context part;
+  opening the mention menu and sending perform no referenced-session fetch.
   The textarea stores visible Session labels plus DraftRecord sidecars containing
   stable Session IDs. Sending resolves each sidecar at the send boundary into
   stable Session identity and visible sent text `@<session title>`.

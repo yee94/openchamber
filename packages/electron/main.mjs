@@ -1541,7 +1541,7 @@ const shutdownInProcessServer = () => {
   state.shutdownPromise = (async () => {
     try {
       if (handle) {
-        await handle.stop({ exitProcess: false });
+        await handle.stop({ exitProcess: false, forceCloseConnections: true });
       }
     } catch (error) {
       log.warn('[electron] graceful in-process web server shutdown failed:', error);

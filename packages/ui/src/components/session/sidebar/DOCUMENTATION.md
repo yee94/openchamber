@@ -128,7 +128,8 @@
 ### Components
 
 - `SidebarHeader.tsx`: Optional session-search field only (action toolbar removed).
-- `SidebarTopBar.tsx`: Desktop titlebar strip with preserved window-drag regions and the global command-palette search action.
+- `TitlebarLeftControls.tsx`: Persistent brand, global-search, and sidebar-toggle controls with shared compact button chrome.
+- `SidebarTopBar.tsx`: Desktop titlebar strip with preserved window-drag regions beneath the persistent titlebar controls.
 - `SidebarDisplayModeMenu.tsx`: Display-mode equalizer menu; rendered on the first section title row.
 - `SidebarPinnedSessions.tsx`: Global top section renderer for pinned sessions.
 - `SidebarFooter.tsx`: Static footer with icon-only settings and shortcuts actions, plus optional update button.

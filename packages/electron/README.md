@@ -14,7 +14,7 @@ The preload bridge exposes desktop-only APIs to the web UI through `window.__OPE
 
 ## Shutdown Lifecycle
 
-Electron owns the in-process server handle. Normal quit, relaunch, vibrancy relaunch, update installation, and `SIGINT`/`SIGTERM`/`SIGHUP` share one shutdown promise and await `serverHandle.stop({ exitProcess: false })` before Electron exits, relaunches, or applies an update. This closes the message queue service and SQLite resources; SSH sessions also stop during the same teardown. A failed graceful stop launches the existing detached managed-OpenCode killer using process information captured before `stop()`.
+Electron owns the in-process server handle. Normal quit, relaunch, vibrancy relaunch, update installation, and `SIGINT`/`SIGTERM`/`SIGHUP` share one shutdown promise and await `serverHandle.stop({ exitProcess: false, forceCloseConnections: true })` before Electron exits, relaunches, or applies an update. Desktop teardown closes remaining local HTTP connections after initiating server close, avoiding the 10-second shutdown wait. This closes the message queue service and SQLite resources; SSH sessions also stop during the same teardown. A failed graceful stop launches the existing detached managed-OpenCode killer using process information captured before `stop()`.
 
 ## Main Files
 

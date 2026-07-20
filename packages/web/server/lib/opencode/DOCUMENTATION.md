@@ -285,7 +285,7 @@ This module provides OpenCode server integration utilities for the web server ru
 ## Public exports (shutdown-runtime.js)
 - `createGracefulShutdownRuntime(dependencies)`: creates graceful shutdown runtime for managed OpenCode and web server teardown sequencing.
 - Returned API:
-  - `gracefulShutdown(options?)`
+  - `gracefulShutdown(options?)`: accepts `forceCloseConnections: true` for runtimes that close remaining HTTP connections after initiating server close.
 
 ## Public exports (server-startup-runtime.js)
 - `createServerStartupRuntime(dependencies)`: creates runtime for server bind/startup tunnel and process handler wiring.

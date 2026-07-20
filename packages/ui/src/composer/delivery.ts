@@ -1,4 +1,4 @@
-import { getSyncMessages, getSyncParts, getSyncSessions } from '@/sync/sync-refs';
+import { getSyncMessages, getSyncParts, getSyncSessions, resolveMaterializedSessionDirectory } from '@/sync/sync-refs';
 import { isSyntheticPart } from '@/lib/messages/synthetic';
 import type { ComposerReferenceSemantic } from './extensions';
 import type { ComposerSendPlan } from './send-plan';
@@ -106,12 +106,13 @@ export const partitionComposerSemantics = (semantics: readonly ComposerReference
 /** Resolves semantic delivery at the owner boundary from the loaded directory snapshot. */
 export const buildComposerSemanticParts = (semantics: readonly ComposerReferenceSemantic[], directory: string): Array<{ text: string; synthetic: true }> => {
     const { sessionIds, skillNames } = partitionComposerSemantics(semantics);
-    const sessions = sessionIds.length > 0 ? new Map(getSyncSessions(directory).map((session) => [session.id, session])) : new Map();
     const contexts: SessionMentionContext[] = sessionIds.flatMap((sessionId) => {
-        const session = sessions.get(sessionId);
+        const sessionDirectory = resolveMaterializedSessionDirectory(sessionId, directory);
+        if (!sessionDirectory) return [];
+        const session = getSyncSessions(sessionDirectory).find((candidate) => candidate.id === sessionId);
         if (!session) return [];
-        const messages = getSyncMessages(sessionId, directory).flatMap((message) => {
-            const text = getSyncParts(message.id, directory).filter((part) => part.type === 'text' && !isSyntheticPart(part)).map((part) => 'text' in part && typeof part.text === 'string' ? part.text : '').filter(Boolean).join('\n');
+        const messages = getSyncMessages(sessionId, sessionDirectory).flatMap((message) => {
+            const text = getSyncParts(message.id, sessionDirectory).filter((part) => part.type === 'text' && !isSyntheticPart(part)).map((part) => 'text' in part && typeof part.text === 'string' ? part.text : '').filter(Boolean).join('\n');
             return text ? [{ role: message.role, text }] : [];
         });
         return [{ id: session.id, title: session.title || session.id, messages }];
