@@ -4,6 +4,8 @@ import React from 'react';
 export type MobileAppActions = {
   /** Open the Changes surface as a modal and (optionally) navigate it to a specific diff. */
   openChanges: (options?: { diffPath?: string | null; staged?: boolean; targetLine?: number }) => void;
+  /** Open the exact single-file patch selected from an edit/apply_patch tool row. */
+  openToolDiff: (options: { diffPath: string; patch: string; targetLine?: number }) => void;
   /** Open every diff from the owning turn in a mobile review sheet. */
   openTurnDiff: (messageId?: string) => void;
   /** Open the Files surface as a modal. */

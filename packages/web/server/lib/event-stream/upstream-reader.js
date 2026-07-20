@@ -148,7 +148,7 @@ export function createUpstreamSseReader({
             continue;
           }
 
-          onConnect?.({ response, lastEventId });
+          const connectionContext = onConnect?.({ response, lastEventId });
 
           const decoder = new TextDecoder();
           const reader = response.body.getReader();
@@ -180,6 +180,7 @@ export function createUpstreamSseReader({
                   payload: envelope.payload,
                   eventId: envelope.eventId,
                   directory: envelope.directory,
+                  connectionContext,
                 });
               }
               separatorIndex = buffer.indexOf('\n\n');
@@ -199,6 +200,7 @@ export function createUpstreamSseReader({
                 payload: envelope.payload,
                 eventId: envelope.eventId,
                 directory: envelope.directory,
+                connectionContext,
               });
             }
           }

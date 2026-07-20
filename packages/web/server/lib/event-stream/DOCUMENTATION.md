@@ -46,6 +46,7 @@ This module contains the OpenChamber message-stream WebSocket protocol and runti
 - Health checks are reserved for initial upstream connect failures and explicit upstream-unavailable responses, not for ordinary stall recovery on an already-established stream.
 - Global synthetic events such as `openchamber:session-status`, `openchamber:session-activity`, `openchamber:notification`, and `openchamber:heartbeat` are preserved on the WS path, but heartbeat frames are emitted only while an upstream SSE stream is actively attached.
 - Global UI broadcasts are fan-out capable across both SSE and WS clients.
+- Each global upstream connection captures a sanitized runtime fence containing the normalized runtime key plus connection generation and derived token. Queue confirmation uses that generation only to validate the connection runtime identity and read current authority by runtime key. Active and paused authorities confirm exact directory, session, and message matches through the queue service; shadow authority skips confirmation while session-index ingestion continues.
 - The reusable upstream reader centralizes SSE fetch/parsing/reconnect behavior for the WS runtime and OpenCode watcher. Additional event consumers should move to it only with parity tests for their lifecycle and error semantics.
 - Browser transport concerns live in the WS bridge modules; server-side global stream ownership lives in `global-hub.js`.
 

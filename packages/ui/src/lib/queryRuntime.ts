@@ -31,6 +31,11 @@ export const queryKeys = {
     sources: (directory: string | null, transport = getRuntimeTransportIdentity()): readonly [string, 'skillsCatalog', 'sources', string | null] => [transport, 'skillsCatalog', 'sources', normalizeQueryDirectory(directory)],
     source: (directory: string | null, sourceId: string, transport = getRuntimeTransportIdentity()): readonly [string, 'skillsCatalog', 'source', string | null, string] => [transport, 'skillsCatalog', 'source', normalizeQueryDirectory(directory), sourceId],
   },
+  messageQueue: {
+    status: (transport = getRuntimeTransportIdentity()): readonly [string, 'messageQueue', 'status'] => [transport, 'messageQueue', 'status'],
+    snapshot: (transport = getRuntimeTransportIdentity()): readonly [string, 'messageQueue', 'snapshot'] => [transport, 'messageQueue', 'snapshot'],
+    scope: (scopeID: string, revision: number, transport = getRuntimeTransportIdentity()): readonly [string, 'messageQueue', 'scope', string, number] => [transport, 'messageQueue', 'scope', scopeID, revision],
+  },
   mcp: {
     configs: (directory: string | null, transport = getRuntimeTransportIdentity()): readonly [string, 'mcp', 'configs', string | null] => [transport, 'mcp', 'configs', normalizeQueryDirectory(directory)],
     status: (directory: string | null, transport = getRuntimeTransportIdentity()): readonly [string, 'mcp', 'status', string | null] => [transport, 'mcp', 'status', normalizeQueryDirectory(directory)],

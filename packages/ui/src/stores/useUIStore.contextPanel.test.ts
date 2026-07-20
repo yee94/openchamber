@@ -4,6 +4,7 @@ import { useUIStore } from './useUIStore';
 beforeEach(() => {
   useUIStore.setState({
     contextPanelByDirectory: {},
+    contextToolDiffByDirectory: {},
     sessionWorkspacePanelById: {},
     contextPanelsOpenBeforeRightSidebarCollapse: [],
     isRightSidebarOpen: false,
@@ -30,6 +31,31 @@ describe('useUIStore context panel tabs', () => {
     expect(reopenedTabs).toHaveLength(1);
     expect(reopenedTabs[0]?.diffTargetLine).toBe(7);
     expect(reopenedTabs[0]?.diffTurnMessageId).toBe('msg_turn_2');
+  });
+
+  test('keeps a clicked tool patch transient and clears it for regular diff navigation', () => {
+    const directory = '/repo';
+    const patch = '--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1 +1 @@\n-old\n+new\n ';
+
+    useUIStore.getState().openContextToolDiff(directory, 'src/app.ts', patch, 1, ' msg_tool_turn ');
+
+    const tab = useUIStore.getState().contextPanelByDirectory[directory]?.tabs[0];
+    expect(tab?.mode).toBe('diff');
+    expect(tab?.targetPath).toBe('src/app.ts');
+    expect(tab?.diffScope).toBe('turn');
+    expect(tab?.diffTurnMessageId).toBe('msg_tool_turn');
+    expect(useUIStore.getState().contextToolDiffByDirectory[directory]).toEqual({
+      targetPath: 'src/app.ts',
+      patch,
+      turnMessageId: 'msg_tool_turn',
+    });
+    const partialize = useUIStore.persist.getOptions().partialize;
+    const persisted = partialize?.(useUIStore.getState()) as Record<string, unknown> | undefined;
+    expect(persisted?.contextToolDiffByDirectory).toBe(undefined);
+
+    useUIStore.getState().openContextDiff(directory, 'src/app.ts', false, 'turn', 1, 'msg_turn');
+
+    expect(useUIStore.getState().contextToolDiffByDirectory[directory]).toBe(undefined);
   });
 
   test('updates readOnly when an existing chat tab is reopened', () => {

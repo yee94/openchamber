@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { legacyQueueScope, migrateMessageQueueState, queueScopeKey, useMessageQueueStore, type QueueItem, type QueueScope } from './messageQueueStore';
+import { legacyQueueScope, markMessageQueueTransportRetired, migrateMessageQueueState, prepareLegacyQueuesForCutover, queueScopeKey, setMessageQueueMutationFence, useMessageQueueStore, type QueueItem, type QueueScope } from './messageQueueStore';
 import { serializeComposerDocument } from '@/composer/document';
 
 const a: Extract<QueueScope, { state: 'bound' }> = { state: 'bound', transportIdentity: 'runtime-a', directory: '/project', sessionID: 'session-a' };
@@ -12,12 +12,51 @@ const mustAdd = (scope: QueueScope = a): QueueItem => {
 };
 
 describe('messageQueueStore scoped ledger', () => {
-  beforeEach(reset);
+  beforeEach(() => { setMessageQueueMutationFence('open'); reset(); });
   test('uses stable physical scope keys and isolates same session across runtimes', () => {
     const first = mustAdd(a); const second = mustAdd(b); const state = useMessageQueueStore.getState();
     expect(queueScopeKey(a)).not.toBe(queueScopeKey(b));
     expect(state.getQueueForScope(a)[0]).toBe(first); expect(state.getQueueForScope(b)[0]).toBe(second);
     expect(/^msg_/.test(first.messageID)).toBe(true); expect(/^msg_/.test(second.messageID)).toBe(true);
+  });
+  test('fences user mutations while allowing an in-flight item to settle', () => {
+    const item = mustAdd();
+    const identity = { queueItemID: item.queueItemID, operationID: item.operationID, messageID: item.messageID };
+    useMessageQueueStore.getState().markQueueItemSendAttempt(a, identity);
+    setMessageQueueMutationFence('quiescing');
+    expect(useMessageQueueStore.getState().addToQueue(a, { content: 'blocked' }).ok).toBe(false);
+    useMessageQueueStore.getState().removeFromQueue(a, item.queueItemID, item.operationID);
+    expect(useMessageQueueStore.getState().getQueueForScope(a)[0]?.queueItemID).toBe(item.queueItemID);
+    useMessageQueueStore.getState().markQueueItemDefinitiveFailure(a, identity);
+    expect(useMessageQueueStore.getState().getQueueForScope(a)[0]?.status).toBe('failed');
+  });
+  test('keeps retired transport scopes read-only while a new unsupported transport opens', () => {
+    const retired = { state: 'bound' as const, transportIdentity: 'retired-web-runtime', directory: '/project', sessionID: 'session-a' };
+    const fresh = { ...retired, transportIdentity: 'vscode-501-runtime' };
+    const old = mustAdd(retired);
+    markMessageQueueTransportRetired(retired.transportIdentity);
+    setMessageQueueMutationFence('open');
+    expect(useMessageQueueStore.getState().addToQueue(retired, { content: 'blocked' }).ok).toBe(false);
+    expect(useMessageQueueStore.getState().getQueueForScope(retired)[0]?.queueItemID).toBe(old.queueItemID);
+    expect(useMessageQueueStore.getState().addToQueue(fresh, { content: 'new-runtime' }).ok).toBe(true);
+  });
+  test('bulk binds every legacy scope atomically with stable order and identities', () => {
+    const first = mustAdd(legacyQueueScope('session-a')); const second = mustAdd(legacyQueueScope('session-a')); const third = mustAdd(legacyQueueScope('session-b'));
+    const existing = mustAdd({ state: 'bound', transportIdentity: 'cutover-runtime', directory: '/a', sessionID: 'session-a' });
+    setMessageQueueMutationFence('quiescing');
+    expect(prepareLegacyQueuesForCutover('cutover-runtime', (sessionID) => sessionID === 'session-a' ? '/a' : '/b')).toEqual({ ok: true, moved: 3 });
+    const boundA = { state: 'bound' as const, transportIdentity: 'cutover-runtime', directory: '/a', sessionID: 'session-a' };
+    const boundB = { state: 'bound' as const, transportIdentity: 'cutover-runtime', directory: '/b', sessionID: 'session-b' };
+    expect(useMessageQueueStore.getState().getQueueForScope(boundA).map((item) => item.queueItemID)).toEqual([first.queueItemID, second.queueItemID, existing.queueItemID]);
+    expect(useMessageQueueStore.getState().getQueueForScope(boundB)[0]?.operationID).toBe(third.operationID);
+    expect(useMessageQueueStore.getState().getQueueForScope(legacyQueueScope('session-a'))).toEqual([]);
+  });
+  test('keeps every legacy scope in place when one authoritative directory is unavailable', () => {
+    const first = mustAdd(legacyQueueScope('session-a')); const second = mustAdd(legacyQueueScope('session-b'));
+    setMessageQueueMutationFence('quiescing');
+    expect(prepareLegacyQueuesForCutover('rollback-runtime', (sessionID) => sessionID === 'session-a' ? '/a' : undefined)).toEqual({ ok: false, unresolvedSessionIDs: ['session-b'] });
+    expect(useMessageQueueStore.getState().getQueueForScope(legacyQueueScope('session-a'))[0]?.queueItemID).toBe(first.queueItemID);
+    expect(useMessageQueueStore.getState().getQueueForScope(legacyQueueScope('session-b'))[0]?.queueItemID).toBe(second.queueItemID);
   });
   test('rejects malformed and content-mismatched composer sidecars without queue mutation', () => {
     const actions = useMessageQueueStore.getState();

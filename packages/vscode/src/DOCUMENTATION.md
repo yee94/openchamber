@@ -58,6 +58,10 @@ Keep `bridge.ts` as a thin orchestration layer that delegates message handling t
 
 ## Extension guideline
 
+The VS Code webview returns `501 { code: 'unavailable' }` for the message-queue
+server route family. This explicit response precedes the generic OpenCode proxy,
+so shared UI worktree-order synchronization exits cleanly in this runtime.
+
 When adding new bridge route families:
 
 1. Prefer creating or extending a domain runtime module under `packages/vscode/src/bridge-*-runtime.ts`.

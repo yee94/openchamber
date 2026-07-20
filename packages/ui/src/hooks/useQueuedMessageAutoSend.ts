@@ -17,10 +17,25 @@ import { queryClient } from '@/lib/queryRuntime';
 import { readInstalledSkillsSnapshot } from '@/queries/installedSkillsQueries';
 import { compileChatComposerDelivery, legacyTextToAuthoredPlan } from '@/components/chat/chatComposerDelivery';
 type SessionStatusType = ScopedSessionStatus;
+export type QueuedMessageOwnershipGate = 'blocked' | 'legacy-enabled';
+let ownershipGate: QueuedMessageOwnershipGate = 'blocked';
+const ownershipGateListeners = new Set<() => void>();
+export const getQueuedMessageOwnershipGate = (): QueuedMessageOwnershipGate => ownershipGate;
+export const setQueuedMessageOwnershipGate = (next: QueuedMessageOwnershipGate): void => {
+  if (ownershipGate === next) return;
+  ownershipGate = next;
+  for (const listener of ownershipGateListeners) listener();
+};
+export const subscribeQueuedMessageOwnershipGate = (listener: () => void) => {
+  ownershipGateListeners.add(listener);
+  return () => ownershipGateListeners.delete(listener);
+};
+const legacyDispatchEnabled = () => ownershipGate === 'legacy-enabled';
 const RETRY_BASE = 2000; const RETRY_MAX = 60000; const RECONCILIATION_QUERY_DEADLINE_MS = 5000; const MAX_RECONCILIATION_CHECKS = 3;
 export const getQueuedAutoSendRetryDelayMs = (failures: number) => Math.min(RETRY_BASE * 2 ** Math.max(failures - 1, 0), RETRY_MAX);
 const dispatchFlights = new Map<string, Promise<void>>();
 const dispatchScopeFlights = new Map<string, Promise<void>>();
+const reconciliationFlights = new Set<Promise<void>>();
 const dispatchFlightListeners = new Set<() => void>();
 let dispatchFlightRevision = 0;
 const notifyDispatchFlightChanged = () => {
@@ -39,6 +54,15 @@ export const useQueueScopeDispatchFlight = (scope: BoundScope | null): boolean =
   () => scope ? dispatchScopeFlights.has(dispatchScopeFlightKey(scope)) : false,
   () => false,
 );
+export const getQueuedMessageFinalLedger = () => structuredClone(useMessageQueueStore.getState().queuedMessages);
+export const quiesceQueuedMessageAutoSend = async (): Promise<Record<string, QueueItem[]>> => {
+  setQueuedMessageOwnershipGate('blocked');
+  while (dispatchFlights.size || dispatchScopeFlights.size || reconciliationFlights.size) {
+    await Promise.allSettled([...new Set([...dispatchFlights.values(), ...dispatchScopeFlights.values(), ...reconciliationFlights])]);
+  }
+  flushMessageQueuePersistence();
+  return getQueuedMessageFinalLedger();
+};
 type QueueHeadPlan = { dispatch?: boolean; query?: boolean; resolve?: boolean; recover?: boolean; nextWakeAt?: number };
 const isAuthoritativeIdle = (status: SessionStatusType): boolean => status === 'idle';
 export type QueueTurnState = 'settled' | 'unsettled' | 'unknown';
@@ -168,6 +192,7 @@ const findQueueItem = (store: ReturnType<typeof useMessageQueueStore.getState>, 
 };
 
 export function dispatchQueuedMessage(sessionID: string, options: { delivery?: 'steer'; queueItemID?: string; scope?: BoundScope; manual?: boolean } = {}): Promise<void> {
+  if (!legacyDispatchEnabled()) return Promise.resolve();
   const store = useMessageQueueStore.getState();
   const preferred = options.scope ?? queueScopeForSession(sessionID);
   const manual = options.manual === true || options.delivery === 'steer';
@@ -214,6 +239,7 @@ export function dispatchQueuedMessage(sessionID: string, options: { delivery?: '
         store.markQueueItemPreDispatchRetry(scope, freshIdentity, Date.now() + getQueuedAutoSendRetryDelayMs(ready.attemptCount + 1));
         return;
       }
+      if (!legacyDispatchEnabled()) { store.markQueueItemPreDispatchRetry(scope, freshIdentity, Date.now() + getQueuedAutoSendRetryDelayMs(ready.attemptCount + 1)); return; }
       const confirmationMatches = () => { const current = useMessageQueueStore.getState().getQueueForScope(scope)[0] as QueueItem | undefined; return getRuntimeTransportIdentity() === scope.transportIdentity && getRuntimeGeneration() === generation && current?.queueItemID === freshIdentity.queueItemID && current.operationID === freshIdentity.operationID && current.messageID === freshIdentity.messageID && queueScopeKey(current.owner) === queueScopeKey(scope); };
       const failureMatches = () => { const current = useMessageQueueStore.getState().getQueueForScope(scope)[0] as QueueItem | undefined; return current?.queueItemID === freshIdentity.queueItemID && current.operationID === freshIdentity.operationID && current.messageID === freshIdentity.messageID && queueScopeKey(current.owner) === queueScopeKey(scope); };
       const confirm = (messageID: string) => { if (confirmationMatches() && messageID === freshIdentity.messageID) useMessageQueueStore.getState().confirmQueueItem(scope, freshIdentity); };
@@ -239,6 +265,7 @@ export function dispatchQueuedMessage(sessionID: string, options: { delivery?: '
 }
 
 export async function reconcileQueuedMessage(operation: QueryOperation, generation = getRuntimeGeneration()): Promise<void> {
+  if (!legacyDispatchEnabled()) return;
   const deadlineAt = Math.min(operation.item.reconciliationDeadlineAt ?? Infinity, Date.now() + RECONCILIATION_QUERY_DEADLINE_MS);
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), Math.max(0, deadlineAt - Date.now()));
   let records: Awaited<ReturnType<typeof fetchRecentSendConfirmationRecords>> = null;
@@ -273,6 +300,7 @@ const releaseUnresolvedQueueHead = (scope: BoundScope, item: QueueItem) => {
 
 export function useQueuedMessageAutoSend(enabledOrOptions?: boolean | { enabled?: boolean }) {
   const enabled = typeof enabledOrOptions === 'boolean' ? enabledOrOptions : enabledOrOptions?.enabled ?? true;
+  const gate = React.useSyncExternalStore(subscribeQueuedMessageOwnershipGate, getQueuedMessageOwnershipGate, getQueuedMessageOwnershipGate);
   const queuedMessages = useMessageQueueStore((state) => state.queuedMessages); const runsByOriginalSessionID = useAutoReviewStore((state) => state.runsByOriginalSessionID);
   const queueAbortBlocks = useSessionUIStore((state) => state.queueAbortBlocks);
   const activeTransportIdentity = React.useSyncExternalStore(
@@ -337,7 +365,7 @@ export function useQueuedMessageAutoSend(enabledOrOptions?: boolean | { enabled?
   }, [childStores]);
   const [wake, setWake] = React.useState(0); const previous = React.useRef(new Map<string, SessionStatusType>()); const reconciliationInFlight = React.useRef(new Set<string>());
   React.useEffect(() => {
-    if (!enabled) return; const now = Date.now(); useSessionUIStore.getState().pruneQueueAbortBlocks(now); const blockedSessions = new Set<string>(); const blockedScopeKeys = new Set<string>();
+    if (!enabled || gate !== 'legacy-enabled') return; const now = Date.now(); useSessionUIStore.getState().pruneQueueAbortBlocks(now); const blockedSessions = new Set<string>(); const blockedScopeKeys = new Set<string>();
     for (const [scopeKey, block] of queueAbortBlocks) if (block.expiresAt > now) blockedScopeKeys.add(scopeKey);
     // A running auto-review pauses only its matching stable runtime. Legacy
     // unkeyed records allow drain so persisted history cannot strand a queue.
@@ -361,12 +389,14 @@ export function useQueuedMessageAutoSend(enabledOrOptions?: boolean | { enabled?
     for (const operation of schedule.queryOperations) {
       reconciliationInFlight.current.add(operation.key);
       const generation = getRuntimeGeneration();
-      void reconcileQueuedMessage(operation, generation).finally(() => {
+      const reconciliation = reconcileQueuedMessage(operation, generation).finally(() => {
         reconciliationInFlight.current.delete(operation.key);
+        reconciliationFlights.delete(reconciliation);
         setWake((value) => value + 1);
       });
+      reconciliationFlights.add(reconciliation);
     }
     const abortBlockWakeAt = getQueueAbortBlockWakeAt(queueAbortBlocks, now); const nextWakeAt = !schedule.nextWakeAt ? abortBlockWakeAt : !abortBlockWakeAt ? schedule.nextWakeAt : Math.min(schedule.nextWakeAt, abortBlockWakeAt);
     let timer: ReturnType<typeof setTimeout> | undefined; if (nextWakeAt) timer = setTimeout(() => { useSessionUIStore.getState().pruneQueueAbortBlocks(); setWake((value) => value + 1); }, Math.max(0, nextWakeAt - Date.now())); return () => { if (timer) clearTimeout(timer); };
-  }, [activeRuntimeKey, activeTransportIdentity, childStores, dispatchFlightState, enabled, queuedMessages, queueAbortBlocks, runsByOriginalSessionID, statusRevision, messageCompletionRevision, getStatus, getTurnState, wake]);
+  }, [activeRuntimeKey, activeTransportIdentity, childStores, dispatchFlightState, enabled, gate, queuedMessages, queueAbortBlocks, runsByOriginalSessionID, statusRevision, messageCompletionRevision, getStatus, getTurnState, wake]);
 }

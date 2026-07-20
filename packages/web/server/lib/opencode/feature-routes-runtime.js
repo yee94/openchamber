@@ -13,6 +13,7 @@ import { registerProjectIconRoutes } from './project-icon-routes.js';
 import { registerScheduledTaskRoutes } from '../scheduled-tasks/routes.js';
 import { registerScheduledTaskToolRoute } from '../scheduled-tasks/managed-tool-route.js';
 import { registerConversationRoutes } from '../conversations/routes.js';
+import { registerMessageQueueRoutes } from '../message-queue/routes.js';
 import { registerSkillRoutes } from './skill-routes.js';
 import { registerPluginRoutes } from './plugin-routes.js';
 import { getNpmInfo, clearCache as clearNpmCache } from './npm-registry.js';
@@ -106,6 +107,8 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       getOpenChamberEventClients,
       writeSseEvent,
       permissionAutoAcceptRuntime,
+      messageQueueService,
+      messageQueueRuntime,
     } = routeDependencies;
 
     registerSettingsUtilityRoutes(app, {
@@ -175,6 +178,8 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       markUserMessageSent,
       waitForOpenCodeReady,
     });
+
+    registerMessageQueueRoutes(app, { messageQueueService, messageQueueRuntime });
 
     registerConfigEntityRoutes(app, {
       resolveProjectDirectory,
@@ -269,7 +274,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerSmallModelRoutes(app, { getSmallModelService });
     registerSessionGoalRoutes(app);
     registerGitHubRoutes(app);
-    registerGitRoutes(app);
+    registerGitRoutes(app, { messageQueueService });
     registerMagicPromptRoutes(app, {
       fsPromises,
       path,

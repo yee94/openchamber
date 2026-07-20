@@ -183,6 +183,24 @@ const listTurnDiffs = (value: unknown): TurnSnapshotDiff[] => {
     });
 };
 
+const createToolTurnDiff = (filePath: string, patch: string): TurnSnapshotDiff => {
+    let additions = 0;
+    let deletions = 0;
+    for (const line of patch.split('\n')) {
+        if (line.startsWith('+++') || line.startsWith('---')) continue;
+        if (line.startsWith('+')) additions += 1;
+        if (line.startsWith('-')) deletions += 1;
+    }
+
+    const status = /^---\s+\/dev\/null(?:\s|$)/m.test(patch)
+        ? 'added'
+        : /^\+\+\+\s+\/dev\/null(?:\s|$)/m.test(patch)
+            ? 'deleted'
+            : 'modified';
+
+    return { file: filePath, patch, status, additions, deletions };
+};
+
 const statusToGitCode = (status?: string): string => {
     if (status === 'added') return 'A';
     if (status === 'deleted') return 'D';
@@ -961,6 +979,8 @@ interface DiffViewProps {
     singleFileView?: boolean;
     /** Scroll the selected file's diff to this modified-file line. */
     targetLine?: number | null;
+    /** Exact single-file patch selected from an edit/apply_patch tool row. */
+    toolPatch?: string | null;
     /** Load complete file context when this view opens. */
     preloadFullFiles?: boolean;
     /** Changes whenever the surrounding tab is reopened for the same target. */
@@ -977,6 +997,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     onDiffScopeChange,
     targetFilePath = null,
     targetLine = null,
+    toolPatch = null,
     flushContent = false,
     singleFileView = false,
     preloadFullFiles = false,
@@ -1073,9 +1094,22 @@ export const DiffView: React.FC<DiffViewProps> = ({
         return [];
     }, [sessionMessages, turnMessageId]);
 
+    const selectedToolTurnDiff = React.useMemo(() => {
+        const filePath = targetFilePath?.trim();
+        if (!filePath || !toolPatch?.trim()) {
+            return null;
+        }
+        return createToolTurnDiff(filePath, toolPatch);
+    }, [targetFilePath, toolPatch]);
+
+    const activeTurnDiffs = React.useMemo(
+        () => selectedToolTurnDiff ? [selectedToolTurnDiff] : lastTurnDiffs,
+        [lastTurnDiffs, selectedToolTurnDiff],
+    );
+
     const lastTurnDiffData = React.useMemo(() => {
         const map = new Map<string, DiffData>();
-        for (const diff of lastTurnDiffs) {
+        for (const diff of activeTurnDiffs) {
             if (!diff.file) continue;
             if (typeof diff.patch === 'string') {
                 map.set(diff.file, createTextDiffDataFromPatch(diff.file, diff.patch, 'patch'));
@@ -1088,11 +1122,11 @@ export const DiffView: React.FC<DiffViewProps> = ({
             });
         }
         return map;
-    }, [lastTurnDiffs]);
+    }, [activeTurnDiffs]);
 
     const changedFiles: FileEntry[] = React.useMemo(() => {
         if (activeDiffScope === 'turn') {
-            return lastTurnDiffs
+            return activeTurnDiffs
                 .map((diff) => ({
                     path: diff.file ?? '',
                     index: '',
@@ -1122,7 +1156,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 isNew: isNewStatusFile(file),
             }))
             .sort((a, b) => a.path.localeCompare(b.path));
-    }, [activeDiffScope, lastTurnDiffs, status]);
+    }, [activeDiffScope, activeTurnDiffs, status]);
 
     const workingFileCount = React.useMemo(() => {
         if (!status?.files) return 0;
@@ -1134,7 +1168,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
         return status.files.filter(isStagedStatusFile).length;
     }, [status]);
 
-    const turnFileCount = lastTurnDiffs.length;
+    const turnFileCount = activeTurnDiffs.length;
 
     const changedFilePathsKey = React.useMemo(
         () => changedFiles.map((file) => file.path).join('\0'),

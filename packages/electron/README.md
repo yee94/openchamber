@@ -12,6 +12,10 @@ Desktop starts the OpenChamber web server in the same Electron main process. The
 
 The preload bridge exposes desktop-only APIs to the web UI through `window.__OPENCHAMBER_DESKTOP__`. Privileged commands are checked in `main.mjs`, not only in the UI.
 
+## Shutdown Lifecycle
+
+Electron owns the in-process server handle. Normal quit, relaunch, vibrancy relaunch, update installation, and `SIGINT`/`SIGTERM`/`SIGHUP` share one shutdown promise and await `serverHandle.stop({ exitProcess: false })` before Electron exits, relaunches, or applies an update. This closes the message queue service and SQLite resources; SSH sessions also stop during the same teardown. A failed graceful stop launches the existing detached managed-OpenCode killer using process information captured before `stop()`.
+
 ## Main Files
 
 | File | Purpose |

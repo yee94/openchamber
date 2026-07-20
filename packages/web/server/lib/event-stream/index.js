@@ -5,6 +5,7 @@ export {
 
 export {
   createGlobalMessageStreamHub,
+  confirmMessageQueueEvent,
 } from './global-hub.js';
 
 export {

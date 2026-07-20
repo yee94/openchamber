@@ -2086,6 +2086,13 @@ const MobileHeader: React.FC<{
   );
 };
 
+type PendingMobileChangesDiff = {
+  path: string;
+  staged: boolean;
+  targetLine?: number;
+  toolPatch?: string;
+};
+
 const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onActiveConnectionDeleted }) => {
   const { t } = useI18n();
   useStreamingHaptics();
@@ -2107,7 +2114,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const [settingsInitialMobileStage, setSettingsInitialMobileStage] = React.useState<'nav' | 'page-content'>('nav');
   const [overflowOpen, setOverflowOpen] = React.useState(false);
   // When set, the Changes surface opens directly into the per-file diff for this path.
-  const [pendingChangesDiff, setPendingChangesDiff] = React.useState<{ path: string; staged: boolean; targetLine?: number } | null>(null);
+  const [pendingChangesDiff, setPendingChangesDiff] = React.useState<PendingMobileChangesDiff | null>(null);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const updateAvailable = useUpdateStore((state) => state.available);
@@ -2150,7 +2157,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     setFilesOpen(true);
   });
 
-  const openChangesSurface = useEvent((diff: { path: string; staged: boolean; targetLine?: number } | null = null) => {
+  const openChangesSurface = useEvent((diff: PendingMobileChangesDiff | null = null) => {
     setTurnDiffOpen(false);
     setTurnDiffMessageId(null);
     setPendingChangesDiff(diff);
@@ -2211,6 +2218,9 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     () => ({
       openChanges: ({ diffPath, staged, targetLine } = {}) => {
         openChangesSurface(diffPath ? { path: diffPath, staged: staged === true, targetLine } : null);
+      },
+      openToolDiff: ({ diffPath, patch, targetLine }) => {
+        openChangesSurface({ path: diffPath, staged: false, targetLine, toolPatch: patch });
       },
       openTurnDiff: openTurnDiffSurface,
       openFiles: () => openFilesSurface(),
@@ -2718,6 +2728,36 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
                         <DiffView hideStackedFileSidebar diffScope="turn" turnMessageId={turnDiffMessageId} flushContent />
                       </div>
                     </div>
+                  ) : pendingChangesDiff?.toolPatch ? (
+                    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
+                      <header className="flex h-[var(--oc-header-height,56px)] shrink-0 items-center gap-2 border-b border-border/40 px-3">
+                        <h2 className="min-w-0 flex-1 truncate typography-ui-label font-semibold text-foreground">
+                          {pendingChangesDiff.path}
+                        </h2>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={closeIpadRightPanel}
+                          aria-label={t('mobile.surface.closeAria')}
+                          className="shrink-0 text-muted-foreground"
+                          style={{ touchAction: 'manipulation' }}
+                        >
+                          <Icon name="close" className="size-5" />
+                        </Button>
+                      </header>
+                      <div className="min-h-0 flex-1 overflow-hidden">
+                        <DiffView
+                          hideStackedFileSidebar
+                          diffScope="turn"
+                          targetFilePath={pendingChangesDiff.path}
+                          targetLine={pendingChangesDiff.targetLine ?? null}
+                          toolPatch={pendingChangesDiff.toolPatch}
+                          singleFileView
+                          flushContent
+                        />
+                      </div>
+                    </div>
                   ) : (
                     <MobileChangesSurface
                       onClose={closeIpadRightPanel}
@@ -2803,12 +2843,24 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
             initiallyExpanded
           >
             <ErrorBoundary>
-              <MobileChangesSurface
-                initialDiffPath={pendingChangesDiff.path}
-                initialDiffStaged={pendingChangesDiff.staged}
-                initialDiffTargetLine={pendingChangesDiff.targetLine ?? null}
-                hideDiffHeader
-              />
+              {pendingChangesDiff.toolPatch ? (
+                <DiffView
+                  hideStackedFileSidebar
+                  diffScope="turn"
+                  targetFilePath={pendingChangesDiff.path}
+                  targetLine={pendingChangesDiff.targetLine ?? null}
+                  toolPatch={pendingChangesDiff.toolPatch}
+                  singleFileView
+                  flushContent
+                />
+              ) : (
+                <MobileChangesSurface
+                  initialDiffPath={pendingChangesDiff.path}
+                  initialDiffStaged={pendingChangesDiff.staged}
+                  initialDiffTargetLine={pendingChangesDiff.targetLine ?? null}
+                  hideDiffHeader
+                />
+              )}
             </ErrorBoundary>
           </MobileResizableSheet>
         ) : changesOpen ? (
