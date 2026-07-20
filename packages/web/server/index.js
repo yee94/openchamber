@@ -82,6 +82,7 @@ import { resolveSessionIndexDbPath } from './lib/session-index/resolve-db-path.j
 import { applySessionIndexEvent } from './lib/session-index/event-ingest.js';
 import { createMessageQueueRuntime } from './lib/message-queue/runtime.js';
 import { resolveMessageQueueDbPath } from './lib/message-queue/resolve-db-path.js';
+import { createOpenChamberEventBroadcaster } from './lib/opencode/feature-routes-runtime.js';
 import { createSessionGoalRuntime } from './lib/session-goal/runtime.js';
 import { createScheduledTasksRuntime } from './lib/scheduled-tasks/runtime.js';
 import { createServerStartupRuntime } from './lib/opencode/server-startup-runtime.js';
@@ -1359,6 +1360,10 @@ async function main(options = {}) {
   const messageQueueDbPath = options.messageQueueDbPath !== undefined
     ? options.messageQueueDbPath
     : process.env.OPENCHAMBER_MESSAGE_QUEUE_DB_PATH;
+  const broadcastOpenChamberEvent = createOpenChamberEventBroadcaster({
+    getOpenChamberEventClients: () => uiOpenChamberEventClients,
+    writeSseEvent,
+  });
   const messageQueueRuntime = createMessageQueueRuntime({
     dbPath: resolveMessageQueueDbPath({ messageQueueDbPath }, OPENCHAMBER_DATA_DIR),
     attachmentRoot: options.messageQueueAttachmentRoot,
@@ -1367,6 +1372,12 @@ async function main(options = {}) {
     buildOpenCodeUrl,
     getOpenCodeAuthHeaders,
     waitForReady: waitForOpenCodeReady,
+    onRevisionTip: (tip) => {
+      broadcastOpenChamberEvent({
+        type: 'openchamber:message-queue-changed',
+        properties: tip,
+      });
+    },
   });
   const messageQueueService = messageQueueRuntime?.service ?? null;
   globalMessageStreamHub.setRuntimeIdentityProvider(() => {
@@ -1380,6 +1391,12 @@ async function main(options = {}) {
     buildOpenCodeUrl,
     getOpenCodeAuthHeaders,
     waitForOpenCodeReady,
+    onRevisionTip: (tip) => {
+      broadcastOpenChamberEvent({
+        type: 'openchamber:session-index-changed',
+        properties: tip,
+      });
+    },
   });
   const unsubscribeSessionIndexEvents = globalMessageStreamHub.subscribeEvent((event) => {
     if (applySessionIndexEvent(sessionIndexService, event)) {

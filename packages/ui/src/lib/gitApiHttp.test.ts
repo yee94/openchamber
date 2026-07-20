@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import { getGitStatus, gitFetch, stageGitFile, stageGitFiles, unstageGitFile, unstageGitFiles } from './gitApiHttp';
+import {
+  getGitStatus,
+  gitFetch,
+  listGitWorktrees,
+  resolveGitPrimaryRoot,
+  stageGitFile,
+  stageGitFiles,
+  unstageGitFile,
+  unstageGitFiles,
+} from './gitApiHttp';
 
 type FetchCall = {
   input: RequestInfo | URL;
@@ -105,6 +114,88 @@ describe('gitApiHttp index mutations', () => {
       expect(unstageError).toBeInstanceOf(Error);
       expect((unstageError as Error).message).toBe('path is required to unstage git changes');
       expect(calls).toHaveLength(0);
+    } finally {
+      restoreMocks();
+    }
+  });
+});
+
+describe('gitApiHttp discovery fan-out', () => {
+  test('caps concurrent primary-root / worktrees network calls at 2', async () => {
+    installWindowMock();
+    let active = 0;
+    let peak = 0;
+    const releases: Array<() => void> = [];
+
+    globalThis.fetch = (async (input) => {
+      const url = String(input);
+      if (!url.includes('/api/git/primary-root') && !url.includes('/api/git/worktrees')) {
+        return new Response('{}', { status: 200 });
+      }
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise<void>((resolve) => {
+        releases.push(() => {
+          active -= 1;
+          resolve();
+        });
+      });
+      if (url.includes('/worktrees')) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ root: '/repo' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    try {
+      const pending = Promise.all([
+        resolveGitPrimaryRoot('/a'),
+        resolveGitPrimaryRoot('/b'),
+        listGitWorktrees('/c'),
+        listGitWorktrees('/d'),
+      ]);
+
+      // Let the first two discovery slots start.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(peak).toBeLessThanOrEqual(2);
+      expect(releases.length).toBe(2);
+
+      while (releases.length > 0) {
+        releases.shift()?.();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      await pending;
+      expect(peak).toBeLessThanOrEqual(2);
+    } finally {
+      restoreMocks();
+    }
+  });
+
+  test('dedupes in-flight primary-root for the same directory', async () => {
+    installWindowMock();
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return new Response(JSON.stringify({ root: '/same' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    try {
+      const [a, b] = await Promise.all([
+        resolveGitPrimaryRoot('/same-root'),
+        resolveGitPrimaryRoot('/same-root'),
+      ]);
+      expect(a.root).toBe('/same');
+      expect(b.root).toBe('/same');
+      expect(calls).toBe(1);
     } finally {
       restoreMocks();
     }

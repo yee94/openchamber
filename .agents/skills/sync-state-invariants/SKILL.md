@@ -56,6 +56,11 @@ For streaming-frequency work, also load `performance-engineering`.
 
 ## Polling And Bootstrap
 
+- Cross-runtime sync invalidation uses OpenChamber SSE revision tips
+  (`openchamber:*-changed`) plus authoritative GET snapshots. Observers must
+  lead with GET (apply, then wait); never wait-first across paging or other
+  gaps where tips can be missed. Do not add new hanging `*/changes` long-poll
+  routes for sync domains.
 - Preserve rich fields when lightweight polling omits them.
 - Use cheap change detection before heavy per-directory fetches.
 - Treat startup 502/503 as transient with bounded retry/recovery.

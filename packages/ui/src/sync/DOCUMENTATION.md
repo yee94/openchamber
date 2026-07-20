@@ -134,7 +134,7 @@ status transitions are owned by the OpenChamber server's global event
 subscriber. Renderer session events update visible metadata only; time-only
 session updates, busy/retry transitions, and token/message delta events do not
 replace the global session list or write the SQLite index. The session-index
-long poll remains active after startup so user-message and task-completion
+SSE tip observer remains active after startup so user-message and task-completion
 ordering revisions promote their session inside its project immediately.
 
 Sidebar directory refreshes are intentionally bounded snapshots, not full catalogs:
@@ -167,7 +167,7 @@ good cache.
 
 Every global session-index asynchronous entry captures the runtime generation
 and transport identity. Snapshot hydration, startup sync, persistence, and
-long-poll updates commit only while that capture remains current.
+tip-driven snapshot reloads commit only while that capture remains current.
 
 Password-gated runtimes force a fresh settings hydration after authentication
 and keep the app tree behind the auth gate until persisted project paths have
@@ -292,9 +292,9 @@ becoming the cached startup result consumed by the session coordinator.
 
 ### Queue server shared-UI lane (Phase 2)
 
-`messageQueueQueries.ts` owns server queue catalog, revision-pinned scope pages, and capability reads through TanStack Query. Queue query keys start with transport identity; scope pages contain at most eight items and fetch every `nextOffset` under the first-page revision. Failed page sequences retain the prior complete scope snapshot. `message-queue-server-runtime.ts` is a headless attachment surface with exact-scope reads only. Successful status, catalog, and scope reads write their transport-scoped Query keys. Descriptor state and stable scope snapshots bind their captured transport identity, and a direct identity read clears them before a delayed runtime-switch callback runs. `getScope()` reads a stable complete current-scope reference from Query data. A successful empty catalog clears queue scope cache, and removal of one catalog scope clears every revision key for that transport and scope; failed polls and failed later pages preserve prior complete data. Local attachments upload bytes, server attachments retain their canonical server path and authoritative byte size, and VS Code attachments close server admission. Long-poll change descriptors load only scopes with a changed revision and use abortable exponential backoff. Its lazy singleton performs no fetch or storage work at import; AppEffects starts it, installs one ref-counted runtime-switch observer, and releases both on cleanup. `useMessageQueueServerScope()` subscribes to its exact scope and returns capability, authority, import state, hydration, scope items, and actions. Available active authority selects server mode directly; `canActivate` remains the Phase 3 activation gate. Shadow and unsupported states expose legacy mode. Phase 2 keeps v3 production authority and auto-send active.
+`messageQueueQueries.ts` owns server queue catalog, revision-pinned scope pages, and capability reads through TanStack Query. Queue query keys start with transport identity; scope pages contain at most eight items and fetch every `nextOffset` under the first-page revision. Failed page sequences retain the prior complete scope snapshot. `message-queue-server-runtime.ts` is a headless attachment surface with exact-scope reads only. Successful status, catalog, and scope reads write their transport-scoped Query keys. Descriptor state and stable scope snapshots bind their captured transport identity, and a direct identity read clears them before a delayed runtime-switch callback runs. `getScope()` reads a stable complete current-scope reference from Query data. A successful empty catalog clears queue scope cache, and removal of one catalog scope clears every revision key for that transport and scope; failed polls and failed later pages preserve prior complete data. Local attachments upload bytes, server attachments retain their canonical server path and authoritative byte size, and VS Code attachments close server admission. SSE revision tips (`openchamber:message-queue-changed`) trigger a snapshot GET; only scopes with a changed revision are page-loaded, with abortable exponential backoff on failures. Its lazy singleton performs no fetch or storage work at import; AppEffects starts it, installs one ref-counted runtime-switch observer, and releases both on cleanup. `useMessageQueueServerScope()` subscribes to its exact scope and returns capability, authority, import state, hydration, scope items, and actions. Available active authority selects server mode directly; `canActivate` remains the Phase 3 activation gate. Shadow and unsupported states expose legacy mode. Phase 2 keeps v3 production authority and auto-send active.
 
-The server observer captures runtime generation for each snapshot, long poll, upload, and mutation. Runtime changes abort its observer and isolate Query cache identity. Web, Electron, hosted mobile, and Capacitor use the server-capable route; `501` marks capability unsupported, and VS Code retains its legacy fallback. Active and paused server authority use the manual-send CAS endpoint; paused promotion moves the item to the queued head with a due time of now while the worker remains stopped, and resume dispatches that promoted head. A mutation conflict may refresh and retry the mutation once; scope advancement after a committed response only refreshes the client snapshot, preserving the original idempotent request as a single execution. Shadow and unsupported authority delegate to the explicit legacy callback. Server authority stays `shadow` and its worker stays paused throughout Phase 2. The v3 production queue remains authoritative until Phase 3 activation.
+The server observer leads with an authoritative snapshot GET, applies scope pages when the catalog diverges, then waits for the next SSE tip only after the cache already matches. Tips published while paging are recovered by the next leading GET rather than a missed wait. `remove` treats authoritative `not_found` as a committed delete after reloading the scope. Runtime changes abort its observer and isolate Query cache identity. The observer captures runtime generation for each snapshot, tip wait, upload, and mutation. Web, Electron, hosted mobile, and Capacitor use the server-capable route; `501` marks capability unsupported, and VS Code retains its legacy fallback. Active and paused server authority use the manual-send CAS endpoint; paused promotion moves the item to the queued head with a due time of now while the worker remains stopped, and resume dispatches that promoted head. A mutation conflict reloads only the mutated scope before one retry; sibling scope descriptors stay on their last loaded revision so unrelated queues do not render empty. After a committed mutation (including manual send), the client always reconciles that scope from the latest snapshot instead of pinning pages to the mutation revision, so a worker claim cannot regress descriptors into an empty chip list. A failed mutation still best-effort reloads the scope before surfacing the error. Scope advancement after a committed response preserves the original idempotent request as a single execution. Shadow and unsupported authority delegate to the explicit legacy callback. Server authority stays `shadow` and its worker stays paused throughout Phase 2. The v3 production queue remains authoritative until Phase 3 activation.
 
 `message-queue-shadow-import.ts` hydrates the v4 runtime read-only and constructs stable scope/item ordinals, canonical payload hashes, snapshot hashes, and manifests without mutating the local ledger. It materializes or uploads canonical attachment payloads, creates a protocol-4 import, stages every payload, and seals the manifest. Payload tokens release through one `finally` path. `message-queue-cutover.ts` owns the headless external-store cutover lifecycle: probing, legacy-unsupported, server-active, server-paused, and blocked ownership; freezing, staging, activating, late-importing, complete, and error migration states. It freezes admission while shadow staging, calls injected quiesce/flush barriers, activates sealed shadow imports, and commits late imports after active or paused ownership. A lost commit response confirms through status epoch and manifest. Only HTTP 501 enables legacy ownership; transport and authorization failures remain blocked with backoff. Runtime switches abort the old flow and isolate the next transport. Phase 3 binds every cutover publication to the v3 ownership gate and mutation fence. The module starts quiescing; only HTTP 501 enables v3 dispatch and user mutations. Quiescing blocks new dispatch before begin and immediately before POST, waits for dispatch and reconciliation flights, resolves and atomically binds every unbound legacy scope, then flushes persistence and captures the final v3 ledger. A server-active or server-paused transport enters the retired transport set, so its bound scopes remain read-only while a newly selected HTTP 501 transport opens its own v3 queue. Existing sending rows retain internal confirmation and failure settlement before retirement.
 
@@ -368,8 +368,9 @@ records allow drain.
 heads and due `retrying` heads with an authoritative scoped `idle` status;
 `unknown`, `busy`, and `retry` statuses keep dispatch paused. Message completion
 revisions wake the scheduler and never override live session status. A trailing
-user, incomplete assistant, or unknown-role message keeps an idle scope paused;
-missing message materialization preserves the idle path.
+user or unknown-role message keeps an idle scope paused; a trailing assistant
+trusts authoritative idle and does not wait for `time.completed`. Missing
+message materialization preserves the idle path.
 - Aborting a turn creates a transient queue-dispatch block keyed by the exact
   `(transportIdentity, directory, sessionID)` queue scope before the SDK abort
   request. The block preserves queued rows, lasts two seconds, rolls back only
@@ -460,6 +461,13 @@ before its response-style / snippet network preamble (composer text is already
 cleared) so the empty draft dialog is not left on screen while those awaits
 run; `claimDraftSubmission` clears `draftEstablishing` when the real claim
 takes over, and failed sends clear it via restore.
+
+Send-path prep must not compete for Chromium's per-origin HTTP/1.1 sockets:
+`fetchResponseStyleInstruction` reads an in-memory cache warmed by settings
+bootstrap / Behavior saves; `expandText` expands from the loaded snippet
+catalog locally when every `#token` resolves. Git discovery
+(`primary-root` / `worktrees`) is capped at 2 concurrent network calls with a
+short TTL + in-flight dedupe so sidebar fan-out cannot starve create/prompt.
 
 After success, commit the real session to directory routing, global session
 state, selection state, and the optimistic shadow map. If SSE delivered the

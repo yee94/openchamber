@@ -669,10 +669,14 @@ const runStructuredGenerationInActiveSession = async ({
 
 export async function listGitWorktrees(directory: string): Promise<import('./api/types').GitWorktreeInfo[]> {
   const runtime = getRuntimeGit();
+  // Runtime bridges bypass gitApiHttp's discovery gate — wrap them the same way.
   if (runtime?.worktree?.list) {
-    return runtime.worktree.list(directory);
+    const list = runtime.worktree.list.bind(runtime.worktree);
+    return gitHttp.withGitDiscoveryNetworkSlot(() => list(directory));
   }
-  if (runtime) return runtime.listGitWorktrees(directory);
+  if (runtime) {
+    return gitHttp.withGitDiscoveryNetworkSlot(() => runtime.listGitWorktrees(directory));
+  }
   return gitHttp.listGitWorktrees(directory);
 }
 

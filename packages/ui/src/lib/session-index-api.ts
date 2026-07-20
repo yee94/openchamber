@@ -1,5 +1,6 @@
 import type { Session } from '@opencode-ai/sdk/v2';
 
+import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { runtimeFetch } from './runtime-fetch';
 
 export type SessionIndexDirectory = {
@@ -68,19 +69,35 @@ export const startSessionIndexBackgroundSync = async (
   return response.json() as Promise<SessionIndexSnapshot>;
 };
 
-export const pollSessionIndexChanges = async (
-  revision: number,
+/**
+ * Wait until a session-index tip arrives with revision > afterRevision, or the
+ * OpenChamber event stream becomes ready (reconnect repair), or the signal aborts.
+ */
+export const waitForSessionIndexInvalidation = (
+  afterRevision: number,
   signal: AbortSignal,
-): Promise<SessionIndexSnapshot | null> => {
-  if (typeof window === 'undefined') return null;
-  const response = await runtimeFetch('/api/openchamber/session-index/changes', {
-    query: { since: revision, timeout: 25_000 },
-    signal,
+): Promise<'tip' | 'ready' | 'aborted'> => new Promise((resolve) => {
+  if (signal.aborted) {
+    resolve('aborted');
+    return;
+  }
+  const finish = (reason: 'tip' | 'ready' | 'aborted') => {
+    unsubscribe();
+    signal.removeEventListener('abort', onAbort);
+    resolve(reason);
+  };
+  const onAbort = () => finish('aborted');
+  const unsubscribe = subscribeOpenchamberEvents((event) => {
+    if (event.type === 'event-stream-ready') {
+      finish('ready');
+      return;
+    }
+    if (event.type === 'session-index-changed' && event.revision > afterRevision) {
+      finish('tip');
+    }
   });
-  if (response.status === 501) return null;
-  await ensureOk(response);
-  return response.json() as Promise<SessionIndexSnapshot>;
-};
+  signal.addEventListener('abort', onAbort, { once: true });
+});
 
 export const persistSessionIndexDirectory = async (input: {
   directory: string;

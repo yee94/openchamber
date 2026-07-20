@@ -73,18 +73,17 @@ describe('Phase 2 decisive production cutover fixture', () => {
     } finally { await f.close(); }
   }, 10_000);
 
-  it('通过两个独立 QueryClient surface 收敛 longpoll，并在 fetch 失败时保留旧快照', async () => {
+  it('通过两个独立 QueryClient surface 经 snapshot 收敛 revision tip，并在 fetch 失败时保留旧快照', async () => {
     const f = await fixture();
     try {
       const a = new QueryClient(), b = new QueryClient();
       const load = async (client, fail = false) => { if (fail) throw new Error('network'); const snapshot = await f.request(prefix); client.setQueryData(['surface', 'snapshot'], snapshot); return snapshot; };
       const first = f.service.admit(item('a')); f.service.admit(item('b'));
       await load(a); await load(b);
-      const pending = f.request(`${prefix}/changes?afterRevision=${b.getQueryData(['surface', 'snapshot']).revision}&timeout=1000`);
       const scope = f.service.getScope(first.scopeID); const edited = f.service.edit({ requestID: 'edit-a', queueItemID: 'item-a', expectedRevision: scope.revision, expectedRowVersion: scope.items[0].rowVersion, item: { content: 'edited-a' } });
       const current = f.service.getScope(first.scopeID); f.service.reorder({ requestID: 'order', scopeID: first.scopeID, expectedRevision: edited.revision, queueItemIDs: current.items.map((entry) => entry.queueItemID).reverse() });
       const afterOrder = f.service.getScope(first.scopeID); f.service.remove({ requestID: 'remove-b', queueItemID: 'item-b', expectedRevision: afterOrder.revision, expectedRowVersion: afterOrder.items.find((entry) => entry.queueItemID === 'item-b').rowVersion });
-      expect((await pending).revision).toBeGreaterThan(first.revision);
+      expect(f.service.snapshot().revision).toBeGreaterThan(first.revision);
       await load(b); const old = b.getQueryData(['surface', 'snapshot']); await expect(load(b, true)).rejects.toThrow('network'); expect(b.getQueryData(['surface', 'snapshot'])).toEqual(old);
       expect(a.getQueryData(['surface', 'snapshot']).revision).toBeLessThan(b.getQueryData(['surface', 'snapshot']).revision);
     } finally { await f.close(); }

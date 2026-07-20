@@ -41,11 +41,51 @@ import { getRuntimeUrlResolver } from './runtime-url';
 const API_BASE = '/api/git';
 const GIT_STATUS_CACHE_TTL_MS = 1200;
 const GIT_REPO_CHECK_CACHE_TTL_MS = 5000;
+// Discovery GETs fan out across every sidebar project. Cap concurrent sockets
+// so long-poll + worktree listing cannot starve send-path reads (settings /
+// createWithPrompt) under Chromium's ~6 HTTP/1.1 connections per origin.
+const GIT_DISCOVERY_NETWORK_CONCURRENCY = 2;
+const GIT_DISCOVERY_CACHE_TTL_MS = 5000;
 const gitStatusCache = new Map<string, { value: GitStatus; expiresAt: number }>();
 const gitStatusInFlight = new Map<string, Promise<GitStatus>>();
 const gitStatusCacheVersions = new Map<string, number>();
 const gitRepoCache = new Map<string, { value: boolean; expiresAt: number }>();
 const gitRepoInFlight = new Map<string, Promise<boolean>>();
+const gitPrimaryRootCache = new Map<string, { value: { root: string }; expiresAt: number }>();
+const gitPrimaryRootInFlight = new Map<string, Promise<{ root: string }>>();
+const gitWorktreesCache = new Map<string, { value: GitWorktreeInfo[]; expiresAt: number }>();
+const gitWorktreesInFlight = new Map<string, Promise<GitWorktreeInfo[]>>();
+let gitDiscoveryNetworkActive = 0;
+const gitDiscoveryNetworkWaiters: Array<() => void> = [];
+
+const acquireGitDiscoveryNetworkSlot = (): Promise<void> => {
+  if (gitDiscoveryNetworkActive < GIT_DISCOVERY_NETWORK_CONCURRENCY) {
+    gitDiscoveryNetworkActive += 1;
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    gitDiscoveryNetworkWaiters.push(resolve);
+  });
+};
+
+const releaseGitDiscoveryNetworkSlot = (): void => {
+  const next = gitDiscoveryNetworkWaiters.shift();
+  if (next) {
+    next();
+    return;
+  }
+  gitDiscoveryNetworkActive = Math.max(0, gitDiscoveryNetworkActive - 1);
+};
+
+/** Shared gate for runtime-backed discovery calls that bypass gitApiHttp helpers. */
+export const withGitDiscoveryNetworkSlot = async <T>(task: () => Promise<T>): Promise<T> => {
+  await acquireGitDiscoveryNetworkSlot();
+  try {
+    return await task();
+  } finally {
+    releaseGitDiscoveryNetworkSlot();
+  }
+};
 
 const normalizeDirectoryKey = (directory: string): string => directory.trim();
 const getStatusCacheKey = (directory: string, mode?: 'light'): string =>
@@ -158,12 +198,37 @@ export async function getGitStatus(directory: string, options?: { mode?: 'light'
 }
 
 export async function resolveGitPrimaryRoot(directory: string): Promise<{ root: string }> {
-  const response = await runtimeFetch(buildUrl(`${API_BASE}/primary-root`, directory));
-  if (!response.ok) {
-    throw new Error(`Failed to resolve git primary root: ${response.statusText}`);
+  const key = normalizeDirectoryKey(directory);
+  const now = Date.now();
+  const cached = gitPrimaryRootCache.get(key);
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
   }
-  const payload = await response.json().catch(() => ({})) as { root?: string };
-  return { root: typeof payload.root === 'string' && payload.root ? payload.root : directory };
+  const inFlight = gitPrimaryRootInFlight.get(key);
+  if (inFlight) return inFlight;
+
+  const task = withGitDiscoveryNetworkSlot(async () => {
+    const response = await runtimeFetch(buildUrl(`${API_BASE}/primary-root`, directory));
+    if (!response.ok) {
+      throw new Error(`Failed to resolve git primary root: ${response.statusText}`);
+    }
+    const payload = await response.json().catch(() => ({})) as { root?: string };
+    const value = { root: typeof payload.root === 'string' && payload.root ? payload.root : directory };
+    gitPrimaryRootCache.set(key, {
+      value,
+      expiresAt: Date.now() + GIT_DISCOVERY_CACHE_TTL_MS,
+    });
+    return value;
+  });
+
+  gitPrimaryRootInFlight.set(key, task);
+  try {
+    return await task;
+  } finally {
+    if (gitPrimaryRootInFlight.get(key) === task) {
+      gitPrimaryRootInFlight.delete(key);
+    }
+  }
 }
 
 export async function resolveGitTopLevel(directory: string): Promise<{ root: string }> {
@@ -544,12 +609,37 @@ export async function generatePullRequestDescription(
 }
 
 export async function listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]> {
-  const response = await runtimeFetch(buildUrl(`${API_BASE}/worktrees`, directory));
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error.error || 'Failed to list worktrees');
+  const key = normalizeDirectoryKey(directory);
+  const now = Date.now();
+  const cached = gitWorktreesCache.get(key);
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
   }
-  return response.json();
+  const inFlight = gitWorktreesInFlight.get(key);
+  if (inFlight) return inFlight;
+
+  const task = withGitDiscoveryNetworkSlot(async () => {
+    const response = await runtimeFetch(buildUrl(`${API_BASE}/worktrees`, directory));
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(error.error || 'Failed to list worktrees');
+    }
+    const value = await response.json() as GitWorktreeInfo[];
+    gitWorktreesCache.set(key, {
+      value,
+      expiresAt: Date.now() + GIT_DISCOVERY_CACHE_TTL_MS,
+    });
+    return value;
+  });
+
+  gitWorktreesInFlight.set(key, task);
+  try {
+    return await task;
+  } finally {
+    if (gitWorktreesInFlight.get(key) === task) {
+      gitWorktreesInFlight.delete(key);
+    }
+  }
 }
 
 export async function validateGitWorktree(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeValidationResult> {

@@ -7,7 +7,7 @@ import path from 'node:path';
 import express from 'express';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolver } from '../../../../ui/src/lib/runtime-url';
-import { abandonMessageQueueImport, activateMessageQueueImport, commitLateMessageQueueImport, createMessageQueueImport, downloadMessageQueueAttachment, fetchMessageQueueServerStatus, pauseMessageQueueAuthority, resumeMessageQueueAuthority, sealMessageQueueImport, stageMessageQueueImport } from '../../../../ui/src/lib/message-queue-server';
+import { abandonMessageQueueImport, activateMessageQueueImport, commitLateMessageQueueImport, createMessageQueueImport, downloadMessageQueueAttachment, fetchMessageQueueServerStatus, fetchMessageQueueSnapshot, pauseMessageQueueAuthority, resumeMessageQueueAuthority, sealMessageQueueImport, stageMessageQueueImport } from '../../../../ui/src/lib/message-queue-server';
 import { readMessageQueueScope } from '../../../../ui/src/queries/messageQueueQueries';
 import { createMessageQueueServerRuntime } from '../../../../ui/src/sync/message-queue-server-runtime';
 import { createMessageQueueServerEditBridge } from '../../../../ui/src/sync/message-queue-server-edit-bridge';
@@ -57,7 +57,24 @@ const fixture = async (options: { send?: (context: any) => Promise<any>; failSco
   return { root, runtime, service: runtime.service, runtimeConfig, close };
 };
 
-const surface = (client: any, identity: string, generation = 1) => createMessageQueueServerRuntime({ client, capture: () => ({ transportIdentity: identity, generation }), current: (capture) => capture.transportIdentity === identity && capture.generation === generation });
+/** Test stand-in for SSE tip waits: poll the snapshot until revision advances. */
+const waitInvalidationBySnapshot = async (revision: number, options: { signal?: AbortSignal } = {}): Promise<'tip' | 'ready' | 'aborted'> => {
+  while (!options.signal?.aborted) {
+    try {
+      if ((await fetchMessageQueueSnapshot(options.signal)).revision > revision) return 'tip';
+    } catch {
+      // Keep polling until the observer aborts or the tip appears.
+    }
+    await wait(20);
+  }
+  return 'aborted';
+};
+const surface = (client: any, identity: string, generation = 1) => createMessageQueueServerRuntime({
+  client,
+  capture: () => ({ transportIdentity: identity, generation }),
+  current: (capture) => capture.transportIdentity === identity && capture.generation === generation,
+  waitInvalidation: waitInvalidationBySnapshot,
+});
 
 afterEach(() => { vi.useRealTimers(); for (const root of roots) fs.rmSync(root, { recursive: true, force: true }); roots.clear(); });
 
@@ -115,7 +132,7 @@ describe('Gate 2 UI production cutover E2E', () => {
     } finally { ui.stop(); await f.close(); }
   }, 15_000);
 
-  it('两个真实 surface 经 longpoll 收敛，并以 CAS 刷新重试 edit、reorder、remove、manual send', async () => {
+  it('两个真实 surface 经 tip/snapshot 收敛，并以 CAS 刷新重试 edit、reorder、remove、manual send', async () => {
     const f = await fixture(); const aClient = new QueryClient(), bClient = new QueryClient(); const a = surface(aClient, 'device-a'), b = surface(bClient, 'device-b');
     try {
       a.start(); b.start(); await eventually(() => expect(a.getState().hydration).toBe('ready'));

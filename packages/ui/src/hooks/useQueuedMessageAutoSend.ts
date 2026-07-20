@@ -71,7 +71,10 @@ export const getTrailingQueueTurnState = (messages: readonly QueueTurnMessage[] 
   if (messages === undefined) return 'unknown';
   const last = messages[messages.length - 1];
   if (!last) return 'settled';
-  if (last.role === 'assistant' && typeof last.time?.completed === 'number') return 'settled';
+  // Trailing assistant: authoritative idle already means the prior turn finished.
+  // Waiting for time.completed only adds a visible drain gap after session.idle.
+  // Trailing user must stay unsettled so the next head cannot race the just-sent turn.
+  if (last.role === 'assistant') return 'settled';
   return 'unsettled';
 };
 

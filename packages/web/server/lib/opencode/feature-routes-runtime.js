@@ -47,7 +47,8 @@ import { installSkillsFromRepository } from '../skills-catalog/install.js';
 import { scanClawdHubPage } from '../skills-catalog/clawdhub/scan.js';
 import { installSkillsFromClawdHub } from '../skills-catalog/clawdhub/install.js';
 
-export const createWorktreeTopologyBroadcaster = ({ getOpenChamberEventClients, writeSseEvent }) => (event) => {
+/** Fan-out an OpenChamber product SSE tip to every /api/openchamber/events client. */
+export const createOpenChamberEventBroadcaster = ({ getOpenChamberEventClients, writeSseEvent }) => (event) => {
   const clients = getOpenChamberEventClients();
   for (const client of clients) {
     try {
@@ -57,6 +58,9 @@ export const createWorktreeTopologyBroadcaster = ({ getOpenChamberEventClients, 
     }
   }
 };
+
+// Topology routes historically imported this name; same broadcaster.
+export const createWorktreeTopologyBroadcaster = createOpenChamberEventBroadcaster;
 
 export const createFeatureRoutesRuntime = (dependencies) => {
   const {

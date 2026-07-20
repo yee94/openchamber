@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { legacyQueueScope, queueScopeKey, useMessageQueueStore, type QueueItem, type QueueScope } from '../stores/messageQueueStore';
+import { legacyQueueScope, queueScopeKey, setMessageQueueMutationFence, useMessageQueueStore, type QueueItem, type QueueScope } from '../stores/messageQueueStore';
 let runtimeIdentity = 'runtime-a'; let runtimeKey = 'runtime-a'; let runtimeGeneration = 1; let send = () => Promise.resolve(); let calls = 0; let sendOptions: unknown; let confirmations = 0; let records: Array<{ info: { id: string } }> = []; let syncMessages: Array<{ id: string }> = []; let fetchRecords: (_sessionID: string, _messageID: string, _directory: string, options?: { signal?: AbortSignal; timeoutMs?: number }) => Promise<Array<{ info: { id: string } }> | null> = () => Promise.resolve(records); let failure: 'pre-dispatch' | 'ambiguous-dispatched' | 'definitive-rejection' = 'ambiguous-dispatched';
 mock.module('@/sync/session-ui-store', () => ({ notifyConfirmedMessageSent: () => { confirmations += 1; }, useSessionUIStore: { getState: () => ({ sendMessage: (...args: unknown[]) => { calls += 1; sendOptions = args[9]; return send(); }, getDirectoryForSession: () => '/project', sessionAbortFlags: new Map() }) } }));
 mock.module('@/lib/runtime-switch', () => ({ getRuntimeTransportIdentity: () => runtimeIdentity, getRuntimeKey: () => runtimeKey, getRuntimeGeneration: () => runtimeGeneration, subscribeRuntimeEndpointChanged: () => () => {} }));
@@ -17,7 +17,7 @@ const admit = (target: QueueScope, content = 'queued'): QueueItem => {
 };
 const add = () => admit(scope());
 describe('queued dispatch and scheduler', () => {
-  beforeEach(() => { reset(); useMessageQueueStore.getState().beginQueueItemDispatch = originalBeginQueueItemDispatch; setQueuedMessageOwnershipGate('legacy-enabled'); runtimeIdentity = 'runtime-a'; runtimeKey = 'runtime-a'; runtimeGeneration = 1; calls = 0; confirmations = 0; records = []; syncMessages = []; fetchRecords = () => Promise.resolve(records); sendOptions = undefined; send = () => Promise.resolve(); failure = 'ambiguous-dispatched'; });
+  beforeEach(() => { setMessageQueueMutationFence('open'); reset(); useMessageQueueStore.getState().beginQueueItemDispatch = originalBeginQueueItemDispatch; setQueuedMessageOwnershipGate('legacy-enabled'); runtimeIdentity = 'runtime-a'; runtimeKey = 'runtime-a'; runtimeGeneration = 1; calls = 0; confirmations = 0; records = []; syncMessages = []; fetchRecords = () => Promise.resolve(records); sendOptions = undefined; send = () => Promise.resolve(); failure = 'ambiguous-dispatched'; });
   test('auto payload compiles legacy queue delivery references', () => {
     const item = admit(scope(), '@worker inspect @src/file.ts');
     const payload = buildQueuedAutoSendPayload([item]);
@@ -241,18 +241,19 @@ describe('queued dispatch and scheduler', () => {
     expect(planQueueHead(item, 'busy', undefined, Date.now()).dispatch).toBe(undefined);
     expect(planQueueHead(item, 'idle', undefined, Date.now()).dispatch).toBe(true);
   });
-  test('idle queues wait for an incomplete assistant turn and dispatch after completion', () => {
+  test('authoritative idle may dispatch while a trailing assistant still lacks time.completed', () => {
     const item = add();
-    expect(getTrailingQueueTurnState([{ role: 'assistant', time: { created: 1 } }])).toBe('unsettled');
-    expect(planQueueHead(item, 'idle', undefined, 0, false, 'unsettled').dispatch).toBe(undefined);
-    expect(getTrailingQueueTurnState([{ role: 'assistant', time: { created: 1, completed: 2 } }])).toBe('settled');
+    expect(getTrailingQueueTurnState([{ role: 'assistant', time: { created: 1 } }])).toBe('settled');
     expect(planQueueHead(item, 'idle', undefined, 0, false, 'settled').dispatch).toBe(true);
+    expect(planQueueHead(item, 'busy', undefined, 0, false, 'settled').dispatch).toBe(undefined);
+    expect(getTrailingQueueTurnState([{ role: 'assistant', time: { created: 1, completed: 2 } }])).toBe('settled');
   });
   test('a confirmed first queue item keeps the next idle head behind its trailing user turn', () => {
     const item = add();
     const args = { queuedMessages: { scope: [item] }, activeTransportIdentity: runtimeIdentity, getStatus: () => 'idle' as const, previous: new Map(), inFlight: new Set<string>(), blockedSessions: new Set<string>(), now: 0 };
     expect(planQueueScheduler({ ...args, getTurnState: () => getTrailingQueueTurnState([{ role: 'user' }]) }).dispatchScopes).toEqual([]);
     expect(planQueueScheduler({ ...args, getTurnState: () => getTrailingQueueTurnState([{ role: 'assistant', time: { completed: 2 } }]) }).dispatchScopes).toEqual([item.owner]);
+    expect(planQueueScheduler({ ...args, getTurnState: () => getTrailingQueueTurnState([{ role: 'assistant', time: { created: 1 } }]) }).dispatchScopes).toEqual([item.owner]);
   });
   test('unknown message materialization allows idle dispatch while busy remains blocked', () => {
     const item = add();

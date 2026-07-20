@@ -17,6 +17,7 @@ import { Icon } from "@/components/icon/Icon";
 import {
   getResponseStylePresetInstructions,
   isResponseStylePreset,
+  rememberResponseStyleSettings,
   RESPONSE_STYLE_PRESETS,
   type ResponseStylePreset,
 } from '@/lib/responseStyle';
@@ -145,6 +146,11 @@ export const BehaviorPage: React.FC = () => {
         setResponseStylePreset(nextSettings.responseStylePreset);
         setResponseStyleCustomInstructions(nextSettings.responseStyleCustomInstructions);
         setInitialPrompt(nextSettings.prompt);
+        rememberResponseStyleSettings({
+          enabled: nextSettings.responseStyleEnabled,
+          preset: nextSettings.responseStylePreset,
+          customInstructions: nextSettings.responseStyleCustomInstructions,
+        });
         lastSavedResponseStyleRef.current = {
           enabled: nextSettings.responseStyleEnabled,
           preset: nextSettings.responseStylePreset,
@@ -188,6 +194,11 @@ export const BehaviorPage: React.FC = () => {
           responseStylePreset: next.preset,
           responseStyleCustomInstructions: next.custom,
         }, t('settings.behavior.page.toast.saveFailed'));
+        rememberResponseStyleSettings({
+          enabled: next.enabled,
+          preset: next.preset,
+          customInstructions: next.custom,
+        });
         lastSavedResponseStyleRef.current = next;
       } catch (error) {
         const message = error instanceof Error ? error.message : t('settings.behavior.page.toast.saveFailed');

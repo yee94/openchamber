@@ -15,23 +15,6 @@ export const registerSessionIndexRoutes = (app, { sessionIndexService, sessionIn
     res.status(202).json(sessionIndexSyncRuntime.enqueue(directories));
   });
 
-  app.get('/api/openchamber/session-index/changes', async (req, res) => {
-    if (!sessionIndexSyncRuntime) return unsupported(res);
-    const controller = new AbortController();
-    const onClose = () => controller.abort();
-    res.once?.('close', onClose);
-    try {
-      const since = Number.parseInt(String(req.query?.since ?? '0'), 10) || 0;
-      const timeoutMs = Number.parseInt(String(req.query?.timeout ?? '25000'), 10) || 25_000;
-      res.json(await sessionIndexSyncRuntime.waitForChange(since, {
-        signal: controller.signal,
-        timeoutMs,
-      }));
-    } finally {
-      res.off?.('close', onClose);
-    }
-  });
-
   app.put('/api/openchamber/session-index/directory', (req, res) => {
     if (!sessionIndexService) return unsupported(res);
     try {

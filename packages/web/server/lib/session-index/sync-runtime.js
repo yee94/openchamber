@@ -33,6 +33,8 @@ export const createSessionIndexSyncRuntime = ({
   buildOpenCodeUrl,
   getOpenCodeAuthHeaders,
   waitForOpenCodeReady,
+  /** Optional tip sink: ({ revision, sync }) after each revision bump. */
+  onRevisionTip = null,
   fetchFn = globalThis.fetch,
   now = Date.now,
   setTimer = setTimeout,
@@ -77,6 +79,20 @@ export const createSessionIndexSyncRuntime = ({
     revision += 1;
     const value = snapshot();
     for (const resolve of [...waiters]) resolve(value);
+    if (typeof onRevisionTip === 'function') {
+      try {
+        onRevisionTip({
+          revision: value.revision,
+          sync: {
+            active: value.sync.active === true,
+            enriching: value.sync.enriching === true,
+          },
+          occurredAt: now(),
+        });
+      } catch (error) {
+        console.warn('[session-index] onRevisionTip failed:', error);
+      }
+    }
   };
 
   const delay = (ms, signal) => new Promise((resolve) => {

@@ -26,7 +26,16 @@ export const getResponseStylePresetInstructions = (preset: ResponseStylePreset):
   }
 };
 
-const buildResponseStyleInstruction = ({
+type ResponseStyleSettingsSnapshot = {
+  enabled: boolean;
+  preset: unknown;
+  customInstructions: unknown;
+};
+
+let responseStyleSettingsCache: ResponseStyleSettingsSnapshot | null = null;
+let responseStyleFetchInFlight: Promise<string | null> | null = null;
+
+export const buildResponseStyleInstruction = ({
   enabled,
   preset,
   customInstructions,
@@ -44,21 +53,63 @@ const buildResponseStyleInstruction = ({
   return getResponseStylePresetInstructions(preset);
 };
 
+/**
+ * Warm / refresh the send-path cache when settings are loaded or saved elsewhere
+ * (defaults bootstrap, Behavior page). Avoids GET /api/config/settings on every
+ * first message while the browser connection pool is saturated.
+ */
+export const rememberResponseStyleSettings = (settings: {
+  enabled?: unknown;
+  preset?: unknown;
+  customInstructions?: unknown;
+}): void => {
+  responseStyleSettingsCache = {
+    enabled: settings.enabled === true,
+    preset: settings.preset,
+    customInstructions: settings.customInstructions,
+  };
+};
+
+/** Test helper — clears the in-memory send-path cache. */
+export const clearResponseStyleSettingsCache = (): void => {
+  responseStyleSettingsCache = null;
+  responseStyleFetchInFlight = null;
+};
+
+export const getCachedResponseStyleInstruction = (): string | null | undefined => {
+  if (!responseStyleSettingsCache) return undefined;
+  return buildResponseStyleInstruction(responseStyleSettingsCache);
+};
+
 export const fetchResponseStyleInstruction = async (): Promise<string | null> => {
-  const response = await runtimeFetch('/api/config/settings', {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-  });
-  if (!response.ok) return null;
-  const settings = await response.json().catch(() => null) as {
-    responseStyleEnabled?: unknown;
-    responseStylePreset?: unknown;
-    responseStyleCustomInstructions?: unknown;
-  } | null;
-  if (!settings) return null;
-  return buildResponseStyleInstruction({
-    enabled: settings.responseStyleEnabled === true,
-    preset: settings.responseStylePreset,
-    customInstructions: settings.responseStyleCustomInstructions,
-  });
+  const cached = getCachedResponseStyleInstruction();
+  if (cached !== undefined) return cached;
+
+  if (responseStyleFetchInFlight) return responseStyleFetchInFlight;
+
+  responseStyleFetchInFlight = (async () => {
+    const response = await runtimeFetch('/api/config/settings', {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) return null;
+    const settings = await response.json().catch(() => null) as {
+      responseStyleEnabled?: unknown;
+      responseStylePreset?: unknown;
+      responseStyleCustomInstructions?: unknown;
+    } | null;
+    if (!settings) return null;
+    rememberResponseStyleSettings({
+      enabled: settings.responseStyleEnabled,
+      preset: settings.responseStylePreset,
+      customInstructions: settings.responseStyleCustomInstructions,
+    });
+    return getCachedResponseStyleInstruction() ?? null;
+  })();
+
+  try {
+    return await responseStyleFetchInFlight;
+  } finally {
+    responseStyleFetchInFlight = null;
+  }
 };

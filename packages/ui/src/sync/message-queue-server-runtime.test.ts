@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { MessageQueueServerError } from '@/lib/message-queue-server';
 import { createMessageQueueServerRuntime } from './message-queue-server-runtime';
 
 const descriptor = { scopeID: 'scope-a', revision: 1, directory: '/repo', sessionID: 'session-a', worktreeState: 'active', itemCount: 1 };
@@ -107,4 +108,200 @@ test('does not repeat a committed mutation when the worker advances the scope be
   expect(result.status).toBe('committed');
   expect(result.scope?.revision).toBe(3);
   expect(mutationCalls).toBe(1);
+});
+
+test('manual send reconciles the latest snapshot so a worker bump cannot empty the chip list', async () => {
+  const cache = new Map<string, unknown>();
+  const client = { setQueryData: (key: readonly unknown[], value: unknown) => cache.set(JSON.stringify(key), value), getQueryData: <T>(key: readonly unknown[]) => cache.get(JSON.stringify(key)) as T | undefined, removeQueries: () => {}, invalidateQueries: async () => {} };
+  const tail = { ...item, queueItemID: 'queue-b', operationID: 'operation-b', messageID: 'msg_b', content: 'tail', position: 1 };
+  let revision = 1;
+  const runtime = createMessageQueueServerRuntime({
+    client: client as never,
+    capture: () => ({ transportIdentity: 'device-a', generation: 1 }),
+    current: () => true,
+    status: async () => ({ capability: true, authority: 'active' }),
+    snapshot: async () => ({ revision, scopes: [{ ...descriptor, revision, itemCount: 2 }], worktreeOrders: [] }),
+    scope: async () => ({
+      ...descriptor,
+      revision,
+      itemCount: 2,
+      items: revision >= 2
+        ? [{ ...tail, position: 0, status: 'sending' as const }, { ...item, position: 1 }]
+        : [item, tail],
+    }),
+    manualSend: async () => {
+      revision = 2;
+      return { revision: 2 };
+    },
+  });
+  await runtime.refresh();
+  expect(runtime.getScope({ transportIdentity: 'device-a', directory: '/repo', sessionID: 'session-a' })?.items.map((entry) => entry.queueItemID)).toEqual(['queue-a', 'queue-b']);
+  const result = await runtime.manualSend({ requestID: 'cut-in', scopeID: descriptor.scopeID, revision: 1, item: tail });
+  expect(result.status).toBe('committed');
+  expect(result.scope?.items.map((entry) => entry.queueItemID)).toEqual(['queue-b', 'queue-a']);
+  expect(result.scope?.items[0]?.status).toBe('sending');
+});
+
+test('failed manual send reloads the authoritative scope instead of leaving an empty chip list', async () => {
+  const cache = new Map<string, unknown>();
+  const client = { setQueryData: (key: readonly unknown[], value: unknown) => cache.set(JSON.stringify(key), value), getQueryData: <T>(key: readonly unknown[]) => cache.get(JSON.stringify(key)) as T | undefined, removeQueries: () => {}, invalidateQueries: async () => {} };
+  const tail = { ...item, queueItemID: 'queue-b', operationID: 'operation-b', messageID: 'msg_b', content: 'tail', position: 1 };
+  let revision = 1;
+  const runtime = createMessageQueueServerRuntime({
+    client: client as never,
+    capture: () => ({ transportIdentity: 'device-a', generation: 1 }),
+    current: () => true,
+    status: async () => ({ capability: true, authority: 'active' }),
+    snapshot: async () => ({ revision, scopes: [{ ...descriptor, revision, itemCount: 2 }], worktreeOrders: [] }),
+    scope: async () => ({ ...descriptor, revision, itemCount: 2, items: [item, tail] }),
+    manualSend: async () => {
+      revision = 2;
+      throw new MessageQueueServerError(409, 'scope_locked');
+    },
+  });
+  await runtime.refresh();
+  await expect(runtime.manualSend({ requestID: 'cut-in-fail', scopeID: descriptor.scopeID, revision: 1, item: tail })).rejects.toMatchObject({ code: 'scope_locked' });
+  // Failure still reloads from the latest snapshot so chips match the server.
+  expect(runtime.getState().scopes.get(descriptor.scopeID)?.revision).toBe(2);
+  expect(runtime.getScope({ transportIdentity: 'device-a', directory: '/repo', sessionID: 'session-a' })?.items.map((entry) => entry.queueItemID)).toEqual(['queue-a', 'queue-b']);
+});
+
+test('observer leading pull applies a newer snapshot after a tip without another wait', async () => {
+  const cache = new Map<string, unknown>();
+  const client = { setQueryData: (key: readonly unknown[], value: unknown) => cache.set(JSON.stringify(key), value), getQueryData: <T>(key: readonly unknown[]) => cache.get(JSON.stringify(key)) as T | undefined, removeQueries: () => {}, invalidateQueries: async () => {} };
+  let revision = 1;
+  let waits = 0;
+  let releaseWait = () => {};
+  let gate = Promise.resolve();
+  const runtime = createMessageQueueServerRuntime({
+    client: client as never,
+    capture: () => ({ transportIdentity: 'device-a', generation: 1 }),
+    current: () => true,
+    status: async () => ({ capability: true, authority: 'active' }),
+    snapshot: async () => ({ revision, scopes: [{ ...descriptor, revision, itemCount: revision === 1 ? 1 : 0 }], worktreeOrders: [] }),
+    scope: async () => ({ ...descriptor, revision, itemCount: revision === 1 ? 1 : 0, items: revision === 1 ? [item] : [] }),
+    waitInvalidation: async () => {
+      waits += 1;
+      await gate;
+      return waits === 1 ? 'tip' : 'aborted';
+    },
+  });
+  await runtime.refresh();
+  expect(runtime.getScope({ transportIdentity: 'device-a', directory: '/repo', sessionID: 'session-a' })?.items).toEqual([item]);
+  gate = new Promise<void>((resolve) => { releaseWait = resolve; });
+  runtime.start();
+  for (let i = 0; i < 100 && waits < 1; i++) await Promise.resolve();
+  expect(waits).toBe(1);
+  // Server advanced while the observer was between applies; the next leading GET
+  // must clear the completed row when the tip wait unblocks.
+  revision = 2;
+  releaseWait();
+  for (let i = 0; i < 100 && (runtime.getScope({ transportIdentity: 'device-a', directory: '/repo', sessionID: 'session-a' })?.items.length ?? -1) !== 0; i++) await Promise.resolve();
+  expect(runtime.getScope({ transportIdentity: 'device-a', directory: '/repo', sessionID: 'session-a' })?.items).toEqual([]);
+  runtime.stop();
+});
+
+test('remove treats authoritative not_found as committed after scope reload', async () => {
+  const cache = new Map<string, unknown>();
+  const client = { setQueryData: (key: readonly unknown[], value: unknown) => cache.set(JSON.stringify(key), value), getQueryData: <T>(key: readonly unknown[]) => cache.get(JSON.stringify(key)) as T | undefined, removeQueries: () => {}, invalidateQueries: async () => {} };
+  let revision = 1;
+  let removeCalls = 0;
+  const runtime = createMessageQueueServerRuntime({
+    client: client as never,
+    capture: () => ({ transportIdentity: 'device-a', generation: 1 }),
+    current: () => true,
+    status: async () => ({ capability: true, authority: 'paused' }),
+    snapshot: async () => ({ revision, scopes: [{ ...descriptor, revision, itemCount: revision === 1 ? 1 : 0 }], worktreeOrders: [] }),
+    scope: async () => ({ ...descriptor, revision, itemCount: revision === 1 ? 1 : 0, items: revision === 1 ? [item] : [] }),
+    remove: async () => {
+      removeCalls++;
+      revision = 2;
+      throw new MessageQueueServerError(404, 'not_found');
+    },
+  });
+  await runtime.refresh();
+  const result = await runtime.remove({ requestID: 'remove-stale', scopeID: descriptor.scopeID, revision: 1, item });
+  expect(result.status).toBe('committed');
+  expect(result.scope?.items).toEqual([]);
+  expect(removeCalls).toBe(1);
+});
+
+test('not_found remove reload preserves remaining items in the same scope', async () => {
+  const cache = new Map<string, unknown>();
+  const client = { setQueryData: (key: readonly unknown[], value: unknown) => cache.set(JSON.stringify(key), value), getQueryData: <T>(key: readonly unknown[]) => cache.get(JSON.stringify(key)) as T | undefined, removeQueries: () => {}, invalidateQueries: async () => {} };
+  const kept = { ...item, queueItemID: 'queue-kept', operationID: 'operation-kept', messageID: 'msg_kept', content: 'kept' };
+  let revision = 1;
+  const runtime = createMessageQueueServerRuntime({
+    client: client as never,
+    capture: () => ({ transportIdentity: 'device-a', generation: 1 }),
+    current: () => true,
+    status: async () => ({ capability: true, authority: 'paused' }),
+    snapshot: async () => ({ revision, scopes: [{ ...descriptor, revision, itemCount: revision === 1 ? 2 : 1 }], worktreeOrders: [] }),
+    scope: async () => ({
+      ...descriptor,
+      revision,
+      itemCount: revision === 1 ? 2 : 1,
+      items: revision === 1 ? [item, kept] : [kept],
+    }),
+    remove: async () => {
+      revision = 2;
+      throw new MessageQueueServerError(404, 'not_found');
+    },
+  });
+  await runtime.refresh();
+  const result = await runtime.remove({ requestID: 'remove-gone', scopeID: descriptor.scopeID, revision: 1, item });
+  expect(result.status).toBe('committed');
+  expect(result.scope?.items).toEqual([kept]);
+});
+
+test('conflict reload keeps sibling scope pages while advancing only the mutated scope', async () => {
+  const cache = new Map<string, unknown>();
+  const client = {
+    setQueryData: (key: readonly unknown[], value: unknown) => cache.set(JSON.stringify(key), value),
+    getQueryData: <T>(key: readonly unknown[]) => cache.get(JSON.stringify(key)) as T | undefined,
+    removeQueries: ({ queryKey }: { queryKey: readonly unknown[] }) => {
+      const prefix = JSON.stringify(queryKey).slice(0, -1);
+      for (const key of cache.keys()) if (key.startsWith(prefix)) cache.delete(key);
+    },
+    invalidateQueries: async () => {},
+  };
+  const sibling = { scopeID: 'scope-b', revision: 1, directory: '/repo', sessionID: 'session-b', worktreeState: 'active' as const, itemCount: 1 };
+  const siblingItem = { ...item, queueItemID: 'queue-b', operationID: 'operation-b', messageID: 'msg_b', content: 'sibling' };
+  let revisionA = 1;
+  let revisionB = 1;
+  let editCalls = 0;
+  const runtime = createMessageQueueServerRuntime({
+    client: client as never,
+    capture: () => ({ transportIdentity: 'device-a', generation: 1 }),
+    current: () => true,
+    status: async () => ({ capability: true, authority: 'paused' }),
+    snapshot: async () => ({
+      revision: Math.max(revisionA, revisionB),
+      scopes: [
+        { ...descriptor, revision: revisionA, itemCount: 1 },
+        { ...sibling, revision: revisionB, itemCount: 1 },
+      ],
+      worktreeOrders: [],
+    }),
+    scope: async (scopeID) => {
+      if (scopeID === sibling.scopeID) return { ...sibling, revision: revisionB, items: [siblingItem] };
+      return { ...descriptor, revision: revisionA, itemCount: 1, items: [{ ...item, content: `a-${revisionA}` }] };
+    },
+    edit: async () => {
+      editCalls++;
+      if (editCalls === 1) {
+        revisionA = 2;
+        revisionB = 2;
+        throw new MessageQueueServerError(409, 'revision_conflict');
+      }
+      return { revision: revisionA };
+    },
+  });
+  await runtime.refresh();
+  expect(runtime.getScope({ transportIdentity: 'device-a', directory: '/repo', sessionID: 'session-b' })?.items).toEqual([siblingItem]);
+  const result = await runtime.edit({ requestID: 'edit-a', scopeID: descriptor.scopeID, revision: 1, item, patch: { content: 'edited' } });
+  expect(result.status).toBe('committed');
+  expect(runtime.getScope({ transportIdentity: 'device-a', directory: '/repo', sessionID: 'session-b' })?.items).toEqual([siblingItem]);
+  expect(runtime.getState().scopes.get(sibling.scopeID)?.revision).toBe(1);
+  expect(runtime.getState().scopes.get(descriptor.scopeID)?.revision).toBe(2);
 });

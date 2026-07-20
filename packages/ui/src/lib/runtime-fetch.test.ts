@@ -1,13 +1,5 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 import { createOpencodeClient } from '@opencode-ai/sdk/v2';
-import {
-  buildRuntimeFetchUrl,
-  getRuntimeRequestPriority,
-  isLatin1Safe,
-  runtimeFetch,
-  sanitizeHeadersForBrowser,
-  setRuntimeInteractiveSessionRequestId,
-} from './runtime-fetch';
 import {
   clearRuntimeAuthCredentialProvider,
   setRuntimeAuthCredentialProvider,
@@ -16,6 +8,17 @@ import {
 import { adoptRelayTunnel, deactivateRelayTunnel } from './relay/runtime-tunnel';
 import type { RelayTunnelClient } from './relay/tunnel-client';
 import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolver } from './runtime-url';
+
+// Clear sticky mocks, then load the real runtime-fetch after restore.
+mock.restore();
+const {
+  buildRuntimeFetchUrl,
+  getRuntimeRequestPriority,
+  isLatin1Safe,
+  runtimeFetch,
+  sanitizeHeadersForBrowser,
+  setRuntimeInteractiveSessionRequestId,
+} = await import('./runtime-fetch');
 
 const originalFetch = globalThis.fetch;
 
@@ -85,7 +88,7 @@ describe('runtime request priority', () => {
     expect(getRuntimeRequestPriority('GET', '/api/config/providers?directory=%2Frepo')).toBe('low');
     expect(getRuntimeRequestPriority('GET', '/api/git/status?directory=%2Frepo')).toBe('low');
     expect(getRuntimeRequestPriority('GET', '/api/quota/usage')).toBe('low');
-    expect(getRuntimeRequestPriority('GET', '/api/openchamber/session-index/changes?since=2')).toBe('low');
+    expect(getRuntimeRequestPriority('GET', '/api/openchamber/session-index')).toBe('low');
     expect(getRuntimeRequestPriority('POST', '/api/session/ses_1/message')).toBe(undefined);
     expect(getRuntimeRequestPriority('GET', 'https://external.example/api/session/ses_1/message')).toBe(undefined);
   });

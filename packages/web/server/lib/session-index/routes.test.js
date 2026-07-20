@@ -81,23 +81,13 @@ describe('session index routes', () => {
     expect(res.body).toMatchObject({ revision: 1, sync: { active: true } });
   });
 
-  it('returns the next SQLite revision through long polling', async () => {
+  it('does not register a long-poll changes route', () => {
     const { app, route } = registry();
-    const waitForChange = vi.fn(async () => ({ revision: 3, sync: { active: false }, directories: [] }));
     registerSessionIndexRoutes(app, {
       sessionIndexService: { snapshot: () => ({ directories: [] }) },
-      sessionIndexSyncRuntime: { waitForChange, snapshot: () => ({ revision: 2, directories: [] }) },
+      sessionIndexSyncRuntime: { snapshot: () => ({ revision: 2, directories: [] }) },
     });
-    const res = response();
-    const req = {
-      query: { since: '2', timeout: '1000' },
-      once: vi.fn(),
-      off: vi.fn(),
-    };
 
-    await route('GET', '/api/openchamber/session-index/changes')(req, res);
-
-    expect(waitForChange).toHaveBeenCalledWith(2, expect.objectContaining({ timeoutMs: 1000 }));
-    expect(res.body).toMatchObject({ revision: 3 });
+    expect(route('GET', '/api/openchamber/session-index/changes')).toBeUndefined();
   });
 });

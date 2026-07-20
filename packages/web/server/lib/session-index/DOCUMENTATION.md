@@ -25,13 +25,14 @@ The runtime processes them sequentially, applies `start=lastSyncedAt` for recent
 indexes, performs a full reconciliation after 24 hours, and commits each result
 to SQLite. It publishes an in-memory revision after every state/SQLite change.
 
-The renderer observes revisions with
-`GET /api/openchamber/session-index/changes?since=<revision>`. This is a bounded
-25-second long poll, not an SSE/WebSocket. Responses contain the current full
-summary snapshot and aggregate progress, so reconnecting never needs an event
-replay log. The renderer keeps this observer active after startup refresh work
-becomes idle, and successful event-driven index writes publish a new revision
-immediately.
+The renderer observes revisions through OpenChamber SSE tip events
+(`openchamber:session-index-changed`). Each tip carries the new revision and
+optional sync progress flags; the renderer then GETs
+`/api/openchamber/session-index` for the authoritative snapshot. Reconnecting
+never needs an event replay log because the next tip or `event-stream-ready`
+triggers a fresh snapshot load. The renderer keeps this tip observer active
+after startup refresh work becomes idle, and successful event-driven index
+writes publish a new revision tip immediately.
 
 The OpenCode proxy calls `noteInteractiveRequest()` for selected-session reads
 and mutations. That aborts the current background list, yields for one second,

@@ -8,10 +8,10 @@ import { getOriginalSessionID, getReviewSessionID } from '@/lib/sessionReviewMet
 import { resetOpenCodeReadiness, waitForOpenCodeReadiness } from '@/lib/runtime-readiness';
 import {
   loadSessionIndexSnapshot,
-  pollSessionIndexChanges,
   persistSessionIndexDirectory,
   persistSessionIndexDirectories,
   startSessionIndexBackgroundSync,
+  waitForSessionIndexInvalidation,
   type SessionIndexSnapshot,
 } from '@/lib/session-index-api';
 import { normalizePath } from '@/lib/pathNormalization';
@@ -846,16 +846,20 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
             : state.startupSyncProgress,
         }));
         if (!current.sync.active) settleRootSync();
-        const pollRuntime = captureSessionIndexRuntime();
-        const next = await pollSessionIndexChanges(current.revision, controller.signal);
-        if (!isCurrentSessionIndexRuntime(runtime) || !isCurrentSessionIndexRuntime(pollRuntime)) break;
+        const waitRuntime = captureSessionIndexRuntime();
+        const reason = await waitForSessionIndexInvalidation(current.revision, controller.signal);
+        if (!isCurrentSessionIndexRuntime(runtime) || !isCurrentSessionIndexRuntime(waitRuntime)) break;
+        if (reason === 'aborted') break;
+        const loadRuntime = captureSessionIndexRuntime();
+        const next = await loadSessionIndexSnapshot();
+        if (!isCurrentSessionIndexRuntime(runtime) || !isCurrentSessionIndexRuntime(loadRuntime)) break;
         if (!next) break;
         current = next;
       }
     };
     const polling = consume().catch((error) => {
       if (!controller.signal.aborted) {
-        console.warn('[GlobalSessions] Session index long poll failed:', error);
+        console.warn('[GlobalSessions] Session index tip sync failed:', error);
       }
     }).finally(() => {
       settleRootSync();
@@ -1137,9 +1141,13 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       while (!controller.signal.aborted && isCurrentSessionIndexRuntime(runtime)) {
         set((state) => applySessionIndexSnapshotState(state, current, true));
         if (!current.sync.active) break;
-        const pollRuntime = captureSessionIndexRuntime();
-        const next = await pollSessionIndexChanges(current.revision, controller.signal);
-        if (!isCurrentSessionIndexRuntime(runtime) || !isCurrentSessionIndexRuntime(pollRuntime)) break;
+        const waitRuntime = captureSessionIndexRuntime();
+        const reason = await waitForSessionIndexInvalidation(current.revision, controller.signal);
+        if (!isCurrentSessionIndexRuntime(runtime) || !isCurrentSessionIndexRuntime(waitRuntime)) break;
+        if (reason === 'aborted') break;
+        const loadRuntime = captureSessionIndexRuntime();
+        const next = await loadSessionIndexSnapshot();
+        if (!isCurrentSessionIndexRuntime(runtime) || !isCurrentSessionIndexRuntime(loadRuntime)) break;
         if (!next) break;
         current = next;
       }

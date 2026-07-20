@@ -72,7 +72,7 @@ const parse = (value) => value == null ? undefined : JSON.parse(value);
 const optionalJson = (value) => value === undefined ? null : JSON.stringify(value);
 const nonEmptyString = (value, limit = MAX_STRING) => typeof value === 'string' && value.length > 0 && value.length <= limit;
 
-export const createMessageQueueService = ({ dbPath, getRuntimeConfig = () => null, clock = () => Date.now(), isServerPathAllowed = () => false } = {}) => {
+export const createMessageQueueService = ({ dbPath, getRuntimeConfig = () => null, clock = () => Date.now(), isServerPathAllowed = () => false, onRevisionTip = null } = {}) => {
   if (typeof dbPath !== 'string' || !dbPath.trim()) return null;
   const Database = require('better-sqlite3');
   const db = new Database(dbPath);
@@ -148,7 +148,16 @@ export const createMessageQueueService = ({ dbPath, getRuntimeConfig = () => nul
     })),
     worktreeOrders: worktreeOrders(),
   });
-  const publish = () => { for (const waiter of [...waiters]) waiter(); };
+  const publish = () => {
+    for (const waiter of [...waiters]) waiter();
+    if (typeof onRevisionTip === 'function') {
+      try {
+        onRevisionTip({ revision: globalRevision(), occurredAt: now() });
+      } catch (error) {
+        console.warn('[message-queue] onRevisionTip failed:', error);
+      }
+    }
+  };
   const validateRequestID = (requestID) => { if (!nonEmptyString(requestID)) fail('validation_error'); };
   const attachmentDescriptor = (attachment, { migrationImport = false } = {}) => {
     if (!plainObject(attachment)) fail('validation_error');

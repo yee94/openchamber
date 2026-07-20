@@ -1,3 +1,4 @@
+import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 
 export type MessageQueueComposerReference = Record<string, unknown>;
@@ -84,12 +85,6 @@ export type MessageQueueScopeDescriptor = {
   sessionID: string;
   worktreeState: string;
   itemCount: number;
-};
-
-export type MessageQueueChanges = {
-  revision: number;
-  scopes: MessageQueueScopeDescriptor[];
-  worktreeOrders: WorktreeOrder[];
 };
 
 type MessageQueueMutationResult = {
@@ -229,14 +224,6 @@ const parseSnapshot = (value: unknown): MessageQueueSnapshot => {
   return { revision: value.revision, scopes, worktreeOrders };
 };
 
-const parseChanges = (value: unknown): MessageQueueChanges => {
-  if (!isRecord(value) || !isRevision(value.revision) || !Array.isArray(value.scopes) || !Array.isArray(value.worktreeOrders)) return malformed();
-  const scopes = value.scopes.map(parseScopeDescriptor);
-  const worktreeOrders = value.worktreeOrders.map(parseWorktreeOrder);
-  if (!scopes.every((scope): scope is MessageQueueScopeDescriptor => scope !== null) || !worktreeOrders.every((order): order is WorktreeOrder => order !== null)) return malformed();
-  return { revision: value.revision, scopes, worktreeOrders };
-};
-
 const parseMutation = (value: unknown): MessageQueueMutationResult => {
   if (!isRecord(value) || !isRevision(value.revision) || Object.keys(value).some((key) => !mutationKeys.has(key))) return malformed();
   if ((value.scopeID !== undefined && typeof value.scopeID !== 'string') || (value.queueItemID !== undefined && typeof value.queueItemID !== 'string') || (value.rowVersion !== undefined && !isRevision(value.rowVersion)) || (value.removedQueueItemID !== undefined && typeof value.removedQueueItemID !== 'string') || (value.projectDirectory !== undefined && typeof value.projectDirectory !== 'string') || (value.token !== undefined && typeof value.token !== 'string') || (value.state !== undefined && typeof value.state !== 'string') || (value.scopeCount !== undefined && !isRevision(value.scopeCount)) || (value.statusCounts !== undefined && (!isRecord(value.statusCounts) || Object.values(value.statusCounts).some((count) => !isRevision(count))))) return malformed();
@@ -254,7 +241,36 @@ export const fetchMessageQueueScope = async (scopeID: string, options: { offset?
   const value = parseScope(await request(`${ROUTE}/scopes/${encodeURIComponent(scopeID)}`, { query: { offset: options.offset, limit: options.limit, expectedRevision: options.expectedRevision }, signal: options.signal }));
   return value ?? malformed();
 };
-export const waitForMessageQueueChanges = async (afterRevision: number, options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<MessageQueueChanges> => parseChanges(await request(`${ROUTE}/changes`, { query: { afterRevision, timeout: options.timeoutMs }, signal: options.signal }));
+/**
+ * Wait until a message-queue tip arrives with revision > afterRevision, or the
+ * OpenChamber event stream becomes ready, or the signal aborts.
+ */
+export const waitForMessageQueueInvalidation = (
+  afterRevision: number,
+  options: { signal?: AbortSignal } = {},
+): Promise<'tip' | 'ready' | 'aborted'> => new Promise((resolve) => {
+  const signal = options.signal;
+  if (signal?.aborted) {
+    resolve('aborted');
+    return;
+  }
+  const finish = (reason: 'tip' | 'ready' | 'aborted') => {
+    unsubscribe();
+    signal?.removeEventListener('abort', onAbort);
+    resolve(reason);
+  };
+  const onAbort = () => finish('aborted');
+  const unsubscribe = subscribeOpenchamberEvents((event) => {
+    if (event.type === 'event-stream-ready') {
+      finish('ready');
+      return;
+    }
+    if (event.type === 'message-queue-changed' && event.revision > afterRevision) {
+      finish('tip');
+    }
+  });
+  signal?.addEventListener('abort', onAbort, { once: true });
+});
 export type MessageQueueServerAuthority = 'shadow' | 'active' | 'paused';
 export type MessageQueueServerStatus = { capability: boolean; authority?: MessageQueueServerAuthority; generation?: number; activationEpoch?: number; activatedAt?: number; manifestHash?: string; protocol?: number; worker?: { paused: boolean; active: number } };
 export const fetchMessageQueueServerStatus = async (signal?: AbortSignal): Promise<MessageQueueServerStatus> => {

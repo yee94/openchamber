@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { fetchMessageQueueSnapshot, fetchWorktreeOrder, MessageQueueServerError, setWorktreeOrder, waitForMessageQueueChanges, type MessageQueueChanges, type MessageQueueSnapshot, type WorktreeOrder } from '@/lib/message-queue-server';
+import { fetchMessageQueueSnapshot, fetchWorktreeOrder, MessageQueueServerError, setWorktreeOrder, waitForMessageQueueInvalidation, type MessageQueueSnapshot, type WorktreeOrder } from '@/lib/message-queue-server';
 import { getRuntimeGeneration, getRuntimeTransportIdentity, isRuntimeEndpointIdentityChange, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { registerWorktreeOrderWriter, useWorktreeOrderStore } from '@/stores/useWorktreeOrderStore';
@@ -13,7 +13,7 @@ export type WorktreeOrderSyncDependencies = {
   fetchSnapshot: (signal?: AbortSignal) => Promise<MessageQueueSnapshot>;
   fetchOrder: (directory: string, signal?: AbortSignal) => Promise<WorktreeOrder>;
   setOrder: (input: { requestID: string; projectDirectory: string; expectedRevision: number; orderedPaths: string[]; signal?: AbortSignal }) => Promise<{ revision: number; worktreeOrder?: WorktreeOrder }>;
-  waitChanges: (revision: number, options: { signal?: AbortSignal; timeoutMs?: number }) => Promise<MessageQueueChanges>;
+  waitInvalidation: (revision: number, options: { signal?: AbortSignal }) => Promise<'tip' | 'ready' | 'aborted'>;
   captureRuntime: () => WorktreeOrderRuntimeCapture;
   isCurrent: (capture: WorktreeOrderRuntimeCapture) => boolean;
   sleep: (ms: number, signal: AbortSignal) => Promise<void>;
@@ -34,7 +34,7 @@ const sleep = (ms: number, signal: AbortSignal): Promise<void> => new Promise((r
 });
 
 const defaults: WorktreeOrderSyncDependencies = {
-  fetchSnapshot: fetchMessageQueueSnapshot, fetchOrder: fetchWorktreeOrder, setOrder: setWorktreeOrder, waitChanges: waitForMessageQueueChanges,
+  fetchSnapshot: fetchMessageQueueSnapshot, fetchOrder: fetchWorktreeOrder, setOrder: setWorktreeOrder, waitInvalidation: waitForMessageQueueInvalidation,
   captureRuntime: () => ({ transportIdentity: getRuntimeTransportIdentity(), generation: getRuntimeGeneration() }),
   isCurrent: (capture) => capture.transportIdentity === getRuntimeTransportIdentity() && capture.generation === getRuntimeGeneration(),
   sleep,
@@ -139,9 +139,13 @@ export const createWorktreeOrderObserver = (projects: () => WorktreeOrderProject
       }
       while (!signal.aborted && dependencies.isCurrent(capture)) {
         try {
-          const changes = await dependencies.waitChanges(revision, { signal, timeoutMs: 25_000 });
+          const reason = await dependencies.waitInvalidation(revision, { signal });
+          if (signal.aborted || !dependencies.isCurrent(capture) || reason === 'aborted') return;
+          const snapshot = await dependencies.fetchSnapshot(signal);
           if (signal.aborted || !dependencies.isCurrent(capture)) return;
-          revision = changes.revision; applyOrders(changes.worktreeOrders, projects(), capture, dependencies); backoff = 500;
+          revision = snapshot.revision;
+          applyOrders(snapshot.worktreeOrders, projects(), capture, dependencies);
+          backoff = 500;
         } catch (error) {
           if (classifyMessageQueueError(error) !== 'retry') return;
           await dependencies.sleep(backoff, signal).catch(() => {}); backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);

@@ -18,6 +18,7 @@ import { resolveProjectForSessionDirectory } from "@/lib/projectResolution";
 import { streamDebugEnabled } from "@/stores/utils/streamDebug";
 import { parseModelIdentifier } from "@/lib/modelIdentifier";
 import { runtimeFetch } from "@/lib/runtime-fetch";
+import { rememberResponseStyleSettings } from "@/lib/responseStyle";
 import { markStartupTrace, measureStartupTrace } from "@/lib/startupTrace";
 import { normalizePath } from "@/lib/pathNormalization";
 import { getSyncConfig, subscribeToSyncConfigChanges } from "@/sync/sync-refs";
@@ -102,6 +103,11 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
                     const sttModel = typeof data?.sttModel === 'string' ? data.sttModel.trim() : undefined;
                     const sttLocalModel = typeof data?.sttLocalModel === 'string' ? data.sttLocalModel.trim() : undefined;
                     const sttLanguage = typeof data?.sttLanguage === 'string' ? data.sttLanguage.trim() : undefined;
+                    rememberResponseStyleSettings({
+                        enabled: data?.responseStyleEnabled,
+                        preset: data?.responseStylePreset,
+                        customInstructions: data?.responseStyleCustomInstructions,
+                    });
 
                     return finish('runtime-settings', {
                         defaultModel: defaultModel.length > 0 ? defaultModel : undefined,
@@ -148,6 +154,11 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
         const sttModel = typeof data?.sttModel === 'string' ? data.sttModel.trim() : undefined;
         const sttLocalModel = typeof data?.sttLocalModel === 'string' ? data.sttLocalModel.trim() : undefined;
         const sttLanguage = typeof data?.sttLanguage === 'string' ? data.sttLanguage.trim() : undefined;
+        rememberResponseStyleSettings({
+            enabled: data?.responseStyleEnabled,
+            preset: data?.responseStylePreset,
+            customInstructions: data?.responseStyleCustomInstructions,
+        });
 
         return finish('settings-route', {
             defaultModel: defaultModel.length > 0 ? defaultModel : undefined,

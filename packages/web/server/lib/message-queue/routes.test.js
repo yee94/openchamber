@@ -16,5 +16,14 @@ describe('message queue routes', () => {
     const renewResponse = response(); route('POST', `${prefix}/items/:queueItemID/edit-reservations/:token/renew`)({ params: { queueItemID: 'item', token: 'token' }, body: { generation: 1, ttlMs: 1_000 } }, renewResponse); expect(renewEditReservation).toHaveBeenCalledWith({ generation: 1, ttlMs: 1_000, queueItemID: 'item', token: 'token' }); expect(renewResponse).toMatchObject({ statusCode: 409, body: { code: 'reservation_expired' } });
     const removeResponse = response(); route('DELETE', `${prefix}/items/:queueItemID/reserved-remove`)({ params: { queueItemID: 'item' }, body: {} }, removeResponse); expect(removeResponse).toMatchObject({ statusCode: 409, body: { code: 'reserved' } });
   });
-  it('passes scope pagination and aborts long polls with request close', async () => { const { app, route } = registry(); const getScope = vi.fn(() => ({ scopeID: 'scope', items: [] })); const waitForChange = vi.fn(async () => ({ revision: 1, scopes: [], worktreeOrders: [] })); registerMessageQueueRoutes(app, { messageQueueService: { getScope, waitForChange } }); const scopeRes = response(); route('GET', `${prefix}/scopes/:scopeID`)({ params: { scopeID: 'scope' }, query: { offset: '2', limit: '8', expectedRevision: '4' } }, scopeRes); expect(scopeRes.body).toEqual({ scopeID: 'scope', items: [] }); expect(getScope).toHaveBeenCalledWith('scope', { offset: 2, limit: 8, expectedRevision: 4 }); const changeRes = response(); await route('GET', `${prefix}/changes`)({ query: {}, once: vi.fn(), off: vi.fn() }, changeRes); expect(waitForChange).toHaveBeenCalledWith(0, expect.objectContaining({ signal: expect.any(AbortSignal) })); });
+  it('passes scope pagination and does not register a long-poll changes route', () => {
+    const { app, route } = registry();
+    const getScope = vi.fn(() => ({ scopeID: 'scope', items: [] }));
+    registerMessageQueueRoutes(app, { messageQueueService: { getScope } });
+    const scopeRes = response();
+    route('GET', `${prefix}/scopes/:scopeID`)({ params: { scopeID: 'scope' }, query: { offset: '2', limit: '8', expectedRevision: '4' } }, scopeRes);
+    expect(scopeRes.body).toEqual({ scopeID: 'scope', items: [] });
+    expect(getScope).toHaveBeenCalledWith('scope', { offset: 2, limit: 8, expectedRevision: 4 });
+    expect(route('GET', `${prefix}/changes`)).toBeUndefined();
+  });
 });

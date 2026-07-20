@@ -1,12 +1,37 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { OpencodeClient, Session } from '@opencode-ai/sdk/v2';
 
-import {
+// Clear sticky mocks from other suites before installing this file's doubles.
+mock.restore();
+
+type OpenChamberEvent = {
+  type: string;
+  revision?: number;
+  occurredAt?: number;
+  sync?: { active: boolean; enriching: boolean };
+};
+const tipListeners = new Set<(event: OpenChamberEvent) => void>();
+/** Deliver a tip (or ready) event to every active OpenChamber tip subscriber. */
+const emitOpenchamberTip = (event: OpenChamberEvent) => {
+  for (const listener of [...tipListeners]) listener(event);
+};
+const realOpenchamberEvents = await import('@/lib/openchamberEvents');
+mock.module('@/lib/openchamberEvents', () => ({
+  subscribeOpenchamberEvents: (listener: (event: OpenChamberEvent) => void) => {
+    tipListeners.add(listener);
+    return () => { tipListeners.delete(listener); };
+  },
+  // Keep the real parser so sibling suites can still assert envelope contracts.
+  parseOpenchamberEventEnvelope: realOpenchamberEvents.parseOpenchamberEventEnvelope,
+}));
+
+// Load after the tip mock so waitForSessionIndexInvalidation binds the double.
+const {
   mergeLiveSessionWithGlobalSession,
   refreshStartupGlobalSessionsForDirectories,
   resolveGlobalSessionDirectory,
   useGlobalSessionsStore,
-} from './useGlobalSessionsStore';
+} = await import('./useGlobalSessionsStore');
 import { opencodeClient } from '@/lib/opencode/client';
 import { resetOpenCodeReadiness } from '@/lib/runtime-readiness';
 import { useSessionFoldersStore } from './useSessionFoldersStore';
@@ -29,7 +54,11 @@ describe('useGlobalSessionsStore', () => {
   let restoreGetSdkClient: (() => void) | null = null;
   let restoreCheckHealth: (() => void) | null = null;
 
+  afterAll(() => {
+    mock.restore();
+  });
   beforeEach(() => {
+    tipListeners.clear();
     resetOpenCodeReadiness();
     const originalCheckHealth = opencodeClient.checkHealth;
     opencodeClient.checkHealth = async () => true;
@@ -307,18 +336,18 @@ describe('useGlobalSessionsStore', () => {
         configurable: true,
         value: { location: { origin: 'http://localhost', href: 'http://localhost/' } },
       });
-      globalThis.fetch = (input, init) => {
+      globalThis.fetch = (input) => {
         const url = input instanceof Request ? input.url : String(input);
         const pathname = new URL(url, 'http://localhost').pathname;
         requests.push(pathname);
-        if (pathname === '/api/openchamber/session-index/changes') {
-          return new Promise<Response>((_resolve, reject) => {
-            init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
-          });
+        if (pathname === '/api/openchamber/session-index') {
+          return Promise.resolve(new Response(JSON.stringify({ available: true, ...snapshot }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }));
         }
-        const isSnapshot = requests.length === 1;
-        return Promise.resolve(new Response(JSON.stringify(isSnapshot ? { available: true, ...snapshot } : snapshot), {
-          status: isSnapshot ? 200 : 202,
+        return Promise.resolve(new Response(JSON.stringify(snapshot), {
+          status: 202,
           headers: { 'Content-Type': 'application/json' },
         }));
       };
@@ -330,13 +359,12 @@ describe('useGlobalSessionsStore', () => {
       } as unknown as OpencodeClient);
 
       await useGlobalSessionsStore.getState().startSessionIndexStartup(['/repo/server']);
-      while (requests.length < 3) await new Promise((resolve) => setTimeout(resolve, 0));
+      while (requests.length < 2) await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(sdkListCalls).toBe(0);
       expect(requests).toEqual([
         '/api/openchamber/session-index',
         '/api/openchamber/session-index/sync',
-        '/api/openchamber/session-index/changes',
       ]);
       expect(useGlobalSessionsStore.getState().sessionsByDirectory.get('/repo/server')).toEqual([cached]);
     } finally {
@@ -402,39 +430,38 @@ describe('useGlobalSessionsStore', () => {
         value: { location: { origin: 'http://localhost', href: 'http://localhost/' } },
       });
       let requestCount = 0;
-      globalThis.fetch = (input, init) => {
+      globalThis.fetch = (input) => {
         requestCount += 1;
-        if (requestCount === 1) {
+        const pathname = new URL(input instanceof Request ? input.url : String(input), 'http://localhost').pathname;
+        if (pathname === '/api/openchamber/session-index' && requestCount === 1) {
           return Promise.resolve(new Response(JSON.stringify({ available: true, ...initialSnapshot }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
           }));
         }
-        if (requestCount === 2) {
+        if (pathname === '/api/openchamber/session-index/sync') {
           return Promise.resolve(new Response(JSON.stringify(initialSnapshot), {
             status: 202,
             headers: { 'Content-Type': 'application/json' },
           }));
         }
-        if (requestCount === 3) {
-          return Promise.resolve(new Response(JSON.stringify(activitySnapshot), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          }));
-        }
-        return new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
-        });
+        return Promise.resolve(new Response(JSON.stringify({ available: true, ...activitySnapshot }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }));
       };
 
-      await useGlobalSessionsStore.getState().startSessionIndexStartup(['/repo/activity']);
+      const startup = useGlobalSessionsStore.getState().startSessionIndexStartup(['/repo/activity']);
+      for (let i = 0; i < 50 && tipListeners.size === 0; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+      emitOpenchamberTip({ type: 'session-index-changed', revision: 2, occurredAt: 1 });
+      await startup;
       while (useGlobalSessionsStore.getState().activeSessions[0]?.id !== 'ses_older') {
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
 
       expect(useGlobalSessionsStore.getState().sessionsByDirectory.get('/repo/activity')?.map((session) => session.id))
         .toEqual(['ses_older', 'ses_newer']);
-      expect(requestCount).toBeGreaterThanOrEqual(4);
+      expect(requestCount).toBeGreaterThanOrEqual(3);
     } finally {
       useGlobalSessionsStore.getState().resetForRuntimeSwitch();
       Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
@@ -554,7 +581,6 @@ describe('useGlobalSessionsStore', () => {
     const originalWindow = globalThis.window;
     const originalFetch = globalThis.fetch;
     const firstSession = buildSession('https://share.example/first-run', { directory: '/repo/a' });
-    let releaseFinalPoll: (() => void) | undefined;
     let finished = false;
     const emptySnapshot = {
       revision: 0,
@@ -615,29 +641,29 @@ describe('useGlobalSessionsStore', () => {
         configurable: true,
         value: { location: { origin: 'http://localhost', href: 'http://localhost/' } },
       });
-      let requestCount = 0;
-      globalThis.fetch = async () => {
-        requestCount += 1;
-        if (requestCount === 1) {
-          return new Response(JSON.stringify({ available: true, ...emptySnapshot }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-        if (requestCount === 2) {
+      let snapshotLoads = 0;
+      globalThis.fetch = async (input) => {
+        const pathname = new URL(input instanceof Request ? input.url : String(input), 'http://localhost').pathname;
+        if (pathname === '/api/openchamber/session-index/sync') {
           return new Response(JSON.stringify(initialSync), {
             status: 202,
             headers: { 'Content-Type': 'application/json' },
           });
         }
-        if (requestCount === 3) {
-          return new Response(JSON.stringify(partialSync), {
+        snapshotLoads += 1;
+        if (snapshotLoads === 1) {
+          return new Response(JSON.stringify({ available: true, ...emptySnapshot }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
           });
         }
-        await new Promise<void>((resolve) => { releaseFinalPoll = resolve; });
-        return new Response(JSON.stringify(completedSync), {
+        if (snapshotLoads === 2) {
+          return new Response(JSON.stringify({ available: true, ...partialSync }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response(JSON.stringify({ available: true, ...completedSync }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });
@@ -645,13 +671,17 @@ describe('useGlobalSessionsStore', () => {
 
       const startup = useGlobalSessionsStore.getState().startSessionIndexStartup(['/repo/a', '/repo/b'])
         .then(() => { finished = true; });
-      while (!releaseFinalPoll) await new Promise((resolve) => setTimeout(resolve, 0));
+      while (tipListeners.size === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+      emitOpenchamberTip({ type: 'session-index-changed', revision: 2, occurredAt: 1 });
+      while (!useGlobalSessionsStore.getState().sessionsByDirectory.get('/repo/a')) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
 
       expect(useGlobalSessionsStore.getState().hasCachedSessionIndex).toBe(false);
       expect(useGlobalSessionsStore.getState().sessionsByDirectory.get('/repo/a')).toEqual([firstSession]);
       expect(finished).toBe(false);
 
-      releaseFinalPoll();
+      emitOpenchamberTip({ type: 'session-index-changed', revision: 3, occurredAt: 2 });
       await startup;
       expect(finished).toBe(true);
     } finally {

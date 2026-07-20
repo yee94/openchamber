@@ -120,7 +120,7 @@ const BACKGROUND_READ_EXACT_PATHS = new Set([
   '/api/session-folders',
   '/api/github/pr/status',
   '/api/openchamber/models-metadata',
-  '/api/openchamber/session-index/changes',
+  '/api/openchamber/session-index',
 ]);
 const BACKGROUND_READ_PREFIXES = [
   '/api/agent',

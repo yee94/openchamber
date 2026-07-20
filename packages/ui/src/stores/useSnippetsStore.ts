@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { Snippet } from '@/types/snippet';
 import { opencodeClient } from '@/lib/opencode/client';
+import { expandSnippetsFromList } from '@/lib/snippetExpand';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -159,6 +160,17 @@ export const useSnippetsStore = create<SnippetsStore>()(
 
       expandText: async (text) => {
         if (!/#[a-z0-9_-]+/i.test(text)) return text;
+
+        // Prefer local expansion from the loaded catalog so send does not wait
+        // on /api/config/snippets/expand while the connection pool is busy.
+        const tryLocal = (): string | null => expandSnippetsFromList(text, get().snippets);
+        const localHit = tryLocal();
+        if (localHit !== null) return localHit;
+
+        await get().loadSnippets();
+        const afterLoad = tryLocal();
+        if (afterLoad !== null) return afterLoad;
+
         const directory = getRequestDirectory();
         const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : '';
         const response = await runtimeFetch(`/api/config/snippets/expand${queryParams}`, {

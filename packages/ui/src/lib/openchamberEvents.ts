@@ -18,7 +18,25 @@ type WorktreeTopologyChangedEvent = {
   operation: 'added' | 'removed';
   occurredAt: number;
 };
-type OpenChamberEvent = ScheduledTaskRanEvent | EventStreamReadyEvent | WorktreeTopologyChangedEvent;
+/** Session-index SQLite revision tip — clients GET /api/openchamber/session-index. */
+type SessionIndexChangedEvent = {
+  type: 'session-index-changed';
+  revision: number;
+  sync?: { active: boolean; enriching: boolean };
+  occurredAt: number;
+};
+/** Message-queue revision tip — clients GET /api/openchamber/message-queue. */
+type MessageQueueChangedEvent = {
+  type: 'message-queue-changed';
+  revision: number;
+  occurredAt: number;
+};
+type OpenChamberEvent =
+  | ScheduledTaskRanEvent
+  | EventStreamReadyEvent
+  | WorktreeTopologyChangedEvent
+  | SessionIndexChangedEvent
+  | MessageQueueChangedEvent;
 type Listener = (event: OpenChamberEvent) => void;
 
 let eventSource: EventSource | null = null;
@@ -110,6 +128,37 @@ export const parseOpenchamberEventEnvelope = (envelope: { type: string; properti
     const occurredAt = parsed?.occurredAt;
     if (!projectDirectory || !directory || (operation !== 'added' && operation !== 'removed') || typeof occurredAt !== 'number' || !Number.isFinite(occurredAt)) return null;
     return { type: 'worktree-topology-changed', projectDirectory, directory, operation, occurredAt };
+  }
+
+  if (envelope.type === 'openchamber:session-index-changed') {
+    const revision = parsed?.revision;
+    const occurredAt = parsed?.occurredAt;
+    if (typeof revision !== 'number' || !Number.isFinite(revision) || revision < 0) return null;
+    if (typeof occurredAt !== 'number' || !Number.isFinite(occurredAt)) return null;
+    const syncRaw = parsed?.sync && typeof parsed.sync === 'object' && !Array.isArray(parsed.sync)
+      ? parsed.sync as Record<string, unknown>
+      : null;
+    return {
+      type: 'session-index-changed',
+      revision,
+      occurredAt,
+      ...(syncRaw
+        ? {
+            sync: {
+              active: syncRaw.active === true,
+              enriching: syncRaw.enriching === true,
+            },
+          }
+        : {}),
+    };
+  }
+
+  if (envelope.type === 'openchamber:message-queue-changed') {
+    const revision = parsed?.revision;
+    const occurredAt = parsed?.occurredAt;
+    if (typeof revision !== 'number' || !Number.isFinite(revision) || revision < 0) return null;
+    if (typeof occurredAt !== 'number' || !Number.isFinite(occurredAt)) return null;
+    return { type: 'message-queue-changed', revision, occurredAt };
   }
 
   if (envelope.type !== 'openchamber:scheduled-task-ran') {
