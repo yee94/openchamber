@@ -2112,6 +2112,7 @@ export const dict = {
   'chat.chatInput.toast.vscodePickFailed': 'Failed to pick files in VS Code',
   'chat.chatInput.toast.openSessionFirst': 'Open a session first',
   'chat.chatInput.toast.togglePermissionAutoAcceptFailed': 'Failed to toggle permission auto-accept',
+  'chat.chatInput.toast.sessionReferenceLoadFailed': 'Could not load the session reference.',
   'chat.chatInput.reviewComments': 'Review comments:',
   'chat.chatInput.reviewCommentsRemove': 'Remove review comments',
   'chat.chatInput.devServerLogs': 'Dev Server logs:',

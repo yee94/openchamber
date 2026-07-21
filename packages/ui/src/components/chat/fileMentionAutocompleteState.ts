@@ -1,3 +1,5 @@
+import type { Session } from '@opencode-ai/sdk/v2';
+
 export type FileMentionAutocompleteInputSource = 'manual' | 'paste';
 
 const SESSION_MENTION_PATTERN = /(^|[\s([{])(@session:([A-Za-z0-9_-]+))(?=$|[\s)\]},.!?;:])/g;
@@ -65,6 +67,23 @@ export const resolveSessionMentionDeletion = (
         text: `${text.slice(0, range.start)}${text.slice(removeEnd)}`,
         caret: range.start,
     };
+};
+
+export const getVisibleSessionMentionCandidates = ({
+    sessions,
+    currentSessionId,
+    searchQuery,
+}: {
+    sessions: readonly Session[];
+    currentSessionId: string | null;
+    searchQuery: string;
+}): Session[] => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    return sessions
+        .filter((session) => session.id !== currentSessionId)
+        .filter((session) => !normalizedQuery || `${session.title ?? ''} ${session.id}`.toLowerCase().includes(normalizedQuery))
+        .sort((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
+        .slice(0, normalizedQuery ? 10 : 3);
 };
 
 export const getFileMentionAutocompleteQuery = ({

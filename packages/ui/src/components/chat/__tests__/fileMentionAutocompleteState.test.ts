@@ -5,10 +5,12 @@ import {
     findSessionMentionRanges,
     getFileMentionAutocompleteQuery,
     getSessionMentionToken,
+    getVisibleSessionMentionCandidates,
     replaceSessionMentionTokens,
     resolveSessionMentionDeletion,
 } from '../fileMentionAutocompleteState';
 import { buildSessionMentionInstruction, type SessionMentionContext } from '@/composer/delivery';
+import type { Session } from '@opencode-ai/sdk/v2';
 
 describe('getFileMentionAutocompleteQuery', () => {
     test('opens file mention autocomplete for manually typed boundary @ text', () => {
@@ -82,6 +84,27 @@ describe('getFileMentionAutocompleteQuery', () => {
 });
 
 describe('session mentions', () => {
+    test('searches every loaded global session while the empty menu stays bounded', () => {
+        const sessions = [
+            { id: 'ses_1', title: 'Alpha', time: { created: 1, updated: 1 } },
+            { id: 'ses_2', title: 'Beta', time: { created: 2, updated: 2 } },
+            { id: 'ses_3', title: 'Gamma', time: { created: 3, updated: 3 } },
+            { id: 'ses_4', title: 'Delta', time: { created: 4, updated: 4 } },
+        ] as Session[];
+
+        expect(getVisibleSessionMentionCandidates({
+            sessions,
+            currentSessionId: null,
+            searchQuery: '',
+        }).map((session) => session.id)).toEqual(['ses_4', 'ses_3', 'ses_2']);
+
+        expect(getVisibleSessionMentionCandidates({
+            sessions,
+            currentSessionId: null,
+            searchQuery: 'a',
+        }).map((session) => session.id)).toEqual(['ses_4', 'ses_3', 'ses_2', 'ses_1']);
+    });
+
     test('creates stable tokens and collects unique session IDs in message order', () => {
         expect(getSessionMentionToken('ses_123')).toBe('session:ses_123');
         expect(collectSessionMentionIds('Compare @session:ses_123 with @session:ses_456 and @session:ses_123.')).toEqual([

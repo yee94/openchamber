@@ -2078,6 +2078,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.chatInput.toast.vscodePickFailed": "Não foi possível selecionar arquivos em VS Code",
   "chat.chatInput.toast.openSessionFirst": "Abra uma sessão primeiro",
   "chat.chatInput.toast.togglePermissionAutoAcceptFailed": "Não foi possível alterar a aceitação automática de permissões",
+  "chat.chatInput.toast.sessionReferenceLoadFailed": "Não foi possível carregar a referência da sessão.",
   "chat.chatInput.reviewComments": "Comentários de revisão:",
   "chat.chatInput.reviewCommentsRemove": "Remover comentários de revisão",
   "chat.chatInput.devServerLogs": "Logs do Dev Server:",

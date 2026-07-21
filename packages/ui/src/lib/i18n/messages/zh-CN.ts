@@ -2078,6 +2078,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.chatInput.toast.vscodePickFailed': '在 VS Code 中选择文件失败',
   'chat.chatInput.toast.openSessionFirst': '请先打开一个会话',
   'chat.chatInput.toast.togglePermissionAutoAcceptFailed': '切换权限自动接受失败',
+  'chat.chatInput.toast.sessionReferenceLoadFailed': '无法加载会话引用。',
   'chat.chatInput.reviewComments': '审查评论：',
   'chat.chatInput.reviewCommentsRemove': '移除审查评论',
   'chat.chatInput.devServerLogs': 'Dev Server 日志：',

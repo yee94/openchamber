@@ -207,14 +207,16 @@ becoming the cached startup result consumed by the session coordinator.
   commits a shared transport response into its own store.
 - Older history is user-driven pagination (`loadMore`) only. Each request loads
   a 30-message page across all surfaces.
-- Composer session mentions list only other global active sessions whose owning
-  directory store is already initialized and has materialized that session's
-  identity and message snapshot. Sending a mention reads that bounded owning
-  directory message/part snapshot and adds a size-limited hidden context part;
-  opening the mention menu and sending perform no referenced-session fetch.
-  The textarea stores visible Session labels plus DraftRecord sidecars containing
-  stable Session IDs. Sending resolves each sidecar at the send boundary into
-  stable Session identity and visible sent text `@<session title>`.
+- Composer session mention search filters every loaded global active-session
+  summary across projects, while the empty menu keeps three recent suggestions.
+  Opening the mention menu performs no referenced-session fetch. Selecting a
+  session lazily materializes its bounded identity and message snapshot in its
+  owning directory before inserting the durable reference. Sending reads that
+  bounded owning-directory message/part snapshot and adds a size-limited hidden
+  context part. The textarea stores visible Session labels plus DraftRecord
+  sidecars containing stable Session IDs. Sending resolves each sidecar at the
+  send boundary into stable Session identity and visible sent text
+  `@<session title>`.
 - A rejected shared request is removed from the coordinator so the next
   explicit/reactive attempt can retry; failure must never be cached as an empty
   authoritative history.

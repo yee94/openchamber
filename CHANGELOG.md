@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.47] - 2026-07-21
+
+- **Session references:** hydrate the target conversation before inserting an `@session` mention, show a localized failure toast when the reference cannot be materialized, and share one session-mention candidate filter across autocomplete surfaces.
+- **Worktree bootstrap:** add authoritative compensation polling after the initial seed so missed ready events still settle bootstrap state and background watchers recover cleanly.
+- **Sidebar scrolling:** keep archived-session virtual rows aligned with the sidebar scroll container when the archived section mounts inside the shared list.
+- **Localization:** add translated copy for session-reference load failures across all supported locales.
+
 ## [1.16.46] - 2026-07-21
 
 - **Directory mentions:** support `@folder` mentions in the composer with persisted `directory` mention kind, autocomplete hits that keep directory intent, and delivery that sends OpenCode `application/x-directory` attachments through send and queued-message paths.

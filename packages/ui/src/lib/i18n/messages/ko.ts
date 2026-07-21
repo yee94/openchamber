@@ -2112,6 +2112,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.chatInput.toast.vscodePickFailed': 'VS Code에서 파일 선택에 실패했습니다',
   'chat.chatInput.toast.openSessionFirst': '먼저 세션을 여세요',
   'chat.chatInput.toast.togglePermissionAutoAcceptFailed': '권한 자동 승인 전환에 실패했습니다',
+  'chat.chatInput.toast.sessionReferenceLoadFailed': '세션 참조를 불러오지 못했습니다.',
   'chat.chatInput.reviewComments': '검토 댓글:',
   'chat.chatInput.reviewCommentsRemove': '검토 댓글 제거',
   'chat.chatInput.devServerLogs': 'Dev Server 로그:',

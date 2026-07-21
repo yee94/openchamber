@@ -19,7 +19,8 @@ import { newSessionDraftKey, sessionDraftKey, type DraftKey, type DraftMention }
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 import * as sessionActions from '@/sync/session-actions';
 import { useDirectorySync, useUserMessageHistory } from '@/sync/sync-context';
-import { getAllSyncSessionMap, getSyncMessages } from '@/sync/sync-refs';
+import { getAllSyncSessionMap, getSyncMessages, resolveMaterializedSessionDirectory } from '@/sync/sync-refs';
+import { useSync } from '@/sync/use-sync';
 import { useInlineCommentDraftStore, type InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
 import { appendInlineComments } from '@/lib/messages/inlineComments';
@@ -930,6 +931,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
     const fallbackDirectory = useDirectoryStore((s) => s.currentDirectory);
     const currentDirectory = useEffectiveDirectory() ?? fallbackDirectory;
+    const { ensureSessionRenderable } = useSync();
     const currentSessionDirectoryForSync = useSessionUIStore(
         React.useCallback((s) => currentSessionId ? s.getDirectoryForSession(currentSessionId) : null, [currentSessionId]),
     );
@@ -1042,6 +1044,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const pendingDroppedAbsolutePathsRef = React.useRef<string[]>([]);
     const canAcceptDropRef = React.useRef(false);
     const mentionRef = React.useRef<FileMentionHandle>(null);
+    const pendingSessionReferenceRef = React.useRef(false);
     const commandRef = React.useRef<CommandAutocompleteHandle>(null);
     const skillRef = React.useRef<SkillAutocompleteHandle>(null);
     const snippetRef = React.useRef<SnippetAutocompleteHandle>(null);
@@ -3667,32 +3670,56 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         textareaRef.current?.focus();
     };
 
-    const handleSessionSelect = (session: { id: string; title?: string }) => {
-        const textarea = textareaRef.current;
-        const cursorPosition = textarea?.selectionStart ?? message.length;
-        const textBeforeCursor = message.substring(0, cursorPosition);
-        const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
-        const sessionTitle = session.title || getAllSyncSessionMap().get(session.id)?.title || session.id;
-        const mentionStart = lastAtSymbol !== -1 ? lastAtSymbol : cursorPosition;
-        const sessionReference: Omit<SessionComposerReference, 'start' | 'end'> = {
-            id: `session:${session.id}:${createUuid()}`,
-            kind: 'session',
-            sessionId: session.id,
-            display: `@${sessionTitle}`,
-        };
-        const inserted = insertReference(mentionStart, cursorPosition, sessionReference, { inlineBoundaries: true });
-        requestAnimationFrame(() => {
-            if (textareaRef.current) {
-                textareaRef.current.selectionStart = inserted.caret;
-                textareaRef.current.selectionEnd = inserted.caret;
+    const handleSessionSelect = useEvent((session: { id: string; title?: string }) => {
+        if (pendingSessionReferenceRef.current) return;
+        pendingSessionReferenceRef.current = true;
+        void (async () => {
+            try {
+                const sessionDirectory = useSessionUIStore.getState().getAuthoritativeDirectoryForSession(session.id);
+                if (!sessionDirectory) {
+                    toast.error(t('chat.chatInput.toast.sessionReferenceLoadFailed'));
+                    return;
+                }
+
+                await ensureSessionRenderable(session.id, { directory: sessionDirectory });
+
+                if (!resolveMaterializedSessionDirectory(session.id, sessionDirectory)) {
+                    toast.error(t('chat.chatInput.toast.sessionReferenceLoadFailed'));
+                    return;
+                }
+
+                const document = getDocument();
+                const textarea = textareaRef.current;
+                const cursorPosition = textarea?.selectionStart ?? document.text.length;
+                const textBeforeCursor = document.text.substring(0, cursorPosition);
+                const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
+                const sessionTitle = getAllSyncSessionMap().get(session.id)?.title || session.title || session.id;
+                const mentionStart = lastAtSymbol !== -1 ? lastAtSymbol : cursorPosition;
+                const sessionReference: Omit<SessionComposerReference, 'start' | 'end'> = {
+                    id: `session:${session.id}:${createUuid()}`,
+                    kind: 'session',
+                    sessionId: session.id,
+                    display: `@${sessionTitle}`,
+                };
+                const inserted = insertReference(mentionStart, cursorPosition, sessionReference, { inlineBoundaries: true });
+                requestAnimationFrame(() => {
+                    if (textareaRef.current) {
+                        textareaRef.current.selectionStart = inserted.caret;
+                        textareaRef.current.selectionEnd = inserted.caret;
+                    }
+                    adjustTextareaHeight();
+                    updateAutocompleteState(inserted.document.text, inserted.caret);
+                });
+                setShowFileMention(false);
+                setMentionQuery('');
+                textareaRef.current?.focus();
+            } catch {
+                toast.error(t('chat.chatInput.toast.sessionReferenceLoadFailed'));
+            } finally {
+                pendingSessionReferenceRef.current = false;
             }
-            adjustTextareaHeight();
-            updateAutocompleteState(inserted.document.text, inserted.caret);
-        });
-        setShowFileMention(false);
-        setMentionQuery('');
-        textareaRef.current?.focus();
-    };
+        })();
+    });
 
     const handleSkillSelect = (skillName: string) => {
         const textarea = textareaRef.current;

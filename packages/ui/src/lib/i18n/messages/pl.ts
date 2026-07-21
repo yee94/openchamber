@@ -1262,6 +1262,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.messageBody.actions.sendReviewFeedback': 'Wyślij uwagi z przeglądu do agenta wdrażającego zmiany',
   'chat.messageBody.actions.sendImplementationResponse': 'Wyślij odpowiedź wdrożeniową do agenta przeglądającego',
   'chat.chatInput.toast.togglePermissionAutoAcceptFailed': 'Nie udało się przełączyć automatycznej akceptacji uprawnień',
+  'chat.chatInput.toast.sessionReferenceLoadFailed': 'Nie udało się wczytać odwołania do sesji.',
   'chat.chatInput.toast.vscodePickFailed': 'Nie udało się wybrać plików w VS Code',
   'chat.chatInput.worktreeNew': '+ Nowe',
   'chat.chatInput.branchSwitch.title': 'Przełączyć na {branch}?',

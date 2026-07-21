@@ -1877,6 +1877,7 @@ export const dict = {
   'chat.chatInput.toast.vscodePickFailed': 'Échec de la sélection des fichiers dans VS Code',
   'chat.chatInput.toast.openSessionFirst': 'Ouvrir d\'abord une session',
   'chat.chatInput.toast.togglePermissionAutoAcceptFailed': 'Échec de l\'activation de l\'acceptation automatique des autorisations',
+  'chat.chatInput.toast.sessionReferenceLoadFailed': 'Impossible de charger la référence de session.',
   'chat.chatInput.reviewComments': 'Commentaires de révision :',
   'chat.chatInput.devServerLogs': 'Journaux du serveur de développement :',
   'chat.chatInput.devServerLogsRemove': 'Supprimer les journaux du serveur de développement',

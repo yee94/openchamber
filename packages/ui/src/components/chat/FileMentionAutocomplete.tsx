@@ -16,9 +16,9 @@ import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { getDirectoryState } from '@/sync/sync-refs';
-import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import type { Session } from '@opencode-ai/sdk/v2';
+import { getVisibleSessionMentionCandidates } from './fileMentionAutocompleteState';
 
 type FileInfo = ProjectFileSearchHit;
 type AgentInfo = {
@@ -129,23 +129,11 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   const visibleSessions = React.useMemo(() => {
     if (!onSessionSelect) return [];
 
-    const queryLower = normalizedSearchQuery.toLowerCase();
-    return activeSessions
-      .filter((session) => session.id !== currentSessionId)
-      .filter((session) => {
-        const directory = resolveGlobalSessionDirectory(session);
-        const state = directory ? getDirectoryState(directory) : undefined;
-        return Boolean(
-          state?.session.some((candidate) => candidate.id === session.id)
-          && Object.prototype.hasOwnProperty.call(state.message, session.id),
-        );
-      })
-      .filter((session) => {
-        if (!queryLower) return true;
-        return `${session.title ?? ''} ${session.id}`.toLowerCase().includes(queryLower);
-      })
-      .sort((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
-      .slice(0, normalizedSearchQuery ? 10 : 3);
+    return getVisibleSessionMentionCandidates({
+      sessions: activeSessions,
+      currentSessionId,
+      searchQuery: normalizedSearchQuery,
+    });
   }, [activeSessions, currentSessionId, normalizedSearchQuery, onSessionSelect]);
   const visibleDirectories = directories;
   const visibleRecentFiles = recentFiles;

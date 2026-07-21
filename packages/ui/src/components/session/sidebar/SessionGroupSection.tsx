@@ -655,14 +655,17 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
   });
 
   const archivedVirtualContainerRef = React.useRef<HTMLDivElement | null>(null);
-  const [archivedScrollEl, setArchivedScrollEl] = React.useState<HTMLElement | null>(null);
   // Offset of the virtual container from the scroll element's content origin.
   // virtua reads startMargin from Virtualizer options and uses it
   // to translate scrollTop into container-relative coordinates. Without this,
   // when the scroll element is an ancestor (the sidebar's ScrollableOverlay),
   // the virtualizer assumes the container starts at the top of the scroll
   // element and renders rows in the wrong subset / position.
-  const [archivedScrollMargin, setArchivedScrollMargin] = React.useState(0);
+  const [archivedVirtualLayout, setArchivedVirtualLayout] = React.useState<{
+    container: HTMLDivElement;
+    scrollElement: HTMLElement;
+    scrollMargin: number;
+  } | null>(null);
 
   // Resolve the scrolling ancestor. When the parent has threaded a
   // `scrollContainerRef` (Layer 1.4), use it directly to skip the
@@ -689,25 +692,21 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useLayoutEffect(() => {
     if (!shouldVirtualize) {
-      if (archivedScrollEl !== null) setArchivedScrollEl(null);
-      if (archivedScrollMargin !== 0) setArchivedScrollMargin(0);
+      setArchivedVirtualLayout((previous) => previous === null ? previous : null);
       return;
     }
     const container = archivedVirtualContainerRef.current;
     if (!container) {
       // Bucket still collapsed — body not mounted. We'll re-run on the
       // render that mounts it.
+      setArchivedVirtualLayout((previous) => previous === null ? previous : null);
       return;
     }
-    let scrollEl: HTMLElement | null = archivedScrollEl;
+    let scrollEl: HTMLElement | null = null;
     const providedScrollEl = scrollContainerRef?.current ?? null;
     if (providedScrollEl && providedScrollEl.contains(container)) {
       scrollEl = providedScrollEl;
-      if (scrollEl !== archivedScrollEl) {
-        setArchivedScrollEl(scrollEl);
-        return;
-      }
-    } else if (!scrollEl || !scrollEl.contains(container)) {
+    } else {
       // Walk up to find the nearest scrolling ancestor. Only happens on
       // first mount or if the DOM tree restructured.
       let el: HTMLElement | null = container.parentElement;
@@ -719,30 +718,46 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
         }
         el = el.parentElement;
       }
-      if (scrollEl !== archivedScrollEl) {
-        setArchivedScrollEl(scrollEl);
-        return;
-      }
     }
-    if (!scrollEl) return;
+    if (!scrollEl) {
+      setArchivedVirtualLayout((previous) => previous === null ? previous : null);
+      return;
+    }
     const offset = container.getBoundingClientRect().top
       - scrollEl.getBoundingClientRect().top
       + scrollEl.scrollTop;
-    setArchivedScrollMargin((prev) => (Math.abs(prev - offset) < 1 ? prev : offset));
+    setArchivedVirtualLayout((previous) => {
+      if (previous?.container === container
+        && previous.scrollElement === scrollEl
+        && Math.abs(previous.scrollMargin - offset) < 1) {
+        return previous;
+      }
+      return { container, scrollElement: scrollEl, scrollMargin: offset };
+    });
   });
 
   // The scroll element is an ANCESTOR of this section (the sidebar's
   // ScrollableOverlay), so scrollMargin translates its scrollTop into
   // container-relative coordinates — the tanstack equivalent of virtua's
   // startMargin this replaces.
-  // Enable ONLY once the ancestor scroll element is resolved. While the
+  // Enable ONLY once the container, ancestor scroll element, and its margin
+  // are measured in one layout snapshot. While the
   // virtualizer is disabled the core resets its cached scroll offset, so the
   // first enabled read takes initialOffset() from the LIVE scrollTop below —
   // making the core's attach-time scrollTo target the current position (a
   // visual no-op) instead of a stale 0 that reset the sidebar to the top.
   // The core only learns the offset from scroll events after that, so this
   // initial seeding is what makes the first render window correct too.
-  const virtualizerReady = shouldVirtualize && archivedScrollEl !== null;
+  const currentVirtualContainer = archivedVirtualContainerRef.current;
+  const currentProvidedScrollElement = scrollContainerRef?.current ?? null;
+  const virtualizerReady = shouldVirtualize
+    && archivedVirtualLayout !== null
+    && archivedVirtualLayout.container === currentVirtualContainer
+    && archivedVirtualLayout.scrollElement.contains(currentVirtualContainer)
+    && (currentProvidedScrollElement === null
+      || archivedVirtualLayout.scrollElement === currentProvidedScrollElement);
+  const archivedScrollEl = archivedVirtualLayout?.scrollElement ?? null;
+  const archivedScrollMargin = archivedVirtualLayout?.scrollMargin ?? 0;
   const sessionVirtualizer = useVirtualizer<HTMLElement, HTMLDivElement>({
     count: visibleSessions.length,
     enabled: virtualizerReady,

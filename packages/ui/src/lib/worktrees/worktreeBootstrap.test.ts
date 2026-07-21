@@ -138,6 +138,30 @@ describe('worktreeBootstrap.waitForWorktreeBootstrap', () => {
     expect(toastErrors).toEqual([]);
   });
 
+  test('background watcher settles from an authoritative compensation read after a missed ready event', async () => {
+    let requestCount = 0;
+    bootstrapStatusHandler = async () => {
+      requestCount += 1;
+      return requestCount === 1
+        ? { status: 'pending', error: null, updatedAt: 2 }
+        : { status: 'ready', error: null, updatedAt: 3 };
+    };
+    markWorktreeBootstrapPending('/repo-wt');
+    const readyStatuses: Array<{ status: 'pending' | 'ready' | 'failed'; error: string | null; updatedAt: number }> = [];
+
+    startWorktreeBootstrapWatcher('/repo-wt', {
+      pollIntervalMs: 1,
+      onReady: (status) => readyStatuses.push(status),
+    });
+
+    await waitFor(() => readyStatuses.length === 1);
+
+    expect(bootstrapStatusCalls).toEqual(['/repo-wt', '/repo-wt']);
+    expect(getWorktreeBootstrapState('/repo-wt')?.status).toBe('ready');
+    expect(readyStatuses.map((status) => status.status)).toEqual(['ready']);
+    expect(toastErrors).toEqual([]);
+  });
+
   test('background watcher shows a toast when bootstrap fails via event', async () => {
     bootstrapStatusResult = { status: 'pending', error: null, updatedAt: 2 };
     markWorktreeBootstrapPending('/repo-wt');

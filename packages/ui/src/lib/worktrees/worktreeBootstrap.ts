@@ -12,6 +12,7 @@ type WorktreeBootstrapListener = (directory: string, status: WorktreeBootstrapSt
 
 type BootstrapSettlement = {
   promise: Promise<GitWorktreeBootstrapStatus>;
+  startCompensation: () => void;
   dispose: () => void;
 };
 
@@ -28,6 +29,7 @@ type BootstrapWaiter = {
 };
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_POLL_INTERVAL_MS = 5 * 1000;
 
 const normalizePath = (value: string): string => value.replace(/\\/g, '/').replace(/\/+$/, '') || value;
 
@@ -234,20 +236,46 @@ const seedBootstrapStatus = async (
 const waitForBootstrapSettlement = (
   directory: string,
   timeoutMs: number,
+  pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
 ): BootstrapSettlement => {
   const key = getKey(directory);
+  const epoch = getEpoch(key);
   ensureBootstrapEventSubscription();
 
   let settled = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let pollInFlight = false;
   let unsubscribe: (() => void) | null = null;
   let rejectPromise: ((error: Error) => void) | null = null;
+  let check: (status: WorktreeBootstrapState | null | undefined) => void = () => {};
+
+  const clearTimers = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = null;
+  };
+
+  const startCompensation = () => {
+    if (settled || pollTimer) return;
+    const compensationIntervalMs = Number.isFinite(pollIntervalMs)
+      ? Math.max(1, pollIntervalMs)
+      : DEFAULT_POLL_INTERVAL_MS;
+    pollTimer = setInterval(() => {
+      if (settled || pollInFlight) return;
+      pollInFlight = true;
+      void seedBootstrapStatus(directory, () => !settled && getEpoch(key) === epoch)
+        .finally(() => {
+          pollInFlight = false;
+        });
+    }, compensationIntervalMs);
+  };
 
   const dispose = (error?: Error) => {
     if (settled) return;
     settled = true;
-    if (timer) clearTimeout(timer);
-    timer = null;
+    clearTimers();
     unsubscribe?.();
     unsubscribe = null;
     if (error) {
@@ -261,14 +289,13 @@ const waitForBootstrapSettlement = (
     const finish = (result: () => void) => {
       if (settled) return;
       settled = true;
-      if (timer) clearTimeout(timer);
-      timer = null;
+      clearTimers();
       unsubscribe?.();
       unsubscribe = null;
       result();
     };
 
-    const check = (status: WorktreeBootstrapState | null | undefined) => {
+    check = (status: WorktreeBootstrapState | null | undefined) => {
       if (!status) return;
       if (status.status === 'ready') {
         finish(() => resolve(status));
@@ -300,6 +327,7 @@ const waitForBootstrapSettlement = (
 
   return {
     promise,
+    startCompensation,
     dispose: () => dispose(new Error('Worktree bootstrap wait cancelled')),
   };
 };
@@ -308,13 +336,14 @@ const watchBootstrapUntilSettled = async (
   directory: string,
   watcher: BootstrapWatcher,
   timeoutMs: number,
+  pollIntervalMs: number,
   onFailed?: WorktreeBootstrapFailureHandler,
   onReady?: WorktreeBootstrapReadyHandler,
 ): Promise<void> => {
   const key = getKey(directory);
   // Subscribe before the one-shot seed so a status event that races the GET
   // cannot be missed between seed completion and waiter attachment.
-  const settlement = waitForBootstrapSettlement(directory, timeoutMs);
+  const settlement = waitForBootstrapSettlement(directory, timeoutMs, pollIntervalMs);
   watcher.disposeSettlement = settlement.dispose;
 
   const seeded = await seedBootstrapStatus(
@@ -339,6 +368,7 @@ const watchBootstrapUntilSettled = async (
     });
     return;
   }
+  settlement.startCompensation();
 
   try {
     const ready = await settlement.promise;
@@ -369,7 +399,7 @@ export const startWorktreeBootstrapWatcher = (
   directory: string,
   options?: {
     timeoutMs?: number;
-    /** @deprecated Ignored — bootstrap status is event-driven. */
+    /** Authoritative bootstrap-status compensation read interval. */
     pollIntervalMs?: number;
     onFailed?: WorktreeBootstrapFailureHandler;
     onReady?: WorktreeBootstrapReadyHandler;
@@ -399,6 +429,7 @@ export const startWorktreeBootstrapWatcher = (
     directory,
     watcher,
     options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    options?.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
     options?.onFailed,
     options?.onReady,
   ).finally(() => {
@@ -435,7 +466,7 @@ export const waitForWorktreeBootstrap = async (directory: string, timeoutMs = DE
   let disposeSettlement = () => {};
   const epoch = getEpoch(key);
   const pending = (async () => {
-    const settlement = waitForBootstrapSettlement(directory, timeoutMs);
+    const settlement = waitForBootstrapSettlement(directory, timeoutMs, DEFAULT_POLL_INTERVAL_MS);
     disposeSettlement = settlement.dispose;
     const seeded = await seedBootstrapStatus(
       directory,
@@ -453,6 +484,7 @@ export const waitForWorktreeBootstrap = async (directory: string, timeoutMs = DE
       settlement.dispose();
       throw new Error(seeded.error || 'Worktree bootstrap failed');
     }
+    settlement.startCompensation();
     await settlement.promise;
   })().finally(() => {
     const waiter = waiters.get(key);
