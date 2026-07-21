@@ -1642,7 +1642,7 @@ export const Header: React.FC<HeaderProps> = ({
   const tabs: TabConfig[] = React.useMemo(() => {
     if (isMobile) {
       const base: TabConfig[] = [
-        { id: 'chat', label: t('layout.mainTab.chat'), icon: "chat-4" },
+        { id: 'chat', label: t('layout.mainTab.chat'), icon: "chat-thread" },
       ];
 
       if (showPlanTab) {

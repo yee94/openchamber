@@ -539,7 +539,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
                   onClick={() => handleSessionPick(session)}
                   onMouseMove={() => setSelectedIndex(rowIndex)}
                 >
-                  <Icon name="chat-4" className="h-3.5 w-3.5 flex-shrink-0 text-[var(--primary-base)]" />
+                  <Icon name="chat-thread" className="h-4 w-4 flex-shrink-0 text-[var(--primary-base)]" />
                   <span
                     className="min-w-0 flex-1 truncate"
                     title={session.title || t('chat.fileMentionAutocomplete.untitledSession')}

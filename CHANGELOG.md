@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.43] - 2026-07-21
+
+- **Chat thread icon:** replace the session-reference glyph with a compact overlapping double-bubble `chat-thread` icon across chat mentions, headers, context tabs, and sidebar actions.
+- **Sidebar polish:** align project-group status colors with branch tinting, tighten footer icon buttons to match titlebar toggles, and improve pinned-session and loading-spinner contrast.
+- **Context file opens:** require authoritative optional-read existence headers so missing files no longer open as empty editor tabs.
+- **Runtime CORS:** expose `x-openchamber-file-exists` to packaged clients so optional file reads can distinguish empty files from missing paths.
+
 ## [1.16.42] - 2026-07-21
 
 - **Draft branch selector:** reuse the Git sidebar searchable branch selector for new conversations, with project-root and worktree targets listed at the bottom.

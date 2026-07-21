@@ -204,7 +204,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                       )}
                     >
                     <span
-                      className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center overflow-hidden text-muted-foreground"
+                      className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center overflow-hidden text-foreground"
                     >
                       {isSessionsLoading ? (
                         <Icon

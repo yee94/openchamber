@@ -16,8 +16,12 @@ type Props = {
   showUpdateButton?: boolean;
 };
 
+// Match titlebar sidebar toggles: quiet 28×28 chrome with 16px glyphs that
+// rest at 55% foreground and lift on hover/focus.
 const footerIconButtonClassName =
-  "size-8 text-muted-foreground hover:bg-[var(--interactive-hover)]/50 hover:text-foreground";
+  "group size-7 rounded-md text-muted-foreground/75 transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary";
+const footerIconClassName =
+  "size-4 text-foreground/55 transition-colors group-hover:text-foreground group-focus-visible:text-foreground";
 
 export function SidebarFooter({
   onOpenSettings,
@@ -42,7 +46,7 @@ export function SidebarFooter({
                 onClick={onOpenSettings}
                 aria-label={t("sessions.sidebar.footer.actions.settings")}
               >
-                <Icon name="settings-3" className="size-4.5" />
+                <Icon name="settings-3" className={footerIconClassName} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
@@ -59,7 +63,7 @@ export function SidebarFooter({
                 onClick={onOpenShortcuts}
                 aria-label={t("sessions.sidebar.footer.actions.shortcuts")}
               >
-                <Icon name="question" className="size-4.5" />
+                <Icon name="question" className={footerIconClassName} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>

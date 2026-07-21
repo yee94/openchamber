@@ -274,7 +274,7 @@ const getTabIcon = (tab: { mode: ContextPanelMode; targetPath: string | null }):
   }
 
   if (tab.mode === 'chat') {
-    return <Icon name="chat-4" className="h-3.5 w-3.5" />;
+    return <Icon name="chat-thread" className="h-3.5 w-3.5" />;
   }
 
   if (tab.mode === 'preview') {

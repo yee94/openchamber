@@ -5486,7 +5486,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                                 <>
                                                     <span className="relative inline-block align-baseline text-transparent">
                                                         @
-                                                        <Icon name="chat-4" className="pointer-events-none absolute left-1/2 top-1/2 size-[1em] -translate-x-1/2 -translate-y-1/2 text-[var(--primary)]" aria-hidden="true" />
+                                                        <Icon name="chat-thread" className="pointer-events-none absolute left-1/2 top-1/2 size-[1em] -translate-x-1/2 -translate-y-1/2 text-[var(--primary)]" aria-hidden="true" />
                                                     </span>
                                                     <span>{part.sessionLabel}</span>
                                                     <span className="text-transparent">{part.text.slice(part.sessionLabel.length + 1)}</span>

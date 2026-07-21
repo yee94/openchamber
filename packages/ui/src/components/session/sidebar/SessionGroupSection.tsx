@@ -1230,10 +1230,10 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
                       <span className="inline-flex shrink-0 items-center gap-1 leading-none align-middle">
                         <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center">
                           <Icon name="git-branch"
-                            className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground', alwaysShowActions ? 'hidden' : 'group-hover/gh:hidden')}
+                            className={cn('h-3.5 w-3.5 shrink-0', alwaysShowActions ? 'hidden' : 'group-hover/gh:hidden')}
                           />
                           <span className={cn(
-                            'text-muted-foreground h-3.5 w-3.5 items-center justify-center',
+                            'h-3.5 w-3.5 items-center justify-center',
                             alwaysShowActions ? 'inline-flex' : 'hidden group-hover/gh:inline-flex',
                           )}>
                             {isCollapsed ? <Icon name="arrow-right-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-down-s" className="h-3.5 w-3.5" />}
@@ -1285,9 +1285,9 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
               ) : group.isArchivedBucket ? (
                 <span className="inline-flex min-w-0 max-w-full items-center gap-1">
                   <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center">
-                    <Icon name="archive" className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground', alwaysShowActions ? 'hidden' : 'group-hover/gh:hidden')} />
+                    <Icon name="archive" className={cn('h-3.5 w-3.5 shrink-0', alwaysShowActions ? 'hidden' : 'group-hover/gh:hidden')} />
                     <span className={cn(
-                      'text-muted-foreground h-3.5 w-3.5 items-center justify-center',
+                      'h-3.5 w-3.5 items-center justify-center',
                       alwaysShowActions ? 'inline-flex' : 'hidden group-hover/gh:inline-flex',
                     )}>
                       {isCollapsed ? <Icon name="arrow-right-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-down-s" className="h-3.5 w-3.5" />}
@@ -1299,10 +1299,10 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
                 <span className="inline-flex min-w-0 max-w-full items-center gap-1">
                   <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center">
                     <Icon name="git-branch"
-                      className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground', alwaysShowActions ? 'hidden' : 'group-hover/gh:hidden')}
+                      className={cn('h-3.5 w-3.5 shrink-0', alwaysShowActions ? 'hidden' : 'group-hover/gh:hidden')}
                     />
                     <span className={cn(
-                      'text-muted-foreground h-3.5 w-3.5 items-center justify-center',
+                      'h-3.5 w-3.5 items-center justify-center',
                       alwaysShowActions ? 'inline-flex' : 'hidden group-hover/gh:inline-flex',
                     )}>
                       {isCollapsed ? <Icon name="arrow-right-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-down-s" className="h-3.5 w-3.5" />}
@@ -1315,15 +1315,18 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
               )}
             </p>
             {showBranchSubtitle && statusLine ? (
-              <span className="inline-flex min-w-0 items-center gap-1.5 leading-tight">
+              <span
+                className={cn('inline-flex min-w-0 items-center gap-1.5 leading-tight', !statusLine.color && 'text-muted-foreground')}
+                style={statusLine.color ? { color: statusLine.color } : undefined}
+              >
                 {group.isArchivedBucket ? (
-                  <Icon name="archive" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                  <Icon name="archive" className="h-3.5 w-3.5 flex-shrink-0" />
                 ) : (!group.isMain || isGitProject) ? (
                   showInlinePrTitle && prIndicator ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center">
-                          <Icon name="git-branch" className="h-3.5 w-3.5 text-muted-foreground" />
+                          <Icon name="git-branch" className="h-3.5 w-3.5" />
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="top" sideOffset={6} align="start" className="max-w-sm">
@@ -1354,13 +1357,10 @@ function SessionGroupSectionBase(props: Props): React.ReactNode {
                       </TooltipContent>
                     </Tooltip>
                   ) : (
-                    <Icon name="git-branch" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                    <Icon name="git-branch" className="h-3.5 w-3.5 flex-shrink-0" />
                   )
                 ) : null}
-                <span
-                  className={cn('min-w-0 truncate text-[11px] font-medium', !statusLine.color && 'text-muted-foreground/80')}
-                  style={statusLine.color ? { color: statusLine.color } : undefined}
-                >
+                <span className="min-w-0 truncate text-[11px] font-medium">
                   {statusLine.label}
                 </span>
               </span>

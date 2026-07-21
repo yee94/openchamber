@@ -30,10 +30,15 @@ const classifyReadError = (error: unknown): ContextFileOpenFailureReason => {
   return 'unreadable';
 };
 
-const readFileContent = async (files: FilesAPI, path: string): Promise<string> => {
+const readOptionalFileContent = async (files: FilesAPI, path: string): Promise<{ content: string; exists: boolean }> => {
   if (files.readFile) {
     const result = await files.readFile(path, { optional: true });
-    return result.content ?? '';
+    // optional reads must carry an authoritative exists flag so empty files and
+    // missing files stay distinguishable (same contract as planQueries).
+    if (typeof result.exists !== 'boolean') {
+      throw new Error('Optional file read requires an existence response header');
+    }
+    return { content: result.content ?? '', exists: result.exists };
   }
 
   const params = new URLSearchParams({ path, optional: 'true' });
@@ -46,12 +51,20 @@ const readFileContent = async (files: FilesAPI, path: string): Promise<string> =
     throw new Error((errorPayload as { error?: string }).error || 'Failed to read file');
   }
 
-  return response.text();
+  const existsHeader = response.headers.get('x-openchamber-file-exists');
+  if (existsHeader !== 'true' && existsHeader !== 'false') {
+    throw new Error('Optional file read requires an existence response header');
+  }
+
+  return { content: await response.text(), exists: existsHeader === 'true' };
 };
 
 export const validateContextFileOpen = async (files: FilesAPI, path: string): Promise<ContextFileOpenValidationResult> => {
   try {
-    const content = await readFileContent(files, path);
+    const { content, exists } = await readOptionalFileContent(files, path);
+    if (!exists) {
+      return { ok: false, reason: 'missing' };
+    }
     const lineCount = countLinesWithLimit(content, MAX_OPEN_FILE_LINES);
     if (lineCount > MAX_OPEN_FILE_LINES) {
       return { ok: false, reason: 'too-large' };

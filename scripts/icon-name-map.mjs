@@ -61,6 +61,14 @@ export const ROUND_CHAT_BUBBLE_SVG =
   `<path d="M12 3a9 9 0 0 1 7.45 14.05L21 21l-4.05-1.55A9 9 0 1 1 12 3Z" />`
 
 /**
+ * Compact, overlapping double speech bubbles for session references. The outer
+ * contours stay round at 12–16px and match the chat-thread glyph in product UI.
+ */
+export const ROUND_CHAT_THREAD_SVG =
+  `<path d="M10.5 7C11.3 4.9 13.1 3.5 15.25 3.5c3.45 0 6.25 2.45 6.25 5.5 0 1.13-.38 2.18-1.03 3.06l.58 2.14-2.3-.75c-.4.18-.8.32-1.2.43" />` +
+  `<path d="M8.5 8.25c-3.6 0-6.5 2.55-6.5 5.75 0 1.21.42 2.33 1.13 3.25l-.63 2.27 2.48-.8c1.04.56 2.24.88 3.52.88 3.6 0 6.5-2.55 6.5-5.75S12.1 8.25 8.5 8.25Z" />`
+
+/**
  * Remixicon `PushpinFill` — classic diagonal thumbtack. Lucide's upright `pin`
  * reads poorly as a sidebar pinned marker at 12px.
  */
@@ -112,7 +120,7 @@ export const ICON_NAME_MAP = {
   "chat-ai-3": { lucide: "bot-message-square", fill: false },
   "chat-history": { lucide: "history", fill: false },
   "chat-new": { lucide: "square-pen", fill: false },
-  "chat-thread": { lucide: "messages-square", fill: false },
+  "chat-thread": { custom: ROUND_CHAT_THREAD_SVG },
   "check": { lucide: "check", fill: false },
   "checkbox": { lucide: "square-check", fill: false },
   "checkbox-blank": { lucide: "square", fill: false },

@@ -708,7 +708,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                 {hasChildren && !isPinnedContext && !isSubtaskSession ? <span className="inline-flex items-center justify-center flex-shrink-0">{isExpanded ? <Icon name="arrow-down-s" className="h-3 w-3" /> : <Icon name="arrow-right-s" className="h-3 w-3" />}</span> : null}
                 <span className="flex-shrink-0">{sessionUpdatedLabel}</span>
                 {hasSecondaryProjectLabel ? <span className="truncate">{secondaryMeta?.projectLabel}</span> : null}
-                {hasSecondaryBranchLabel ? <span className="inline-flex min-w-0 items-center gap-0.5"><Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" /><span className="truncate">{secondaryMeta?.branchLabel}</span></span> : null}
+                {hasSecondaryBranchLabel ? <span className="inline-flex min-w-0 items-center gap-0.5"><Icon name="git-branch" className="h-3 w-3 flex-shrink-0" /><span className="truncate">{secondaryMeta?.branchLabel}</span></span> : null}
               </div>
             </div>
           ) : null}
@@ -752,7 +752,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const pinnedMarkerContent = (
     <Icon
       name="pushpin-2-fill"
-      className="h-3 w-3 flex-shrink-0 text-foreground/50"
+      className="h-3 w-3 flex-shrink-0 text-foreground"
       aria-label={t('sessions.sidebar.session.status.pinned')}
     />
   );
@@ -1071,7 +1071,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           }}
           className="[&>svg]:mr-1"
         >
-          <Icon name="chat-4" className="mr-1 h-4 w-4" />
+          <Icon name="chat-thread" className="mr-1 h-4 w-4" />
           <span className="truncate">{t('sessions.sidebar.session.menu.openInSidePanel')}</span>
           <span className="shrink-0 typography-micro px-1 rounded leading-none pb-px text-[var(--status-warning)] bg-[var(--status-warning)]/10">{t('sessions.sidebar.session.menu.betaBadge')}</span>
         </Item>
