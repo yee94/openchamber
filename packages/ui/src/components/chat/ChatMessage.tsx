@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Message, Part } from '@opencode-ai/sdk/v2';
+import { useEvent } from '@reactuses/core';
 import { useShallow } from 'zustand/react/shallow';
 
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
@@ -746,10 +747,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         }
     }, [sessionId, message.info.id, revertToMessage]);
 
-    const handleEdit = React.useCallback(() => {
+    const handleEdit = useEvent(() => {
         if (!sessionId || !message.info.id || pendingMessageActionRef.current) return;
-        editMessagePreservingChanges(sessionId, message.info.id);
-    }, [editMessagePreservingChanges, message.info.id, sessionId]);
+        editMessagePreservingChanges(sessionId, message.info.id, {
+            info: message.info,
+            parts: message.parts,
+        });
+    });
 
     // NEW: Fork handler
     const handleFork = React.useCallback(async () => {

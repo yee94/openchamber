@@ -3,14 +3,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon } from '@/components/icon/Icon';
-import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
-import { useUIStore } from '@/stores/useUIStore';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
@@ -23,8 +19,8 @@ type Props = {
 };
 
 /**
- * Session list display-mode menu (equalizer). Lives on the Recent section
- * header row so the old sidebar action toolbar can stay empty.
+ * Project collapse/expand menu (equalizer). Lives on the Recent section header
+ * row so the old sidebar action toolbar can stay empty.
  */
 export function SidebarDisplayModeMenu({
   collapseAllProjects,
@@ -33,17 +29,6 @@ export function SidebarDisplayModeMenu({
   iconClassName,
 }: Props): React.ReactNode {
   const { t } = useI18n();
-  const displayMode = useSessionDisplayStore((state) => state.displayMode);
-  const setDisplayMode = useSessionDisplayStore((state) => state.setDisplayMode);
-  const setSettingsPage = useUIStore((state) => state.setSettingsPage);
-  const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
-  // VS Code forces the expanded layout, so the mode toggle is meaningless there.
-  const showDisplayModeToggle = !isVSCodeRuntime();
-
-  const openSessionsSettings = React.useCallback(() => {
-    setSettingsPage('sessions');
-    setSettingsDialogOpen(true);
-  }, [setSettingsDialogOpen, setSettingsPage]);
 
   return (
     <DropdownMenu>
@@ -70,33 +55,6 @@ export function SidebarDisplayModeMenu({
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="min-w-[160px]">
-        {showDisplayModeToggle ? (
-          <>
-            <DropdownMenuItem
-              onClick={() => setDisplayMode('default')}
-              className="flex items-center justify-between"
-            >
-              <span>{t('sessions.sidebar.header.displayMode.default')}</span>
-              {displayMode === 'default' ? <Icon name="check" className="h-4 w-4 text-primary" /> : null}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => setDisplayMode('minimal')}
-              className="flex items-center justify-between"
-            >
-              <span>{t('sessions.sidebar.header.displayMode.minimal')}</span>
-              {displayMode === 'minimal' ? <Icon name="check" className="h-4 w-4 text-primary" /> : null}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-          </>
-        ) : null}
-        <DropdownMenuItem
-          onClick={openSessionsSettings}
-          className="flex items-center gap-2"
-        >
-          <Icon name="settings-3" className="h-4 w-4" />
-          <span>{t('sessions.sidebar.openSettings')}</span>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
         <DropdownMenuItem onClick={collapseAllProjects} className="flex items-center gap-2">
           <Icon name="contract-up-down" className="h-4 w-4" />
           <span>{t('sessions.sidebar.header.displayMode.collapseAll')}</span>

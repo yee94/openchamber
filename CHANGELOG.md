@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.49] - 2026-07-21
+
+- **Message editing:** restore the composer from the visible user-message snapshot captured at click time so edits still work when the directory store has not hydrated that message yet.
+- **Sidebar:** simplify the Recent header equalizer menu to project collapse and expand actions, removing the in-menu display-mode toggle and sessions-settings shortcut.
+- **Localization:** rename the sidebar equalizer labels across all supported locales to match the project expand/collapse actions.
+
 ## [1.16.48] - 2026-07-21
 
 - **Session forking:** resolve explicit assistant-message fork points to the following source message ID so forks retain history through the selected reply without restoring composer input.

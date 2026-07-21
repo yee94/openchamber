@@ -88,6 +88,11 @@ import { announceSessionSwitchIntent } from "@/lib/sessionSwitchIntent"
 
 export type { AttachedFile }
 
+export type MessageEditSnapshot = {
+  info: Message
+  parts: Part[]
+}
+
 // ---------------------------------------------------------------------------
 // Send routing — shell mode, slash commands, or normal prompt
 // ---------------------------------------------------------------------------
@@ -430,7 +435,7 @@ export type SessionUIState = {
   shareSession: (sessionId: string) => Promise<Session | null>
   unshareSession: (sessionId: string) => Promise<Session | null>
   revertToMessage: (sessionId: string, messageId: string, options?: { skipRedoPush?: boolean }) => Promise<void>
-  editMessagePreservingChanges: (sessionId: string, messageId: string) => void
+  editMessagePreservingChanges: (sessionId: string, messageId: string, snapshot?: MessageEditSnapshot) => void
   forkFromMessage: (sessionId: string, messageId: string) => Promise<void>
   forkCurrentSession: (sessionId: string) => Promise<void>
   handleSlashUndo: (sessionId: string) => Promise<void>
@@ -1929,8 +1934,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     await revertToMessageAction(sessionId, messageId)
   },
 
-  editMessagePreservingChanges: (sessionId, messageId) => {
-    stageMessageEdit(sessionId, messageId)
+  editMessagePreservingChanges: (sessionId, messageId, snapshot) => {
+    stageMessageEdit(sessionId, messageId, snapshot)
     set({ stagedMessageEdit: { sessionId, messageId } })
   },
 

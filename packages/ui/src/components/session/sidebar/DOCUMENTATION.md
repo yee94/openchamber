@@ -131,7 +131,7 @@
 - `GlobalSearchButton.tsx`: Shared command-palette trigger rendered in the Electron brand row while the sidebar is open and in the titlebar while it is collapsed.
 - `TitlebarLeftControls.tsx`: Persistent Web brand and sidebar-toggle controls, plus the Electron global-search fallback for a collapsed sidebar.
 - `SidebarTopBar.tsx`: Desktop titlebar strip with preserved window-drag regions beneath the persistent titlebar controls.
-- `SidebarDisplayModeMenu.tsx`: Display-mode equalizer menu; rendered on the first section title row.
+- `SidebarDisplayModeMenu.tsx`: Project collapse/expand menu; rendered on the first section title row.
 - `SidebarPinnedSessions.tsx`: Global top section renderer for pinned sessions.
 - `SidebarFooter.tsx`: Static footer with icon-only settings and shortcuts actions, plus optional update button.
 - `SidebarProjectsList.tsx`: Main scrollable tree renderer for projects, root sessions, worktrees/groups, and empty/search states.
