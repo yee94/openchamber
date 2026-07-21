@@ -24,6 +24,7 @@
         "src/mobile-main.tsx",
         "src/mini-chat-main.tsx",
         "src/sw.ts",
+        "server/private-relay/node-smoke.js",
         "server/**/*.{test,spec}.{js,cjs,mjs}",
         "src/**/*.{test,spec}.{ts,tsx}"
       ],

@@ -49,6 +49,33 @@ openchamber update                   # Update to latest version
 
 `startup enable` snapshots your current environment into the native service so startup behaves like you launched `openchamber` from the same shell. This preserves provider tokens, PATH, SSH agent settings, and other CLI auth/config env vars. Use `--no-env-snapshot` for a minimal service env.
 
+## Self-hosted Private Relay
+
+Run a private Relay when OpenChamber Hosts need outbound-only remote access:
+
+```sh
+npm install -g @openchamber/web
+openchamber-relay --public-url wss://relay.example.com/ws
+```
+
+Use TLS at a reverse proxy and keep the default loopback listener. From the repository root, Docker deployment uses:
+
+```sh
+OPENCHAMBER_RELAY_SERVER_PUBLIC_URL=wss://relay.example.com/ws \
+OPENCHAMBER_RELAY_PUBLISHED_PORT=8787 \
+docker compose -f docker-compose.relay.yml up -d --build
+```
+
+Compose publishes `127.0.0.1:${OPENCHAMBER_RELAY_PUBLISHED_PORT:-8787}` by default. `OPENCHAMBER_RELAY_PUBLISHED_PORT` selects the host port, and a TLS reverse proxy provides the public `wss://` entry point.
+
+Point every OpenChamber Host at the Relay, then generate a Relay pairing link or enable Relay pairing:
+
+```sh
+OPENCHAMBER_RELAY_URL=wss://relay.example.com/ws openchamber
+```
+
+Saved pairing candidates retain their endpoint snapshot. Use a new pairing link or candidate refresh to move existing clients to the self-hosted endpoint. See [OpenChamber Private Relay](server/private-relay/README.md) for bundle builds, reverse-proxy configuration, security, operations, and systemd guidance.
+
 ### Tunnel behavior notes
 
 - One active tunnel per running OpenChamber instance (port).
