@@ -5,7 +5,7 @@
 
 import type { OpencodeClient, Session, Message, Part, SessionStatus } from "@opencode-ai/sdk/v2/client"
 import { Binary } from "./binary"
-import { useSessionUIStore, type ForkTransitionStage } from "./session-ui-store"
+import { useSessionUIStore, type ForkTransitionStage, type MessageEditSnapshot } from "./session-ui-store"
 import { useInputStore } from "./input-store"
 import type { ChildStoreManager } from "./child-store"
 import { computeSubtreeIds } from "./scoped-blocking-requests"
@@ -1703,18 +1703,36 @@ function removeSessionMessageFromStore(store: DirectoryStoreApi, sessionId: stri
   store.setState({ message, part })
 }
 
-export function stageMessageEdit(sessionId: string, messageId: string): void {
-  const { store } = dirStoreForSession(sessionId)
-  const state = store.getState()
+export function stageMessageEdit(sessionId: string, messageId: string, snapshot?: MessageEditSnapshot): void {
+  let targetMessage = snapshot?.info
+  let targetParts = snapshot?.parts
 
-  const messages = state.message[sessionId] ?? []
-  const targetIndex = messages.findIndex((message) => message.id === messageId)
-  const targetMessage = targetIndex >= 0 ? messages[targetIndex] : undefined
-  if (!targetMessage || targetMessage.role !== "user") {
+  if (snapshot) {
+    const visibleMessage = snapshot.info
+    if (
+      visibleMessage.id !== messageId
+      || visibleMessage.sessionID !== sessionId
+      || visibleMessage.role !== "user"
+    ) {
+      throw new Error("The selected user message is unavailable")
+    }
+  } else {
+    const { store } = dirStoreForSession(sessionId)
+    const state = store.getState()
+    const messages = state.message[sessionId] ?? []
+    const targetIndex = messages.findIndex((message) => message.id === messageId)
+    const storedMessage = targetIndex >= 0 ? messages[targetIndex] : undefined
+    if (!storedMessage || storedMessage.role !== "user") {
+      throw new Error("The selected user message is unavailable")
+    }
+    targetMessage = storedMessage
+    targetParts = state.part[messageId] ?? []
+  }
+
+  if (!targetMessage || !targetParts) {
     throw new Error("The selected user message is unavailable")
   }
 
-  const targetParts = state.part[messageId] ?? []
   const messageText = targetParts
     .filter((part) => part.type === "text" && !isSyntheticPart(part))
     .map((part: Record<string, unknown>) => (part as { text?: string }).text || (part as { content?: string }).content || "")

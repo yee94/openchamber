@@ -1202,6 +1202,49 @@ describe("message edit staging", () => {
     expect(inputState.attachedFiles).toEqual([{ url: "file:///attached.txt", mimeType: "text/plain", filename: "attached.txt" }])
   })
 
+  test("restores a visible user snapshot when the child store lacks its message and parts", async () => {
+    const sessionStore = createStore({}, {
+      session: [{ id: "session-a", time: { created: 1 } } as Session],
+      message: { "session-a": [] },
+      part: {},
+    })
+    const childStores = createChildStores([["/test/project", sessionStore]])
+    const snapshot = {
+      info: { id: "msg_2", sessionID: "session-a", role: "user", time: { created: 2 } } as Message,
+      parts: [
+        { id: "text_2", messageID: "msg_2", type: "text", text: "edit this" },
+        { id: "synthetic_2", messageID: "msg_2", type: "text", text: "hidden", synthetic: true },
+        { id: "file_2", messageID: "msg_2", type: "file", url: "file:///attached.txt", mime: "text/plain", filename: "attached.txt" },
+      ] as Part[],
+    }
+
+    const { stageMessageEdit, setActionRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/current/project")
+
+    stageMessageEdit("session-a", "msg_2", snapshot)
+
+    expect(inputState.pendingInputText).toBe("edit this")
+    expect(inputState.pendingInputMode).toBe("replace")
+    expect(inputState.attachedFiles).toEqual([{ url: "file:///attached.txt", mimeType: "text/plain", filename: "attached.txt" }])
+  })
+
+  test("preserves the composer when a visible snapshot identity does not match", async () => {
+    const sessionStore = createStore({}, { session: [{ id: "session-a", time: { created: 1 } } as Session] })
+    const childStores = createChildStores([["/test/project", sessionStore]])
+    const snapshot = {
+      info: { id: "wrong-message", sessionID: "session-a", role: "user", time: { created: 2 } } as Message,
+      parts: [{ id: "text_2", messageID: "wrong-message", type: "text", text: "wrong" } as Part],
+    }
+
+    const { stageMessageEdit, setActionRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/current/project")
+
+    expect(() => stageMessageEdit("session-a", "msg_2", snapshot)).toThrow("The selected user message is unavailable")
+    expect(inputState.pendingInputText).toBe("previous draft")
+    expect(inputState.pendingInputMode).toBe("normal")
+    expect(inputState.attachedFiles).toEqual([{ url: "file:///previous.txt", mimeType: "text/plain", filename: "previous.txt" }])
+  })
+
   test("commits the selected turn and later messages immediately before replacement send", async () => {
     const session = { id: "session-a", time: { created: 1 } } as Session
     const targetMessage = { id: "msg_2", sessionID: "session-a", role: "user", time: { created: 2 } } as Message
