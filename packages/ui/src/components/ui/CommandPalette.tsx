@@ -517,7 +517,7 @@ export const CommandPalette: React.FC = () => {
       >
         <Command
           shouldFilter={false}
-          className="max-h-full min-h-0 rounded-[inherit] bg-transparent [&_[cmdk-group]]:px-0 [&_[data-slot=command-input-wrapper]]:h-auto [&_[data-slot=command-input-wrapper]]:border-0 [&_[data-slot=command-input-wrapper]]:border-b-0 [&_[data-slot=command-input-wrapper]]:px-4 [&_[data-slot=command-input-wrapper]]:pb-2 [&_[data-slot=command-input-wrapper]]:pt-3 [&_[data-slot=command-input-wrapper]>svg]:hidden [&_[data-slot=command-input]]:h-7 [&_[data-slot=command-input]]:py-0 [&_[data-slot=command-input]]:typography-meta [&_[data-slot=command-input]]:font-normal [&_[data-slot=command-input]]:leading-5 [&_[data-slot=command-input]]:placeholder:text-muted-foreground/55"
+          className="max-h-full min-h-0 rounded-[inherit] bg-transparent [&_[cmdk-group]]:px-0 [&_[data-slot=command-input-wrapper]]:px-2.5 [&_[data-slot=command-input-wrapper]]:pt-2.5 [&_[data-slot=command-input-wrapper]]:pb-1.5"
         >
           <CommandInput
             value={query}

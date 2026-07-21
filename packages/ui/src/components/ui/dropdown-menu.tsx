@@ -93,6 +93,10 @@ type ContentProps = {
   className?: string;
   children?: React.ReactNode;
   onCloseAutoFocus?: (event: Event) => void;
+  /** Space to keep clear of the viewport edge; defaults to 8px so the popup never touches the window edge. */
+  collisionPadding?: React.ComponentProps<typeof BaseMenu.Positioner>["collisionPadding"];
+  /** Defaults to shifting on both axes so the popup stays fully on-screen instead of flipping past the opposite edge. */
+  collisionAvoidance?: React.ComponentProps<typeof BaseMenu.Positioner>["collisionAvoidance"];
 } & Omit<React.ComponentProps<typeof BaseMenu.Popup>, "style" | "className" | "children">
 
 function DropdownMenuContent({
@@ -106,6 +110,8 @@ function DropdownMenuContent({
   style,
   children,
   onCloseAutoFocus,
+  collisionPadding = 8,
+  collisionAvoidance = { side: "shift", align: "shift" },
   ...props
 }: ContentProps) {
   const portalContext = React.useContext(DropdownPortalContext);
@@ -118,6 +124,8 @@ function DropdownMenuContent({
         align={align}
         side={side}
         alignOffset={alignOffset}
+        collisionPadding={collisionPadding}
+        collisionAvoidance={collisionAvoidance}
         className={cn("app-region-no-drag z-50", positionerClassName)}
       >
         <BaseMenu.Popup
@@ -276,7 +284,11 @@ function DropdownMenuSubContent({
   const portalContext = React.useContext(DropdownPortalContext);
   return (
     <BaseMenu.Portal container={portalContext?.portalContainer || undefined}>
-      <BaseMenu.Positioner className="z-50">
+      <BaseMenu.Positioner
+        className="z-50"
+        collisionPadding={8}
+        collisionAvoidance={{ side: "shift", align: "shift" }}
+      >
         <BaseMenu.Popup
           data-slot="dropdown-menu-sub-content"
           style={{

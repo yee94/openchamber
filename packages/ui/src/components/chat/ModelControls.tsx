@@ -2374,7 +2374,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 onKeyDownCapture={handleAgentCycleShortcut}
                                 finalFocus={resolveComposerFinalFocus}
                             >
-                                <div className="p-2 border-b border-border/40">
+                                <div className="p-1.5 pb-1">
                                     <div className="relative">
                                         <Icon name="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
                                         <Input

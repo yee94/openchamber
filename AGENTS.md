@@ -90,6 +90,7 @@ High-value anchors:
 
 - Sync: `packages/ui/src/sync/DOCUMENTATION.md`
 - Stores: `packages/ui/src/stores/DOCUMENTATION.md`
+- Shared UI primitives (Select / searchable pickers, dialogs, mobile sheets): `packages/ui/src/components/ui/DOCUMENTATION.md`
 - CLI: `packages/web/bin/lib/DOCUMENTATION.md`
 - VS Code runtime: `packages/vscode/src/DOCUMENTATION.md`
 - Electron: `packages/electron/README.md`

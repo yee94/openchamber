@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.44] - 2026-07-21
+
+- **Searchable pickers:** unify search-field chrome across command, select, and dropdown pickers with the shared bordered `Input` look, consistent padding, and dense `h-8` search rows in model, agent, branch, and command-palette surfaces.
+- **Popup positioning:** keep shared `Select` and `DropdownMenu` popups inside the viewport with default collision padding and shift-based collision avoidance instead of flipping off-screen.
+- **UI documentation:** document the required select and searchable-picker contract in shared UI primitives so new pickers stay visually and behaviorally consistent.
+
 ## [1.16.43] - 2026-07-21
 
 - **Chat thread icon:** replace the session-reference glyph with a compact overlapping double-bubble `chat-thread` icon across chat mentions, headers, context tabs, and sidebar actions.

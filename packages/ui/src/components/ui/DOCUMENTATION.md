@@ -33,3 +33,46 @@ The Sessions sheet exposes a dedicated top resize handle with `72dvh` and `98dvh
 ## Grouped Cards
 
 `grouped-card.styles.ts` exports opt-in grouped-card recipes for compact settings and editor surfaces. `groupedCardClassName` owns the single elevated surface and outer border, `groupedCardRowClassName` owns consistent row height and inset separators, and `groupedSectionTitleClassName` owns the section label. Controls inside a grouped row keep their own interaction affordance while the row remains part of one shared card layer.
+
+## Select And Searchable Pickers
+
+This is the required contract for new or revised `Select`, `DropdownMenu`, and searchable popup pickers in shared UI. Follow it instead of inventing local search chrome.
+
+### Positioning
+
+- Use shared `SelectContent` and `DropdownMenuContent` / `DropdownMenuSubContent`.
+- Keep the shared defaults: `collisionPadding={8}` and `collisionAvoidance={{ side: 'shift', align: 'shift' }}`.
+- Override collision props only with a documented product reason. Prefer shifting the popup so it stays fully on-screen near viewport edges rather than flipping off-screen.
+- Size searchable popups with viewport-aware max height (`max-h-[var(--available-height)]` or an equivalent `min(...)` clamp). Do not let a long option list grow past the visible viewport.
+
+### Search Field Chrome
+
+Canonical look is the bordered shared `Input` style, not a flat bottom divider.
+
+- Prefer shared `CommandInput` for `Command` / `DropdownMenu` searchable lists. It already matches bordered `Input` chrome.
+- Prefer shared `Input` for search headers inside `SelectContent` (for example draft project pickers).
+- Wrapper padding for the search row is `p-1.5 pb-1`.
+- Dense picker search fields are typically `h-8` with a leading search icon.
+- Keep the ring treatment: inset `ring-border/60`, hover subtle surface, focus `interactive-focus-ring`.
+- Do not force borderless overrides such as `ring-0`, `border-none`, `rounded-none bg-transparent`, or CSS that strips `command-input-wrapper` borders / hides the search icon.
+- Do not reintroduce the old `border-b border-border/40` search divider as the primary search-field affordance.
+- Keep search placeholders localized through `locale-ui-patterns`.
+
+### Primitive Selection
+
+| Need | Shared pattern |
+|---|---|
+| Short fixed option set | `Select` + `SelectItem` |
+| Searchable select list | `SelectContent` header + shared `Input` |
+| Searchable menu / branch-style picker | `DropdownMenu` + `Command` + `CommandInput` |
+| Global command search | `CommandPalette` / shared `Command` |
+
+Reuse the shared primitives above. Do not add one-off popup search components or alternate search visuals for the same interaction.
+
+### Review Checklist
+
+- Popup stays inside the viewport with the shared collision defaults.
+- Search chrome matches bordered `Input` / `CommandInput`, including focus ring.
+- No local CSS undoes shared search borders, icons, or padding.
+- Long lists scroll inside the popup instead of overflowing the window.
+- Nearby searchable pickers (project, branch, model, agent, command palette) remain visually consistent.

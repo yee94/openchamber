@@ -159,6 +159,10 @@ type SelectContentExtra = {
   sideOffset?: number;
   side?: "top" | "right" | "bottom" | "left";
   align?: "start" | "center" | "end";
+  /** Space to keep clear of the viewport edge; defaults to 8px so the popup never touches the window edge. */
+  collisionPadding?: React.ComponentProps<typeof BaseSelect.Positioner>["collisionPadding"];
+  /** Defaults to shifting on both axes so the popup stays fully on-screen instead of flipping past the opposite edge. */
+  collisionAvoidance?: React.ComponentProps<typeof BaseSelect.Positioner>["collisionAvoidance"];
 };
 
 function SelectContent({
@@ -170,6 +174,8 @@ function SelectContent({
   sideOffset,
   side,
   align,
+  collisionPadding = 8,
+  collisionAvoidance = { side: "shift", align: "shift" },
   ...props
 }: React.ComponentProps<typeof BaseSelect.Popup> & SelectContentExtra) {
   const portalContext = React.useContext(SelectPortalContext);
@@ -183,6 +189,8 @@ function SelectContent({
         sideOffset={sideOffset}
         side={side}
         align={align}
+        collisionPadding={collisionPadding}
+        collisionAvoidance={collisionAvoidance}
         className="absolute z-[120] pointer-events-auto"
       >
         <BaseSelect.Popup

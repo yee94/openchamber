@@ -36,20 +36,29 @@ const CommandInput = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
 >(({ className, ...props }, ref) => {
   return (
-    <div
-       data-slot="command-input-wrapper"
-       className="flex h-8 items-center gap-2 border-b px-3"
-     >
-       <Icon name="search" className="size-4 shrink-0 opacity-50" />
-       <CommandPrimitive.Input
-        ref={ref}
-        data-slot="command-input"
+    // Match the bordered Input used in Select dropdowns (e.g. draft project picker)
+    // so every searchable command/select popup shares one search-field look.
+    <div data-slot="command-input-wrapper" className="p-1.5 pb-1">
+      <div
+        data-slot="command-input-field"
         className={cn(
-          "placeholder:text-muted-foreground flex h-8 w-full rounded-lg bg-transparent py-2 typography-meta outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
-          className
+          "flex h-8 items-center gap-2 rounded-lg px-3",
+          "bg-[var(--surface-elevated)] ring-1 ring-inset ring-border/60 transition duration-200 ease-out",
+          "hover:[&:not(:focus-within)]:bg-[var(--surface-subtle)] hover:[&:not(:focus-within)]:ring-transparent",
+          "focus-within:ring-2 focus-within:ring-[var(--interactive-focus-ring)]",
         )}
-        {...props}
-      />
+      >
+        <Icon name="search" className="size-4 shrink-0 opacity-50" />
+        <CommandPrimitive.Input
+          ref={ref}
+          data-slot="command-input"
+          className={cn(
+            "placeholder:text-muted-foreground flex h-8 w-full bg-transparent typography-meta outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
+            className
+          )}
+          {...props}
+        />
+      </div>
     </div>
   )
 })
