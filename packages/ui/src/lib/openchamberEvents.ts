@@ -1,4 +1,4 @@
-import { getRuntimeUrlResolver } from './runtime-url';
+import { consumeRuntimeSse } from './runtime-sse';
 import { subscribeRuntimeEndpointChanged } from './runtime-switch';
 
 type ScheduledTaskRanEvent = {
@@ -39,7 +39,9 @@ type OpenChamberEvent =
   | MessageQueueChangedEvent;
 type Listener = (event: OpenChamberEvent) => void;
 
-let eventSource: EventSource | null = null;
+type ConnectionAttempt = { controller: AbortController };
+
+let attempt: ConnectionAttempt | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempt = 0;
@@ -69,21 +71,22 @@ const scheduleReconnect = () => {
   }, delay);
 };
 
-const cleanupSource = () => {
+const cleanupAttempt = () => {
   clearHeartbeatTimer();
-  if (eventSource) {
-    eventSource.close();
-  }
-  eventSource = null;
+  const currentAttempt = attempt;
+  attempt = null;
+  currentAttempt?.controller.abort();
 };
 
-const resetHeartbeatTimer = () => {
+const resetHeartbeatTimer = (expectedAttempt: ConnectionAttempt) => {
   clearHeartbeatTimer();
-  if (listeners.size === 0) {
+  if (listeners.size === 0 || attempt !== expectedAttempt) {
     return;
   }
-  heartbeatTimer = setTimeout(() => {
-    cleanupSource();
+  const timer = setTimeout(() => {
+    if (attempt !== expectedAttempt || heartbeatTimer !== timer) return;
+    heartbeatTimer = null;
+    cleanupAttempt();
     scheduleReconnect();
   }, HEARTBEAT_TIMEOUT_MS);
 };
@@ -133,7 +136,7 @@ export const parseOpenchamberEventEnvelope = (envelope: { type: string; properti
   if (envelope.type === 'openchamber:session-index-changed') {
     const revision = parsed?.revision;
     const occurredAt = parsed?.occurredAt;
-    if (typeof revision !== 'number' || !Number.isFinite(revision) || revision < 0) return null;
+    if (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 0) return null;
     if (typeof occurredAt !== 'number' || !Number.isFinite(occurredAt)) return null;
     const syncRaw = parsed?.sync && typeof parsed.sync === 'object' && !Array.isArray(parsed.sync)
       ? parsed.sync as Record<string, unknown>
@@ -156,7 +159,7 @@ export const parseOpenchamberEventEnvelope = (envelope: { type: string; properti
   if (envelope.type === 'openchamber:message-queue-changed') {
     const revision = parsed?.revision;
     const occurredAt = parsed?.occurredAt;
-    if (typeof revision !== 'number' || !Number.isFinite(revision) || revision < 0) return null;
+    if (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 0) return null;
     if (typeof occurredAt !== 'number' || !Number.isFinite(occurredAt)) return null;
     return { type: 'message-queue-changed', revision, occurredAt };
   }
@@ -189,51 +192,62 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
   const nextEvent = parseOpenchamberEventEnvelope(envelope);
   if (!nextEvent) return;
   if (nextEvent.type === 'event-stream-ready') reconnectAttempt = 0;
-  for (const listener of listeners) listener(nextEvent);
+  for (const listener of listeners) {
+    try {
+      listener(nextEvent);
+    } catch {
+      // One consumer cannot disrupt the shared event transport.
+    }
+  }
 };
 
 const connect = () => {
   if (typeof window === 'undefined' || listeners.size === 0) {
     return;
   }
-  if (typeof EventSource !== 'function') {
-    return;
-  }
+  if (attempt) return;
 
-  if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
-    return;
-  }
-
-  cleanupSource();
-
-  const source = new EventSource(getRuntimeUrlResolver().sse('/api/openchamber/events'));
-  source.onopen = () => {
-    if (eventSource !== source) return;
-    resetHeartbeatTimer();
-  };
-  source.onmessage = (event) => {
-    if (eventSource !== source) return;
-    resetHeartbeatTimer();
-    const envelope = parseEnvelope(event.data);
-    if (!envelope) {
-      return;
-    }
-    dispatchFromEnvelope(envelope);
-  };
-
-  source.onerror = () => {
-    if (eventSource !== source) return;
-    cleanupSource();
-    scheduleReconnect();
-  };
-
-  eventSource = source;
+  const nextAttempt: ConnectionAttempt = { controller: new AbortController() };
+  attempt = nextAttempt;
+  void consumeRuntimeSse('/api/openchamber/events', {
+    signal: nextAttempt.controller.signal,
+    onOpen: () => {
+      if (attempt !== nextAttempt) return;
+      resetHeartbeatTimer(nextAttempt);
+    },
+    onActivity: () => {
+      if (attempt !== nextAttempt) return;
+      resetHeartbeatTimer(nextAttempt);
+    },
+    onMessage: (data) => {
+      if (attempt !== nextAttempt) return;
+      const envelope = parseEnvelope(data);
+      if (envelope) dispatchFromEnvelope(envelope);
+    },
+  }).then(
+    () => {
+      if (attempt !== nextAttempt) return;
+      attempt = null;
+      clearHeartbeatTimer();
+      scheduleReconnect();
+    },
+    () => {
+      if (attempt !== nextAttempt) return;
+      attempt = null;
+      clearHeartbeatTimer();
+      if (!nextAttempt.controller.signal.aborted) scheduleReconnect();
+    },
+  );
 };
 
 const ensureRuntimeChangeSubscription = () => {
   if (runtimeChangeUnsubscribe || typeof window === 'undefined') return;
   runtimeChangeUnsubscribe = subscribeRuntimeEndpointChanged(() => {
-    cleanupSource();
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    cleanupAttempt();
     reconnectAttempt = 0;
     connect();
   });
@@ -257,7 +271,7 @@ export const subscribeOpenchamberEvents = (listener: Listener): (() => void) => 
         reconnectTimer = null;
       }
       reconnectAttempt = 0;
-      cleanupSource();
+      cleanupAttempt();
       cleanupRuntimeChangeSubscription();
     }
   };

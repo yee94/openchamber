@@ -40,7 +40,7 @@ Relay is not a separate link format: it is one transport candidate inside the un
 
 Everything a client normally sends to the single OpenChamber origin:
 - **HTTP** — REST endpoints and proxied OpenCode SDK calls under `/api/*`, plus `/auth/*` and `/health`.
-- **SSE** — long-lived streamed responses (the event stream, notifications, terminal output fallback). These are just HTTP responses whose body streams; the tunnel needs no special SSE handling.
+- **SSE** — streamed responses opened through `runtimeFetch`, including `/api/openchamber/events` and SDK global SSE. Relay carries these HTTP response body frames through the tunnel.
 - **WebSocket** — the endpoints that use a real socket (the global event stream on platforms that support WS, terminal I/O, dictation).
 
 The host dispatcher restricts tunneled traffic to explicit path allowlists (one for HTTP, one for WS).
@@ -85,7 +85,7 @@ The E2EE and framing logic exists twice: TypeScript in `packages/ui/src/lib/rela
 
 ## Runtime integration (client)
 
-Relay mode plugs into the existing client transport layer rather than a parallel path: `runtime-switch` activates the tunnel singleton, `runtime-fetch` routes runtime requests through it, `runtime-url`/`runtime-socket` yield tunnel-backed URLs and sockets, and `runtime-auth` mints the URL-scoped token through the tunnel. Direct-URL connections and the Electron realtime-proxy path are unaffected.
+Relay mode plugs into the existing client transport layer rather than a parallel path: `runtime-switch` activates the tunnel singleton, `runtime-fetch` routes runtime requests and product SSE streamed responses through it, `runtime-url` builds browser-consumed URLs, `runtime-socket` opens tunneled WebSockets, and `runtime-auth` mints the URL-scoped token through the tunnel. Direct-URL connections and the Electron realtime-proxy path are unaffected.
 
 ## Design invariants (do not regress)
 

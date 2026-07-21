@@ -45,11 +45,11 @@ function showSessionUndoToast(args: {
       "div",
       {
         className:
-          "flex w-full min-w-[min(var(--width),calc(100vw-2rem))] max-w-[calc(100vw-2rem)] items-center gap-2.5 text-foreground",
+          "flex w-full min-w-0 max-w-full items-center gap-2.5 text-foreground",
       },
       React.createElement(
         "span",
-        { className: "min-w-0 flex-1 text-left typography-ui-label font-medium whitespace-nowrap" },
+        { className: "min-w-0 flex-1 truncate text-left typography-ui-label font-medium" },
         args.message,
       ),
       React.createElement(

@@ -2,11 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMessageQueueWorker } from './worker.js';
 
 const claim = { item: { queueItemID: 'item', scopeID: 'scope', directory: '/repo', sessionID: 'session', content: 'hello', attemptCount: 0, attachments: [] }, leaseToken: 'lease', leaseExpiresAt: 10, fenceGeneration: 1 };
+const candidate = { item: claim.item, eligibilityToken: 'eligibility', leaseExpiresAt: 20_000, fenceGeneration: 1, dispatchMode: 'automatic' };
 const reconcileClaim = { item: { queueItemID: 'reconcile-item', directory: '/repo', sessionID: 'session', messageID: 'msg_0000000001' }, leaseToken: 'reconcile-lease', fenceGeneration: 1 };
 const flush = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 const setup = ({ result = { ok: true }, service: serviceOverrides = {}, adapter: adapterOverrides = {}, worker: workerOptions = {} } = {}) => {
   const service = {
-    getRuntimeKey: vi.fn(() => 'runtime'), getAuthority: vi.fn(() => ({ authority: 'active', generation: 1 })), claimDueReconcile: vi.fn(() => null), claimNext: vi.fn().mockReturnValueOnce(claim).mockReturnValue(null), renewLease: vi.fn(), releaseIneligible: vi.fn(), beginAttempt: vi.fn(() => ({ messageID: 'msg_0000000001', attemptCount: 1 })), completeAttempt: vi.fn(), scheduleRetry: vi.fn(), markAmbiguous: vi.fn(), markFailed: vi.fn(), recordReconcileUnavailable: vi.fn(), recordReconcileMiss: vi.fn(), recordReconcileConfirmed: vi.fn(), confirmByMessage: vi.fn(), close: vi.fn(), ...serviceOverrides,
+    getRuntimeKey: vi.fn(() => 'runtime'), getAuthority: vi.fn(() => ({ authority: 'active', generation: 1 })), claimDueReconcile: vi.fn(() => null), reserveEligibilityCandidate: vi.fn().mockReturnValueOnce(candidate).mockReturnValue(null), deferEligibilityCandidate: vi.fn(), claimNext: vi.fn().mockReturnValueOnce(claim).mockReturnValue(null), renewLease: vi.fn(), releaseIneligible: vi.fn(), beginAttempt: vi.fn(() => ({ messageID: 'msg_0000000001', attemptCount: 1 })), completeAttempt: vi.fn(), scheduleRetry: vi.fn(), markAmbiguous: vi.fn(), markFailed: vi.fn(), recordReconcileUnavailable: vi.fn(), recordReconcileMiss: vi.fn(), recordReconcileConfirmed: vi.fn(), confirmByMessage: vi.fn(), close: vi.fn(), ...serviceOverrides,
   };
   const adapter = {
     captureRuntime: vi.fn(() => ({ token: 'r' })), checkEligibility: vi.fn(() => ({ available: true, idle: true, settled: true, latestMessageID: 'msg_0000000000' })), createMessageID: vi.fn(() => 'msg_0000000001'), materializeAttachments: vi.fn(() => []), send: vi.fn(() => result), findMessage: vi.fn(), ...adapterOverrides,
@@ -23,7 +24,7 @@ describe('message queue worker', () => {
     expect(service.claimNext).toHaveBeenCalledTimes(0);
     worker.start();
     await worker.wake();
-    expect(service.claimNext).toHaveBeenCalledWith({ runtimeKey: 'runtime', owner: 'worker', leaseMs: 15000 });
+    expect(service.claimNext).toHaveBeenCalledWith({ runtimeKey: 'runtime', owner: 'worker', leaseMs: 15000, queueItemID: 'item', eligibilityToken: 'eligibility' });
     expect(service.completeAttempt).not.toHaveBeenCalled();
     expect(service.markAmbiguous).toHaveBeenCalledWith(expect.objectContaining({ queueItemID: 'item', leaseToken: 'lease', fenceGeneration: 1, runtimeKey: 'runtime', dueAt: expect.any(Number) }));
     await worker.stop();
@@ -42,8 +43,8 @@ describe('message queue worker', () => {
   it('diagnoses a failed timer flight and permits a later wake retry', async () => {
     vi.useFakeTimers();
     const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const claimNext = vi.fn().mockReturnValueOnce(null).mockImplementationOnce(() => { throw new Error('timer claim failed'); }).mockReturnValue(null);
-    const { worker } = setup({ service: { claimNext } });
+    const reserveEligibilityCandidate = vi.fn().mockReturnValueOnce(null).mockImplementationOnce(() => { throw new Error('timer claim failed'); }).mockReturnValue(null);
+    const { worker } = setup({ service: { reserveEligibilityCandidate } });
     worker.start();
     await worker.wake();
     await vi.advanceTimersByTimeAsync(1_000);
@@ -75,26 +76,26 @@ describe('message queue worker', () => {
     }
   });
 
-  it('releases automatic busy and unsettled claims before send', async () => {
+  it('leaves automatic busy and unsettled candidates queued before claiming', async () => {
     const { worker, service, adapter } = setup({ adapter: { checkEligibility: vi.fn(() => ({ available: true, idle: false, settled: false })) } });
     worker.start(); await worker.wake();
-    expect(service.releaseIneligible).toHaveBeenCalledTimes(1); expect(adapter.send).toHaveBeenCalledTimes(0); expect(service.beginAttempt).toHaveBeenCalledTimes(0);
+    expect(service.claimNext).toHaveBeenCalledTimes(0); expect(service.deferEligibilityCandidate).toHaveBeenCalledTimes(1); expect(service.releaseIneligible).toHaveBeenCalledTimes(0); expect(adapter.send).toHaveBeenCalledTimes(0); expect(service.beginAttempt).toHaveBeenCalledTimes(0);
     await worker.stop();
   });
 
   it('sends a manual available claim once while busy and unsettled', async () => {
     const manualClaim = { ...claim, dispatchMode: 'manual' };
-    const { worker, service, adapter } = setup({ service: { claimNext: vi.fn().mockReturnValueOnce(manualClaim).mockReturnValue(null) }, adapter: { checkEligibility: vi.fn(() => ({ available: true, idle: false, settled: false, latestMessageID: 'msg_0000000000' })) } });
+    const { worker, service, adapter } = setup({ service: { reserveEligibilityCandidate: vi.fn().mockReturnValueOnce({ ...candidate, item: manualClaim.item, dispatchMode: 'manual' }).mockReturnValue(null), claimNext: vi.fn().mockReturnValueOnce(manualClaim).mockReturnValue(null) }, adapter: { checkEligibility: vi.fn(() => ({ available: true, idle: false, settled: false, latestMessageID: 'msg_0000000000' })) } });
     worker.start(); await worker.wake();
     expect(service.beginAttempt).toHaveBeenCalledTimes(1); expect(adapter.send).toHaveBeenCalledTimes(1); expect(service.releaseIneligible).toHaveBeenCalledTimes(0);
     await worker.stop();
   });
 
-  it('releases an unavailable manual claim before send', async () => {
+  it('leaves an unavailable manual candidate queued before claiming', async () => {
     const manualClaim = { ...claim, dispatchMode: 'manual' };
-    const { worker, service, adapter } = setup({ service: { claimNext: vi.fn().mockReturnValueOnce(manualClaim).mockReturnValue(null) }, adapter: { checkEligibility: vi.fn(() => ({ available: false, idle: true, settled: true })) } });
+    const { worker, service, adapter } = setup({ service: { reserveEligibilityCandidate: vi.fn().mockReturnValueOnce({ ...candidate, item: manualClaim.item, dispatchMode: 'manual' }).mockReturnValue(null), claimNext: vi.fn().mockReturnValueOnce(manualClaim).mockReturnValue(null) }, adapter: { checkEligibility: vi.fn(() => ({ available: false, idle: true, settled: true })) } });
     worker.start(); await worker.wake();
-    expect(service.releaseIneligible).toHaveBeenCalledTimes(1); expect(adapter.send).toHaveBeenCalledTimes(0); expect(service.beginAttempt).toHaveBeenCalledTimes(0);
+    expect(service.claimNext).toHaveBeenCalledTimes(0); expect(service.deferEligibilityCandidate).toHaveBeenCalledTimes(1); expect(service.releaseIneligible).toHaveBeenCalledTimes(0); expect(adapter.send).toHaveBeenCalledTimes(0); expect(service.beginAttempt).toHaveBeenCalledTimes(0);
     await worker.stop();
   });
 
@@ -150,7 +151,7 @@ describe('message queue worker', () => {
     const service = {
       claimDueReconcile: vi.fn().mockReturnValueOnce(reconcileClaim).mockReturnValue(null),
       recordReconcileUnavailable: vi.fn((args) => ({ ...args, deadlineAt, unresolved: Date.now() >= deadlineAt })),
-      claimNext: vi.fn(() => null),
+      reserveEligibilityCandidate: vi.fn(() => null),
     };
     const { worker, adapter } = setup({ service, adapter: { findMessage: vi.fn((_scope, _messageID, options) => { signal = options.signal; return new Promise(() => {}); }) } });
     worker.start();
@@ -167,7 +168,7 @@ describe('message queue worker', () => {
     let release;
     const pending = new Promise((resolve) => { release = resolve; });
     const { worker, service, adapter } = setup({
-      service: { claimDueReconcile: vi.fn().mockReturnValueOnce(reconcileClaim).mockReturnValue(null), claimNext: vi.fn(() => null) },
+      service: { claimDueReconcile: vi.fn().mockReturnValueOnce(reconcileClaim).mockReturnValue(null), reserveEligibilityCandidate: vi.fn(() => null) },
       adapter: { findMessage: vi.fn(() => pending) },
     });
     worker.start();
@@ -179,7 +180,7 @@ describe('message queue worker', () => {
     await first;
     expect(adapter.findMessage).toHaveBeenCalledTimes(1);
     expect(service.recordReconcileConfirmed).toHaveBeenCalledTimes(1);
-    expect(service.claimNext).toHaveBeenCalledTimes(1);
+    expect(service.reserveEligibilityCandidate).toHaveBeenCalledTimes(1);
     await worker.stop();
   });
 
@@ -198,5 +199,31 @@ describe('message queue worker', () => {
     release({ ok: true });
     await expect(stopping).resolves.toMatchObject({ drained: true, active: 0 });
     expect(service.close).toHaveBeenCalledTimes(0);
+  });
+
+  it('停止期间中断忽略 abort 的 eligibility probe 且不获取发送租约', async () => {
+    const pending = new Promise(() => {});
+    const { worker, service, adapter } = setup({ adapter: { checkEligibility: vi.fn(() => pending) } });
+    worker.start();
+    await flush();
+    await expect(worker.stop()).resolves.toMatchObject({ drained: true, active: 0 });
+    expect(service.claimNext).toHaveBeenCalledTimes(0);
+    expect(service.deferEligibilityCandidate).toHaveBeenCalledTimes(1);
+    expect(adapter.send).toHaveBeenCalledTimes(0);
+  });
+
+  it('停止期间等待忽略 abort 的附件预检并在 beginAttempt 前释放租约', async () => {
+    let release;
+    const pending = new Promise((resolve) => { release = resolve; });
+    const { worker, service, adapter } = setup({ adapter: { materializeAttachments: vi.fn(() => pending) } });
+    worker.start();
+    await flush();
+    const stopping = worker.stop();
+    await flush();
+    release([]);
+    await expect(stopping).resolves.toMatchObject({ drained: true, active: 0 });
+    expect(service.beginAttempt).toHaveBeenCalledTimes(0);
+    expect(service.releaseIneligible).toHaveBeenCalledTimes(1);
+    expect(adapter.send).toHaveBeenCalledTimes(0);
   });
 });

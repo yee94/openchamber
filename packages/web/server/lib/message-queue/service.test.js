@@ -185,6 +185,29 @@ describe('message queue service', () => {
     service.close();
   });
 
+  it('replays a completed admission after dispatch replaces its message ID', () => {
+    const service = createService(dbPath());
+    const input = admission('admit-original', 'completed-replay');
+    service.admit(input);
+    service.setAuthority({ authority: 'active', expectedGeneration: 0 });
+    const claim = service.claimNext({ owner: 'worker' });
+    const attempt = service.beginAttempt({ queueItemID: input.item.queueItemID, leaseToken: claim.leaseToken, fenceGeneration: claim.fenceGeneration, messageID: 'msg_dispatch_replay' });
+    expect(() => service.completeAttempt({ queueItemID: input.item.queueItemID, operationID: 'operation-crossed', messageID: attempt.messageID, leaseToken: claim.leaseToken, fenceGeneration: claim.fenceGeneration })).toThrow(expect.objectContaining({ code: 'idempotency_conflict' }));
+    expect(() => service.completeAttempt({ queueItemID: input.item.queueItemID, operationID: input.item.operationID, messageID: 'msg_crossed', leaseToken: claim.leaseToken, fenceGeneration: claim.fenceGeneration })).toThrow(expect.objectContaining({ code: 'idempotency_conflict' }));
+    expect(service.getScope(claim.item.scopeID).items).toHaveLength(1);
+    service.completeAttempt({ queueItemID: input.item.queueItemID, operationID: input.item.operationID, messageID: attempt.messageID, leaseToken: claim.leaseToken, fenceGeneration: claim.fenceGeneration });
+
+    expect(service.admit({ ...input, requestID: 'admit-replay' })).toMatchObject({
+      queueItemID: input.item.queueItemID,
+      operationID: input.item.operationID,
+      messageID: attempt.messageID,
+      completed: true,
+      duplicate: true,
+    });
+    expect(() => service.admit({ ...input, requestID: 'admit-crossed', item: { ...input.item, operationID: 'operation-crossed' } })).toThrow(expect.objectContaining({ code: 'idempotency_conflict' }));
+    service.close();
+  });
+
   it('fences ordinary mutations behind an active edit reservation and deletes with the reservation CAS', () => {
     const service = createService(dbPath()); const admitted = service.admit(admission());
     const reservation = service.reserveForEdit({ requestID: 'reserve', queueItemID: 'item-1', expectedRevision: admitted.revision, rowVersion: admitted.rowVersion, owner: 'editor', ttlMs: 10_000 });
@@ -440,6 +463,42 @@ describe('message queue service', () => {
     const done = service.completeAttempt({ queueItemID: 'item-1', operationID: 'operation-1', messageID: fresh.messageID, leaseToken: retry.leaseToken, fenceGeneration: retry.fenceGeneration });
     expect(done.completed).toBe(true);
     expect(service.completeAttempt({ queueItemID: 'item-1', operationID: 'operation-1', messageID: fresh.messageID }).duplicate).toBe(true);
+    service.close();
+  });
+
+  it('serializes eligibility probes across workers and fences expired probe tokens', () => {
+    const pathname = dbPath(); let time = 1_000;
+    const first = createMessageQueueService({ dbPath: pathname, getRuntimeConfig: () => ({ apiBaseUrl: 'http://runtime' }), clock: () => time });
+    const second = createMessageQueueService({ dbPath: pathname, getRuntimeConfig: () => ({ apiBaseUrl: 'http://runtime' }), clock: () => time });
+    first.admit(admission()); first.setAuthority({ authority: 'active', expectedGeneration: 0 });
+    const reserved = first.reserveEligibilityCandidate({ owner: 'worker-a', leaseMs: 100 });
+    expect(second.reserveEligibilityCandidate({ owner: 'worker-b', leaseMs: 100 })).toBeNull();
+    expect(second.claimNext({ owner: 'worker-b', queueItemID: reserved.item.queueItemID, eligibilityToken: 'wrong' })).toBeNull();
+    first.deferEligibilityCandidate({ queueItemID: reserved.item.queueItemID, eligibilityToken: reserved.eligibilityToken, fenceGeneration: reserved.fenceGeneration, delayMs: 10 });
+    time += 11;
+    const takeover = second.reserveEligibilityCandidate({ owner: 'worker-b', leaseMs: 100 });
+    expect(first.claimNext({ owner: 'worker-a', queueItemID: reserved.item.queueItemID, eligibilityToken: reserved.eligibilityToken })).toBeNull();
+    expect(second.claimNext({ owner: 'worker-b', queueItemID: takeover.item.queueItemID, eligibilityToken: takeover.eligibilityToken })).toMatchObject({ item: { status: 'sending' }, leaseToken: takeover.eligibilityToken });
+    first.close(); second.close();
+  });
+
+  it('fences probe leases across authority changes and lets manual promotion preempt a probe', () => {
+    const service = createService(dbPath());
+    const head = service.admit(admission('head-request', 'head'));
+    service.admit(admission('tail-request', 'tail'));
+    const active = service.setAuthority({ authority: 'active', expectedGeneration: 0 });
+    const oldProbe = service.reserveEligibilityCandidate({ owner: 'worker-a' });
+    const paused = service.pauseAuthority({ expectedGeneration: active.generation });
+    service.resumeAuthority({ expectedGeneration: paused.generation });
+    const resumedProbe = service.reserveEligibilityCandidate({ owner: 'worker-b' });
+    expect(resumedProbe.item.queueItemID).toBe(oldProbe.item.queueItemID);
+    expect(service.claimNext({ owner: 'worker-a', queueItemID: oldProbe.item.queueItemID, eligibilityToken: oldProbe.eligibilityToken })).toBeNull();
+
+    const scope = service.getScope(head.scopeID); const tail = scope.items.find((entry) => entry.queueItemID === 'item-tail');
+    service.manualSend({ requestID: 'manual-tail', queueItemID: tail.queueItemID, expectedRevision: scope.revision, expectedRowVersion: tail.rowVersion });
+    expect(service.claimNext({ owner: 'worker-b', queueItemID: resumedProbe.item.queueItemID, eligibilityToken: resumedProbe.eligibilityToken })).toBeNull();
+    const manualProbe = service.reserveEligibilityCandidate({ owner: 'worker-c' });
+    expect(manualProbe).toMatchObject({ item: { queueItemID: 'item-tail' }, dispatchMode: 'manual' });
     service.close();
   });
 

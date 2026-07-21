@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { parseOpenchamberEventEnvelope } from './openchamberEvents';
+import { parseOpenchamberEventEnvelope, subscribeOpenchamberEvents } from './openchamberEvents';
 
 describe('parseOpenchamberEventEnvelope', () => {
   test('parses ready and valid topology envelopes', () => {
@@ -33,5 +33,57 @@ describe('parseOpenchamberEventEnvelope', () => {
     expect(parseOpenchamberEventEnvelope({ type: 'openchamber:session-index-changed', properties: { revision: 1 } })).toBeNull();
     expect(parseOpenchamberEventEnvelope({ type: 'openchamber:message-queue-changed', properties: { revision: '1', occurredAt: 1 } })).toBeNull();
     expect(parseOpenchamberEventEnvelope({ type: 'openchamber:message-queue-changed', properties: { revision: 1, occurredAt: Number.NaN } })).toBeNull();
+    expect(parseOpenchamberEventEnvelope({ type: 'openchamber:session-index-changed', properties: { revision: 1.5, occurredAt: 1 } })).toBeNull();
+    expect(parseOpenchamberEventEnvelope({ type: 'openchamber:message-queue-changed', properties: { revision: Number.MAX_SAFE_INTEGER + 1, occurredAt: 1 } })).toBeNull();
   });
+});
+
+test('shares one runtime SSE request, isolates listeners, aborts the final subscription, and ignores stale runtime attempts', async () => {
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+  const runtimeWindow = new EventTarget();
+  let firstController: ReadableStreamDefaultController<Uint8Array> | undefined;
+  let secondController: ReadableStreamDefaultController<Uint8Array> | undefined;
+  const signals: AbortSignal[] = [];
+  let requests = 0;
+  const encoder = new TextEncoder();
+
+  try {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: runtimeWindow });
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      signals.push(init?.signal as AbortSignal);
+      requests += 1;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          if (requests === 1) firstController = controller;
+          else secondController = controller;
+        },
+      });
+      return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    }) as typeof fetch;
+
+    const received: unknown[] = [];
+    const removeThrowing = subscribeOpenchamberEvents(() => { throw new Error('listener failure'); });
+    const removeReceiving = subscribeOpenchamberEvents((event) => received.push(event));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(requests).toBe(1);
+
+    expect(signals[0]?.aborted).toBe(false);
+    runtimeWindow.dispatchEvent(new Event('openchamber:runtime-endpoint-changed'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(signals[0]?.aborted).toBe(true);
+    expect(requests).toBe(2);
+
+    firstController?.error(new Error('late stale failure'));
+    secondController?.enqueue(encoder.encode('data: {"type":"openchamber:message-queue-changed","properties":{"revision":9,"occurredAt":2}}\n\n'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(received).toEqual([{ type: 'message-queue-changed', revision: 9, occurredAt: 2 }]);
+
+    removeThrowing();
+    removeReceiving();
+    expect(signals[1]?.aborted).toBe(true);
+  } finally {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+    globalThis.fetch = originalFetch;
+  }
 });

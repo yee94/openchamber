@@ -27,7 +27,7 @@ const item = (id, directory = '/repo', sessionID = 'session', extra = {}) => ({
   },
 });
 
-const fixture = async ({ adapter = {}, runtimeConfig = { apiBaseUrl: 'http://runtime-a' } } = {}) => {
+const fixture = async ({ adapter = {}, runtimeConfig = { apiBaseUrl: 'http://runtime-a' }, onRevisionTip = null } = {}) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-cutover-')); fixtures.add(root);
   const config = { current: runtimeConfig };
   const sent = [];
@@ -40,7 +40,7 @@ const fixture = async ({ adapter = {}, runtimeConfig = { apiBaseUrl: 'http://run
     findMessage: async () => ({ found: false }),
     ...adapter,
   };
-  const runtime = createMessageQueueRuntime({ dbPath: path.join(root, 'queue.sqlite'), attachmentRoot: path.join(root, 'attachments'), adapter: fake, workerID: `fixture-${process.pid}`, getRuntimeConfig: () => config.current });
+  const runtime = createMessageQueueRuntime({ dbPath: path.join(root, 'queue.sqlite'), attachmentRoot: path.join(root, 'attachments'), adapter: fake, workerID: `fixture-${process.pid}`, getRuntimeConfig: () => config.current, onRevisionTip });
   await runtime.startPaused();
   const app = express(); app.use(express.json()); registerMessageQueueRoutes(app, { messageQueueService: runtime.service, messageQueueRuntime: runtime });
   const server = http.createServer(app);
@@ -99,6 +99,27 @@ describe('Phase 2 decisive production cutover fixture', () => {
       expect(dispatched.map((entry) => entry.queueItemID)).toEqual(expect.arrayContaining(['item-one', 'item-other'])); expect(dispatched.map((entry) => entry.queueItemID)).not.toContain('item-two'); expect(maximum).toBe(2);
       releases.splice(0).forEach((release) => release()); await running; dispatched.forEach((entry) => f.runtime.worker.confirmByMessage({ directory: entry.directory, sessionID: entry.sessionID, messageID: entry.messageID })); void f.runtime.wake(); await eventually(() => expect(dispatched.map((entry) => entry.queueItemID)).toContain('item-two'));
       releases.splice(0).forEach((release) => release());
+    } finally { await f.close(); }
+  }, 10_000);
+
+  it('会话暂不可发送时保持 queued 行和 scope revision 稳定', async () => {
+    let eligibilityChecks = 0;
+    const revisionTips = [];
+    const f = await fixture({ adapter: { checkEligibility: async () => { eligibilityChecks += 1; return { available: true, idle: false, settled: false, latestMessageID: 'msg_0000000000' }; } }, onRevisionTip: (revision) => revisionTips.push(revision) });
+    try {
+      const admitted = f.service.admit(item('ineligible-stable'));
+      f.service.setAuthority({ authority: 'active', expectedGeneration: 0 });
+      const before = f.service.getScope(admitted.scopeID);
+      const beforeGlobalRevision = f.service.snapshot().revision;
+      revisionTips.length = 0;
+      await f.runtime.startActive();
+      await eventually(() => expect(eligibilityChecks).toBeGreaterThan(0));
+      const after = f.service.getScope(admitted.scopeID);
+      expect(after.revision).toBe(before.revision);
+      expect(after.items[0]).toMatchObject({ status: 'queued', rowVersion: before.items[0].rowVersion, dueAt: before.items[0].dueAt });
+      expect(f.service.snapshot().revision).toBe(beforeGlobalRevision);
+      expect(revisionTips).toHaveLength(0);
+      expect(f.sent).toHaveLength(0);
     } finally { await f.close(); }
   }, 10_000);
 

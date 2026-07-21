@@ -26,6 +26,8 @@ import {
   type RelayTunnelClient,
   type TunnelWireSocket,
 } from './tunnel-client';
+import { adoptRelayTunnel, deactivateRelayTunnel } from './runtime-tunnel';
+import { subscribeOpenchamberEvents } from '../openchamberEvents';
 
 const WS_OPEN = 1;
 const WS_CLOSED = 3;
@@ -92,6 +94,8 @@ type MiniHostOptions = {
   batch?: boolean;
   // Records every tunnel frame the host received, in arrival order.
   recordFrame?: (frame: TunnelFrame) => void;
+  onHttpRequest?: (request: { path: string; method: string; headers: Record<string, string> }) => void;
+  onAbort?: (streamId: number) => void;
 };
 
 // A minimal host responder wired to one endpoint. Answers a few routes so the
@@ -132,6 +136,7 @@ const attachMiniHost = (endpoint: FakeEndpoint, hostPrivateKey: CryptoKey, optio
     }
     if (frame.frameType === TunnelFrameType.HttpRequest) {
       const req = decodeJsonPayload(frame.payload, isHttpRequestPayload);
+      options.onHttpRequest?.(req);
       httpBodies.set(frame.streamId, []);
       (endpoint as FakeEndpoint & { pendingPath?: Map<number, string> }).pendingPath ??= new Map();
       (endpoint as FakeEndpoint & { pendingPath: Map<number, string> }).pendingPath.set(frame.streamId, req.path);
@@ -143,6 +148,7 @@ const attachMiniHost = (endpoint: FakeEndpoint, hostPrivateKey: CryptoKey, optio
     }
     if (frame.frameType === TunnelFrameType.StreamAbort) {
       aborted.add(frame.streamId);
+      options.onAbort?.(frame.streamId);
       return;
     }
     if (frame.frameType === TunnelFrameType.StreamEnd) {
@@ -183,6 +189,12 @@ const attachMiniHost = (endpoint: FakeEndpoint, hostPrivateKey: CryptoKey, optio
           setTimeout(pump, 10);
         };
         pump();
+      } else if (path === '/api/openchamber/events') {
+        sendFrame(encodeTunnelFrame(TunnelFrameType.HttpResponse, streamId, encodeJsonPayload({ status: 200, headers: { 'content-type': 'text/event-stream' } })));
+        const event = textEncoder.encode(': 你\ndata: {"type":"openchamber:message-queue-changed","properties":{"revision":12,"occurredAt":34}}\n\n');
+        sendFrame(encodeTunnelFrame(TunnelFrameType.HttpBody, streamId, event.slice(0, 4)));
+        sendFrame(encodeTunnelFrame(TunnelFrameType.HttpBody, streamId, event.slice(4)));
+        sendFrame(encodeTunnelFrame(TunnelFrameType.StreamEnd, streamId, new Uint8Array(0)));
       } else {
         respondJson(streamId, 404, { error: 'not found' });
       }
@@ -246,6 +258,7 @@ const setupClient = async (
   killWire: () => void;
   sendTextToClient: (text: string) => void;
   clientBinaryCount: () => number;
+  hostEncPubJwk: JsonWebKey;
 }> => {
   const hostKeyPair = await generateEcdhKeyPair();
   const hostPubJwk = await exportPublicKeyJwk(hostKeyPair.publicKey);
@@ -281,6 +294,7 @@ const setupClient = async (
     killWire: () => lastClientEndpoint?.close(1006, 'killed'),
     sendTextToClient: (text: string) => lastHostEndpoint?.send(text),
     clientBinaryCount: () => lastClientEndpoint?.binarySent ?? 0,
+    hostEncPubJwk: hostPubJwk,
   };
 };
 
@@ -329,7 +343,8 @@ describe('createRelayTunnelClient', () => {
   });
 
   test('propagates abort to the host and errors the stream', async () => {
-    const { client } = await setupClient();
+    const aborted: number[] = [];
+    const { client } = await setupClient({ onAbort: (streamId) => aborted.push(streamId) });
     track(client);
     const controller = new AbortController();
     const response = await client.fetch('/never-ends', { signal: controller.signal });
@@ -337,6 +352,39 @@ describe('createRelayTunnelClient', () => {
     await reader.read();
     controller.abort();
     await expect(reader.read()).rejects.toThrow();
+    await wait(10);
+    expect(aborted).toHaveLength(1);
+  });
+
+  test('delivers an OpenChamber queue tip through the encrypted Relay SSE response', async () => {
+    const requests: Array<{ path: string; method: string; headers: Record<string, string> }> = [];
+    const { client, hostEncPubJwk } = await setupClient({ onHttpRequest: (request) => requests.push(request) });
+    track(client);
+    const originalWindow = globalThis.window;
+    const runtimeWindow = new EventTarget();
+    let unsubscribe: () => void = () => undefined;
+
+    try {
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: runtimeWindow });
+      adoptRelayTunnel({ relayUrl: 'wss://relay.test/ws', serverId: 'server-1', hostEncPubJwk }, client);
+      const received = await Promise.race([
+        new Promise<unknown>((resolve) => {
+          unsubscribe = subscribeOpenchamberEvents(resolve);
+        }),
+        wait(1_000).then(() => { throw new Error('Timed out waiting for tunneled queue tip'); }),
+      ]);
+      unsubscribe();
+
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.path).toBe('/api/openchamber/events');
+      expect(requests[0]?.method).toBe('GET');
+      expect(requests[0]?.headers.accept).toBe('text/event-stream');
+      expect(received).toEqual({ type: 'message-queue-changed', revision: 12, occurredAt: 34 });
+    } finally {
+      unsubscribe();
+      deactivateRelayTunnel();
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+    }
   });
 
   test('opens, echoes, and closes a tunneled WebSocket', async () => {
