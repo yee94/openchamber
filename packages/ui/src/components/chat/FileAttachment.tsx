@@ -12,7 +12,11 @@ import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
 import { useDeviceInfo } from '@/lib/device';
-import { isCodeSelectionFilePart } from './attachmentCitations';
+import {
+  isCodeSelectionFilePart,
+  isDirectoryAttachmentMime,
+  isDirectoryAttachmentPath,
+} from './attachmentCitations';
 
 import type { ToolPopupContent } from './message/types';
 
@@ -284,6 +288,9 @@ interface FileChipProps {
 const FileChip = memo(({ file, onRemove }: FileChipProps) => {
   const { t } = useI18n();
   const { displayName, fileSize, extension } = useFileDetails(file);
+  const isDirectory = isDirectoryAttachmentMime(file.mimeType)
+    || isDirectoryAttachmentPath(file.filename)
+    || isDirectoryAttachmentPath(file.serverPath);
 
   return (
     <button
@@ -296,7 +303,7 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
       }}
       className="flex items-center gap-1.5 text-sm hover:opacity-80 transition-opacity text-left h-5"
     >
-      <FileTypeIcon filePath={file.filename} extension={extension} className="h-4 w-4" />
+      <FileTypeIcon filePath={file.filename} extension={extension} isDirectory={isDirectory} className="h-4 w-4" />
       <span className="text-foreground truncate max-w-[200px]">
         {displayName}
         {fileSize && <span className="text-muted-foreground ml-1">({fileSize})</span>}
@@ -798,6 +805,10 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
               const ext = fileName.split('.').pop() || '';
               const sizeText = formatFileSize(file.size);
               const githubLinkKind = getGitHubLinkKind(file);
+              // OpenCode marks directories with application/x-directory (or a trailing slash).
+              const isDirectory = isDirectoryAttachmentMime(file.mime)
+                || isDirectoryAttachmentPath(file.filename)
+                || isDirectoryAttachmentPath(file.url);
               return (
                 <Tooltip key={`file-${file.url || file.filename || index}`}>
                   <TooltipTrigger asChild>
@@ -823,7 +834,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
                         {file.mime?.includes('pdf') ? (
                           <Icon name="file-pdf" className="text-muted-foreground h-3.5 w-3.5" />
                         ) : (
-                          <FileTypeIcon filePath={fileName} extension={ext} className="text-muted-foreground h-3.5 w-3.5" />
+                          <FileTypeIcon filePath={fileName} extension={ext} isDirectory={isDirectory} className="text-muted-foreground h-3.5 w-3.5" />
                         )}
                         <div className="overflow-hidden max-w-[140px]">
                           <span className="truncate block" title={fileName}>{fileName}</span>
@@ -979,6 +990,12 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
                 <div className="flex-shrink-0">
                   {file.mime?.startsWith('image/') ? (
                     <Icon name="file-image" className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
+                  ) : isDirectoryAttachmentMime(file.mime) || isDirectoryAttachmentPath(file.filename) || isDirectoryAttachmentPath(file.url) ? (
+                    <FileTypeIcon
+                      filePath={fileName}
+                      isDirectory
+                      className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")}
+                    />
                   ) : file.mime?.includes('pdf') ? (
                     <Icon name="file-pdf" className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
                   ) : (

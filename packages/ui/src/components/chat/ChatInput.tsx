@@ -1048,15 +1048,22 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const messageRef = React.useRef(message);
     const pendingPastedAttachmentFilenamesRef = React.useRef<Set<string>>(new Set());
     const getDocument = composer.getDocument;
-    const replaceWithConfirmedFileMentions = React.useCallback((nextText: string, paths: readonly string[]) => applyProgrammaticEdit(nextText, (mentions, document) => {
+    const replaceWithConfirmedFileMentions = React.useCallback((nextText: string, paths: readonly string[], directoryPaths: readonly string[] = []) => applyProgrammaticEdit(nextText, (mentions, document) => {
         const additions: DraftMention[] = [];
+        const directorySet = new Set(directoryPaths);
         for (const path of paths) {
             let from = 0;
             const token = `@${path}`;
             while (from < document.text.length) {
                 const start = document.text.indexOf(token, from);
                 if (start < 0) break;
-                additions.push({ kind: 'file', value: path, path, label: path, range: { start, end: start + token.length } });
+                additions.push({
+                    kind: directorySet.has(path) ? 'directory' : 'file',
+                    value: path,
+                    path,
+                    label: path,
+                    range: { start, end: start + token.length },
+                });
                 from = start + token.length;
             }
         }
@@ -1863,7 +1870,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 installedSkillNames: queuedSkillNames,
                 directory: queueDirectory,
                 root: queueDirectory,
-                confirmedFilePaths: queuedMsg.composerMentions?.filter((mention) => mention.kind === 'file').map((mention) => mention.path || mention.value),
+                confirmedFilePaths: queuedMsg.composerMentions?.filter((mention) => mention.kind === 'file' || mention.kind === 'directory').map((mention) => mention.path || mention.value),
+                confirmedDirectoryPaths: queuedMsg.composerMentions?.filter((mention) => mention.kind === 'directory').map((mention) => mention.path || mention.value),
                 citationAttachments: queuedMsg.attachments,
             });
             semanticReferences.push(...compiled.semantics);
@@ -1900,6 +1908,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 directory: currentDirectory,
                 root: chatSearchDirectory || currentDirectory,
                 confirmedFilePaths: confirmedFileMentions.map((mention) => mention.path),
+                confirmedDirectoryPaths: confirmedFileMentions.filter((mention) => mention.kind === 'directory').map((mention) => mention.path),
                 citationAttachments: sendableAttachedFiles,
             });
             semanticReferences.push(...compiled.semantics);
@@ -3562,7 +3571,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
     }, [addAttachedFile, addDroppedPathsAsMentions, attachedFiles, adjustTextareaHeight, currentSessionId, getDocument, inputMode, insertReference, markFileMentionPasteSuppression, message, newSessionDraftOpen, insertTextAtSelection, t, updateAutocompleteState, commitBrowserTextChange, applyProgrammaticEdit]);
 
-    const handleFileSelect = (file: { name: string; path: string; relativePath?: string }) => {
+    const handleFileSelect = (file: { name: string; path: string; relativePath?: string; isDirectory?: boolean }) => {
 
         const cursorPosition = textareaRef.current?.selectionStart || 0;
         const textBeforeCursor = message.substring(0, cursorPosition);
@@ -3571,6 +3580,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const mentionPath = (file.relativePath && file.relativePath.trim().length > 0)
             ? file.relativePath.trim()
             : (toProjectRelativeMentionPath(file.path) || file.name);
+        const directoryPaths = file.isDirectory ? [mentionPath] : [];
 
 
         if (lastAtSymbol !== -1) {
@@ -3578,7 +3588,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 message.substring(0, lastAtSymbol) +
                 `@${mentionPath} ` +
                 message.substring(cursorPosition);
-            replaceWithConfirmedFileMentions(newMessage, [mentionPath]);
+            replaceWithConfirmedFileMentions(newMessage, [mentionPath], directoryPaths);
             const nextCursor = lastAtSymbol + mentionPath.length + 2;
             requestAnimationFrame(() => {
                 if (textareaRef.current) {
@@ -3593,7 +3603,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 message.substring(0, cursorPosition) +
                 `@${mentionPath} ` +
                 message.substring(cursorPosition);
-            replaceWithConfirmedFileMentions(newMessage, [mentionPath]);
+            replaceWithConfirmedFileMentions(newMessage, [mentionPath], directoryPaths);
             const nextCursor = cursorPosition + mentionPath.length + 2;
             requestAnimationFrame(() => {
                 if (textareaRef.current) {

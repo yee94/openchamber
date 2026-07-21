@@ -19,4 +19,8 @@ describe('getEffectiveShortcutCombos', () => {
       previous_session: 'mod+shift+arrowup',
     })).toEqual(['mod+shift+arrowup']);
   });
+
+  test('returns the toggle_right_sidebar default combo and its Cmd+\\ alias', () => {
+    expect(getEffectiveShortcutCombos('toggle_right_sidebar')).toEqual(['mod+alt+b', 'mod+\\']);
+  });
 });

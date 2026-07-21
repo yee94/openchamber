@@ -805,7 +805,7 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
-      if (eventMatchesShortcut(e, combo('toggle_right_sidebar'))) {
+      if (combos('toggle_right_sidebar').some((shortcut) => eventMatchesShortcut(e, shortcut))) {
         const { isMobile } = useUIStore.getState();
         if (isMobile) {
           return;

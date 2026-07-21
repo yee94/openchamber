@@ -2,6 +2,9 @@ import { expect, mock, test } from 'bun:test';
 
 mock.module('@/sync/sync-refs', () => ({
     getSyncSessions: () => [{ id: 'ses_1', title: 'Prior work' }],
+    getSyncMessages: () => [],
+    getSyncParts: () => [],
+    resolveMaterializedSessionDirectory: (_sessionId: string, directory?: string) => directory ?? null,
 }));
 
 const { compileChatComposerDelivery, legacyTextToAuthoredPlan } = await import('./chatComposerDelivery');
@@ -53,6 +56,23 @@ test('manual and auto legacy delivery compile text-only queue content', () => {
         expect(compiled.agent).toBe('worker');
         expect(compiled.attachments[0]?.serverPath).toBe('/project/src/file.ts');
     }
+});
+
+test('confirmed directory mentions send application/x-directory mime', () => {
+    const compiled = compileChatComposerDelivery({
+        plan: legacyTextToAuthoredPlan('update @opencode config'),
+        agents,
+        installedSkillNames: new Set(),
+        directory: '/Users/yee.wang/.config',
+        root: '/Users/yee.wang/.config',
+        confirmedFilePaths: ['opencode'],
+        confirmedDirectoryPaths: ['opencode'],
+    });
+
+    expect(compiled.attachments).toHaveLength(1);
+    expect(compiled.attachments[0]?.serverPath).toBe('/Users/yee.wang/.config/opencode');
+    expect(compiled.attachments[0]?.mimeType).toBe('application/x-directory');
+    expect(compiled.attachments[0]?.filename).toBe('opencode');
 });
 
 test('compiler preserves Paste payload bytes while resolving authored session tokens', () => {

@@ -8,6 +8,8 @@ import {
     getAttachmentCitationIconPath,
     isInlineAttachmentCitation,
     isCodeSelectionFilePart,
+    isDirectoryAttachmentMime,
+    isDirectoryAttachmentPath,
     isGenericImageFilename,
     removeAttachmentCitations,
     resolveAttachmentCitationDeletion,
@@ -215,5 +217,12 @@ describe('attachment citations', () => {
             ['README.md:20'],
             { key: 'Backspace', selectionStart: 3, selectionEnd: 3 },
         )).toBeNull();
+    });
+
+    test('recognizes OpenCode directory attachment mime and trailing-slash paths', () => {
+        expect(isDirectoryAttachmentMime('application/x-directory')).toBe(true);
+        expect(isDirectoryAttachmentMime(' text/plain ')).toBe(false);
+        expect(isDirectoryAttachmentPath('/Users/yee.wang/.config/opencode/')).toBe(true);
+        expect(isDirectoryAttachmentPath('/Users/yee.wang/.config/opencode')).toBe(false);
     });
 });

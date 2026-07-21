@@ -152,7 +152,8 @@ export const buildQueuedAutoSendPayload = (queue: QueuedMessage[]) => {
     installedSkillNames: new Set(readInstalledSkillsSnapshot(queryClient, directory).map((skill) => skill.name)),
     directory,
     root: directory,
-    confirmedFilePaths: queued.composerMentions?.filter((mention) => mention.kind === 'file').map((mention) => mention.path || mention.value),
+    confirmedFilePaths: queued.composerMentions?.filter((mention) => mention.kind === 'file' || mention.kind === 'directory').map((mention) => mention.path || mention.value),
+    confirmedDirectoryPaths: queued.composerMentions?.filter((mention) => mention.kind === 'directory').map((mention) => mention.path || mention.value),
     citationAttachments: queued.attachments,
   });
   const additionalParts = buildComposerSemanticParts(compiled.semantics, directory);

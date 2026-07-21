@@ -255,7 +255,8 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     })
       .then((hits) => {
         if (!cancelled) {
-          setDirectories(hits.slice(0, 10));
+          // Directory-only search hits must keep isDirectory so @mentions send the folder mime.
+          setDirectories(hits.slice(0, 10).map((hit) => ({ ...hit, isDirectory: true })));
         }
       })
       .catch(() => {
@@ -439,7 +440,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         if (dirIndex < visibleDirectories.length) {
           const dir = visibleDirectories[dirIndex];
           if (dir) {
-            handleFileSelect(dir);
+            handleFileSelect({ ...dir, isDirectory: true });
           }
           return;
         }
@@ -574,7 +575,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
                     isMobile && 'min-h-11',
                     isSelected && "bg-interactive-selection text-interactive-selection-foreground"
                   )}
-                  onClick={() => handleFileSelect(dir)}
+                  onClick={() => handleFileSelect({ ...dir, isDirectory: true })}
                   onMouseMove={() => setSelectedIndex(rowIndex)}
                 >
                   <Icon name="folder-3-fill" className="h-3.5 w-3.5 text-current" />

@@ -238,9 +238,10 @@ const resolveIconName = (filePath: string, extension?: string): string => {
 
 export const getFileTypeIconHref = (
   filePath: string,
-  options?: { extension?: string; themeVariant?: ThemeVariant }
+  options?: { extension?: string; themeVariant?: ThemeVariant; isDirectory?: boolean }
 ): string => {
-  const resolvedBaseIconName = resolveIconName(filePath, options?.extension);
+  // Directories share OpenCode's folder glyph instead of the document fallback.
+  const resolvedBaseIconName = options?.isDirectory ? 'folder' : resolveIconName(filePath, options?.extension);
   const baseIconName = FILE_TYPE_ICON_IDS.has(resolvedBaseIconName) ? resolvedBaseIconName : fallbackIconName;
   const iconName = selectVariantIconName(baseIconName, options?.themeVariant || 'dark');
   return `#${iconName}`;

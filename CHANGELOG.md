@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.46] - 2026-07-21
+
+- **Directory mentions:** support `@folder` mentions in the composer with persisted `directory` mention kind, autocomplete hits that keep directory intent, and delivery that sends OpenCode `application/x-directory` attachments through send and queued-message paths.
+- **Directory attachments:** show the shared folder glyph for directory attachments and mentions in composer chips and message file rows, detecting OpenCode directory mime and trailing-slash path markers.
+- **Keyboard shortcuts:** add `Mod+\` as a default alias for toggling the review panel alongside the existing shortcut.
+
 ## [1.16.45] - 2026-07-21
 
 - **Localization:** translate Today, Yesterday, and Yesterday-with-time date labels in Simplified and Traditional Chinese locale dictionaries.

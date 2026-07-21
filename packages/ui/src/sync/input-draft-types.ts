@@ -90,7 +90,7 @@ export type DraftSyntheticPart = {
 }
 
 export type DraftMention = {
-  kind: "file" | "agent"
+  kind: "file" | "directory" | "agent"
   value: string
   path: string
   label: string
@@ -176,7 +176,7 @@ export const parseDraftMentions = (text: string, value: unknown): DraftMention[]
   const occurrences = new Set<string>()
   let previousEnd = 0
   for (const candidate of value) {
-    if (!isPlainObject(candidate) || !hasOnlyKeys(candidate, ["kind", "value", "path", "label", "range"]) || (candidate.kind !== "file" && candidate.kind !== "agent") || !isBoundedString(candidate.value, DRAFT_MENTION_LIMITS.valueLength) || !isBoundedString(candidate.path, DRAFT_MENTION_LIMITS.pathLength) || !isBoundedString(candidate.label, DRAFT_MENTION_LIMITS.labelLength) || !isPlainObject(candidate.range) || !hasOnlyKeys(candidate.range, ["start", "end"]) || !isNonNegativeInteger(candidate.range.start) || !isNonNegativeInteger(candidate.range.end) || candidate.range.end <= candidate.range.start || candidate.range.end > text.length || candidate.range.start < previousEnd || !isUTF16Boundary(text, candidate.range.start) || !isUTF16Boundary(text, candidate.range.end) || text.slice(candidate.range.start, candidate.range.end) !== `@${candidate.value}`) return undefined
+    if (!isPlainObject(candidate) || !hasOnlyKeys(candidate, ["kind", "value", "path", "label", "range"]) || (candidate.kind !== "file" && candidate.kind !== "directory" && candidate.kind !== "agent") || !isBoundedString(candidate.value, DRAFT_MENTION_LIMITS.valueLength) || !isBoundedString(candidate.path, DRAFT_MENTION_LIMITS.pathLength) || !isBoundedString(candidate.label, DRAFT_MENTION_LIMITS.labelLength) || !isPlainObject(candidate.range) || !hasOnlyKeys(candidate.range, ["start", "end"]) || !isNonNegativeInteger(candidate.range.start) || !isNonNegativeInteger(candidate.range.end) || candidate.range.end <= candidate.range.start || candidate.range.end > text.length || candidate.range.start < previousEnd || !isUTF16Boundary(text, candidate.range.start) || !isUTF16Boundary(text, candidate.range.end) || text.slice(candidate.range.start, candidate.range.end) !== `@${candidate.value}`) return undefined
     const occurrence = JSON.stringify([candidate.kind, candidate.value, candidate.path, candidate.label, candidate.range.start, candidate.range.end])
     if (occurrences.has(occurrence)) return undefined
     occurrences.add(occurrence)

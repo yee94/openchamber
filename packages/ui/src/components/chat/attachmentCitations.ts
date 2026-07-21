@@ -210,6 +210,18 @@ export const isCodeSelectionFilePart = (part: DisplayFilePartCandidate): boolean
     && /:\d+(?:-\d+)?$/.test(part.filename)
 );
 
+/** OpenCode directory attachment mime — keep in sync with opencode session/prompt. */
+export const DIRECTORY_ATTACHMENT_MIME = 'application/x-directory';
+
+export const isDirectoryAttachmentMime = (mime?: string | null): boolean => (
+    typeof mime === 'string' && mime.trim().toLowerCase() === DIRECTORY_ATTACHMENT_MIME
+);
+
+/** Trailing slash is OpenCode's lightweight directory marker on paths/URLs. */
+export const isDirectoryAttachmentPath = (path?: string | null): boolean => (
+    typeof path === 'string' && /[/\\]$/.test(path.trim())
+);
+
 export const findAttachmentCitationRanges = (text: string, filenames: string[]): CitationRange[] => {
     if (!text || !text.includes('[') || filenames.length === 0) {
         return [];

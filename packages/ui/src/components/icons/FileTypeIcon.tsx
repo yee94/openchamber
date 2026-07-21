@@ -6,13 +6,15 @@ import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 type FileTypeIconProps = {
   filePath: string;
   extension?: string;
+  /** OpenCode directory attachments (`application/x-directory`) use the folder glyph. */
+  isDirectory?: boolean;
   className?: string;
 };
 
-export const FileTypeIcon: React.FC<FileTypeIconProps> = ({ filePath, extension, className }) => {
+export const FileTypeIcon: React.FC<FileTypeIconProps> = ({ filePath, extension, isDirectory, className }) => {
   const theme = useOptionalThemeSystem();
   const variant = theme?.currentTheme.metadata.variant === 'light' ? 'light' : 'dark';
-  const iconHref = getFileTypeIconHref(filePath, { extension, themeVariant: variant });
+  const iconHref = getFileTypeIconHref(filePath, { extension, isDirectory, themeVariant: variant });
 
   return (
     <svg

@@ -226,6 +226,7 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
   {
     id: 'toggle_right_sidebar',
     defaultCombo: 'mod+alt+b',
+    defaultAliases: ['mod+\\'],
     label: 'Toggle review panel',
     description: 'Toggle the review panel (right sidebar)',
     customizable: true,

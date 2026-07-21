@@ -12,6 +12,12 @@ const record = (): DraftRecord => ({
 })
 
 describe("input draft types", () => {
+  test("accepts directory mention kind", () => {
+    const text = "@opencode"
+    const mentions = [{ kind: "directory" as const, value: "opencode", path: "opencode", label: "opencode", range: { start: 0, end: 9 } }]
+    expect(parseDraftMentions(text, mentions)).toEqual(mentions)
+  })
+
   test("strictly parses authored mention ranges", () => {
     const text = "@README @agent"
     const mentions = [{ kind: "file", value: "README", path: "README", label: "README", range: { start: 0, end: 7 } }, { kind: "agent", value: "agent", path: "agent", label: "agent", range: { start: 8, end: 14 } }]
