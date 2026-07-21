@@ -54,7 +54,7 @@ Canonical look is the bordered shared `Input` style, not a flat bottom divider.
 - Wrapper padding for the search row is `p-1.5 pb-1`.
 - Dense picker search fields are typically `h-8` with a leading search icon.
 - Keep the ring treatment: inset `ring-border/60`, hover subtle surface, focus `interactive-focus-ring`.
-- Do not force borderless overrides such as `ring-0`, `border-none`, `rounded-none bg-transparent`, or CSS that strips `command-input-wrapper` borders / hides the search icon.
+- Do not force borderless overrides such as `ring-0`, `border-none`, `rounded-none`, or CSS that strips `command-input-wrapper` borders / hides the search icon. `CommandPalette` keeps its search field transparent so it inherits the palette surface while retaining its border and focus ring.
 - Do not reintroduce the old `border-b border-border/40` search divider as the primary search-field affordance.
 - Keep search placeholders localized through `locale-ui-patterns`.
 

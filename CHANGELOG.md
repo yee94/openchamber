@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.48] - 2026-07-21
+
+- **Session forking:** resolve explicit assistant-message fork points to the following source message ID so forks retain history through the selected reply without restoring composer input.
+- **Command palette:** keep the search field transparent so it inherits the palette surface while retaining its border and focus ring.
+
 ## [1.16.47] - 2026-07-21
 
 - **Session references:** hydrate the target conversation before inserting an `@session` mention, show a localized failure toast when the reference cannot be materialized, and share one session-mention candidate filter across autocomplete surfaces.

@@ -441,8 +441,9 @@ must not materialize that complete copied history into the directory store.
   through normally.
 - A current-session fork during `busy` or `retry` targets the latest user
   message. The active assistant message remains outside the forked history.
-- A fork from a selected message restores that message's text and file parts.
-  A current-session fork preserves the composer's existing resources.
+- An explicit user-message fork passes that user message ID and restores its text and file parts.
+- An explicit assistant-message fork passes the following source message ID; an assistant at the source tail passes `undefined` and retains the full history through that reply.
+- A current-session fork preserves the composer's existing resources.
 
 ### New conversation orchestration
 

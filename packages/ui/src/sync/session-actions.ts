@@ -90,7 +90,12 @@ export function resolveForkMessageId(
   messages: Message[],
   status: SessionStatus | undefined,
 ): string | undefined {
-  if (messageId || !status || status.type === "idle") return messageId
+  if (messageId) {
+    const messageIndex = messages.findIndex((message) => message.id === messageId)
+    if (messageIndex === -1 || messages[messageIndex]?.role !== "assistant") return messageId
+    return messages[messageIndex + 1]?.id
+  }
+  if (!status || status.type === "idle") return messageId
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     if (messages[index]?.role === "user") return messages[index].id
   }

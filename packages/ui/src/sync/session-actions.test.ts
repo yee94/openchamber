@@ -372,20 +372,24 @@ describe("abort queue dispatch block", () => {
 })
 
 describe("resolveForkMessageId", () => {
-  const userMessage = { id: "user-latest", role: "user", sessionID: "session-a", time: { created: 2 } } as Message
-  const assistantMessage = { id: "assistant-loading", role: "assistant", sessionID: "session-a", time: { created: 3 } } as Message
+  const userMessage = { id: "user-message", role: "user", sessionID: "session-a", time: { created: 2 } } as Message
+  const assistantMessage = { id: "assistant-message", role: "assistant", sessionID: "session-a", time: { created: 3 } } as Message
+  const nextMessage = { id: "next-message", role: "user", sessionID: "session-a", time: { created: 4 } } as Message
 
   test("uses the latest user message while a response is in progress", async () => {
     const { resolveForkMessageId } = await import("./session-actions")
 
-    expect(resolveForkMessageId(undefined, [userMessage, assistantMessage], { type: "busy" })).toBe("user-latest")
-    expect(resolveForkMessageId(undefined, [userMessage, assistantMessage], { type: "retry", attempt: 1, message: "retrying", next: 0 })).toBe("user-latest")
+    expect(resolveForkMessageId(undefined, [userMessage, assistantMessage], { type: "busy" })).toBe("user-message")
+    expect(resolveForkMessageId(undefined, [userMessage, assistantMessage], { type: "retry", attempt: 1, message: "retrying", next: 0 })).toBe("user-message")
   })
 
-  test("preserves explicit and completed-session fork points", async () => {
+  test("resolves explicit fork points against source message roles", async () => {
     const { resolveForkMessageId } = await import("./session-actions")
 
-    expect(resolveForkMessageId("selected-message", [userMessage, assistantMessage], { type: "busy" })).toBe("selected-message")
+    expect(resolveForkMessageId("user-message", [userMessage, assistantMessage], { type: "busy" })).toBe("user-message")
+    expect(resolveForkMessageId("assistant-message", [userMessage, assistantMessage, nextMessage], { type: "idle" })).toBe("next-message")
+    expect(resolveForkMessageId("assistant-message", [userMessage, assistantMessage], { type: "idle" })).toBe(undefined)
+    expect(resolveForkMessageId("unknown-message", [userMessage, assistantMessage], { type: "busy" })).toBe("unknown-message")
     expect(resolveForkMessageId(undefined, [userMessage, assistantMessage], { type: "idle" })).toBe(undefined)
   })
 })
@@ -448,14 +452,15 @@ describe("forkSession input restoration", () => {
     expect(inputState.pendingInputText).not.toContain("/fork")
   })
 
-  test("does not restore composer when forking from an assistant message", async () => {
+  test("keeps the composer unchanged and passes the next message when forking from an assistant message", async () => {
     const sourceSession = { id: "session-a", title: "Source", time: { created: 1 } } as Session
     const selectedMessage = { id: "message-a", sessionID: "session-a", role: "assistant", time: { created: 1 } } as Message
+    const nextMessage = { id: "message-b", sessionID: "session-a", role: "user", time: { created: 2 } } as Message
     inputState.pendingInputText = "existing draft"
     inputState.attachedFiles = [{ url: "file:///existing.txt", mimeType: "text/plain", filename: "existing.txt" }]
     const sessionStore = createStore({}, {
       session: [sourceSession],
-      message: { "session-a": [selectedMessage] },
+      message: { "session-a": [selectedMessage, nextMessage] },
       session_status: { "session-a": { type: "idle" } },
       part: {
         "message-a": [
@@ -469,7 +474,7 @@ describe("forkSession input restoration", () => {
 
     await forkSession("session-a", 2, "message-a")
 
-    expect(replyCalls.find((call) => call.method === "session.fork")?.params.messageID).toBe("message-a")
+    expect(replyCalls.find((call) => call.method === "session.fork")?.params.messageID).toBe("message-b")
     expect(clearAttachedFilesCalls).toBe(0)
     expect(inputState.pendingInputText).toBe("existing draft")
     expect(inputState.attachedFiles).toEqual([{ url: "file:///existing.txt", mimeType: "text/plain", filename: "existing.txt" }])
