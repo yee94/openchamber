@@ -24,6 +24,12 @@ interface BranchInfo {
   behind?: number;
 }
 
+export type BranchSelectorWorktreeOption = {
+  value: string;
+  label: string;
+  pending?: boolean;
+};
+
 interface BranchSelectorProps {
   currentBranch: string | null | undefined;
   localBranches: string[];
@@ -35,6 +41,25 @@ interface BranchSelectorProps {
   disabled?: boolean;
   /** Icon-only trigger; branch name shown in tooltip. */
   iconOnly?: boolean;
+  /** Replace the default trigger (e.g. draft composer chip). */
+  trigger?: React.ReactElement;
+  /** Optional content label override for the default text trigger. */
+  triggerLabel?: string | null;
+  /** Align the dropdown. Defaults based on iconOnly. */
+  contentAlign?: 'start' | 'end' | 'center';
+  /** Hide the trigger tooltip (useful for custom composer chips). */
+  hideTooltip?: boolean;
+  /** Project root directory row shown above linked worktrees. */
+  projectRootOption?: BranchSelectorWorktreeOption | null;
+  /** Linked worktrees listed under the branch lists. */
+  worktreeOptions?: BranchSelectorWorktreeOption[];
+  /** Currently selected session/worktree directory. */
+  selectedDirectory?: string | null;
+  onSelectDirectory?: (directory: string) => void;
+  onCreateWorktree?: () => void;
+  worktreesLabel?: string;
+  worktreeNewLabel?: string;
+  projectRootLabel?: string;
 }
 
 const sanitizeBranchNameInput = (value: string): string => {
@@ -60,6 +85,18 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
   remotes = [],
   disabled = false,
   iconOnly = false,
+  trigger,
+  triggerLabel,
+  contentAlign,
+  hideTooltip = false,
+  projectRootOption = null,
+  worktreeOptions = [],
+  selectedDirectory = null,
+  onSelectDirectory,
+  onCreateWorktree,
+  worktreesLabel,
+  worktreeNewLabel,
+  projectRootLabel,
 }) => {
   const { t } = useI18n();
   const [isOpen, setIsOpen] = React.useState(false);
@@ -75,6 +112,7 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
   }, []);
 
   const hasMultipleRemotes = remotes.length > 1;
+  const showWorktreeSection = Boolean(onSelectDirectory || onCreateWorktree);
 
   const sanitizedNewBranch = React.useMemo(
     () => sanitizeBranchNameInput(newBranchName),
@@ -93,12 +131,32 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
     return remoteBranches.filter((b) => b.toLowerCase().includes(term));
   }, [search, remoteBranches]);
 
+  const filteredWorktrees = React.useMemo(() => {
+    const term = search.toLowerCase();
+    if (!term) return worktreeOptions;
+    return worktreeOptions.filter((option) => option.label.toLowerCase().includes(term));
+  }, [search, worktreeOptions]);
+
+  const projectRootMatches = React.useMemo(() => {
+    if (!projectRootOption) return false;
+    const term = search.toLowerCase();
+    if (!term) return true;
+    return projectRootOption.label.toLowerCase().includes(term)
+      || (projectRootLabel ?? '').toLowerCase().includes(term);
+  }, [projectRootLabel, projectRootOption, search]);
+
   const handleCheckout = (branch: string) => {
     if (branch === currentBranch) {
       setIsOpen(false);
       return;
     }
     onCheckout(branch);
+    setIsOpen(false);
+    setSearch('');
+  };
+
+  const handleSelectDirectory = (directory: string) => {
+    onSelectDirectory?.(directory);
     setIsOpen(false);
     setSearch('');
   };
@@ -110,13 +168,13 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
 
   const handleCreate = async () => {
     if (!sanitizedNewBranch || isCreating) return;
-    
+
     // If multiple remotes, show remote selection first
     if (hasMultipleRemotes) {
       setShowRemoteSelect(true);
       return;
     }
-    
+
     // Single or no remote - proceed directly
     setIsCreating(true);
     try {
@@ -162,45 +220,59 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
     }
   }, [isOpen]);
 
-  const branchLabel = currentBranch || t('gitView.branch.detachedHead');
+  const branchLabel = triggerLabel || currentBranch || t('gitView.branch.detachedHead');
+  const resolvedContentAlign = contentAlign ?? (iconOnly ? 'end' : 'start');
+  const resolvedWorktreesLabel = worktreesLabel ?? t('chat.chatInput.worktrees');
+  const resolvedWorktreeNewLabel = worktreeNewLabel ?? t('chat.chatInput.worktreeNew');
+  const resolvedProjectRootLabel = projectRootLabel ?? t('chat.chatInput.projectRoot');
+
+  const defaultTrigger = iconOnly ? (
+    <button
+      type="button"
+      className="flex size-6 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50"
+      disabled={disabled}
+      aria-label={branchLabel}
+    >
+      <Icon name="git-branch" className="size-3.5" />
+    </button>
+  ) : (
+    <Button
+      variant="ghost"
+      size="xs"
+      className="h-6 min-w-0 max-w-full justify-start gap-1 px-0 hover:bg-transparent"
+      disabled={disabled}
+      aria-label={branchLabel}
+    >
+      <Icon name="git-branch" className="size-3.5 text-primary" />
+      <span className="min-w-0 truncate typography-ui-label font-semibold text-left text-foreground">
+        {branchLabel}
+      </span>
+      <Icon name="arrow-down-s" className="size-3 shrink-0 text-muted-foreground" />
+    </Button>
+  );
+
+  const menuTrigger = (
+    <DropdownMenuTrigger asChild disabled={disabled}>
+      {trigger ?? defaultTrigger}
+    </DropdownMenuTrigger>
+  );
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            {iconOnly ? (
-              <button
-                type="button"
-                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={disabled}
-                aria-label={branchLabel}
-              >
-                <Icon name="git-branch" className="size-3.5" />
-              </button>
-            ) : (
-              <Button
-                variant="ghost"
-                size="xs"
-                className="h-6 min-w-0 max-w-full justify-start gap-1 px-0 hover:bg-transparent"
-                disabled={disabled}
-                aria-label={branchLabel}
-              >
-                <Icon name="git-branch" className="size-3.5 text-primary" />
-                <span className="min-w-0 truncate typography-ui-label font-semibold text-left text-foreground">
-                  {branchLabel}
-                </span>
-                <Icon name="arrow-down-s" className="size-3 shrink-0 text-muted-foreground" />
-              </Button>
-            )}
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent sideOffset={8}>
-          {iconOnly ? branchLabel : t('gitView.branch.currentBranchTooltip')}
-        </TooltipContent>
-      </Tooltip>
+      {hideTooltip || trigger ? (
+        menuTrigger
+      ) : (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {menuTrigger}
+          </TooltipTrigger>
+          <TooltipContent sideOffset={8}>
+            {iconOnly ? branchLabel : t('gitView.branch.currentBranchTooltip')}
+          </TooltipContent>
+        </Tooltip>
+      )}
 
-      <DropdownMenuContent align={iconOnly ? 'end' : 'start'} className="w-72 p-0 max-h-[60vh] flex flex-col">
+      <DropdownMenuContent align={resolvedContentAlign} className="w-72 p-0 max-h-[60vh] flex flex-col">
         <Command className="h-full min-h-0">
           <CommandInput
             placeholder={t('gitView.branch.searchPlaceholder')}
@@ -354,6 +426,56 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
                 </CommandItem>
               )}
             </CommandGroup>
+
+            {showWorktreeSection ? (
+              <>
+                <CommandSeparator />
+                <CommandGroup>
+                  <div className="flex items-center justify-between px-2 py-1.5">
+                    <span className="text-muted-foreground typography-meta">{resolvedWorktreesLabel}</span>
+                    {onCreateWorktree ? (
+                      <button
+                        type="button"
+                        className="cursor-pointer text-muted-foreground typography-meta hover:text-foreground"
+                        onPointerDown={(event) => { event.stopPropagation(); }}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setIsOpen(false);
+                          onCreateWorktree();
+                        }}
+                      >
+                        {resolvedWorktreeNewLabel}
+                      </button>
+                    ) : null}
+                  </div>
+                  {projectRootOption && projectRootMatches ? (
+                    <CommandItem onSelect={() => handleSelectDirectory(projectRootOption.value)}>
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="typography-micro text-muted-foreground">{resolvedProjectRootLabel}</span>
+                        <span className="truncate typography-ui-label text-foreground">{projectRootOption.label}</span>
+                      </span>
+                      {selectedDirectory === projectRootOption.value ? (
+                        <span className="typography-micro text-primary">{t('gitView.branch.currentBadge')}</span>
+                      ) : null}
+                    </CommandItem>
+                  ) : null}
+                  {filteredWorktrees.map((option) => (
+                    <CommandItem
+                      key={`worktree-${option.value}`}
+                      onSelect={() => handleSelectDirectory(option.value)}
+                    >
+                      <span className="truncate typography-ui-label text-foreground">
+                        {option.pending ? '⏳ ' : ''}{option.label}
+                      </span>
+                      {selectedDirectory === option.value ? (
+                        <span className="typography-micro text-primary">{t('gitView.branch.currentBadge')}</span>
+                      ) : null}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
+            ) : null}
 
           </CommandList>
         </Command>

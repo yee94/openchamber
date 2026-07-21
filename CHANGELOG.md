@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.42] - 2026-07-21
+
+- **Draft branch selector:** reuse the Git sidebar searchable branch selector for new conversations, with project-root and worktree targets listed at the bottom.
+- **Branch switching:** when picking a branch in a draft conversation, choose between checking out in the current directory or opening an isolated worktree for that branch.
+- **Worktree drafts:** add branch-scoped worktree draft creation so existing branches can spawn dedicated worktrees without generating a new branch name.
+- **Draft target switching:** clear create-time draft locks after worktree bootstrap so project root (e.g. main) remains selectable once the new worktree appears.
+
 ## [1.16.41] - 2026-07-21
 
 - **Queued attachments:** allow the `X-Message-Queue-Content-Length` header through runtime CORS preflight so packaged clients can send explicit upload size metadata with queued attachment requests.

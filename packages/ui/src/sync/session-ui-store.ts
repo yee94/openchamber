@@ -1378,15 +1378,25 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     writeRuntimeSessionMemory(runtimeMemoryKey(), { draft: nextDraft })
   },
 
-  setNewSessionDraftTarget: (target) => {
+  setNewSessionDraftTarget: (target, options) => {
     let nextDirectory: string | null = null
     set((s) => {
       nextDirectory = normalizePath(target.directoryOverride ?? s.newSessionDraft.directoryOverride)
+      // force: explicit user/target updates must release create-time draft locks so
+      // selecting project root (e.g. main) after a new worktree is not a no-op.
+      // selectedDraftDirectory prefers bootstrapPendingDirectory over directoryOverride.
+      const force = options?.force === true
       return {
         newSessionDraft: {
           ...s.newSessionDraft,
           selectedProjectId: target.projectId ?? target.selectedProjectId ?? s.newSessionDraft.selectedProjectId,
           directoryOverride: target.directoryOverride ?? s.newSessionDraft.directoryOverride,
+          ...(force
+            ? {
+                bootstrapPendingDirectory: null,
+                preserveDirectoryOverride: false,
+              }
+            : {}),
         },
       }
     })

@@ -150,27 +150,54 @@ const initializeSessionForWorktree = (sessionId: string, metadata: {
 };
 
 
-const createInstantWorktreeDraft = async (options?: {
+type InstantWorktreeDraftOptions = {
   initialPrompt?: string;
   title?: string;
-}): Promise<string | null> => {
+  /** When set, create a worktree for this existing branch instead of generating a new one. */
+  existingBranch?: string;
+  projectDirectory?: string;
+};
+
+const slugifyWorktreeName = (value: string): string => {
+  return value
+    .trim()
+    .replace(/^remotes\//, '')
+    .replace(/[^A-Za-z0-9._/-]+/g, '-')
+    .replace(/\/+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    || 'worktree';
+};
+
+const createInstantWorktreeDraft = async (options?: InstantWorktreeDraftOptions): Promise<string | null> => {
   if (isCreatingWorktreeSession) {
     return null;
   }
 
   const activeProject = useProjectsStore.getState().getActiveProject();
-  if (!activeProject?.path) {
+  const projectDirectory = options?.projectDirectory?.trim() || activeProject?.path;
+  if (!projectDirectory) {
     toast.error('No active project', {
       description: 'Please select a project first.',
     });
     return null;
   }
 
-  const projectDirectory = activeProject.path;
+  const projectRef = resolveProjectRef(projectDirectory) ?? (
+    activeProject?.path
+      ? { id: activeProject.id, path: activeProject.path }
+      : null
+  );
+  if (!projectRef) {
+    toast.error('No active project', {
+      description: 'Please select a project first.',
+    });
+    return null;
+  }
 
   let isGitRepo = false;
   try {
-    isGitRepo = await checkIsGitRepository(projectDirectory);
+    isGitRepo = await checkIsGitRepository(projectRef.path);
   } catch {
     // Ignore errors, treat as not a git repo
   }
@@ -185,8 +212,12 @@ const createInstantWorktreeDraft = async (options?: {
   isCreatingWorktreeSession = true;
 
   try {
-    const projectRef: ProjectRef = { id: activeProject.id, path: projectDirectory };
     const pendingRequestId = createPendingDraftWorktreeRequest();
+    const existingBranch = options?.existingBranch?.trim().replace(/^remotes\//, '') || '';
+    const preferredName = existingBranch
+      ? slugifyWorktreeName(existingBranch)
+      : generateBranchName();
+    const mode = existingBranch ? 'existing' as const : 'new' as const;
 
     // Lock the draft immediately so no React effect can reset it to the project
     // root while we await the preview / worktree creation below.
@@ -211,12 +242,11 @@ const createInstantWorktreeDraft = async (options?: {
       });
     }
 
-    const preferredName = generateBranchName();
-
     const preview = await previewGitWorktree(projectRef.path, {
-      mode: 'new',
-      branchName: preferredName,
-      worktreeName: preferredName,
+      mode,
+      ...(mode === 'new'
+        ? { branchName: preferredName, worktreeName: preferredName }
+        : { existingBranch, worktreeName: preferredName }),
     }).catch(() => null);
 
     // Refine draft target once we know the actual worktree path from the preview.
@@ -236,11 +266,13 @@ const createInstantWorktreeDraft = async (options?: {
     const setupCommands = await getWorktreeSetupCommands(projectRef);
     const metadata = await createWorktreeWithDefaults(projectRef, {
       preferredName,
-      mode: 'new',
-      branchName: preferredName,
+      mode,
       worktreeName: preferredName,
       setupCommands,
       returnAfterDirectoryCreated: true,
+      ...(mode === 'new'
+        ? { branchName: preferredName }
+        : { existingBranch }),
     });
 
     resolvePendingDraftWorktreeRequest(pendingRequestId, metadata.path);
@@ -287,6 +319,27 @@ export async function createWorktreeSession(): Promise<string | null> {
  */
 export async function createWorktreeDraft(options?: { initialPrompt?: string; title?: string }): Promise<string | null> {
   return createInstantWorktreeDraft(options);
+}
+
+/**
+ * Create a draft-scoped worktree checked out to an existing branch.
+ */
+export async function createWorktreeDraftForBranch(options: {
+  branch: string;
+  projectDirectory?: string;
+  initialPrompt?: string;
+  title?: string;
+}): Promise<string | null> {
+  const branch = options.branch?.trim();
+  if (!branch) {
+    return null;
+  }
+  return createInstantWorktreeDraft({
+    existingBranch: branch,
+    projectDirectory: options.projectDirectory,
+    initialPrompt: options.initialPrompt,
+    title: options.title,
+  });
 }
 
 /**

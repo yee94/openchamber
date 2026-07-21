@@ -1138,3 +1138,58 @@ describe('createSession preserves pure semantics (no draftSubmitting pollution)'
     expect(draft.draftSubmitting).toBe(false);
   });
 });
+
+describe('setNewSessionDraftTarget force unlock', () => {
+  const projectRoot = '/projects/alpha';
+  const worktreePath = '/projects/alpha/.slim/worktrees/feature';
+
+  beforeEach(() => {
+    useSessionUIStore.setState({
+      currentSessionId: null,
+      currentSessionDirectory: null,
+      newSessionDraft: {
+        open: true,
+        draftID: 'draft-force-unlock',
+        selectedProjectId: 'proj-a',
+        directoryOverride: worktreePath,
+        pendingWorktreeRequestId: null,
+        bootstrapPendingDirectory: worktreePath,
+        preserveDirectoryOverride: true,
+        parentID: null,
+        draftSubmitting: false,
+        draftEstablishing: false,
+        submissionToken: 0,
+      },
+      availableWorktreesByProject: new Map(),
+    });
+    useProjectsStore.setState({
+      projects: [{ id: 'proj-a', path: projectRoot, label: 'Alpha' }],
+      activeProjectId: 'proj-a',
+    });
+    useDirectoryStore.getState().setDirectory(worktreePath, { showOverlay: false });
+  });
+
+  test('force:true clears bootstrap/preserve locks so project root can be reselected', () => {
+    useSessionUIStore.getState().setNewSessionDraftTarget({
+      projectId: 'proj-a',
+      directoryOverride: projectRoot,
+    }, { force: true });
+
+    const draft = useSessionUIStore.getState().newSessionDraft;
+    expect(draft.directoryOverride).toBe(projectRoot);
+    expect(draft.bootstrapPendingDirectory).toBeNull();
+    expect(draft.preserveDirectoryOverride).toBe(false);
+  });
+
+  test('without force keeps create-time locks so automatic resets cannot steal the worktree', () => {
+    useSessionUIStore.getState().setNewSessionDraftTarget({
+      projectId: 'proj-a',
+      directoryOverride: projectRoot,
+    });
+
+    const draft = useSessionUIStore.getState().newSessionDraft;
+    expect(draft.directoryOverride).toBe(projectRoot);
+    expect(draft.bootstrapPendingDirectory).toBe(worktreePath);
+    expect(draft.preserveDirectoryOverride).toBe(true);
+  });
+});

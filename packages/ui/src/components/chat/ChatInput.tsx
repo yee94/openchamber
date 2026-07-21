@@ -65,7 +65,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { COMPOSER_ICON_HOVER_CLASS, SELECTOR_CHIP_HOVER_CLASS } from '@/components/chat/message/parts/toolRowChrome';
 import { Input } from '@/components/ui/input';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
@@ -87,8 +87,8 @@ import { readInstalledSkillsSnapshot, useInstalledSkillsQuery } from '@/queries/
 import { useCommandsQuery } from '@/queries/commandQueries';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
-import { createWorktreeDraft } from '@/lib/worktreeSessionCreator';
 import { buildSessionTargetOptions } from '@/sync/session-worktree-contract';
+import { DraftSessionBranchSelector } from './DraftSessionBranchSelector';
 import { extractGitChangedFiles } from './changedFiles';
 import { useI18n } from '@/lib/i18n';
 import { sessionEvents } from '@/lib/sessionEvents';
@@ -899,7 +899,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     }, []);
     const [mobileDictationActive, setMobileDictationActive] = React.useState(false);
     const [mobileAttachMenuOpen, setMobileAttachMenuOpen] = React.useState(false);
-    const [mobileDraftPicker, setMobileDraftPicker] = React.useState<'project' | 'branch' | null>(null);
+    const [mobileDraftPicker, setMobileDraftPicker] = React.useState<'project' | null>(null);
     const [mobileDraftPickerQuery, setMobileDraftPickerQuery] = React.useState('');
     const [desktopDraftProjectQuery, setDesktopDraftProjectQuery] = React.useState('');
     const [desktopDraftProjectPickerOpen, setDesktopDraftProjectPickerOpen] = React.useState(false);
@@ -4270,14 +4270,32 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     }, [projectRootBranchOption?.value, selectedDraftDirectory, worktreeBranchOptions]);
 
     React.useEffect(() => {
-        if (!newSessionDraft?.open || !newSessionDraft?.preserveDirectoryOverride) {
+        if (!newSessionDraft?.open) {
+            return;
+        }
+        if (!newSessionDraft.preserveDirectoryOverride && !newSessionDraft.bootstrapPendingDirectory) {
             return;
         }
         if (!selectedDraftDirectory || !selectedDraftBranchIsKnown) {
             return;
         }
-        useSessionUIStore.getState().setDraftPreserveDirectoryOverride(false);
-    }, [newSessionDraft?.open, newSessionDraft?.preserveDirectoryOverride, selectedDraftBranchIsKnown, selectedDraftDirectory]);
+        // Create-time locks only need to survive until the new worktree is a known
+        // selectable option. Keeping bootstrapPendingDirectory after that makes
+        // selecting project root (main) a no-op because selectedDraftDirectory
+        // prefers the bootstrap path over directoryOverride.
+        if (newSessionDraft.preserveDirectoryOverride) {
+            useSessionUIStore.getState().setDraftPreserveDirectoryOverride(false);
+        }
+        if (newSessionDraft.bootstrapPendingDirectory) {
+            useSessionUIStore.getState().setDraftBootstrapPendingDirectory(null);
+        }
+    }, [
+        newSessionDraft?.bootstrapPendingDirectory,
+        newSessionDraft?.open,
+        newSessionDraft?.preserveDirectoryOverride,
+        selectedDraftBranchIsKnown,
+        selectedDraftDirectory,
+    ]);
 
     const shouldShowDraftBranchSelector = React.useMemo(() => {
         if (selectedDraftProjectIsGitRepo !== true) {
@@ -4294,7 +4312,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
     const handleDraftProjectChange = React.useCallback((projectId: string) => {
         const draft = useSessionUIStore.getState().newSessionDraft;
-        if (draft?.pendingWorktreeRequestId || draft?.bootstrapPendingDirectory || draft?.preserveDirectoryOverride) {
+        // Only block while worktree creation is still in-flight. bootstrap /
+        // preserve locks protect against automatic resets, not explicit picks.
+        if (draft?.pendingWorktreeRequestId) {
             return;
         }
         const project = projects.find((entry) => entry.id === projectId);
@@ -4312,7 +4332,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
     const handleDraftDirectoryChange = React.useCallback((directory: string) => {
         const draft = useSessionUIStore.getState().newSessionDraft;
-        if (draft?.pendingWorktreeRequestId || draft?.bootstrapPendingDirectory || draft?.preserveDirectoryOverride) {
+        // Only block while worktree creation is still in-flight. bootstrap /
+        // preserve locks protect against automatic resets, not explicit picks.
+        if (draft?.pendingWorktreeRequestId) {
             return;
         }
         if (!selectedDraftProject) {
@@ -5138,64 +5160,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                         )}
 
                         {selectedDraftProject && shouldShowDraftBranchSelector ? (
-                            <Select
-                                value={selectedDraftDirectory ?? draftBranchItems[0]?.value ?? normalizePath(selectedDraftProject.path) ?? ''}
-                                onValueChange={handleDraftDirectoryChange}
-                            >
-                                <SelectTrigger asChild size="sm">
-                                    <button
-                                        type="button"
-                                        className={cn(
-                                            'group relative inline-flex h-6 min-w-0 w-fit max-w-[48vw] items-center rounded-lg !border-0 px-1.5 py-1 pr-1.5 typography-micro font-medium text-foreground/80 transition-[padding] hover:pr-5 focus-visible:pr-5 data-[popup-open]:pr-5 sm:max-w-[20rem]',
-                                            SELECTOR_CHIP_HOVER_CLASS,
-                                        )}
-                                    >
-                                        <SelectValue>
-                                            <Icon name="git-branch" className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                                            <span className="truncate">{selectedDraftBranchLabel ?? t('chat.chatInput.branch')}</span>
-                                        </SelectValue>
-                                        <Icon
-                                            name="arrow-down-s"
-                                            className="pointer-events-none absolute right-1 size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 group-data-[popup-open]:opacity-100"
-                                            aria-hidden="true"
-                                        />
-                                    </button>
-                                </SelectTrigger>
-                                <SelectContent className="w-max min-w-48">
-                                    {projectRootBranchOption ? (
-                                        <SelectGroup>
-                                            <SelectLabel>{t('chat.chatInput.projectRoot')}</SelectLabel>
-                                            <SelectItem key={projectRootBranchOption.value} value={projectRootBranchOption.value} className="max-w-[24rem] truncate">
-                                                {projectRootBranchOption.label}
-                                            </SelectItem>
-                                        </SelectGroup>
-                                    ) : null}
-                                    {projectRootBranchOption ? <SelectSeparator /> : null}
-                                    <SelectGroup>
-                                        <div className="flex items-center justify-between px-2 py-1.5">
-                                            <span className="text-muted-foreground typography-meta">{t('chat.chatInput.worktrees')}</span>
-                                            <button
-                                                type="button"
-                                                className="text-muted-foreground typography-meta hover:text-foreground cursor-pointer"
-                                                onPointerDown={(e) => { e.stopPropagation(); }}
-                                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); void createWorktreeDraft(); }}
-                                            >
-                                                {t('chat.chatInput.worktreeNew')}
-                                            </button>
-                                        </div>
-                                        {worktreeBranchOptions.map((option) => (
-                                            <SelectItem key={option.value} value={option.value} className="max-w-[24rem] truncate">
-                                                {option.pending ? '⏳ ' : ''}{option.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectGroup>
-                                    {selectedDraftDirectory && !selectedDraftBranchIsKnown ? (
-                                        <SelectItem value={selectedDraftDirectory} className="max-w-[24rem] truncate">
-                                            {selectedDraftBranchLabel}
-                                        </SelectItem>
-                                    ) : null}
-                                </SelectContent>
-                            </Select>
+                            <DraftSessionBranchSelector
+                                directory={selectedDraftDirectory}
+                                projectDirectory={selectedDraftProjectPath}
+                                label={selectedDraftBranchLabel}
+                                projectRootOption={projectRootBranchOption}
+                                worktreeOptions={worktreeBranchOptions}
+                                onSelectDirectory={handleDraftDirectoryChange}
+                            />
                         ) : null}
                     </div>
                 ) : null}
@@ -5227,17 +5199,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                             </button>
                         )}
                         {selectedDraftProject && shouldShowDraftBranchSelector ? (
-                            <button
-                                type="button"
-                                className={cn(
-                                    'inline-flex h-auto min-h-6 min-w-0 max-w-[48vw] flex-shrink cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1 typography-micro font-medium text-foreground/80',
-                                    SELECTOR_CHIP_HOVER_CLASS,
-                                )}
-                                onClick={() => setMobileDraftPicker('branch')}
-                            >
-                                <span className="truncate">{selectedDraftBranchLabel ?? t('chat.chatInput.branch')}</span>
-                                <Icon name="arrow-down-s" className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-                            </button>
+                            <DraftSessionBranchSelector
+                                directory={selectedDraftDirectory}
+                                projectDirectory={selectedDraftProjectPath}
+                                label={selectedDraftBranchLabel}
+                                projectRootOption={projectRootBranchOption}
+                                worktreeOptions={worktreeBranchOptions}
+                                onSelectDirectory={handleDraftDirectoryChange}
+                                maxWidthClassName="max-w-[48vw]"
+                            />
                         ) : null}
                     </div>
                 ) : null}
@@ -6085,77 +6055,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                 <Icon name="folder-add" className="h-4 w-4 shrink-0 text-muted-foreground" />
                                 <span>{t('chat.chatInput.draftPicker.newProject')}</span>
                             </button>
-                        </div>
-                    </div>
-                </MobileOverlayPanel>
-                <MobileOverlayPanel
-                    open={mobileDraftPicker === 'branch'}
-                    title={t('chat.chatInput.branch')}
-                    onClose={() => setMobileDraftPicker(null)}
-                >
-                    <div className="flex flex-col gap-2 px-3 pb-4 pt-1">
-                        <Input
-                            value={mobileDraftPickerQuery}
-                            onChange={(event) => setMobileDraftPickerQuery(event.target.value)}
-                            placeholder={t('chat.chatInput.draftPicker.searchBranches')}
-                            className="h-9"
-                        />
-                        <div className="flex flex-col">
-                            {(() => {
-                                const query = mobileDraftPickerQuery.trim().toLowerCase();
-                                const matches = (label: string) => !query || label.toLowerCase().includes(query);
-                                const selectedValue = selectedDraftDirectory
-                                    ?? draftBranchItems[0]?.value
-                                    ?? normalizePath(selectedDraftProject.path)
-                                    ?? '';
-                                const renderRow = (value: string, label: React.ReactNode, key?: string) => (
-                                    <button
-                                        key={key ?? value}
-                                        type="button"
-                                        className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-2.5 text-left typography-ui-label hover:bg-[var(--interactive-hover)]"
-                                        onClick={() => {
-                                            handleDraftDirectoryChange(value);
-                                            setMobileDraftPicker(null);
-                                        }}
-                                    >
-                                        <span className="min-w-0 flex-1 truncate">{label}</span>
-                                        {value === selectedValue ? (
-                                            <Icon name="check" className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                                        ) : null}
-                                    </button>
-                                );
-                                return (
-                                    <>
-                                        {projectRootBranchOption && matches(projectRootBranchOption.label) ? (
-                                            <>
-                                                <div className="px-2 pb-1 pt-1.5 text-muted-foreground typography-meta">
-                                                    {t('chat.chatInput.projectRoot')}
-                                                </div>
-                                                {renderRow(projectRootBranchOption.value, projectRootBranchOption.label)}
-                                            </>
-                                        ) : null}
-                                        <div className="flex items-center justify-between px-2 pb-1 pt-2">
-                                            <span className="text-muted-foreground typography-meta">{t('chat.chatInput.worktrees')}</span>
-                                            <button
-                                                type="button"
-                                                className="cursor-pointer text-muted-foreground typography-meta hover:text-foreground"
-                                                onClick={() => {
-                                                    setMobileDraftPicker(null);
-                                                    void createWorktreeDraft();
-                                                }}
-                                            >
-                                                {t('chat.chatInput.worktreeNew')}
-                                            </button>
-                                        </div>
-                                        {worktreeBranchOptions
-                                            .filter((option) => matches(option.label))
-                                            .map((option) => renderRow(option.value, `${option.pending ? '⏳ ' : ''}${option.label}`))}
-                                        {selectedDraftDirectory && !selectedDraftBranchIsKnown && matches(selectedDraftBranchLabel ?? '')
-                                            ? renderRow(selectedDraftDirectory, selectedDraftBranchLabel, 'unknown-current')
-                                            : null}
-                                    </>
-                                );
-                            })()}
                         </div>
                     </div>
                 </MobileOverlayPanel>
