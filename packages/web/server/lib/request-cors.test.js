@@ -13,5 +13,6 @@ describe('applyRuntimeCorsHeaders', () => {
     expect(headers.get('Access-Control-Allow-Origin')).toBe('openchamber-ui://app');
     expect(headers.get('Access-Control-Allow-Headers')).toContain('X-Message-Queue-Upload-Token');
     expect(headers.get('Access-Control-Allow-Headers')).toContain('X-Message-Queue-Sha256');
+    expect(headers.get('Access-Control-Allow-Headers')).toContain('X-Message-Queue-Content-Length');
   });
 });
