@@ -6,7 +6,16 @@ let bootstrapStatusResult: { status: 'pending' | 'ready' | 'failed'; error: stri
   error: null,
   updatedAt: 1,
 };
+let bootstrapStatusHandler: ((directory: string) => Promise<typeof bootstrapStatusResult>) | null = null;
 const toastErrors: Array<{ title: string; description?: string }> = [];
+type OpenChamberListener = (event: {
+  type: string;
+  directory?: string;
+  status?: 'pending' | 'ready' | 'failed';
+  error?: string | null;
+  updatedAt?: number;
+}) => void;
+const openchamberListeners = new Set<OpenChamberListener>();
 
 mock.module('@/components/ui', () => ({
   toast: {
@@ -23,27 +32,39 @@ mock.module('@/lib/i18n', () => ({
   },
 }));
 
+const resolveBootstrapStatus = (directory: string) => {
+  bootstrapStatusCalls.push(directory);
+  if (bootstrapStatusHandler) {
+    return bootstrapStatusHandler(directory);
+  }
+  return Promise.resolve(bootstrapStatusResult);
+};
+
 mock.module('@/contexts/runtimeAPIRegistry', () => ({
   getRegisteredRuntimeAPIs: () => ({
     git: {
       worktree: {
-        bootstrapStatus: (directory: string) => {
-          bootstrapStatusCalls.push(directory);
-          return Promise.resolve(bootstrapStatusResult);
-        },
+        bootstrapStatus: (directory: string) => resolveBootstrapStatus(directory),
       },
     },
   }),
 }));
 
 mock.module('@/lib/gitApiHttp', () => ({
-  getGitWorktreeBootstrapStatus: (directory: string) => {
-    bootstrapStatusCalls.push(directory);
-    return Promise.resolve(bootstrapStatusResult);
+  getGitWorktreeBootstrapStatus: (directory: string) => resolveBootstrapStatus(directory),
+}));
+
+mock.module('@/lib/openchamberEvents', () => ({
+  subscribeOpenchamberEvents: (listener: OpenChamberListener) => {
+    openchamberListeners.add(listener);
+    return () => {
+      openchamberListeners.delete(listener);
+    };
   },
 }));
 
 const {
+  applyWorktreeBootstrapStatusEvent,
   clearWorktreeBootstrapState,
   getWorktreeBootstrapState,
   markWorktreeBootstrapPending,
@@ -52,29 +73,46 @@ const {
 } = await import('./worktreeBootstrap');
 
 const waitFor = async (predicate: () => boolean): Promise<void> => {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
     if (predicate()) return;
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
   throw new Error('Timed out waiting for condition');
 };
 
+const emitBootstrapStatus = (
+  directory: string,
+  status: 'pending' | 'ready' | 'failed',
+  error: string | null = null,
+  updatedAt = Date.now(),
+) => {
+  const event = {
+    type: 'worktree-bootstrap-status',
+    directory,
+    status,
+    error,
+    updatedAt,
+  };
+  for (const listener of openchamberListeners) listener(event);
+};
+
 describe('worktreeBootstrap.waitForWorktreeBootstrap', () => {
   beforeEach(() => {
     bootstrapStatusCalls.length = 0;
     toastErrors.length = 0;
+    bootstrapStatusHandler = null;
     bootstrapStatusResult = { status: 'ready', error: null, updatedAt: 1 };
     clearWorktreeBootstrapState('/repo');
     clearWorktreeBootstrapState('/repo-wt');
   });
 
-  test('does not poll directories that were not marked pending', async () => {
+  test('does not seed directories that were not marked pending', async () => {
     await waitForWorktreeBootstrap('/repo');
 
     expect(bootstrapStatusCalls).toEqual([]);
   });
 
-  test('polls when the directory was explicitly marked pending', async () => {
+  test('seeds once when the directory was explicitly marked pending', async () => {
     markWorktreeBootstrapPending('/repo-wt');
 
     await waitForWorktreeBootstrap('/repo-wt');
@@ -82,26 +120,31 @@ describe('worktreeBootstrap.waitForWorktreeBootstrap', () => {
     expect(bootstrapStatusCalls).toEqual(['/repo-wt']);
   });
 
-  test('background watcher polls pending worktrees without blocking', async () => {
+  test('background watcher seeds pending worktrees and settles on events without polling', async () => {
+    bootstrapStatusResult = { status: 'pending', error: null, updatedAt: 2 };
     markWorktreeBootstrapPending('/repo-wt');
     const readyStatuses: Array<{ status: 'pending' | 'ready' | 'failed'; error: string | null; updatedAt: number }> = [];
 
     startWorktreeBootstrapWatcher('/repo-wt', {
-      pollIntervalMs: 0,
       onReady: (status) => readyStatuses.push(status),
     });
 
+    await waitFor(() => bootstrapStatusCalls.length === 1);
+    emitBootstrapStatus('/repo-wt', 'ready');
     await waitFor(() => readyStatuses.length === 1);
+
     expect(bootstrapStatusCalls).toEqual(['/repo-wt']);
     expect(readyStatuses.map((status) => status.status)).toEqual(['ready']);
     expect(toastErrors).toEqual([]);
   });
 
-  test('background watcher shows a toast when bootstrap fails', async () => {
-    bootstrapStatusResult = { status: 'failed', error: 'setup failed', updatedAt: 2 };
+  test('background watcher shows a toast when bootstrap fails via event', async () => {
+    bootstrapStatusResult = { status: 'pending', error: null, updatedAt: 2 };
     markWorktreeBootstrapPending('/repo-wt');
 
-    startWorktreeBootstrapWatcher('/repo-wt', { pollIntervalMs: 0 });
+    startWorktreeBootstrapWatcher('/repo-wt');
+    await waitFor(() => bootstrapStatusCalls.length === 1);
+    emitBootstrapStatus('/repo-wt', 'failed', 'setup failed');
 
     await waitFor(() => toastErrors.length === 1);
     expect(toastErrors).toEqual([{ title: 'worktree.bootstrap.toast.failed', description: 'setup failed' }]);
@@ -114,7 +157,6 @@ describe('worktreeBootstrap.waitForWorktreeBootstrap', () => {
 
     startWorktreeBootstrapWatcher('/repo-wt', {
       timeoutMs: 0,
-      pollIntervalMs: 0,
       onFailed: (status) => failedStatuses.push(status),
     });
 
@@ -131,11 +173,101 @@ describe('worktreeBootstrap.waitForWorktreeBootstrap', () => {
     bootstrapStatusResult = { status: 'pending', error: null, updatedAt: 2 };
     markWorktreeBootstrapPending('/repo-wt');
 
-    startWorktreeBootstrapWatcher('/repo-wt', { pollIntervalMs: 1000 });
-    startWorktreeBootstrapWatcher('/repo-wt', { pollIntervalMs: 1000 });
+    startWorktreeBootstrapWatcher('/repo-wt');
+    startWorktreeBootstrapWatcher('/repo-wt');
 
     await waitFor(() => bootstrapStatusCalls.length === 1);
     expect(bootstrapStatusCalls).toEqual(['/repo-wt']);
     clearWorktreeBootstrapState('/repo-wt');
+  });
+
+  test('applyWorktreeBootstrapStatusEvent updates local state for WS consumers', () => {
+    markWorktreeBootstrapPending('/repo-wt');
+    applyWorktreeBootstrapStatusEvent('/repo-wt', {
+      status: 'ready',
+      error: null,
+      updatedAt: 9,
+    });
+    expect(getWorktreeBootstrapState('/repo-wt')).toEqual({
+      status: 'ready',
+      error: null,
+      updatedAt: 9,
+    });
+  });
+
+  test('rejects an older pending seed after a newer ready event', async () => {
+    let releaseSeed: ((value: typeof bootstrapStatusResult) => void) | null = null;
+    bootstrapStatusHandler = () => new Promise((resolve) => {
+      releaseSeed = resolve;
+    });
+
+    markWorktreeBootstrapPending('/repo-wt');
+    startWorktreeBootstrapWatcher('/repo-wt');
+    await waitFor(() => bootstrapStatusCalls.length === 1);
+
+    const readyAt = Date.now() + 100;
+    emitBootstrapStatus('/repo-wt', 'ready', null, readyAt);
+    expect(getWorktreeBootstrapState('/repo-wt')?.status).toBe('ready');
+
+    releaseSeed?.({ status: 'pending', error: null, updatedAt: readyAt - 50 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(getWorktreeBootstrapState('/repo-wt')).toEqual({
+      status: 'ready',
+      error: null,
+      updatedAt: readyAt,
+    });
+    expect(toastErrors).toEqual([]);
+  });
+
+  test('clear disposes the old timeout so a restarted watcher is not failed by it', async () => {
+    bootstrapStatusResult = { status: 'pending', error: null, updatedAt: 2 };
+    markWorktreeBootstrapPending('/repo-wt');
+
+    const firstFailed: Array<{ status: string }> = [];
+    startWorktreeBootstrapWatcher('/repo-wt', {
+      timeoutMs: 30,
+      onFailed: (status) => firstFailed.push(status),
+    });
+    await waitFor(() => bootstrapStatusCalls.length === 1);
+
+    clearWorktreeBootstrapState('/repo-wt');
+    markWorktreeBootstrapPending('/repo-wt');
+    const secondReady: Array<{ status: string }> = [];
+    startWorktreeBootstrapWatcher('/repo-wt', {
+      timeoutMs: 5_000,
+      onReady: (status) => secondReady.push(status),
+    });
+    await waitFor(() => bootstrapStatusCalls.length === 2);
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    emitBootstrapStatus('/repo-wt', 'ready', null, Date.now());
+    await waitFor(() => secondReady.length === 1);
+
+    expect(firstFailed).toEqual([]);
+    expect(getWorktreeBootstrapState('/repo-wt')?.status).toBe('ready');
+    expect(toastErrors).toEqual([]);
+  });
+
+  test('clear bumps epoch so a late seed from a cancelled watcher cannot rewrite state', async () => {
+    let releaseSeed: ((value: typeof bootstrapStatusResult) => void) | null = null;
+    bootstrapStatusHandler = () => new Promise((resolve) => {
+      releaseSeed = resolve;
+    });
+
+    markWorktreeBootstrapPending('/repo-wt');
+    startWorktreeBootstrapWatcher('/repo-wt');
+    await waitFor(() => bootstrapStatusCalls.length === 1);
+
+    clearWorktreeBootstrapState('/repo-wt');
+    markWorktreeBootstrapPending('/repo-wt');
+    expect(getWorktreeBootstrapState('/repo-wt')?.status).toBe('pending');
+
+    releaseSeed?.({ status: 'failed', error: 'stale seed', updatedAt: Date.now() + 1_000 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(getWorktreeBootstrapState('/repo-wt')?.status).toBe('pending');
+    expect(getWorktreeBootstrapState('/repo-wt')?.error).toBeNull();
+    expect(toastErrors).toEqual([]);
   });
 });

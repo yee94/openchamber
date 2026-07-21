@@ -10,6 +10,7 @@ import {
   cherryPick,
   createWorktree,
   getWorktreeBootstrapStatus,
+  setWorktreeBootstrapStatusBroadcaster,
   getStatus,
   removeWorktree,
   resolvePrimaryWorktreeRoot,
@@ -486,6 +487,44 @@ describe('createWorktree', () => {
       restore();
     }
   });
+  it('broadcasts openchamber bootstrap status events as state changes', async () => {
+    if (!canRunGit()) return;
+
+    const events = [];
+    setWorktreeBootstrapStatusBroadcaster((event) => {
+      events.push(event);
+    });
+
+    const { restore } = withDataHome();
+    try {
+      const { repo } = createCommittedRepo();
+      const created = await createWorktree(repo, {
+        worktreeName: 'broadcast-wt',
+        branchName: 'feature/broadcast-wt',
+        returnAfterDirectoryCreated: true,
+      });
+
+      expect(events.some((event) => (
+        event?.type === 'openchamber:worktree-bootstrap-status'
+        && typeof event?.properties?.directory === 'string'
+        && event.properties.status === 'pending'
+      ))).toBe(true);
+
+      await vi.waitFor(async () => {
+        const status = await getWorktreeBootstrapStatus(created.path);
+        expect(['ready', 'failed']).toContain(status.status);
+      });
+
+      expect(events.some((event) => (
+        event?.type === 'openchamber:worktree-bootstrap-status'
+        && event.properties?.status !== 'pending'
+      ))).toBe(true);
+    } finally {
+      setWorktreeBootstrapStatusBroadcaster(null);
+      restore();
+    }
+  });
+
 });
 
 // ---------------------------------------------------------------------------

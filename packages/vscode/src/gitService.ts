@@ -15,10 +15,21 @@ import type { API as GitAPI, Repository, GitExtension, Status } from './git.d';
 let gitApi: GitAPI | null = null;
 let gitExtensionEnabled = false;
 const worktreeBootstrapState = new Map<string, { status: 'pending' | 'ready' | 'failed'; error: string | null; updatedAt: number }>();
+type WorktreeBootstrapStatusNotifier = (event: {
+  directory: string;
+  status: 'pending' | 'ready' | 'failed';
+  error: string | null;
+  updatedAt: number;
+}) => void;
+let worktreeBootstrapStatusNotifier: WorktreeBootstrapStatusNotifier | null = null;
 
 const WORKTREE_BOOTSTRAP_PENDING = 'pending' as const;
 const WORKTREE_BOOTSTRAP_READY = 'ready' as const;
 const WORKTREE_BOOTSTRAP_FAILED = 'failed' as const;
+
+export const setWorktreeBootstrapStatusNotifier = (notifier: WorktreeBootstrapStatusNotifier | null): void => {
+  worktreeBootstrapStatusNotifier = notifier;
+};
 
 const toBootstrapStateKey = (directory: string): string => {
   const normalized = normalizeDirectoryPath(directory);
@@ -33,11 +44,22 @@ const setWorktreeBootstrapState = (directory: string, status: 'pending' | 'ready
   if (!key) {
     return;
   }
-  worktreeBootstrapState.set(key, {
+  const next = {
     status,
     error: typeof error === 'string' && error.trim().length > 0 ? error.trim() : null,
     updatedAt: Date.now(),
-  });
+  };
+  worktreeBootstrapState.set(key, next);
+  try {
+    worktreeBootstrapStatusNotifier?.({
+      directory: key,
+      status: next.status,
+      error: next.error,
+      updatedAt: next.updatedAt,
+    });
+  } catch {
+    // Webview delivery must not break git worktree creation.
+  }
 };
 
 const clearWorktreeBootstrapState = (directory: string): void => {

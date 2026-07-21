@@ -49,7 +49,7 @@ export const registerMessageQueueRoutes = (app, { messageQueueService, messageQu
   app.post(`${prefix}/attachments/uploads`, (req, res) => messageQueueService ? send(res, () => messageQueueService.createAttachmentUpload(req.body)) : unsupported(res));
   app.put(`${prefix}/attachments/uploads/:uploadID`, async (req, res) => {
     const current = runtime(); if (!current) return unsupported(res);
-    const uploadToken = req.headers['x-message-queue-upload-token']; const expectedSize = Number(req.headers['content-length']); const expectedSha256 = req.headers['x-message-queue-sha256']; const controller = new AbortController();
+    const headerValue = (value) => Array.isArray(value) ? value[0] : value; const uploadToken = headerValue(req.headers['x-message-queue-upload-token']); const expectedSize = Number(headerValue(req.headers['x-message-queue-content-length']) ?? headerValue(req.headers['content-length'])); const expectedSha256 = headerValue(req.headers['x-message-queue-sha256']); const controller = new AbortController();
     req.once?.('aborted', () => controller.abort());
     try { const runtimeKey = current.service.getRuntimeKey(); let ready; current.service.getAttachmentUpload({ uploadID: req.params.uploadID, uploadToken }, { runtimeKey }); await current.attachmentStore.writeUpload({ uploadID: req.params.uploadID, stream: req, expectedSize, expectedSha256, signal: controller.signal, onStored: (stored) => { ready = current.service.markAttachmentReady({ uploadID: req.params.uploadID, uploadToken, objectHash: stored.storageKey, storageKey: stored.storageKey, sizeBytes: stored.size }, { runtimeKey }); } }); res.json(ready); }
     catch (error) { res.status(statusFor(error)).json({ code: publicCode(error) }); }

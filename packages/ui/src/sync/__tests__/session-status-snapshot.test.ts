@@ -6,7 +6,7 @@ import { INITIAL_STATE, type State } from "../types"
 import type { DirectoryStore } from "../child-store"
 import {
   applySessionStatusSnapshot,
-  needsSnapshotAfterStatusPoll,
+  collectSessionStatusSnapshotApplyIds,
   isLiveRevisionCurrent,
   resolveStrictDomainSessionID,
   shouldTriggerDomainRecovery,
@@ -37,52 +37,13 @@ function completedMessage() {
 const BUSY: SessionStatus = { type: "busy" }
 
 describe("applySessionStatusSnapshot", () => {
-  describe("monotonic mode (periodic poll)", () => {
-    test("keeps a newer idle state when an older busy snapshot completes", () => {
-      const store = createDirectoryStore({
-        session_status: { ses_a: { type: "idle" } },
-        session_status_observed_at: { ses_a: 20 },
-      })
-      const changed = applySessionStatusSnapshot(store, { ses_a: { type: "busy" } }, ["ses_a"], "monotonic", 10)
-      expect(changed).toBe(false)
-      expect(store.getState().session_status.ses_a).toEqual({ type: "idle" })
-      expect(store.getState().session_status_observed_at.ses_a).toBe(20)
-    })
-    test("does NOT lower a busy session to idle when the snapshot omits it", () => {
-      const store = createDirectoryStore({ session_status: { ses_a: BUSY } })
-      const changed = applySessionStatusSnapshot(store, {} as StatusSnapshot, ["ses_a"], "monotonic")
-      expect(changed).toBe(false)
-      expect(store.getState().session_status.ses_a).toEqual(BUSY)
-    })
-
-    test("does NOT lower a busy session even when the snapshot reports it idle", () => {
-      const store = createDirectoryStore({ session_status: { ses_a: BUSY } })
-      applySessionStatusSnapshot(store, { ses_a: { type: "idle" } }, ["ses_a"], "monotonic")
-      expect(store.getState().session_status.ses_a).toEqual(BUSY)
-    })
-
-    test("raises an idle/unknown session to busy when the snapshot reports it active (missed event)", () => {
-      const store = createDirectoryStore({ session_status: {} })
-      const changed = applySessionStatusSnapshot(store, { ses_a: { type: "busy" } }, ["ses_a"], "monotonic")
-      expect(changed).toBe(true)
-      expect(store.getState().session_status.ses_a).toEqual(BUSY)
-    })
-
-    test("updates busy → retry from the snapshot", () => {
-      const store = createDirectoryStore({ session_status: { ses_a: BUSY } })
-      const retry: SessionStatus = { type: "retry", attempt: 2, message: "x", next: 30 }
-      applySessionStatusSnapshot(store, { ses_a: { type: "retry", attempt: 2, message: "x", next: 30 } }, ["ses_a"], "monotonic")
-      expect(store.getState().session_status.ses_a).toEqual(retry)
-    })
-  })
-
-  describe("authoritative mode (reconnect / escalated resync)", () => {
+  describe("one-shot snapshot (bootstrap / reconnect / escalated resync)", () => {
     test("keeps a newer busy state when an older absent snapshot completes", () => {
       const store = createDirectoryStore({
         session_status: { ses_a: BUSY },
         session_status_observed_at: { ses_a: 20 },
       })
-      const changed = applySessionStatusSnapshot(store, {} as StatusSnapshot, ["ses_a"], "authoritative", 10)
+      const changed = applySessionStatusSnapshot(store, {} as StatusSnapshot, ["ses_a"], 10)
       expect(changed).toBe(false)
       expect(store.getState().session_status.ses_a).toEqual(BUSY)
       expect(store.getState().session_status_observed_at.ses_a).toBe(20)
@@ -93,17 +54,18 @@ describe("applySessionStatusSnapshot", () => {
         session_status: { ses_a: BUSY },
         session_status_observed_at: { ses_a: 10 },
       })
-      const changed = applySessionStatusSnapshot(store, {} as StatusSnapshot, ["ses_a"], "authoritative", 20)
+      const changed = applySessionStatusSnapshot(store, {} as StatusSnapshot, ["ses_a"], 20)
       expect(changed).toBe(true)
       expect(store.getState().session_status.ses_a).toEqual({ type: "idle" })
       expect(store.getState().session_status_observed_at.ses_a).toBe(20)
     })
+
     test("lowers a busy session to idle when the snapshot omits it", () => {
       const store = createDirectoryStore({
         session_status: { ses_a: BUSY },
         message: { ses_a: completedMessage() },
       })
-      const changed = applySessionStatusSnapshot(store, {} as StatusSnapshot, ["ses_a"], "authoritative")
+      const changed = applySessionStatusSnapshot(store, {} as StatusSnapshot, ["ses_a"])
       expect(changed).toBe(true)
       expect(store.getState().session_status.ses_a).toEqual({ type: "idle" })
     })
@@ -116,7 +78,7 @@ describe("applySessionStatusSnapshot", () => {
         session_status: { ses_a: BUSY },
         message: { ses_a: streamingMessage() },
       })
-      const changed = applySessionStatusSnapshot(store, {} as StatusSnapshot, ["ses_a"], "authoritative")
+      const changed = applySessionStatusSnapshot(store, {} as StatusSnapshot, ["ses_a"])
       expect(changed).toBe(true)
       expect(store.getState().session_status.ses_a).toEqual({ type: "idle" })
     })
@@ -126,39 +88,49 @@ describe("applySessionStatusSnapshot", () => {
         session_status: {},
         message: { ses_a: streamingMessage() },
       })
-      const changed = applySessionStatusSnapshot(store, {} as StatusSnapshot, ["ses_a"], "authoritative")
+      const changed = applySessionStatusSnapshot(store, {} as StatusSnapshot, ["ses_a"])
       expect(changed).toBe(true)
       expect(store.getState().session_status.ses_a).toEqual({ type: "idle" })
     })
 
-  })
-})
-
-describe("needsSnapshotAfterStatusPoll", () => {
-  test("escalates when the store says busy but the snapshot omits it", () => {
-    const store = createDirectoryStore({
-      session_status: { ses_a: BUSY },
-      message: { ses_a: completedMessage() },
+    test("raises an idle/unknown session to busy when the snapshot reports it active", () => {
+      const store = createDirectoryStore({ session_status: {} })
+      const changed = applySessionStatusSnapshot(store, { ses_a: { type: "busy" } }, ["ses_a"])
+      expect(changed).toBe(true)
+      expect(store.getState().session_status.ses_a).toEqual(BUSY)
     })
-    expect(needsSnapshotAfterStatusPoll(store.getState(), "ses_a", undefined)).toBe(true)
-  })
 
-  test("escalates regardless of a still-streaming trailing message (snapshot drives recovery)", () => {
-    const store = createDirectoryStore({
-      session_status: { ses_a: BUSY },
-      message: { ses_a: streamingMessage() },
+    test("updates busy → retry from the snapshot", () => {
+      const store = createDirectoryStore({ session_status: { ses_a: BUSY } })
+      const retry: SessionStatus = { type: "retry", attempt: 2, message: "x", next: 30 }
+      applySessionStatusSnapshot(store, { ses_a: { type: "retry", attempt: 2, message: "x", next: 30 } }, ["ses_a"])
+      expect(store.getState().session_status.ses_a).toEqual(retry)
     })
-    expect(needsSnapshotAfterStatusPoll(store.getState(), "ses_a", undefined)).toBe(true)
-  })
 
-  test("does NOT escalate when the snapshot confirms the session is active", () => {
-    const store = createDirectoryStore({ session_status: { ses_a: BUSY } })
-    expect(needsSnapshotAfterStatusPoll(store.getState(), "ses_a", { type: "busy" })).toBe(false)
-  })
+    test("reconnect apply set unions local candidates with snapshot IDs", () => {
+      // A background session that went idle→busy while disconnected is present
+      // only in the snapshot; local candidates alone would miss it.
+      expect(collectSessionStatusSnapshotApplyIds(
+        ["ses_local"],
+        { ses_background: { type: "busy" } } as StatusSnapshot,
+      ).sort()).toEqual(["ses_background", "ses_local"])
+    })
 
-  test("does NOT escalate when the store already considers the session idle", () => {
-    const store = createDirectoryStore({ session_status: {} })
-    expect(needsSnapshotAfterStatusPoll(store.getState(), "ses_a", undefined)).toBe(false)
+    test("applies busy for a snapshot-only session after reconnect", () => {
+      const store = createDirectoryStore({ session_status: { ses_local: { type: "idle" } } })
+      const applyIds = collectSessionStatusSnapshotApplyIds(
+        ["ses_local"],
+        { ses_background: { type: "busy" } } as StatusSnapshot,
+      )
+      const changed = applySessionStatusSnapshot(
+        store,
+        { ses_background: { type: "busy" } } as StatusSnapshot,
+        applyIds,
+      )
+      expect(changed).toBe(true)
+      expect(store.getState().session_status.ses_background).toEqual(BUSY)
+      expect(store.getState().session_status.ses_local).toEqual({ type: "idle" })
+    })
   })
 })
 

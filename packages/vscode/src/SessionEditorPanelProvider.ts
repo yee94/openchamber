@@ -189,6 +189,12 @@ export class SessionEditorPanelProvider {
     }
   }
 
+  public postMessage(message: unknown): void {
+    for (const entry of this._panels.values()) {
+      entry.panel.webview.postMessage(message);
+    }
+  }
+
   public notifySettingsSynced(settings: unknown): void {
     for (const entry of this._panels.values()) {
       entry.panel.webview.postMessage({

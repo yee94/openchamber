@@ -12,6 +12,7 @@ const execFileAsync = promisify(execFile);
 const gpgconfCandidates = ['gpgconf', '/opt/homebrew/bin/gpgconf', '/usr/local/bin/gpgconf'];
 let resolvedGitBinary = null;
 const worktreeBootstrapState = new Map();
+let worktreeBootstrapStatusBroadcaster = null;
 const remoteExistenceCache = new Map();
 const SIMPLE_GIT_SAFE_BINARY_PATTERN = /^([a-z]:)?([a-z0-9/.\\_~-]+)$/i;
 const SIMPLE_GIT_UNSAFE_BINARY_WARNING = 'Invalid value supplied for custom binary, restricted characters must be removed';
@@ -30,16 +31,40 @@ const toBootstrapStateKey = (directory) => {
   return path.resolve(normalized);
 };
 
+export const setWorktreeBootstrapStatusBroadcaster = (broadcaster) => {
+  worktreeBootstrapStatusBroadcaster = typeof broadcaster === 'function' ? broadcaster : null;
+};
+
 const setWorktreeBootstrapState = (directory, status, error = null) => {
   const key = toBootstrapStateKey(directory);
   if (!key) {
     return;
   }
-  worktreeBootstrapState.set(key, {
+  const next = {
     status,
     error: typeof error === 'string' && error.trim().length > 0 ? error.trim() : null,
     updatedAt: Date.now(),
-  });
+  };
+  worktreeBootstrapState.set(key, next);
+  if (!worktreeBootstrapStatusBroadcaster) {
+    return;
+  }
+  try {
+    worktreeBootstrapStatusBroadcaster({
+      type: 'openchamber:worktree-bootstrap-status',
+      properties: {
+        directory: key,
+        status: next.status,
+        error: next.error,
+        updatedAt: next.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.warn(
+      'Failed to broadcast worktree bootstrap status:',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 };
 
 const clearWorktreeBootstrapState = (directory) => {

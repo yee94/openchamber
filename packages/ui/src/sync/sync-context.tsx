@@ -39,6 +39,7 @@ import { useTodosPersistStore } from "@/stores/useTodosPersistStore"
 import { toast } from "@/components/ui"
 import { appendNotification } from "./notification-store"
 import { applyGlobalSessionStatusEvent, useGlobalSessionStatusStore } from "./global-session-status"
+import { applyWorktreeBootstrapStatusEvent } from "@/lib/worktrees/worktreeBootstrap"
 import type { State } from "./types"
 import type { SessionStatus } from "@opencode-ai/sdk/v2/client"
 import type { PermissionRequest } from "@/types/permission"
@@ -232,7 +233,6 @@ const RECONNECT_MESSAGE_LIMIT = 30
 const SESSION_MATERIALIZATION_MESSAGE_LIMIT = 30
 const RECONNECT_SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
 const ACTIVE_SESSION_WATCHDOG_INTERVAL_MS = 5_000
-const ACTIVE_SESSION_STATUS_POLL_INTERVAL_MS = 5_000
 const ACTIVE_SESSION_STALE_EVENT_MS = 40_000
 const ACTIVE_SESSION_FULL_RESYNC_COOLDOWN_MS = 15_000
 const ACTIVE_SESSION_DOMAIN_STALE_MS = 60_000
@@ -357,7 +357,7 @@ async function materializeSessionFromServer(
   })
 
   if (statusBeforeMaterialization && statusBeforeMaterialization.type !== "idle" && !options?.isStale?.()) {
-    await resyncDirectorySessionStatuses(directory, store, [sessionID], "authoritative")
+    await resyncDirectorySessionStatuses(directory, store, [sessionID])
   }
 }
 
@@ -520,24 +520,15 @@ export type DirectorySessionStatusSnapshot = NonNullable<
 // How a /session/status snapshot is reconciled into the store.
 //
 // The directory-scoped snapshot lists only active (busy/retry) sessions; an
-// absent candidate means "idle per this snapshot".
-//
-// - "monotonic": only confirm/raise active status. Never lowers a busy/retry
-//   session to idle. Used by the periodic watchdog poll — real idle arrives via
-//   SSE (session.status / session.idle) or via an authoritative resync that the
-//   watchdog escalates to when it detects a stale busy entry. This keeps the
-//   blind 5s poll from clobbering live state on a transient/misscoped snapshot.
-// - "authoritative": treat the snapshot as ground truth — absent/idle candidates
-//   are lowered to idle. Used by reconnect/escalated resyncs, a deliberate edge
-//   where the live server snapshot is the source of truth (mirrors the bootstrap
-//   snapshot). The snapshot wins over any derived message state here.
-export type StatusSnapshotMode = "monotonic" | "authoritative"
-
+// absent candidate means "idle per this snapshot". Snapshots are one-shot
+// (bootstrap / reconnect / escalated resync) — live busy/idle transitions arrive
+// via the global event WS (`session.status` / `session.idle`). Treat the
+// snapshot as ground truth: absent/idle candidates are lowered to idle, and the
+// snapshot wins over any derived message state.
 export function applySessionStatusSnapshot(
   store: StoreApi<DirectoryStore>,
   snapshot: DirectorySessionStatusSnapshot,
   candidateSessionIds: string[],
-  mode: StatusSnapshotMode,
   observedAt?: number,
 ): boolean {
   if (candidateSessionIds.length === 0) return false
@@ -562,7 +553,7 @@ export function applySessionStatusSnapshot(
       const incoming = toSessionStatus(snapshot[sessionId])
 
       if (incoming && incoming.type !== "idle") {
-        // Confirm or raise active status (catches a busy event the SSE missed).
+        // Confirm or raise active status (catches a busy event the stream missed).
         if (!haveEquivalentSyncSnapshots(current[sessionId], incoming)) {
           draft()[sessionId] = incoming
           changed = true
@@ -572,9 +563,6 @@ export function applySessionStatusSnapshot(
       }
 
       // Snapshot reports this candidate idle (absent, or explicit idle).
-      // Monotonic never lowers; authoritative trusts the snapshot as truth.
-      if (mode === "monotonic") continue
-
       const existing = current[sessionId]
       if (!existing || existing.type !== "idle") {
         draft()[sessionId] = { type: "idle" }
@@ -593,37 +581,32 @@ export function applySessionStatusSnapshot(
   return changed
 }
 
+export function collectSessionStatusSnapshotApplyIds(
+  localCandidateSessionIds: string[],
+  snapshot: DirectorySessionStatusSnapshot,
+): string[] {
+  return Array.from(new Set([
+    ...localCandidateSessionIds,
+    ...Object.keys(snapshot),
+  ]))
+}
+
 async function resyncDirectorySessionStatuses(
   directory: string,
   store: StoreApi<DirectoryStore>,
   candidateSessionIds: string[],
-  mode: StatusSnapshotMode,
 ): Promise<DirectorySessionStatusSnapshot | null> {
   const requestedAt = Date.now()
   const nextStatuses = await opencodeClient.getSessionStatusForDirectory(directory)
   // null = fetch failed; preserve existing state. {} or populated = a snapshot
-  // of active sessions — reconciled per `mode` (absence ≠ idle under monotonic).
+  // of active sessions — absence means idle for the candidate set.
   if (nextStatuses === null) return null
-  if (mode === "authoritative") {
-    store.setState({ session_status_snapshot_at: requestedAt })
-  }
-  applySessionStatusSnapshot(store, nextStatuses, candidateSessionIds, mode, requestedAt)
+  // Local reconnect candidates alone miss sessions that went idle→busy while the
+  // stream was down. Always union snapshot IDs into the apply set.
+  const applyIds = collectSessionStatusSnapshotApplyIds(candidateSessionIds, nextStatuses)
+  store.setState({ session_status_snapshot_at: requestedAt })
+  applySessionStatusSnapshot(store, nextStatuses, applyIds, requestedAt)
   return nextStatuses
-}
-
-// After a monotonic poll, decide whether to escalate to a full authoritative
-// resync: the store believes the session is active but the snapshot reports it
-// idle/absent — a suspected missed idle that the monotonic poll deliberately
-// won't lower on its own. The authoritative resync is the recovery path.
-export function needsSnapshotAfterStatusPoll(
-  state: DirectoryStore,
-  sessionId: string,
-  snapshotEntry: DirectorySessionStatusSnapshot[string] | undefined,
-): boolean {
-  const incoming = toSessionStatus(snapshotEntry)
-  if (incoming && incoming.type !== "idle") return false
-  const currentStatus = state.session_status?.[sessionId]
-  return Boolean(currentStatus && currentStatus.type !== "idle")
 }
 
 // Decide whether the event stream is genuinely stale and warrants a full
@@ -1375,14 +1358,20 @@ async function resyncDirectoryAfterReconnect(
   routingIndex: EventRoutingIndex,
   reason: SessionMaterializationReason,
   getLiveRevision: (sessionID: string) => number,
+  options?: { statusOnly?: boolean },
 ) {
   const current = store.getState()
   const candidateSessionIds = getActiveSessionCandidateIds(directory, current)
-  if (candidateSessionIds.length === 0) return
 
-  await resyncDirectorySessionStatuses(directory, store, candidateSessionIds, "authoritative")
+  // Always take an authoritative status snapshot for initialized directories.
+  // An empty local candidate set must not skip the fetch — that is exactly how
+  // background idle→busy transitions are lost across reconnect.
+  await resyncDirectorySessionStatuses(directory, store, candidateSessionIds)
 
-  const materializationSessionIds = getReconnectMaterializationSessionIds(candidateSessionIds, {
+  if (options?.statusOnly) return
+
+  const refreshedCandidateSessionIds = getActiveSessionCandidateIds(directory, store.getState())
+  const materializationSessionIds = getReconnectMaterializationSessionIds(refreshedCandidateSessionIds, {
     directory,
     viewedSession: getViewedSessionMaterializationTarget(directory),
   })
@@ -1480,6 +1469,22 @@ function handleEvent(
   childStores: ChildStoreManager,
   routingIndex: EventRoutingIndex,
 ) {
+  if ((payload as { type?: unknown }).type === "openchamber:worktree-bootstrap-status") {
+    const properties = (payload as unknown as { properties?: unknown }).properties
+    if (properties && typeof properties === "object" && !Array.isArray(properties)) {
+      const record = properties as Record<string, unknown>
+      const directory = typeof record.directory === "string" ? record.directory : ""
+      if (directory) {
+        applyWorktreeBootstrapStatusEvent(directory, {
+          status: record.status as "pending" | "ready" | "failed",
+          error: typeof record.error === "string" ? record.error : null,
+          updatedAt: typeof record.updatedAt === "number" ? record.updatedAt : Date.now(),
+        })
+      }
+    }
+    return
+  }
+
   if ((payload as { type?: unknown }).type === "openchamber:permission-auto-accept.updated") {
     const properties = (payload as unknown as { properties?: unknown }).properties
     if (properties && typeof properties === "object") {
@@ -1861,10 +1866,8 @@ export function SyncProvider(props: {
   const lastStreamActivityAtRef = useRef(0)
   const lastDomainActivityAtBySessionRef = useRef(new Map<string, number>())
   const liveRevisionBySessionRef = useRef(new Map<string, number>())
-  const lastStatusPollAtByDirectoryRef = useRef(new Map<string, number>())
   const lastFullResyncAtByDirectoryRef = useRef(new Map<string, number>())
   const resyncingDirectoriesRef = useRef(new Set<string>())
-  const statusPollingDirectoriesRef = useRef(new Set<string>())
   const pipelineReconnectRef = useRef<((reason?: string) => void) | null>(null)
   const pipelineHasConnectedRef = useRef(false)
   const pipelineDisconnectedBeforeFirstConnectRef = useRef(false)
@@ -1878,21 +1881,36 @@ export function SyncProvider(props: {
     [childStores, props.sdk, props.directory],
   )
 
-  const triggerDirectoryResync = useCallback((directory: string, reason: SessionMaterializationReason) => {
+  const triggerDirectoryResync = useCallback((
+    directory: string,
+    reason: SessionMaterializationReason,
+    options?: { statusOnly?: boolean },
+  ) => {
     const store = childStores.children.get(directory)
     if (!store) return
     const resyncing = resyncingDirectoriesRef.current
     if (resyncing.has(directory)) return
 
-    console.warn("[refresh-debug] directory-resync", { directory, reason })
+    console.warn("[refresh-debug] directory-resync", { directory, reason, statusOnly: !!options?.statusOnly })
 
-    lastFullResyncAtByDirectoryRef.current.set(directory, Date.now())
+    // status-only snapshots should not start the full-resync cooldown; they only
+    // refresh busy/idle truth after stream ready / recent boot.
+    if (!options?.statusOnly) {
+      lastFullResyncAtByDirectoryRef.current.set(directory, Date.now())
+    }
     resyncing.add(directory)
-    void resyncDirectoryAfterReconnect(directory, store, routingIndex, reason, (sessionID) => (
-      liveRevisionBySessionRef.current.get(viewedSessionKey(directory, sessionID)) ?? 0
-    ))
+    void resyncDirectoryAfterReconnect(
+      directory,
+      store,
+      routingIndex,
+      reason,
+      (sessionID) => (
+        liveRevisionBySessionRef.current.get(viewedSessionKey(directory, sessionID)) ?? 0
+      ),
+      options,
+    )
       .catch(() => {
-        // Transient failure — the watchdog, next SSE event, or reconnect will catch up.
+        // Transient failure — the watchdog, next stream event, or reconnect will catch up.
       })
       .finally(() => {
         resyncing.delete(directory)
@@ -2047,14 +2065,15 @@ export function SyncProvider(props: {
         })
         const isFirstConnect = !pipelineHasConnectedRef.current
         pipelineHasConnectedRef.current = true
-        if (isFirstConnect && !pipelineDisconnectedBeforeFirstConnectRef.current) {
-          return
-        }
-        if (isRecentBoot()) {
-          return
-        }
+        // Always close the bootstrap-GET → WS-ready gap with an authoritative
+        // status snapshot. Skip heavier message materialization on first ready
+        // / recent boot; those paths already have bootstrap coverage.
+        const statusOnly = (
+          (isFirstConnect && !pipelineDisconnectedBeforeFirstConnectRef.current)
+          || isRecentBoot()
+        )
         for (const dir of childStores.children.keys()) {
-          triggerDirectoryResync(dir, "stream-reconnect")
+          triggerDirectoryResync(dir, "stream-reconnect", { statusOnly })
         }
       },
       onDisconnect: (reason) => {
@@ -2096,28 +2115,9 @@ export function SyncProvider(props: {
     let stopped = false
     let running = false
 
-    const pollDirectoryStatuses = async (
-      directory: string,
-      store: StoreApi<DirectoryStore>,
-      candidateSessionIds: string[],
-    ) => {
-      const polling = statusPollingDirectoriesRef.current
-      if (polling.has(directory)) return
-      polling.add(directory)
-      try {
-        const statuses = await resyncDirectorySessionStatuses(directory, store, candidateSessionIds, "monotonic")
-        if (!statuses) return
-        const needsSnapshot = candidateSessionIds.some((sessionId) => (
-          needsSnapshotAfterStatusPoll(store.getState(), sessionId, statuses[sessionId])
-        ))
-        if (needsSnapshot) {
-          triggerDirectoryResync(directory, "stale-status-resync")
-        }
-      } finally {
-        polling.delete(directory)
-      }
-    }
-
+    // Transport/domain watchdog only — live busy/idle comes from the global
+    // event WS. One-shot `/session/status` snapshots are reserved for bootstrap
+    // and reconnect/escalated resyncs, not a periodic poll.
     const tick = () => {
       if (running || stopped) return
       running = true
@@ -2129,15 +2129,8 @@ export function SyncProvider(props: {
             const state = store.getState()
             const candidateSessionIds = getStatusWatchdogCandidateSessionIds(state)
             if (candidateSessionIds.length === 0) {
-              lastStatusPollAtByDirectoryRef.current.delete(directory)
               lastFullResyncAtByDirectoryRef.current.delete(directory)
               continue
-            }
-
-            const lastStatusPollAt = lastStatusPollAtByDirectoryRef.current.get(directory) ?? 0
-            if (now - lastStatusPollAt >= ACTIVE_SESSION_STATUS_POLL_INTERVAL_MS) {
-              lastStatusPollAtByDirectoryRef.current.set(directory, now)
-              void pollDirectoryStatuses(directory, store, candidateSessionIds).catch(() => undefined)
             }
 
             const lastFullResyncAt = lastFullResyncAtByDirectoryRef.current.get(directory) ?? 0
@@ -2174,9 +2167,6 @@ export function SyncProvider(props: {
         })
         .finally(() => {
           running = false
-          if (stopped) {
-            statusPollingDirectoriesRef.current.clear()
-          }
         })
     }
 

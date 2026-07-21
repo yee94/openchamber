@@ -82,6 +82,10 @@ const handleConnectionMessage = (event: MessageEvent) => {
     window.__OPENCHAMBER_CONNECTION__ = { status: payload, error, cliAvailable: prevCliAvailable };
     window.dispatchEvent(new CustomEvent('openchamber:connection-status', { detail: { status: payload, error } }));
   }
+  if (msg?.type === 'openchamber:worktree-bootstrap-status') {
+    const properties = msg.properties && typeof msg.properties === 'object' ? msg.properties : msg;
+    window.dispatchEvent(new CustomEvent('openchamber:worktree-bootstrap-status', { detail: properties }));
+  }
 };
 
 window.addEventListener('message', handleConnectionMessage);

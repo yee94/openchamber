@@ -180,7 +180,7 @@ const parseAttachment = (value: unknown): MessageQueueAttachment | null => {
   const validOccurrence = Array.isArray(occurrence) && ((occurrence.length === 2 && occurrence[0] === 'root' && occurrence[1] === value.attachmentID) || (occurrence.length === 3 && occurrence[0] === 'part' && typeof occurrence[1] === 'string' && occurrence[1] && occurrence[2] === value.attachmentID));
   if (!validOccurrence) return null;
   const locator = value.locator;
-  if (locator.kind === 'upload' && Object.keys(locator).every((key) => ['kind', 'uploadID'].includes(key)) && typeof locator.uploadID === 'string' && locator.uploadID) return { attachmentID: value.attachmentID, occurrenceRefID: occurrence as unknown as MessageQueueAttachment['occurrenceRefID'], filename: value.filename, mimeType: value.mimeType, size: value.size, source: value.source as MessageQueueAttachment['source'], locator: { kind: 'upload', uploadID: locator.uploadID } };
+  if (locator.kind === 'upload' && Object.keys(locator).every((key) => ['kind', 'uploadID', 'storageKey'].includes(key)) && typeof locator.uploadID === 'string' && locator.uploadID && (locator.storageKey === undefined || typeof locator.storageKey === 'string') && locator.storageKey !== '') return { attachmentID: value.attachmentID, occurrenceRefID: occurrence as unknown as MessageQueueAttachment['occurrenceRefID'], filename: value.filename, mimeType: value.mimeType, size: value.size, source: value.source as MessageQueueAttachment['source'], locator: { kind: 'upload', uploadID: locator.uploadID } };
   if (locator.kind === 'server-path' && Object.keys(locator).every((key) => ['kind', 'path'].includes(key)) && typeof locator.path === 'string' && locator.path) return { attachmentID: value.attachmentID, occurrenceRefID: occurrence as unknown as MessageQueueAttachment['occurrenceRefID'], filename: value.filename, mimeType: value.mimeType, size: value.size, source: value.source as MessageQueueAttachment['source'], locator: { kind: 'server-path', path: locator.path } };
   return null;
 };
@@ -348,7 +348,7 @@ export const createMessageQueueAttachmentUpload = async (input: { expiresAt?: nu
 };
 export const uploadMessageQueueAttachment = async (upload: MessageQueueUpload, body: Blob, sha256: string, signal?: AbortSignal): Promise<void> => {
   let response: Response;
-  try { response = await runtimeFetch(`${ROUTE}/attachments/uploads/${encodeURIComponent(upload.uploadID)}`, { method: 'PUT', headers: { 'Content-Length': String(body.size), 'X-Message-Queue-Upload-Token': upload.uploadToken, 'X-Message-Queue-Sha256': sha256 }, body, signal }); } catch { throw new MessageQueueServerError(0, 'unavailable'); }
+  try { response = await runtimeFetch(`${ROUTE}/attachments/uploads/${encodeURIComponent(upload.uploadID)}`, { method: 'PUT', headers: { 'Content-Length': String(body.size), 'X-Message-Queue-Content-Length': String(body.size), 'X-Message-Queue-Upload-Token': upload.uploadToken, 'X-Message-Queue-Sha256': sha256 }, body, signal }); } catch { throw new MessageQueueServerError(0, 'unavailable'); }
   if (!response.ok) throw new MessageQueueServerError(response.status, await parseErrorCode(response));
 };
 export type MessageQueueEditReservation = { revision: number; scopeID: string; queueItemID: string; rowVersion: number; token: string; expiresAt: number; generation: number };
@@ -371,7 +371,7 @@ export const downloadMessageQueueAttachment = async (queueItemID: string, attach
   if (!response.ok) throw new MessageQueueServerError(response.status, await parseErrorCode(response));
   const expectedMimeType = attachment.mimeType.trim().toLowerCase();
   const length = response.headers.get('Content-Length'), mimeType = response.headers.get('Content-Type')?.split(';', 1)[0]?.trim().toLowerCase();
-  if (length !== String(attachment.size) || mimeType !== expectedMimeType) throw new MessageQueueServerError(response.status, 'unavailable');
+  if ((length !== null && length !== String(attachment.size)) || mimeType !== expectedMimeType) throw new MessageQueueServerError(response.status, 'unavailable');
   let body: Blob;
   try { body = await response.blob(); } catch { throw new MessageQueueServerError(response.status, 'unavailable'); }
   if (body.size !== attachment.size) throw new MessageQueueServerError(response.status, 'unavailable');

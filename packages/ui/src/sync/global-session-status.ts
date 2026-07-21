@@ -10,7 +10,7 @@ import { normalizeProjectPath } from '@/lib/projectResolution';
 // see live status for all sessions, not just the synced ones.
 //
 // Only non-idle entries are kept; absence means idle. Entries carry their
-// directory so a polled per-directory snapshot can authoritatively replace
+// directory so a one-shot per-directory snapshot can authoritatively replace
 // that directory's slice (the server omits idle sessions from snapshots).
 
 type ActiveStatusType = 'busy' | 'retry';
@@ -28,7 +28,7 @@ export const useGlobalSessionStatusStore = create<GlobalSessionStatusState>(() =
 const normalizeStatusType = (type: unknown): ActiveStatusType | 'idle' =>
   type === 'busy' ? 'busy' : type === 'retry' ? 'retry' : 'idle';
 
-// Both write paths normalize the directory key, so a polled snapshot can
+// Both write paths normalize the directory key, so a one-shot snapshot can
 // authoritatively replace entries written by events (and vice versa) even when
 // the two sources format the same path differently (trailing slash, …).
 const normalizeDirectory = (directory: string): string =>
@@ -82,11 +82,11 @@ export const applyGlobalSessionStatusEvent = (
   }
 };
 
-// Polled path: an authoritative `/session/status?directory=X` snapshot. Entries
-// missing from the snapshot are idle now — cleared both by directory key and by
-// the caller's session-id list (the server may report a canonicalized directory
-// that differs from the key an event wrote, e.g. via symlinks). Seeds the
-// initial state (events only deliver changes) and reconciles missed events.
+// One-shot path: an authoritative `/session/status?directory=X` snapshot used
+// on connect/reconnect. Entries missing from the snapshot are idle now — cleared
+// both by directory key and by the caller's session-id list (the server may
+// report a canonicalized directory that differs from the key an event wrote,
+// e.g. via symlinks). Seeds the initial state (events only deliver changes).
 export const applyGlobalSessionStatusSnapshot = (
   rawDirectory: string,
   raw: Record<string, { type?: string }>,

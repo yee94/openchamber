@@ -1650,6 +1650,7 @@ async function main(options = {}) {
     markUserMessageSent: (sessionID) => sessionRuntime.markUserMessageSent(sessionID),
     waitForOpenCodeReady,
     getOpenChamberEventClients: () => uiOpenChamberEventClients,
+    broadcastGlobalUiEvent,
     writeSseEvent,
     permissionAutoAcceptRuntime,
     messageQueueService,

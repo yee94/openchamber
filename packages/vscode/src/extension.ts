@@ -4,6 +4,7 @@ import { AgentManagerPanelProvider } from './AgentManagerPanelProvider';
 import { SessionEditorPanelProvider } from './SessionEditorPanelProvider';
 import { createOpenCodeManager, type OpenCodeManager } from './opencode';
 import { startGlobalEventWatcher, stopGlobalEventWatcher, setChatViewProvider } from './sessionActivityWatcher';
+import { setWorktreeBootstrapStatusNotifier } from './gitService';
 import { resolveWorkspaceFolders } from './workspaceResolver';
 
 let chatViewProvider: ChatViewProvider | undefined;
@@ -739,6 +740,19 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     })
   );
+
+  setWorktreeBootstrapStatusNotifier((event) => {
+    const message = {
+      type: 'openchamber:worktree-bootstrap-status',
+      properties: event,
+    };
+    chatViewProvider?.postMessage(message);
+    agentManagerProvider?.postMessage(message);
+    sessionEditorProvider?.postMessage(message);
+  });
+  context.subscriptions.push({
+    dispose: () => setWorktreeBootstrapStatusNotifier(null),
+  });
 
   // Start OpenCode API without blocking activation.
   // Blocking here delays webview resolution and causes a blank panel until startup completes.

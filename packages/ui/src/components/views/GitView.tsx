@@ -64,6 +64,11 @@ import type { GitRemote } from '@/lib/gitApi';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { cn } from '@/lib/utils';
 import { generateCommitMessage as generateSessionCommitMessage, getGitWorktreeBootstrapStatus } from '@/lib/gitApi';
+import {
+  getWorktreeBootstrapState,
+  subscribeWorktreeBootstrapState,
+  applyWorktreeBootstrapStatusEvent,
+} from '@/lib/worktrees/worktreeBootstrap';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { useI18n } from '@/lib/i18n';
 
@@ -403,34 +408,36 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     }
 
     let cancelled = false;
-    let timeoutId: number | null = null;
+    const local = getWorktreeBootstrapState(currentDirectory);
+    if (local) {
+      setWorktreeBootstrapStatus(local.status);
+    }
 
-    const poll = async () => {
-      try {
-        const next = await getGitWorktreeBootstrapStatus(currentDirectory);
-        if (cancelled) {
-          return;
-        }
-        setWorktreeBootstrapStatus(next.status);
-        if (next.status === 'pending') {
-          timeoutId = window.setTimeout(() => {
-            void poll();
-          }, 500);
-        }
-      } catch {
-        if (!cancelled) {
+    const unsubscribe = subscribeWorktreeBootstrapState((directory, status) => {
+      if (cancelled) return;
+      if (normalizePath(directory) !== normalizePath(currentDirectory)) return;
+      setWorktreeBootstrapStatus(status.status);
+    });
+
+    // One-shot seed — live updates arrive via openchamber/global WS events.
+    // Read back from the store after apply so a delayed pending GET cannot
+    // overwrite a newer ready/failed event already accepted by updatedAt order.
+    void getGitWorktreeBootstrapStatus(currentDirectory)
+      .then((next) => {
+        if (cancelled) return;
+        applyWorktreeBootstrapStatusEvent(currentDirectory, next);
+        const applied = getWorktreeBootstrapState(currentDirectory);
+        setWorktreeBootstrapStatus(applied?.status ?? next.status);
+      })
+      .catch(() => {
+        if (!cancelled && !getWorktreeBootstrapState(currentDirectory)) {
           setWorktreeBootstrapStatus(null);
         }
-      }
-    };
-
-    void poll();
+      });
 
     return () => {
       cancelled = true;
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
+      unsubscribe();
     };
   }, [isActive, currentDirectory]);
 

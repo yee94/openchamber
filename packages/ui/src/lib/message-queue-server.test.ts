@@ -31,7 +31,7 @@ const item = { queueItemID: 'item/a', operationID: 'operation/a', messageID: 'me
 const scope = { scopeID: 'scope/a', revision: 4, directory: '/repo', sessionID: 'session/a', worktreeState: 'active', itemCount: 1, items: [item] };
 const snapshot = { revision: 4, scopes: [{ ...scope, items: undefined }], worktreeOrders: [{ projectDirectory: '/repo', orderedPaths: ['/repo/w'], revision: 2 }] };
 
-type FetchCall = { url: URL; method: string; body: string | null; signal?: AbortSignal | null };
+type FetchCall = { url: URL; method: string; body: string | null; headers: Headers; signal?: AbortSignal | null };
 const fetchCalls: FetchCall[] = [];
 let responseImplementation: (call: FetchCall) => Promise<Response>;
 const originalFetch = globalThis.fetch;
@@ -70,7 +70,8 @@ describe('message queue server adapter', () => {
       const call: FetchCall = {
         url: new URL(request.url),
         method: request.method,
-        body: init?.body == null ? null : String(init.body),
+        body: init?.body == null ? null : (typeof init.body === 'string' ? init.body : '[binary]'),
+        headers: request.headers,
         signal: request.signal,
       };
       fetchCalls.push(call);
@@ -166,7 +167,7 @@ describe('message queue server adapter', () => {
   test('accepts only canonical attachment DTOs and sends manual CAS', async () => {
     responseImplementation = async (call) => {
       if (call.method === 'POST') return new Response(JSON.stringify({ revision: 6, scopeID: 'scope/a', queueItemID: 'item/a', rowVersion: 3 }));
-      return new Response(JSON.stringify({ ...scope, items: [{ ...item, attachments: [{ attachmentID: 'attachment/a', occurrenceRefID: ['root', 'attachment/a'], filename: 'a.txt', mimeType: 'text/plain', size: 1, source: 'local', locator: { kind: 'upload', uploadID: 'upload/a' } }] }] }));
+      return new Response(JSON.stringify({ ...scope, items: [{ ...item, attachments: [{ attachmentID: 'attachment/a', occurrenceRefID: ['root', 'attachment/a'], filename: 'a.txt', mimeType: 'text/plain', size: 1, source: 'local', locator: { kind: 'upload', uploadID: 'upload/a', storageKey: 'abc' } }] }] }));
     };
     const parsed = await api.fetchMessageQueueScope('scope/a');
     expect(parsed.items[0]?.attachments?.[0]?.locator).toEqual({ kind: 'upload', uploadID: 'upload/a' });
@@ -201,6 +202,26 @@ describe('message queue server adapter', () => {
   test('requires the compact renew acknowledgement fields', async () => {
     responseImplementation = async () => new Response(JSON.stringify({ queueItemID: 'item/a', token: 'token', generation: 1 }));
     try { await api.renewEditReservation('item/a', { token: 'token', generation: 1, ttlMs: 1_000 }); throw new Error('expected malformed renewal to fail'); } catch (error) { expect((error as { code?: string }).code).toBe('unavailable'); }
+  });
+
+  test('sends relay-safe attachment upload size header', async () => {
+    responseImplementation = async () => new Response(JSON.stringify({ uploadID: 'upload/a', uploadToken: 'token', expiresAt: 10 }), { status: 200 });
+    const upload = await api.createMessageQueueAttachmentUpload();
+    responseImplementation = async (call) => {
+      expect(call.headers?.get('Content-Length')).toBe('4');
+      expect(call.headers?.get('X-Message-Queue-Content-Length')).toBe('4');
+      expect(call.headers?.get('X-Message-Queue-Upload-Token')).toBe('token');
+      expect(call.headers?.get('X-Message-Queue-Sha256')).toBe('deadbeef');
+      return new Response(JSON.stringify({ uploadID: 'upload/a', state: 'ready', objectHash: 'deadbeef', storageKey: 'deadbeef', sizeBytes: 4 }), { status: 200 });
+    };
+    await api.uploadMessageQueueAttachment(upload, new Blob(['abcd']), 'deadbeef');
+  });
+
+  test('downloads attachments when relay omits Content-Length', async () => {
+    responseImplementation = async () => new Response(new Blob(['x'], { type: 'text/plain' }), { headers: { 'Content-Type': 'text/plain' } });
+    const blob = await api.downloadMessageQueueAttachment('item/a', { attachmentID: 'attachment/a', size: 1, mimeType: 'text/plain' });
+    expect(blob.size).toBe(1);
+    expect(blob.type).toBe('text/plain');
   });
 
   test('rejects downloaded attachments with a different MIME base type or size', async () => {

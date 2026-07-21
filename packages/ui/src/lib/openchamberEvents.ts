@@ -18,6 +18,13 @@ type WorktreeTopologyChangedEvent = {
   operation: 'added' | 'removed';
   occurredAt: number;
 };
+type WorktreeBootstrapStatusEvent = {
+  type: 'worktree-bootstrap-status';
+  directory: string;
+  status: 'pending' | 'ready' | 'failed';
+  error: string | null;
+  updatedAt: number;
+};
 /** Session-index SQLite revision tip — clients GET /api/openchamber/session-index. */
 type SessionIndexChangedEvent = {
   type: 'session-index-changed';
@@ -35,6 +42,7 @@ type OpenChamberEvent =
   | ScheduledTaskRanEvent
   | EventStreamReadyEvent
   | WorktreeTopologyChangedEvent
+  | WorktreeBootstrapStatusEvent
   | SessionIndexChangedEvent
   | MessageQueueChangedEvent;
 type Listener = (event: OpenChamberEvent) => void;
@@ -131,6 +139,16 @@ export const parseOpenchamberEventEnvelope = (envelope: { type: string; properti
     const occurredAt = parsed?.occurredAt;
     if (!projectDirectory || !directory || (operation !== 'added' && operation !== 'removed') || typeof occurredAt !== 'number' || !Number.isFinite(occurredAt)) return null;
     return { type: 'worktree-topology-changed', projectDirectory, directory, operation, occurredAt };
+  }
+
+  if (envelope.type === 'openchamber:worktree-bootstrap-status') {
+    const directory = typeof parsed?.directory === 'string' ? parsed.directory.trim() : '';
+    const status = parsed?.status;
+    const updatedAt = parsed?.updatedAt;
+    const error = typeof parsed?.error === 'string' && parsed.error.trim().length > 0 ? parsed.error.trim() : null;
+    if (!directory || (status !== 'pending' && status !== 'ready' && status !== 'failed')) return null;
+    if (typeof updatedAt !== 'number' || !Number.isFinite(updatedAt)) return null;
+    return { type: 'worktree-bootstrap-status', directory, status, error, updatedAt };
   }
 
   if (envelope.type === 'openchamber:session-index-changed') {

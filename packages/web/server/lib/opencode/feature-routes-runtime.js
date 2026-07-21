@@ -124,6 +124,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       permissionAutoAcceptRuntime,
       messageQueueService,
       messageQueueRuntime,
+      broadcastGlobalUiEvent,
     } = routeDependencies;
 
     registerSettingsUtilityRoutes(app, {
@@ -289,12 +290,31 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerSmallModelRoutes(app, { getSmallModelService });
     registerSessionGoalRoutes(app);
     registerGitHubRoutes(app);
+    const broadcastOpenChamberEvent = createOpenChamberEventBroadcaster({
+      getOpenChamberEventClients,
+      writeSseEvent,
+    });
+    const broadcastWorktreeTopologyChanged = createWorktreeTopologyBroadcaster({
+      getOpenChamberEventClients,
+      writeSseEvent,
+    });
+    const broadcastWorktreeBootstrapStatus = (event) => {
+      broadcastOpenChamberEvent(event);
+      if (typeof broadcastGlobalUiEvent === 'function') {
+        const directory = typeof event?.properties?.directory === 'string' ? event.properties.directory : '';
+        broadcastGlobalUiEvent(event, directory ? { directory } : undefined);
+      }
+    };
+    void import('../git/service.js').then((gitService) => {
+      if (typeof gitService.setWorktreeBootstrapStatusBroadcaster === 'function') {
+        gitService.setWorktreeBootstrapStatusBroadcaster(broadcastWorktreeBootstrapStatus);
+      }
+    }).catch(() => {
+      // Git service unavailable in this runtime — bootstrap status stays request-scoped.
+    });
     registerGitRoutes(app, {
       messageQueueService,
-      broadcastWorktreeTopologyChanged: createWorktreeTopologyBroadcaster({
-        getOpenChamberEventClients,
-        writeSseEvent,
-      }),
+      broadcastWorktreeTopologyChanged,
     });
     registerMagicPromptRoutes(app, {
       fsPromises,

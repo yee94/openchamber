@@ -128,6 +128,10 @@ export class AgentManagerPanelProvider {
     this._sendCachedState();
   }
 
+  public postMessage(message: unknown): void {
+    this._panel?.webview.postMessage(message);
+  }
+
   public notifySettingsSynced(settings: unknown): void {
     if (!this._panel) {
       return;

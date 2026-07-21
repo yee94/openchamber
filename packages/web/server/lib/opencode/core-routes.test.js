@@ -308,6 +308,40 @@ describe('core-routes', () => {
     }, { runtimeKey: 'a'.repeat(64) });
   });
 
+  it('should accept relay-safe X-Message-Queue-Content-Length when Content-Length is absent', async () => {
+    const app = express();
+    const received = [];
+    const getAttachmentUpload = vi.fn();
+    const markAttachmentReady = vi.fn(() => ({ ready: true }));
+    const attachmentStore = {
+      writeUpload: vi.fn(async ({ stream, expectedSize, onStored }) => {
+        for await (const chunk of stream) received.push(Buffer.from(chunk));
+        const object = { storageKey: 'object_2', size: expectedSize }; onStored(object); return object;
+      }),
+    };
+    registerCommonRequestMiddleware(app, { express });
+    const getRuntimeKey = vi.fn(() => 'a'.repeat(64));
+    registerMessageQueueRoutes(app, {
+      messageQueueService: { getAttachmentUpload, markAttachmentReady, getRuntimeKey },
+      messageQueueRuntime: { service: { getAttachmentUpload, markAttachmentReady, getRuntimeKey }, attachmentStore },
+    });
+
+    const payload = Buffer.from('relay-bytes');
+    const uploadRequest = request(app)
+      .put('/api/openchamber/message-queue/attachments/uploads/upload_2')
+      .set('Content-Type', 'application/octet-stream')
+      .set('x-message-queue-content-length', String(payload.length))
+      .set('x-message-queue-upload-token', 'upload-token');
+    uploadRequest.write(payload);
+    await uploadRequest.expect(200, { ready: true });
+
+    expect(Buffer.concat(received)).toEqual(payload);
+    expect(attachmentStore.writeUpload).toHaveBeenCalledWith(expect.objectContaining({
+      uploadID: 'upload_2',
+      expectedSize: payload.length,
+    }));
+  });
+
   it('should stream validated message queue attachment content', async () => {
     const app = express();
     const getItemAttachment = vi.fn(() => ({ attachment: { attachmentID: 'attachment_1' }, item: { runtimeKey: 'a'.repeat(64), directory: '/repo' } }));

@@ -12,6 +12,33 @@ describe('parseOpenchamberEventEnvelope', () => {
     expect(parseOpenchamberEventEnvelope({ type: 'openchamber:worktree-topology-changed', properties: { projectDirectory: '/repo', directory: '/repo/feature', operation: 'moved', occurredAt: '1' } })).toBeNull();
   });
 
+  test('parses worktree bootstrap status envelopes', () => {
+    expect(parseOpenchamberEventEnvelope({
+      type: 'openchamber:worktree-bootstrap-status',
+      properties: { directory: '/repo/feature', status: 'ready', error: null, updatedAt: 12 },
+    })).toEqual({
+      type: 'worktree-bootstrap-status',
+      directory: '/repo/feature',
+      status: 'ready',
+      error: null,
+      updatedAt: 12,
+    });
+    expect(parseOpenchamberEventEnvelope({
+      type: 'openchamber:worktree-bootstrap-status',
+      properties: { directory: '/repo/feature', status: 'failed', error: 'boom', updatedAt: 13 },
+    })).toEqual({
+      type: 'worktree-bootstrap-status',
+      directory: '/repo/feature',
+      status: 'failed',
+      error: 'boom',
+      updatedAt: 13,
+    });
+    expect(parseOpenchamberEventEnvelope({
+      type: 'openchamber:worktree-bootstrap-status',
+      properties: { directory: '/repo/feature', status: 'running', updatedAt: 1 },
+    })).toBeNull();
+  });
+
   test('parses session-index and message-queue tip envelopes', () => {
     expect(parseOpenchamberEventEnvelope({
       type: 'openchamber:session-index-changed',

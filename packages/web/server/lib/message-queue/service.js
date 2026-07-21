@@ -102,7 +102,7 @@ export const createMessageQueueService = ({ dbPath, getRuntimeConfig = () => nul
     mimeType: attachment.mime_type ?? attachment.media_type ?? 'application/octet-stream',
     size: attachment.size_bytes,
     source: attachment.source,
-    locator: attachment.locator_kind === 'server_path' ? { kind: 'server-path', path: attachment.locator_value } : { kind: 'upload', uploadID: attachment.upload_id, storageKey: attachment.storage_key },
+    locator: attachment.locator_kind === 'server_path' ? { kind: 'server-path', path: attachment.locator_value } : { kind: 'upload', uploadID: attachment.upload_id, ...(attachment.storage_key ? { storageKey: attachment.storage_key } : {}) },
   }));
   const itemOutput = (row) => {
     const attempt = db.prepare('SELECT * FROM queue_attempt WHERE queue_item_id = ?').get(row.queue_item_id);

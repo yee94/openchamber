@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.40] - 2026-07-21
+
+- **Worktree bootstrap:** replace client polling with live OpenChamber worktree-bootstrap status events, with updatedAt ordering so delayed HTTP seeds cannot overwrite newer ready or failed states.
+- **Git workspace:** subscribe GitView to the shared bootstrap store and seed status once on open instead of polling every 500ms.
+- **Session status sync:** remove periodic `/session/status` polling from sync and tray surfaces; reconnect and bootstrap now take one authoritative snapshot that also covers idle-to-busy transitions missed while the stream was down.
+- **Queued attachments:** accept server-side upload storage keys in queue attachment locators, send explicit upload content-length headers, and tolerate missing download length headers when validating attachment size.
+- **VS Code:** forward worktree bootstrap status events into agent and session webviews so worktree readiness stays in sync without polling.
+
 ## [1.16.39] - 2026-07-21
 
 - **Runtime SSE transport:** add a shared fetch-based SSE consumer that works through encrypted relay responses, replacing browser `EventSource` for OpenChamber event tips.

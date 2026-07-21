@@ -275,17 +275,17 @@ const collectLiveData = (): LiveData => {
 // landing in useGlobalSessionStatusStore (the fallback in the rollup below):
 //  - live: the global event stream carries status events for every directory;
 //    the sync dispatcher routes the ones without a child store into the store;
-//  - polled: events only deliver changes, so an initial per-directory snapshot
-//    seeds the state and a slow poll reconciles anything missed. Per directory
-//    because the upstream `/session/status` endpoint is directory-scoped
+//  - one-shot snapshot: events only deliver changes, so a per-directory
+//    `/session/status` seed runs on connect / when the visible directory set
+//    changes. Not a periodic poll — missed events recover via reconnect
+//    resync. Per directory because the upstream endpoint is directory-scoped
 //    (querying it without a directory covers only the server's own cwd, NOT
 //    all projects).
 
-// Directories worth polling: everywhere the tray's visible sessions live —
-// including synced ones, so the poll reconciles any status event a child
-// store missed (e.g. a session created from another window mid-race). Returns
-// each directory with the session ids the global list places there, so the
-// snapshot can authoritatively clear stale entries by session id.
+// Directories worth seeding: everywhere the tray's visible sessions live —
+// including synced ones, so a reconnect/seed can clear stale entries a child
+// store missed. Returns each directory with the session ids the global list
+// places there.
 const collectStatusPollDirectories = (): Map<string, string[]> => {
   const allSessions = useGlobalSessionsStore.getState().activeSessions;
   const rootDirs = new Set<string>();
@@ -348,8 +348,8 @@ const buildSnapshot = (instanceName: string): TraySnapshot => {
 
   // A session is active if EITHER source says so: the synced child stores
   // (instant, but can miss sessions created outside this window) or the
-  // cross-project status map (event-driven for every directory + polled
-  // reconciliation). Requiring agreement would re-introduce the gaps.
+  // cross-project status map (event-driven for every directory + one-shot
+  // seed on connect). Requiring agreement would re-introduce the gaps.
   const globalStatusById = useGlobalSessionStatusStore.getState().statusById;
   const resolveStatus = (id: string): TraySessionStatus => {
     const fromStores = live.statusById.get(id);
@@ -428,10 +428,10 @@ export const useTraySync = (): void => {
       flushNow();
     });
 
-    // Seed + reconcile the cross-project status map. The live path is the
-    // global event stream (captured by the sync dispatcher); this poll covers
-    // sessions already busy before this window opened and any missed events.
-    // Cheap: ~ms per directory, bounded by the tray's visible session count.
+    // Seed the cross-project status map once. The live path is the global
+    // event stream (captured by the sync dispatcher); this one-shot snapshot
+    // covers sessions already busy before this window opened. Missed events
+    // after that recover via reconnect resync, not a periodic poll.
     let statusRefreshPromise: Promise<void> | null = null;
     let lastStatusTargetSignature = '';
     const statusTargetSignature = (targets: ReadonlyMap<string, readonly string[]>) =>
@@ -537,11 +537,11 @@ export const useTraySync = (): void => {
     // change must re-push the snapshot so the badge appears/clears immediately.
     const unsubscribeUI = useUIStore.subscribe(() => scheduleFlush());
     // Cross-project status map: fed live by the sync dispatcher from the global
-    // event stream, and seeded/reconciled by the poll below.
+    // event stream, and seeded once below when OpenCode is ready.
     const unsubscribeGlobalStatus = useGlobalSessionStatusStore.subscribe(() => scheduleFlush());
     // The status stream is the primary source. Once the runtime reports a real
-    // connection, run one bounded reconciliation for sessions that were busy
-    // before this window subscribed. Never poll while OpenCode is warming up.
+    // connection, run one bounded seed for sessions that were busy before this
+    // window subscribed. Never hit `/session/status` while OpenCode is warming up.
     let wasOpenCodeReady = isOpenCodeReady();
     const unsubscribeConfig = useConfigStore.subscribe(() => {
       const ready = isOpenCodeReady();
@@ -550,10 +550,8 @@ export const useTraySync = (): void => {
     });
 
     // Global busy/retry status is event-driven. If the event connection was
-    // already ready before this hook mounted, reconcile once; thereafter this
-    // slow interval is only a missed-event safety net.
+    // already ready before this hook mounted, seed once; no periodic poll.
     if (wasOpenCodeReady) void refreshGlobalStatus();
-    const globalStatusInterval = window.setInterval(() => { void refreshGlobalStatus(); }, POLL_INTERVAL_MS);
 
     // Usage: push to the tray whenever the quota store changes, and do one
     // initial fetch for enabled providers so the submenu isn't empty on launch.
@@ -582,7 +580,6 @@ export const useTraySync = (): void => {
       disposed = true;
       if (flushTimer !== null) window.clearTimeout(flushTimer);
       window.clearInterval(interval);
-      window.clearInterval(globalStatusInterval);
       window.clearInterval(usageRefreshTick);
       unsubscribeNotif();
       unsubscribeGlobal();
