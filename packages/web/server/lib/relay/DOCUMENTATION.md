@@ -41,7 +41,7 @@ Relay is not a separate link format: it is one transport candidate inside the un
 Everything a client normally sends to the single OpenChamber origin:
 - **HTTP** — REST endpoints and proxied OpenCode SDK calls under `/api/*`, plus `/auth/*` and `/health`.
 - **SSE** — streamed responses opened through `runtimeFetch`, including `/api/openchamber/events` and SDK global SSE. Relay carries these HTTP response body frames through the tunnel.
-- **WebSocket** — the endpoints that use a real socket (the global event stream on platforms that support WS, terminal I/O, dictation).
+- **WebSocket** — the endpoints that use a real socket (the global event stream on platforms that support WS, terminal I/O, dictation, language-server JSON-RPC).
 
 The host dispatcher restricts tunneled traffic to explicit path allowlists (one for HTTP, one for WS).
 

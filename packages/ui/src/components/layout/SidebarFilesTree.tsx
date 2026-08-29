@@ -41,8 +41,20 @@ import { collectExpandableDirectoryPaths, collectUnexpandedDirectoryPaths, isFil
 import { cn, getRevealLabelKey } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
+import { FileGitFolderBadge, FileGitStatusMark } from '@/components/files/FileGitStatusMark';
 import { Icon } from "@/components/icon/Icon";
 import { getContextFileOpenFailureMessage, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
+import {
+  buildFileGitDecorationIndex,
+  decorateFileTreeChildren,
+  fileGitNameClassName,
+  fileGitStatusLabelKey,
+  ghostChildrenForDirectory,
+  isGhostDirectory,
+  lookupFileGitDecoration,
+  lookupFolderGitBadge,
+  type FileGitDecoration,
+} from '@/lib/files/fileGitDecorations';
 import { useI18n } from '@/lib/i18n';
 
 type FileNode = {
@@ -51,6 +63,7 @@ type FileNode = {
   type: 'file' | 'directory';
   extension?: string;
   relativePath?: string;
+  ghost?: boolean;
 };
 
 const sortNodes = (items: FileNode[]) =>
@@ -164,22 +177,6 @@ const getFileIcon = (filePath: string, extension?: string): React.ReactNode => {
   return <FileTypeIcon filePath={filePath} extension={extension} className="size-3.5" />;
 };
 
-// --- Git status indicators (matching FilesView) ---
-
-type FileStatus = 'open' | 'modified' | 'git-modified' | 'git-added' | 'git-deleted';
-
-const FileStatusDot: React.FC<{ status: FileStatus }> = ({ status }) => {
-  const color = {
-    open: 'var(--status-info)',
-    modified: 'var(--status-warning)',
-    'git-modified': 'var(--status-warning)',
-    'git-added': 'var(--status-success)',
-    'git-deleted': 'var(--status-error)',
-  }[status];
-
-  return <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />;
-};
-
 // --- FileRow with context menu (matching FilesView) ---
 
 interface FileRowProps {
@@ -187,8 +184,8 @@ interface FileRowProps {
   root: string;
   isExpanded: boolean;
   isActive: boolean;
-  status?: FileStatus | null;
-  badge?: { modified: number; added: number } | null;
+  decoration?: FileGitDecoration | null;
+  badge?: { modified: number; added: number; deleted: number } | null;
   permissions: {
     canRename: boolean;
     canCreateFile: boolean;
@@ -208,7 +205,7 @@ const FileRow: React.FC<FileRowProps> = ({
   root,
   isExpanded,
   isActive,
-  status,
+  decoration,
   badge,
   permissions,
   downloadFile,
@@ -346,16 +343,19 @@ const FileRow: React.FC<FileRowProps> = ({
         ) : (
           getFileIcon(node.path, node.extension)
         )}
-        <span className="min-w-0 flex-1 truncate typography-code" title={node.path}>
+        <span
+          className={cn(
+            'min-w-0 flex-1 truncate typography-code',
+            fileGitNameClassName(decoration, node.ghost),
+          )}
+          title={node.path}
+        >
           {node.name}
         </span>
-        {!isDir && status && <FileStatusDot status={status} />}
-        {isDir && badge && (
-          <span className="text-xs flex items-center gap-1 ml-auto mr-1">
-            {badge.modified > 0 && <span className="text-[var(--status-warning)]">M{badge.modified}</span>}
-            {badge.added > 0 && <span className="text-[var(--status-success)]">+{badge.added}</span>}
-          </span>
+        {!isDir && decoration && (
+          <FileGitStatusMark decoration={decoration} label={t(fileGitStatusLabelKey(decoration.kind))} />
         )}
+        {isDir && badge && <FileGitFolderBadge badge={badge} />}
       </button>
       {(canRename || canCreateFile || canCreateFolder || canDelete || canReveal) && (
         <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 focus-within:opacity-100 group-hover:opacity-100">
@@ -401,7 +401,7 @@ const areFileRowPropsEqual = (prev: FileRowProps, next: FileRowProps): boolean =
   && prev.root === next.root
   && prev.isExpanded === next.isExpanded
   && prev.isActive === next.isActive
-  && prev.status === next.status
+  && prev.decoration === next.decoration
   && prev.badge === next.badge
   && prev.permissions === next.permissions
   && prev.downloadFile === next.downloadFile
@@ -505,7 +505,6 @@ export const SidebarFilesTree: React.FC = () => {
   }, [root]);
 
   const EMPTY_PATHS: string[] = React.useMemo(() => [], []);
-  const EMPTY_CONTEXT_TABS: Array<{ mode: string; targetPath: string | null }> = React.useMemo(() => [], []);
   const expandedPaths = useFilesViewTabsStore((state) => (root ? (state.byRoot[root]?.expandedPaths ?? EMPTY_PATHS) : EMPTY_PATHS));
   const selectedPath = useFilesViewTabsStore((state) => (root ? (state.byRoot[root]?.selectedPath ?? null) : null));
   const setSelectedPath = useFilesViewTabsStore((state) => state.setSelectedPath);
@@ -514,14 +513,6 @@ export const SidebarFilesTree: React.FC = () => {
   const removeExpandedPathsByPrefix = useFilesViewTabsStore((state) => state.removeExpandedPathsByPrefix);
   const toggleExpandedPath = useFilesViewTabsStore((state) => state.toggleExpandedPath);
   const expandPaths = useFilesViewTabsStore((state) => state.expandPaths);
-  const contextTabs = useUIStore((state) => (root ? (state.contextPanelByDirectory[root]?.tabs ?? EMPTY_CONTEXT_TABS) : EMPTY_CONTEXT_TABS));
-  const openContextFilePaths = React.useMemo(() => new Set(
-    contextTabs
-      .map((tab) => (tab.mode === 'file' ? tab.targetPath : null))
-      .filter((targetPath): targetPath is string => typeof targetPath === 'string' && targetPath.length > 0)
-      .map((targetPath) => normalizePath(targetPath))
-  ), [contextTabs]);
-
   // Dialog state for CRUD operations
   const [activeDialog, setActiveDialog] = React.useState<'createFile' | 'createFolder' | 'rename' | 'delete' | null>(null);
   const [dialogData, setDialogData] = React.useState<{ path: string; name?: string; type?: 'file' | 'directory' } | null>(null);
@@ -801,72 +792,26 @@ export const SidebarFilesTree: React.FC = () => {
     };
   }, [currentDirectory, debouncedSearchQuery, searchFiles, showHidden, showGitignored]);
 
-  // --- Git status helpers (matching FilesView) ---
-  //
-  // statusByPath / badgeByDir are precomputed once per gitStatus change so the
-  // tree render is O(1) per node instead of O(N) per node. Without these
-  // maps, a deep tree with 200 files and 40 directories would do ~8000
-  // string comparisons on every render.
-
-  const statusByPath = React.useMemo(() => {
-    const map = new Map<string, FileStatus>();
-    if (!gitStatus?.files) return map;
-    for (const file of gitStatus.files) {
-      if (file.index === 'A' || file.working_dir === '?') {
-        map.set(file.path, 'git-added');
-      } else if (file.index === 'D') {
-        map.set(file.path, 'git-deleted');
-      } else if (file.index === 'M' || file.working_dir === 'M') {
-        map.set(file.path, 'git-modified');
-      }
-    }
-    return map;
-  }, [gitStatus]);
-
-  const badgeByDir = React.useMemo(() => {
-    const map = new Map<string, { modified: number; added: number }>();
-    if (!gitStatus?.files || !root) return map;
-    for (const file of gitStatus.files) {
-      const isModified = file.index === 'M' || file.working_dir === 'M';
-      const isAdded = file.index === 'A' || file.working_dir === '?';
-      if (!isModified && !isAdded) continue;
-      const segments = file.path.split('/');
-      if (segments.length <= 1) continue;
-      let currentDir = root;
-      for (let i = 0; i < segments.length - 1; i++) {
-        currentDir = `${currentDir}/${segments[i]}`;
-        let entry = map.get(currentDir);
-        if (!entry) {
-          entry = { modified: 0, added: 0 };
-          map.set(currentDir, entry);
-        }
-        if (isModified) entry.modified++;
-        if (isAdded) entry.added++;
-      }
-    }
-    return map;
-  }, [gitStatus, root]);
-
-  const getFileStatus = React.useCallback((path: string): FileStatus | null => {
-    if (openContextFilePaths.has(path)) return 'open';
-    if (statusByPath.size === 0) return null;
-    const relative = path.startsWith(root + '/') ? path.slice(root.length + 1) : path;
-    return statusByPath.get(relative) ?? null;
-  }, [openContextFilePaths, statusByPath, root]);
-
-  const getFolderBadge = React.useCallback((dirPath: string): { modified: number; added: number } | null => {
-    if (badgeByDir.size === 0) return null;
-    const entry = badgeByDir.get(dirPath);
-    if (!entry) return null;
-    return entry.modified + entry.added > 0 ? entry : null;
-  }, [badgeByDir]);
+  // Git decorations are O(changed files) once, then O(1) per row.
+  const gitDecorationIndex = React.useMemo(
+    () => buildFileGitDecorationIndex(gitStatus?.files, root),
+    [gitStatus, root],
+  );
+  const decoratedChildrenByDir = React.useMemo(
+    () => decorateFileTreeChildren(childrenByDir, root, gitStatus?.files),
+    [childrenByDir, gitStatus, root],
+  );
 
   // --- File operations ---
 
   const handleOpenFile = React.useCallback(async (node: FileNode) => {
     if (!root) return;
 
-    const openValidation = await validateContextFileOpen(files, node.path);
+    const decoration = lookupFileGitDecoration(gitDecorationIndex, node.path, root);
+    const skipMissingGuard = node.ghost === true || decoration?.kind === 'deleted';
+    const openValidation = skipMissingGuard
+      ? { ok: true as const }
+      : await validateContextFileOpen(files, node.path);
     if (!openValidation.ok) {
       toast.error(getContextFileOpenFailureMessage(openValidation.reason));
       return;
@@ -875,17 +820,28 @@ export const SidebarFilesTree: React.FC = () => {
     setSelectedPath(root, node.path);
     addOpenPath(root, node.path);
     openContextFile(root, node.path);
-  }, [addOpenPath, files, openContextFile, root, setSelectedPath]);
+  }, [addOpenPath, files, gitDecorationIndex, openContextFile, root, setSelectedPath]);
 
   const toggleDirectory = React.useCallback(async (dirPath: string) => {
     const normalized = normalizePath(dirPath);
     if (!root) return;
 
     toggleExpandedPath(root, normalized);
-    if (!loadedDirsRef.current.has(normalized)) {
-      await loadDirectory(normalized);
+    if (loadedDirsRef.current.has(normalized)) {
+      return;
     }
-  }, [loadDirectory, root, toggleExpandedPath]);
+    const listed = Object.values(decoratedChildrenByDir).flat().find((node) => normalizePath(node.path) === normalized);
+    if (listed && isGhostDirectory(listed)) {
+      loadedDirsRef.current = new Set(loadedDirsRef.current);
+      loadedDirsRef.current.add(normalized);
+      setChildrenByDir((prev) => ({
+        ...prev,
+        [normalized]: ghostChildrenForDirectory(normalized, root, gitStatus?.files),
+      }));
+      return;
+    }
+    await loadDirectory(normalized);
+  }, [decoratedChildrenByDir, gitStatus, loadDirectory, root, toggleExpandedPath]);
 
   const directoryPaths = React.useMemo(
     () => (root ? collectExpandableDirectoryPaths(root, childrenByDir) : []),
@@ -1057,7 +1013,7 @@ export const SidebarFilesTree: React.FC = () => {
   // --- Tree rendering (matching FilesView with indent guides) ---
 
   function renderTree(dirPath: string, depth: number): React.ReactNode {
-    const nodes = childrenByDir[dirPath] ?? [];
+    const nodes = decoratedChildrenByDir[dirPath] ?? [];
 
     return nodes.map((node) => {
       const isDir = node.type === 'directory';
@@ -1073,8 +1029,8 @@ export const SidebarFilesTree: React.FC = () => {
             root={root}
             isExpanded={isExpanded}
             isActive={isActive}
-            status={!isDir ? getFileStatus(node.path) : undefined}
-            badge={isDir ? getFolderBadge(node.path) : undefined}
+            decoration={!isDir ? lookupFileGitDecoration(gitDecorationIndex, node.path, root) : undefined}
+            badge={isDir ? lookupFolderGitBadge(gitDecorationIndex, node.path) : undefined}
             permissions={fileRowPermissions}
             downloadFile={files.downloadFile}
             onSelect={handleOpenFile}
@@ -1101,7 +1057,7 @@ export const SidebarFilesTree: React.FC = () => {
     });
   }
 
-  const hasTree = Boolean(root && childrenByDir[root]);
+  const hasTree = Boolean(root && decoratedChildrenByDir[root]);
   const rootLoadError = root ? loadErrorsByDir[root] : null;
   const toggleAllDirectoriesLabel = allDirectoriesExpanded
     ? t('sidebarFilesTree.actions.collapseAllTitle')
@@ -1231,11 +1187,20 @@ export const SidebarFilesTree: React.FC = () => {
                   >
                     {getFileIcon(node.path, node.extension)}
                     <span
-                      className="min-w-0 flex-1 truncate typography-code"
+                      className={cn(
+                        'min-w-0 flex-1 truncate typography-code',
+                        fileGitNameClassName(lookupFileGitDecoration(gitDecorationIndex, node.path, root)),
+                      )}
                       style={{ direction: 'rtl', textAlign: 'left' }}
                     >
                       {node.relativePath ?? node.path}
                     </span>
+                    {(() => {
+                      const decoration = lookupFileGitDecoration(gitDecorationIndex, node.path, root);
+                      return decoration
+                        ? <FileGitStatusMark decoration={decoration} label={t(fileGitStatusLabelKey(decoration.kind))} />
+                        : null;
+                    })()}
                   </button>
                 </li>
               );

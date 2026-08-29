@@ -22,6 +22,7 @@ import { prepareNotificationLastMessage } from './lib/notifications/index.js';
 import { registerTtsRoutes } from './lib/tts/routes.js';
 import { detectSayTtsCapability } from './lib/tts/capability-runtime.js';
 import { createTerminalRuntime } from './lib/terminal/runtime.js';
+import { createLspRuntime } from './lib/lsp/runtime.js';
 import { createDictationRuntime } from './lib/dictation/runtime.js';
 import {
   createGlobalUiEventBroadcaster,
@@ -930,6 +931,7 @@ const tunnelWiringRuntime = createTunnelWiringRuntime();
 const startupPipelineRuntime = createStartupPipelineRuntime({
   createTerminalRuntime,
   createDictationRuntime,
+  createLspRuntime,
   createMessageStreamWsRuntime,
   createServerStartupRuntime,
 });

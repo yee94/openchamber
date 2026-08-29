@@ -14,7 +14,9 @@ const isAllowedSsePath = (pathname) => {
 const isAllowedWebSocketPath = (pathname) => {
   return pathname === '/api/event/ws'
     || pathname === '/api/global/event/ws'
-    || pathname === '/api/terminal/ws';
+    || pathname === '/api/terminal/ws'
+    || pathname === '/api/dictation/ws'
+    || pathname === '/api/lsp/ws';
 };
 
 const normalizeBaseUrl = (value) => {

@@ -33,6 +33,7 @@ const ALLOWED_WS_PATHS = new Set([
   '/api/event/ws',
   '/api/terminal/ws',
   '/api/dictation/ws',
+  '/api/lsp/ws',
 ]);
 
 // Hop-by-hop headers stripped from tunneled requests; `host` is set by fetch

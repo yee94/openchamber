@@ -1,4 +1,5 @@
 import React from 'react';
+import { useEvent } from '@reactuses/core';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 
 import { toast } from '@/components/ui';
@@ -58,7 +59,7 @@ import type { Extension } from '@codemirror/state';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useUIStore } from '@/stores/useUIStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
-import { useGitStatus } from '@/stores/useGitStore';
+import { useGitStatus, useGitStore } from '@/stores/useGitStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { buildCodeMirrorCommentWidgets, CodeSelectionActionBubble, normalizeLineRange, useInlineCommentController } from '@/components/comments';
 import { opencodeClient } from '@/lib/opencode/client';
@@ -69,7 +70,31 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useInputStore } from '@/sync/input-store';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
+import { FileGitFolderBadge, FileGitStatusMark } from '@/components/files/FileGitStatusMark';
 import { Icon } from "@/components/icon/Icon";
+import { createGitGutterExtension } from '@/lib/codemirror/gitGutter';
+import {
+  createCodeNavigationExtension,
+  revealEditorPosition,
+  type CodeNavRequest,
+} from '@/lib/codemirror/codeNavigation';
+import { resolveCodeNavigation } from '@/lib/codemirror/resolveCodeNavigation';
+import { notifyLspEditorReady, setLspOpenFileHandler } from '@/lib/codemirror/lspEditorRegistry';
+import { requestLspDefinition } from '@/lib/codemirror/lspNavigation';
+import { acquireLspSession, peekLspSession } from '@/lib/codemirror/lspSession';
+import { languageIdForPath } from '@/lib/codemirror/lspUris';
+import {
+  buildFileGitDecorationIndex,
+  decorateFileTreeChildren,
+  fileGitNameClassName,
+  fileGitStatusLabelKey,
+  ghostChildrenForDirectory,
+  isGhostDirectory,
+  lookupFileGitDecoration,
+  lookupFolderGitBadge,
+  type FileGitDecoration,
+} from '@/lib/files/fileGitDecorations';
+import { useVisibleGitStatusSync } from '@/hooks/useVisibleGitStatusSync';
 import { useMessageTTS } from '@/hooks/useMessageTTS';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
@@ -87,6 +112,7 @@ type FileNode = {
   type: 'file' | 'directory';
   extension?: string;
   relativePath?: string;
+  ghost?: boolean;
 };
 
 type FileStatSnapshot = {
@@ -233,20 +259,6 @@ const getDisplayPath = (root: string | null, path: string): string => {
 
 const DEFAULT_IGNORED_DIR_NAMES = new Set(['node_modules']);
 
-type FileStatus = 'open' | 'modified' | 'git-modified' | 'git-added' | 'git-deleted';
-
-const FileStatusDot: React.FC<{ status: FileStatus }> = ({ status }) => {
-  const color = {
-    open: 'var(--status-info)',
-    modified: 'var(--status-warning)',
-    'git-modified': 'var(--status-warning)',
-    'git-added': 'var(--status-success)',
-    'git-deleted': 'var(--status-error)',
-  }[status];
-
-  return <span className="size-2 rounded-full" style={{ backgroundColor: color }} />;
-};
-
 const ScrollingFileName: React.FC<{ name: string }> = ({ name }) => {
   const containerRef = React.useRef<HTMLSpanElement | null>(null);
   const textRef = React.useRef<HTMLSpanElement | null>(null);
@@ -374,8 +386,8 @@ interface FileRowProps {
   isActive: boolean;
   isMobile: boolean;
   alwaysShowActions: boolean;
-  status?: FileStatus | null;
-  badge?: { modified: number; added: number } | null;
+  decoration?: FileGitDecoration | null;
+  badge?: { modified: number; added: number; deleted: number } | null;
   permissions: {
     canRename: boolean;
     canCreateFile: boolean;
@@ -401,7 +413,7 @@ const FileRow: React.FC<FileRowProps> = ({
   isActive,
   isMobile,
   alwaysShowActions,
-  status,
+  decoration,
   badge,
   permissions,
   downloadFile,
@@ -543,18 +555,18 @@ const FileRow: React.FC<FileRowProps> = ({
           getFileIcon(node.path, node.extension)
         )}
         <span
-          className="min-w-0 flex-1 truncate typography-meta"
+          className={cn(
+            'min-w-0 flex-1 truncate typography-meta',
+            fileGitNameClassName(decoration, node.ghost),
+          )}
           title={node.path}
         >
           {node.name}
         </span>
-        {!isDir && status && <FileStatusDot status={status} />}
-        {isDir && badge && (
-          <span className="text-xs flex items-center gap-1 ml-auto mr-1">
-            {badge.modified > 0 && <span className="text-[var(--status-warning)]">M{badge.modified}</span>}
-            {badge.added > 0 && <span className="text-[var(--status-success)]">+{badge.added}</span>}
-          </span>
+        {!isDir && decoration && (
+          <FileGitStatusMark decoration={decoration} label={t(fileGitStatusLabelKey(decoration.kind))} />
         )}
+        {isDir && badge && <FileGitFolderBadge badge={badge} />}
       </button>
       {(canRename || canCreateFile || canCreateFolder || canDelete || canReveal) && (
         <div className={cn(
@@ -735,7 +747,7 @@ const useAssetAuthRefresh = (
 
 export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = true }) => {
   const { t } = useI18n();
-  const { files, runtime } = useRuntimeAPIs();
+  const { files, runtime, git } = useRuntimeAPIs();
   const { currentTheme, availableThemes, lightThemeId, darkThemeId } = useThemeSystem();
   const { isMobile, isTablet, screenWidth } = useDeviceInfo();
   const alwaysShowActions = isMobile || isTablet;
@@ -748,6 +760,29 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
   const suppressFileLoadingIndicator = mode === 'editor-only' && !isMobile;
   const searchFiles = useFileSearchStore((state) => state.searchFiles);
   const gitStatus = useGitStatus(currentDirectory);
+  useVisibleGitStatusSync(currentDirectory, isActive);
+  const [lspGeneration, setLspGeneration] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!root || !isActive) {
+      return;
+    }
+    const session = acquireLspSession(root);
+    let cancelled = false;
+    void session.ready.then(() => {
+      if (!cancelled) {
+        setLspGeneration((value) => value + 1);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setLspGeneration((value) => value + 1);
+      }
+    });
+    return () => {
+      cancelled = true;
+      session.release();
+    };
+  }, [isActive, root]);
 
   const [searchQuery, setSearchQuery] = React.useState('');
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 200);
@@ -921,6 +956,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
   const desktopImageBlobUrlRef = React.useRef<string>('');
 
   const [loadedFilePath, setLoadedFilePath] = React.useState<string | null>(null);
+  const [deletedSnapshotPath, setDeletedSnapshotPath] = React.useState<string | null>(null);
 
   const [draftContent, setDraftContent] = React.useState('');
   const [isSaving, setIsSaving] = React.useState(false);
@@ -1037,6 +1073,19 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
   const setMainTabGuard = useUIStore((state) => state.setMainTabGuard);
   const pendingFileNavigation = useUIStore((state) => state.pendingFileNavigation);
   const setPendingFileNavigation = useUIStore((state) => state.setPendingFileNavigation);
+  const openContextFileAtLine = useUIStore((state) => state.openContextFileAtLine);
+  const openLspTargetFile = useEvent((targetPath: string) => {
+    if (!root) {
+      return;
+    }
+    openContextFileAtLine(root, targetPath, 1);
+  });
+  React.useEffect(() => {
+    setLspOpenFileHandler(openLspTargetFile);
+    return () => {
+      setLspOpenFileHandler(null);
+    };
+  }, [openLspTargetFile]);
   const pendingFileFocusPath = useUIStore((state) => state.pendingFileFocusPath);
   const setPendingFileFocusPath = useUIStore((state) => state.setPendingFileFocusPath);
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
@@ -1866,6 +1915,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
         }
         const editorContent = normalizeEditorLineEndings(content);
         setLoadedFileLineEnding(detectFileLineEnding(content));
+        setDeletedSnapshotPath(null);
         setFileContent(editorContent);
         diagramXmlRef.current = editorContent;
         diagramSavedXmlRef.current = editorContent;
@@ -1881,7 +1931,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
           })
           .catch(() => {});
       })
-      .catch((error) => {
+      .catch(async (error) => {
         if (!isCurrentLoad()) {
           return;
         }
@@ -1916,6 +1966,28 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
           return;
         }
         if (isFileMissingError(error)) {
+          const relative = getDisplayPath(root, node.path);
+          if (git && root && relative) {
+            try {
+              const cached = useGitStore.getState().getDiff(root, relative);
+              const diff = cached ?? await git.getGitFileDiff(root, { path: relative });
+              if (!diff.isBinary && diff.original.length > 0) {
+                const editorContent = normalizeEditorLineEndings(diff.original);
+                setLoadedFileLineEnding(detectFileLineEnding(diff.original));
+                setFileContent(editorContent);
+                setDraftContent(editorContent.length > MAX_VIEW_CHARS
+                  ? `${editorContent.slice(0, MAX_VIEW_CHARS)}\n\n… truncated …`
+                  : editorContent);
+                setLoadedFilePath(node.path);
+                setDeletedSnapshotPath(node.path);
+                setFileError(null);
+                lastLoadedFileStatRef.current = null;
+                return;
+              }
+            } catch {
+              // Fall through to the missing-file cleanup.
+            }
+          }
           if (root) {
             removeOpenPathsByPrefix(root, node.path);
           }
@@ -1938,7 +2010,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
           setFileLoading(false);
         }
       });
-  }, [expandPaths, isMobile, loadDirectory, mode, readFile, readFileStat, removeOpenPathsByPrefix, root, runtime.isDesktop, searchQuery, setSelectedPath, t]);
+  }, [expandPaths, git, isMobile, loadDirectory, mode, readFile, readFileStat, removeOpenPathsByPrefix, root, runtime.isDesktop, searchQuery, setSelectedPath, t]);
 
   const ensurePathVisible = React.useCallback(async (targetPath: string, includeTarget: boolean) => {
     if (!root) {
@@ -2218,48 +2290,84 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
     }
   }, [getNextOpenFile, handleSelectFile, isDirty, isMobile, openFiles, removeOpenPath, root, selectedFile?.path, setSelectedPath]);
 
-  const getFileStatus = React.useCallback((path: string): FileStatus | null => {
-    // Check open status
-    if (openPaths.includes(path)) return 'open';
-    
-    // Check git status
-    if (gitStatus?.files) {
-      const relative = path.startsWith(root + '/') ? path.slice(root.length + 1) : path;
-      const file = gitStatus.files.find(f => f.path === relative);
-      if (file) {
-        if (file.index === 'A' || file.working_dir === '?') return 'git-added';
-        if (file.index === 'D') return 'git-deleted';
-        if (file.index === 'M' || file.working_dir === 'M') return 'git-modified';
-      }
-    }
-    return null;
-  }, [openPaths, gitStatus, root]);
+  const gitDecorationIndex = React.useMemo(
+    () => buildFileGitDecorationIndex(gitStatus?.files, root),
+    [gitStatus, root],
+  );
+  const decoratedChildrenByDir = React.useMemo(
+    () => decorateFileTreeChildren(childrenByDir, root, gitStatus?.files),
+    [childrenByDir, gitStatus, root],
+  );
+  const [gitGutterConfig, setGitGutterConfig] = React.useState<{ baseline: string; kind: 'off' | 'untracked' | 'diff' }>({
+    baseline: '',
+    kind: 'off',
+  });
 
-  const getFolderBadge = React.useCallback((dirPath: string): { modified: number; added: number } | null => {
-    if (!gitStatus?.files) return null;
-    const relativeDir = dirPath.startsWith(root + '/') ? dirPath.slice(root.length + 1) : dirPath;
-    const prefix = relativeDir ? `${relativeDir}/` : '';
-    
-    let modified = 0, added = 0;
-    for (const f of gitStatus.files) {
-      if (f.path.startsWith(prefix)) {
-        if (f.index === 'M' || f.working_dir === 'M') modified++;
-        if (f.index === 'A' || f.working_dir === '?') added++;
-      }
+  React.useEffect(() => {
+    if (!selectedFile?.path || !root || !git) {
+      setGitGutterConfig({ baseline: '', kind: 'off' });
+      return;
     }
-    return modified + added > 0 ? { modified, added } : null;
-  }, [gitStatus, root]);
+    const decoration = lookupFileGitDecoration(gitDecorationIndex, selectedFile.path, root);
+    if (!decoration || decoration.kind === 'deleted') {
+      setGitGutterConfig({ baseline: '', kind: 'off' });
+      return;
+    }
+    if (decoration.kind === 'added' || decoration.kind === 'untracked') {
+      setGitGutterConfig({ baseline: '', kind: 'untracked' });
+      return;
+    }
+    const relative = getDisplayPath(root, selectedFile.path);
+    if (!relative || relative === '.') {
+      setGitGutterConfig({ baseline: '', kind: 'off' });
+      return;
+    }
+    const cached = useGitStore.getState().getDiff(root, relative);
+    if (cached && !cached.isBinary) {
+      setGitGutterConfig({ baseline: cached.original, kind: 'diff' });
+      return;
+    }
+    let cancelled = false;
+    void git.getGitFileDiff(root, { path: relative }).then((diff) => {
+      if (cancelled || diff.isBinary) {
+        return;
+      }
+      useGitStore.getState().setDiff(root, relative, {
+        original: diff.original,
+        modified: diff.modified,
+        isBinary: diff.isBinary,
+      });
+      setGitGutterConfig({ baseline: diff.original, kind: 'diff' });
+    }).catch(() => {
+      if (!cancelled) {
+        setGitGutterConfig({ baseline: '', kind: 'off' });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [git, gitDecorationIndex, root, selectedFile?.path]);
 
   const toggleDirectory = React.useCallback(async (dirPath: string) => {
     const normalized = normalizePath(dirPath);
     if (!root) return;
 
     toggleExpandedPath(root, normalized);
-
-    if (!loadedDirsRef.current.has(normalized)) {
-      await loadDirectory(normalized);
+    if (loadedDirsRef.current.has(normalized)) {
+      return;
     }
-  }, [loadDirectory, root, toggleExpandedPath]);
+    const listed = Object.values(decoratedChildrenByDir).flat().find((node) => normalizePath(node.path) === normalized);
+    if (listed && isGhostDirectory(listed)) {
+      loadedDirsRef.current = new Set(loadedDirsRef.current);
+      loadedDirsRef.current.add(normalized);
+      setChildrenByDir((prev) => ({
+        ...prev,
+        [normalized]: ghostChildrenForDirectory(normalized, root, gitStatus?.files),
+      }));
+      return;
+    }
+    await loadDirectory(normalized);
+  }, [decoratedChildrenByDir, gitStatus, loadDirectory, root, toggleExpandedPath]);
 
   const directoryPaths = React.useMemo(
     () => (root ? collectExpandableDirectoryPaths(root, childrenByDir) : []),
@@ -2304,7 +2412,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
   );
 
   function renderTree(dirPath: string, depth: number): React.ReactNode {
-    const nodes = childrenByDir[dirPath] ?? [];
+    const nodes = decoratedChildrenByDir[dirPath] ?? [];
 
     return nodes.map((node, index) => {
       const isDir = node.type === 'directory';
@@ -2329,8 +2437,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
             isActive={isActive}
             isMobile={isMobile}
             alwaysShowActions={alwaysShowActions}
-            status={!isDir ? getFileStatus(node.path) : undefined}
-            badge={isDir ? getFolderBadge(node.path) : undefined}
+            decoration={!isDir ? lookupFileGitDecoration(gitDecorationIndex, node.path, root) : undefined}
+            badge={isDir ? lookupFolderGitBadge(gitDecorationIndex, node.path) : undefined}
             permissions={fileRowPermissions}
             downloadFile={files.downloadFile}
             contextMenuPath={contextMenuPath}
@@ -2434,7 +2542,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
 
   const canCopy = Boolean(selectedFile && (!isSelectedImage || isSelectedSvg) && !isSelectedPdf && fileContent.length > 0);
   const canCopyPath = Boolean(selectedFile && displaySelectedPath.length > 0);
-  const canEdit = Boolean(selectedFile && !selectedFileIsOutsideWorkspace && !isSelectedImage && !isSelectedPdf && files.writeFile && fileContent.length <= MAX_VIEW_CHARS);
+  const canEdit = Boolean(selectedFile && !selectedFileIsOutsideWorkspace && !isSelectedImage && !isSelectedPdf && files.writeFile && fileContent.length <= MAX_VIEW_CHARS && deletedSnapshotPath !== selectedFile.path);
   const isMarkdown = Boolean(selectedFile?.path && isMarkdownFile(selectedFile.path));
   const isHtml = Boolean(selectedFile?.path && isHtmlFile(selectedFile.path));
   const isDrawio = Boolean(selectedFile?.path && isDrawioFile(selectedFile.path));
@@ -2988,6 +3096,32 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
   }, [addEditorSelectionToChat, isMobile, shortcutOverrides, textViewMode]);
   const editorFontSize = useUIStore((state) => state.editorFontSize);
 
+  const handleCodeNavigate = useEvent(async (request: CodeNavRequest) => {
+    const view = editorViewRef.current;
+    let target = view
+      ? await requestLspDefinition(view, request.from).catch(() => null)
+      : null;
+    if (!target) {
+      target = await resolveCodeNavigation(request, {
+        files,
+        searchFiles: files.search ? (query) => files.search!(query) : undefined,
+        directory: root,
+        currentContent: view?.state.doc.toString() ?? draftContent,
+      });
+    }
+    if (!target) {
+      toast.error(t('filesView.navigation.definitionNotFound', { name: request.text }));
+      return;
+    }
+    if (normalizePath(target.path) === normalizePath(request.filePath) && editorViewRef.current) {
+      revealEditorPosition(editorViewRef.current, target.line, target.column ?? 1);
+      return;
+    }
+    if (root) {
+      openContextFileAtLine(root, target.path, target.line, target.column);
+    }
+  });
+
   const editorExtensions = React.useMemo(() => {
     if (!selectedFile?.path) {
       return [createFlexokiCodeMirrorTheme(currentTheme, { fontSize: editorFontSize })];
@@ -3013,6 +3147,21 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
     if (wrapLines) {
       extensions.push(EditorView.lineWrapping);
     }
+    if (gitGutterConfig.kind !== 'off') {
+      extensions.push(createGitGutterExtension(gitGutterConfig));
+    }
+    if (!isMobile && selectedFile.path && languageIdForPath(selectedFile.path)) {
+      const lspPlugin = peekLspSession(root)?.plugin(selectedFile.path);
+      if (lspPlugin) {
+        extensions.push(lspPlugin);
+      }
+    }
+    if (!isMobile && selectedFile.path) {
+      extensions.push(createCodeNavigationExtension({
+        filePath: selectedFile.path,
+        onNavigate: handleCodeNavigate,
+      }));
+    }
     extensions.push(EditorView.updateListener.of((update) => {
       if (update.selectionSet || update.docChanged) {
         syncEditorSelection(update.view);
@@ -3033,7 +3182,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
       }));
     }
     return extensions;
-  }, [currentTheme, selectedFile?.path, staticLanguageExtension, dynamicLanguageExtension, wrapLines, isMobile, nudgeEditorSelectionAboveKeyboard, editorFontSize, syncEditorSelection]);
+  }, [currentTheme, selectedFile?.path, staticLanguageExtension, dynamicLanguageExtension, wrapLines, isMobile, nudgeEditorSelectionAboveKeyboard, editorFontSize, syncEditorSelection, gitGutterConfig, handleCodeNavigate, lspGeneration, root]);
 
   const pierreTheme = React.useMemo(
     () => ({ light: lightTheme.metadata.id, dark: darkTheme.metadata.id }),
@@ -4045,6 +4194,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
                   blockWidgets={blockWidgets}
                   onViewReady={(view) => {
                     editorViewRef.current = view;
+                    if (selectedFile?.path) {
+                      notifyLspEditorReady(selectedFile.path, view);
+                    }
                     syncEditorSelection(view);
                     setEditorViewReadyNonce((value) => value + 1);
                     window.requestAnimationFrame(() => {
@@ -4052,6 +4204,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
                     });
                   }}
                   onViewDestroy={() => {
+                    if (selectedFile?.path) {
+                      notifyLspEditorReady(selectedFile.path, null);
+                    }
                     if (editorViewRef.current) {
                       editorViewRef.current = null;
                     }
@@ -4163,7 +4318,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
     </div>
   );
 
-  const hasTree = Boolean(root && childrenByDir[root]);
+  const hasTree = Boolean(root && decoratedChildrenByDir[root]);
   const rootLoadError = root ? loadErrorsByDir[root] : null;
 
   const treePanel = (
@@ -4283,12 +4438,21 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
                   >
                     {getFileIcon(node.path, node.extension)}
                     <span
-                      className="min-w-0 flex-1 truncate typography-meta"
+                      className={cn(
+                        'min-w-0 flex-1 truncate typography-meta',
+                        fileGitNameClassName(lookupFileGitDecoration(gitDecorationIndex, node.path, root)),
+                      )}
                       style={{ direction: 'rtl', textAlign: 'left' }}
                       title={node.path}
                     >
                       {node.relativePath ?? node.path}
                     </span>
+                    {(() => {
+                      const decoration = lookupFileGitDecoration(gitDecorationIndex, node.path, root);
+                      return decoration
+                        ? <FileGitStatusMark decoration={decoration} label={t(fileGitStatusLabelKey(decoration.kind))} />
+                        : null;
+                    })()}
                   </button>
                 </li>
               );
@@ -4374,12 +4538,18 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', isActive = 
                 className="h-full"
                 onViewReady={(view) => {
                   editorViewRef.current = view;
+                  if (selectedFile?.path) {
+                    notifyLspEditorReady(selectedFile.path, view);
+                  }
                   syncEditorSelection(view);
                   window.requestAnimationFrame(() => {
                     nudgeEditorSelectionAboveKeyboard(view);
                   });
                 }}
                 onViewDestroy={() => {
+                  if (selectedFile?.path) {
+                    notifyLspEditorReady(selectedFile.path, null);
+                  }
                   if (editorViewRef.current) {
                     editorViewRef.current = null;
                   }

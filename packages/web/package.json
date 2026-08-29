@@ -43,6 +43,8 @@
     "reflect-metadata": "^0.2.2",
     "sherpa-onnx-node": "1.12.28",
     "simple-git": "^3.28.0",
+    "typescript": "~5.9.0",
+    "typescript-language-server": "^6.0.0",
     "web-push": "^3.6.7",
     "ws": "^8.18.3",
     "yaml": "^2.8.1"
@@ -97,7 +99,6 @@
     "tailwindcss": "^4.0.0",
     "tsx": "^4.20.6",
     "tw-animate-css": "^1.3.8",
-    "typescript": "~5.9.0",
     "typescript-eslint": "^8.39.1",
     "vite": "^8.2.0",
     "vite-plugin-pwa": "^1.3.0",

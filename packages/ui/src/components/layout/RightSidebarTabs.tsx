@@ -27,14 +27,12 @@ const isBrowserActive = (): boolean => {
 };
 
 /**
- * Keeps git status fresh while the right sidebar's Git tab is the visible
- * consumer. Replaces the GitPollingProvider removed in commit b2d5ccb4.
+ * Keeps git status fresh while the right sidebar's Git or Files tab is the
+ * visible consumer. Files explorer decorations read the same status cache.
  *
- * Gating rules (mirror the right-sidebar render policy):
+ * Gating rules:
  *   - sidebar must be open
- *   - right tab must be 'git' (otherwise GitView is not the visible consumer)
- *   - main tab must not be 'git' (otherwise secondaryView's GitView handles
- *     refresh and this poll would duplicate work)
+ *   - right tab is 'files', or 'git' while the main tab is not already 'git'
  *   - browser must be visible + online
  *
  * Any condition flip resets the interval so the next tick starts fresh.
@@ -49,7 +47,10 @@ function useRightSidebarGitSync(
   const ensureStatus = useGitStore((state) => state.ensureStatus);
 
   const shouldPoll = Boolean(
-    directory && git && isSidebarOpen && rightTab === 'git' && mainTab !== 'git'
+    directory
+    && git
+    && isSidebarOpen
+    && (rightTab === 'files' || (rightTab === 'git' && mainTab !== 'git'))
   );
 
   React.useEffect(() => {

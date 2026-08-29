@@ -371,6 +371,9 @@ Important properties:
   share a single in-flight request for one runtime and directory
 - loading state is per-directory, not global
 - `ensureStatus()` and `ensureAll()` are the preferred entry points for consumers
+- Files explorer decorations (`SidebarFilesTree`, `FilesView`) are visible
+  consumers of status, not only the Git tab. `useVisibleGitStatusSync` and the
+  right-sidebar poll refresh status while those surfaces are visible.
 - in-flight dedupe exists for status and `ensureAll()`
 - diff data is separately cached and capped with size + count limits
 

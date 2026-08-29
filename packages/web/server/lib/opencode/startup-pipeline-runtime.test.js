@@ -5,7 +5,7 @@ describe('startup pipeline runtime', () => {
   it('sets the active loopback bridge origin after listen and before bootstrap', async () => {
     const order = [];
     const runtime = createStartupPipelineRuntime({
-      createTerminalRuntime: vi.fn(() => ({})), createDictationRuntime: vi.fn(() => ({})), createMessageStreamWsRuntime: vi.fn(() => ({})),
+      createTerminalRuntime: vi.fn(() => ({})), createDictationRuntime: vi.fn(() => ({})), createLspRuntime: vi.fn(() => ({})), createMessageStreamWsRuntime: vi.fn(() => ({})),
       createServerStartupRuntime: vi.fn(() => ({ resolveBindHost: () => '127.0.0.1', startListeningAndMaybeTunnel: async () => ({ activePort: 41234 }), attachProcessHandlers: vi.fn() })),
     });
     await runtime.run({

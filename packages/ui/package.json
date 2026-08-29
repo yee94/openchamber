@@ -38,6 +38,7 @@
     "@codemirror/language-data": "^6.5.2",
     "@codemirror/legacy-modes": "^6.5.2",
     "@codemirror/lint": "^6.9.2",
+    "@codemirror/lsp-client": "^6.2.5",
     "@codemirror/search": "^6.6.0",
     "@codemirror/state": "^6.5.4",
     "@codemirror/view": "6.39.13",
