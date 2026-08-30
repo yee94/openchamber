@@ -7,6 +7,29 @@ import { getViewportSessionMemory, useViewportStore, type SessionMemoryState } f
 
 type AutoFollowState = 'following' | 'released';
 
+export type ChatScrollPhysics = 'dom' | 'tanstack';
+
+export const AUTO_FOLLOW_VIRTUAL_END_THRESHOLD_PX = 80;
+
+export const resolveChatScrollPhysics = (
+    physics: ChatScrollPhysics | (() => ChatScrollPhysics) | undefined,
+): ChatScrollPhysics => (
+    typeof physics === 'function' ? physics() : (physics ?? 'dom')
+);
+
+export const shouldWriteAutoFollowScrollTop = (physics: ChatScrollPhysics): boolean => (
+    physics === 'dom'
+);
+
+export const resolveAutoFollowPinnedFromDistance = (
+    distanceFromEnd: number | null | undefined,
+    thresholdPx: number = AUTO_FOLLOW_VIRTUAL_END_THRESHOLD_PX,
+): boolean => (
+    typeof distanceFromEnd === 'number'
+    && Number.isFinite(distanceFromEnd)
+    && distanceFromEnd <= thresholdPx
+);
+
 export type ContentChangeReason = 'text' | 'structural' | 'permission' | 'animation';
 
 export type ViewportIdentity = {
@@ -56,6 +79,14 @@ interface UseChatAutoFollowOptions {
     onActiveTurnChange?: (turnId: string | null) => void;
     /** Desktop history: fired after release on explicit upward wheel/touch/key intent. Not used for scrollbar pointer. */
     onUpwardUserIntent?: () => void;
+    /**
+     * When `tanstack`, this hook never assigns `scrollTop`. Pin state is
+     * following|released from the virtualizer; jump-to-latest is `scrollToEnd`.
+     */
+    scrollPhysics?: ChatScrollPhysics | (() => ChatScrollPhysics);
+    scrollToEnd?: () => void;
+    readIsAtEnd?: () => boolean | null | undefined;
+    readDistanceFromEnd?: () => number | null | undefined;
 }
 
 export interface UseChatAutoFollowResult {
@@ -77,23 +108,17 @@ export interface UseChatAutoFollowResult {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Chat auto-follow. The model is deliberately simple, which is what makes it
-// flicker-free:
+// Chat auto-follow. Two physics modes, one owner:
 //
-//   • Auto-follow is on unless the user scrolled up (`released`). While
-//     `following`, content growth (cold history paint, virtualizer remeasure,
-//     async tool/code height) must silently re-pin to the bottom — including
-//     idle sessions. History load must not strand a bottom-pinned viewport
-//     mid-timeline. User wheel/touch/key gestures release immediately and are
-//     never fought.
-//   • Following the bottom is INSTANT — `scrollTop = scrollHeight` inside the
-//     content ResizeObserver, which fires after layout and before paint. There
-//     is NO easing loop and NO settle burst, so there are never two writers
-//     racing for `scrollTop` (the root cause of the old jiggle/double-scroll).
-//   • A short-lived "auto" marker (position + 1500ms) lets the scroll handler
-//     distinguish our own programmatic writes from genuine user scrolling, so
-//     a scroll event that lands at our just-written bottom never trips a false
-//     release.
+//   • Auto-follow is on unless the user scrolled up (`released`). User
+//     wheel/touch/key gestures release immediately and are never fought.
+//   • `dom` (tiny unvirtualized lists): following writes `scrollTop =
+//     scrollHeight` inside the content ResizeObserver after layout and before
+//     paint. A short-lived "auto" marker distinguishes our writes from the user.
+//   • `tanstack`: this hook NEVER assigns scrollTop. Pin state is
+//     following|released from virtualizer.isAtEnd() / getDistanceFromEnd()
+//     (80px). Jump-to-latest is scrollToEnd(). Token growth is owned by
+//     wasAtEnd + followOnAppend because the streaming row is in the count.
 //
 // Explicit history pagination holds auto-follow released until its keyed viewport
 // restoration completes, so virtualizer measurement scroll events cannot claim
@@ -231,6 +256,10 @@ export const useChatAutoFollow = ({
     isMobile,
     onActiveTurnChange,
     onUpwardUserIntent,
+    scrollPhysics,
+    scrollToEnd,
+    readIsAtEnd,
+    readDistanceFromEnd,
 }: UseChatAutoFollowOptions): UseChatAutoFollowResult => {
     const scrollRef = React.useRef<HTMLDivElement | null>(null);
     const [containerEl, setContainerEl] = React.useState<HTMLDivElement | null>(null);
@@ -252,6 +281,25 @@ export const useChatAutoFollow = ({
     const currentViewportIdentityRef = React.useRef(createViewportIdentity(currentSessionId, viewportKey));
     currentViewportIdentityRef.current = createViewportIdentity(currentSessionId, viewportKey);
     const lastViewportIdentityRef = React.useRef<ViewportIdentity | null>(null);
+    const scrollToEndRef = React.useRef(scrollToEnd);
+    scrollToEndRef.current = scrollToEnd;
+    const readIsAtEndRef = React.useRef(readIsAtEnd);
+    readIsAtEndRef.current = readIsAtEnd;
+    const readDistanceFromEndRef = React.useRef(readDistanceFromEnd);
+    readDistanceFromEndRef.current = readDistanceFromEnd;
+    const scrollPhysicsRef = React.useRef(scrollPhysics);
+    scrollPhysicsRef.current = scrollPhysics;
+
+    const resolvePhysics = (): ChatScrollPhysics => resolveChatScrollPhysics(scrollPhysicsRef.current);
+    const ownsScrollTop = (): boolean => shouldWriteAutoFollowScrollTop(resolvePhysics());
+    const jumpToLatestOwned = (): void => {
+        scrollToEndRef.current?.();
+    };
+    const readVirtualPinned = (): boolean => {
+        const atEnd = readIsAtEndRef.current?.();
+        if (atEnd === true) return true;
+        return resolveAutoFollowPinnedFromDistance(readDistanceFromEndRef.current?.());
+    };
 
     // Programmatic-scroll marker: the bottom position we last
     // wrote and when. A scroll event whose scrollTop matches `top` within a few
@@ -406,7 +454,10 @@ export const useChatAutoFollow = ({
             setShowScrollButton(false);
             return;
         }
-        const showButton = stateRef.current === 'released' && !isNearBottomOf(box, isMobileRef.current);
+        const nearBottom = resolvePhysics() === 'tanstack'
+            ? readVirtualPinned()
+            : isNearBottomOf(box, isMobileRef.current);
+        const showButton = stateRef.current === 'released' && !nearBottom;
         setShowScrollButton(showButton);
     });
 
@@ -426,6 +477,13 @@ export const useChatAutoFollow = ({
     React.useEffect(() => () => cancelForcedBottom(), [containerEl]);
 
     const forceBottomDefeatingMomentum = useEvent(() => {
+        if (!ownsScrollTop()) {
+            cancelForcedBottom();
+            setStateValue('following');
+            jumpToLatestOwned();
+            updateOverflowAndButton();
+            return;
+        }
         const el = scrollRef.current;
         if (!el) return;
 
@@ -474,6 +532,10 @@ export const useChatAutoFollow = ({
     });
 
     const scrollToBottomNow = useEvent((behavior: ScrollBehavior) => {
+        if (!ownsScrollTop()) {
+            jumpToLatestOwned();
+            return;
+        }
         const el = scrollRef.current;
         if (!el) return;
         markAuto(el);
@@ -498,6 +560,11 @@ export const useChatAutoFollow = ({
         // Passive follow never runs after the user scrolled away. Forced jumps
         // (send, go-to-bottom, session restore, entry-stick) always proceed.
         if (!force && stateRef.current !== 'following') return;
+
+        if (!ownsScrollTop()) {
+            if (force) jumpToLatestOwned();
+            return;
+        }
 
         const distance = distanceFromBottom(el);
         if (distance < AUTO_MATCH_TOLERANCE_PX) {
@@ -528,6 +595,11 @@ export const useChatAutoFollow = ({
         historyViewportPreservationRef.current = false;
         setStateValue('following');
         endEntryStick();
+        if (!ownsScrollTop()) {
+            jumpToLatestOwned();
+            updateOverflowAndButton();
+            return;
+        }
         if (mode === 'instant') {
             forceBottomDefeatingMomentum();
             return;
@@ -744,6 +816,37 @@ export const useChatAutoFollow = ({
             return;
         }
 
+        if (resolvePhysics() === 'tanstack') {
+            const distance = readDistanceFromEndRef.current?.();
+            const pinned = readIsAtEndRef.current?.() === true
+                || resolveAutoFollowPinnedFromDistance(distance);
+            if (!canScrollGeometry(geometry)) {
+                setStateValue('following');
+                return;
+            }
+            if (pinned) {
+                if (
+                    scrollingDown
+                    || stateRef.current === 'following'
+                    || (typeof distance === 'number' && distance <= AUTO_MATCH_TOLERANCE_PX)
+                ) {
+                    setStateValue('following');
+                }
+                queueSave();
+                return;
+            }
+            if (
+                stateRef.current === 'following'
+                && (isAuto(el) || isAnimationGuardActive() || scrollTopUnchanged)
+            ) {
+                queueSave();
+                return;
+            }
+            stop(geometry);
+            queueSave();
+            return;
+        }
+
         if (!canScrollGeometry(geometry)) {
             setStateValue('following');
             return;
@@ -868,6 +971,11 @@ export const useChatAutoFollow = ({
     // there is no "jump up then catch up". Observe both the container (composer
     // growth shrinks the viewport) and the inner content (streaming growth).
     const handleContentResize = useEvent(() => {
+        if (!ownsScrollTop()) {
+            const observed = scrollRef.current;
+            updateOverflowAndButton(observed ? readScrollGeometry(observed) : undefined);
+            return;
+        }
         // Keyboard open / animating / composer expand: viewport and composer
         // height changes must not re-pin the message list. Keeping scrollTop
         // leaves the main chat stable while the keyboard and input ride up.
@@ -1064,11 +1172,13 @@ export const useChatAutoFollow = ({
         // here) must keep us pinned and refresh the quiescence timer, even though
         // the session is idle.
         if (entryStickRef.current) {
-            scrollToBottom(true);
+            if (ownsScrollTop()) {
+                scrollToBottom(true);
+            }
             armEntryStickQuiet();
             return;
         }
-        if (stateRef.current === 'following') {
+        if (stateRef.current === 'following' && ownsScrollTop()) {
             scrollToBottom(false);
         }
     });
@@ -1081,7 +1191,7 @@ export const useChatAutoFollow = ({
 
         const kick = () => {
             if (!enabled) return;
-            if (stateRef.current === 'following') {
+            if (stateRef.current === 'following' && ownsScrollTop()) {
                 scrollToBottom(false);
             }
         };

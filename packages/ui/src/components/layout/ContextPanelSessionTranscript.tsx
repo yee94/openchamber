@@ -137,6 +137,14 @@ const ContextPanelSessionTranscriptContent: React.FC<ContextPanelSessionTranscri
         sessionMessageCount,
         sessionIsWorking,
         isMobile: false,
+        scrollPhysics: () => (
+            messageListRef.current?.isHistoryVirtualized() ? 'tanstack' : 'dom'
+        ),
+        scrollToEnd: () => {
+            messageListRef.current?.scrollToBottom();
+        },
+        readIsAtEnd: () => messageListRef.current?.isAtEnd() ?? null,
+        readDistanceFromEnd: () => messageListRef.current?.getDistanceFromEnd() ?? null,
     });
     const ensureSession = useEvent((reason: 'active' | 'retry') => {
         void sync.ensureSessionRenderable(sessionId, resolveContextPanelEnsureForce(reason));
@@ -269,7 +277,7 @@ const ContextPanelSessionTranscriptContent: React.FC<ContextPanelSessionTranscri
                                 <div className="relative min-h-full">
                                     {transcriptState === 'partial-error' ? <div className="flex items-center justify-center gap-2 px-3 py-2 text-sm text-[var(--status-error-foreground)]"><span className="truncate">{prefetch?.error}</span><Button type="button" variant="secondary" size="xs" onClick={retryPartialError}>{t('chat.history.retry')}</Button></div> : null}
                                     {shouldShowContextPanelLoadOlder(hasMore) ? <div className="flex justify-center pt-3 pb-1"><Button type="button" variant="secondary" size="sm" onClick={loadOlder} disabled={isLoadingOlder}>{isLoadingOlder ? <Icon name="loader-4" className="size-4 animate-spin" /> : null}{t('chat.history.loadOlder')}</Button></div> : null}
-                                    <MessageList ref={messageListRef} sessionKey={sessionId} virtualizerKey={viewportKey} messages={sessionMessages} sessionIsWorking={sessionIsWorking} activeStreamingMessageId={streamingMessageId} activeStreamingPhase={activeStreamingPhase} onMessageContentChange={notifyContentChange} getAnimationHandlers={getAnimationHandlers} isLoadingOlder={isLoadingOlder} scrollToBottom={() => goToBottom('instant')} scrollRef={scrollRef} directory={syncDirectory} />
+                                    <MessageList ref={messageListRef} sessionKey={sessionId} virtualizerKey={viewportKey} messages={sessionMessages} sessionIsWorking={sessionIsWorking} activeStreamingMessageId={streamingMessageId} activeStreamingPhase={activeStreamingPhase} onMessageContentChange={notifyContentChange} getAnimationHandlers={getAnimationHandlers} isLoadingOlder={isLoadingOlder} scrollToBottom={() => goToBottom('instant')} scrollRef={scrollRef} directory={syncDirectory} cacheVirtualizerMeasurements={!active} />
                                     <div className="h-12" aria-hidden="true" />
                                 </div>
                             </ScrollShadow>

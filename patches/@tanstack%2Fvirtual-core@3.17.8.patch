@@ -1,4 +1,4 @@
-# OpenChamber patch: @tanstack/virtual-core@3.17.7
+# OpenChamber patch: @tanstack/virtual-core@3.17.8
 #
 # What: clamp calculateRange scrollOffset to [0, totalSize - viewport] so
 # transient end-anchor adjustments cannot produce an out-of-bounds render range.
@@ -11,11 +11,11 @@
 #   1) open packages/ui chat history virtualized, scroll up + load more
 #   2) no blank range / jump from unclamped scrollOffset during measure
 #   3) bun install without this patch; chat MessageList + timeline tests still pass
-# Re-check on each @tanstack/react-virtual / virtual-core bump past 3.17.7.
+# Re-check on each @tanstack/react-virtual / virtual-core bump past 3.17.8.
 #
 --- a/dist/esm/index.js
 +++ b/dist/esm/index.js
-@@ -725,10 +725,12 @@
+@@ -730,10 +730,12 @@
            this.range = null;
            return null;
          }
@@ -31,7 +31,7 @@
            // start/end directly from Float64Array, skipping the Proxy traps.
 --- a/dist/cjs/index.cjs
 +++ b/dist/cjs/index.cjs
-@@ -727,10 +727,12 @@
+@@ -732,10 +732,12 @@
            this.range = null;
            return null;
          }

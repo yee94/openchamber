@@ -641,6 +641,10 @@ svg.animate-spin {
   --oc-scrollbar-thumb-hover: oklch(0.6 0.02 80 / 0.5);
 }
 
+[data-scrollbar="chat"] {
+  overflow-anchor: none;
+}
+
 [data-scrollbar="chat"]::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   background-clip: padding-box;

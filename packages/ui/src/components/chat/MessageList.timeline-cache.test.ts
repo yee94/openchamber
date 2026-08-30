@@ -64,7 +64,12 @@ const {
     resolveMarkdownPreloadReleaseWhileScrolling,
     resolveMarkdownVisibleReleaseLimit,
     resolveTanstackEstimatedEntrySize,
+    resolveTanstackEstimateSize,
     resolveTanstackEstimateMinSamples,
+    resolveTanstackItemKey,
+    resolveTimelineVirtualized,
+    resolveVirtualizerTimelineEntries,
+    TANSTACK_MISSING_ITEM_KEY,
     resolveTimelineVirtualizerCacheKey,
     shouldInvalidateVirtualizerMeasurementsOnColumnResize,
     resolveTanstackHistoryFrameStyle,
@@ -515,5 +520,52 @@ describe('history virtualizer frame vs live tail', () => {
         expect(source).toContain('paddingBottom: historyFrameStyle.paddingBottom');
         expect(source).not.toContain('style={{ height: tanstackVirtualizer.getTotalSize() }}');
         expect(source).not.toContain("sizeElement.style.height = `${instance.getTotalSize()}px`");
+    });
+});
+
+describe('single-owner TanStack chat physics', () => {
+    test('getItemKey is a stable entry id and never an index fallback', () => {
+        expect(resolveTanstackItemKey({ key: 'turn:abc' })).toBe('turn:abc');
+        expect(resolveTanstackItemKey({ key: 'msg:1' })).toBe('msg:1');
+        expect(resolveTanstackItemKey(undefined)).toBe(TANSTACK_MISSING_ITEM_KEY);
+        expect(resolveTanstackItemKey({ key: '' })).toBe(TANSTACK_MISSING_ITEM_KEY);
+        expect(resolveTanstackItemKey({ key: 'turn:abc' })).not.toMatch(/^index:/);
+
+        const source = readFileSync(join(here, 'MessageList.tsx'), 'utf8');
+        expect(source).toContain('getItemKey: (index) => resolveTanstackItemKey(entriesRef.current[index])');
+        expect(source).not.toContain('`index:${index}`');
+        expect(source).not.toContain('`index:${i}`');
+    });
+
+    test('virtualizer count includes history and the streaming tail', () => {
+        const history = [{ key: 'turn:1' }, { key: 'turn:2' }];
+        const tail = [{ key: 'turn:3' }];
+        expect(resolveVirtualizerTimelineEntries(history, tail)).toEqual([
+            { key: 'turn:1' },
+            { key: 'turn:2' },
+            { key: 'turn:3' },
+        ]);
+        expect(resolveVirtualizerTimelineEntries(history, [])).toBe(history);
+        expect(resolveTimelineVirtualized(4)).toBe(false);
+        expect(resolveTimelineVirtualized(5)).toBe(true);
+        expect(resolveTimelineVirtualized(6)).toBe(true);
+
+        const source = readFileSync(join(here, 'MessageList.tsx'), 'utf8');
+        expect(source).toContain('entries={virtualizerEntries}');
+        expect(source).toContain('count: renderEntries.length');
+        expect(source).toContain('ref={tanstackVirtualizer.measureElement}');
+        expect(source).toContain('data-index={item.index}');
+        expect(source).not.toMatch(/\bpaddingEnd\s*:/);
+        expect(source).not.toMatch(/\bdirectDomUpdates\s*:/);
+    });
+
+    test('estimateSize uses a cached entry height when present', async () => {
+        const { clearMarkdownHeightCache, rememberEntryHeight } = await import('./markdown/markdownHeightCache');
+        clearMarkdownHeightCache();
+        rememberEntryHeight('turn:cached', 512, 800);
+        expect(resolveTanstackEstimateSize('turn:cached', 168)).toBe(512);
+        expect(resolveTanstackEstimateSize('turn:unknown', 168)).toBe(168);
+        expect(resolveTanstackEstimateSize(undefined, 320)).toBe(320);
+        clearMarkdownHeightCache();
     });
 });

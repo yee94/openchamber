@@ -51,6 +51,19 @@ export const rememberMarkdownHeight = (
 
 export const recallMarkdownHeight = (key: string): number | undefined => heights.get(key);
 
+const ENTRY_HEIGHT_PREFIX = 'entry:';
+
+/** Timeline row height keyed by stable turn/message entry id, not content hash. */
+export const rememberEntryHeight = (entryKey: string, height: number, width: number): void => {
+    if (!entryKey) return;
+    rememberMarkdownHeight(`${ENTRY_HEIGHT_PREFIX}${entryKey}`, height, width);
+};
+
+export const recallEntryHeight = (entryKey: string): number | undefined => {
+    if (!entryKey) return undefined;
+    return recallMarkdownHeight(`${ENTRY_HEIGHT_PREFIX}${entryKey}`);
+};
+
 export const clearMarkdownHeightCache = (): void => {
     heights.clear();
     measuredWidth = null;

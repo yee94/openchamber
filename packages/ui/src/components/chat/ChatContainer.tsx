@@ -1222,6 +1222,14 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
         isMobile,
         onActiveTurnChange: handleActiveTurnChange,
         onUpwardUserIntent: handleHistoryUpwardIntentBridge,
+        scrollPhysics: () => (
+            messageListRef.current?.isHistoryVirtualized() ? 'tanstack' : 'dom'
+        ),
+        scrollToEnd: () => {
+            messageListRef.current?.scrollToBottom();
+        },
+        readIsAtEnd: () => messageListRef.current?.isAtEnd() ?? null,
+        readDistanceFromEnd: () => messageListRef.current?.getDistanceFromEnd() ?? null,
     });
     const composerSwapScopeRef = React.useRef<HTMLDivElement>(null);
     useMobileComposerSwap({ enabled: isMobile, scrollRef, scopeRef: composerSwapScopeRef });

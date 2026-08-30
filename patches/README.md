@@ -18,7 +18,7 @@ If a patch file is missing or the version key drifts from the lockfile, install 
 
 | Package | File | Why |
 |---------|------|-----|
-| `@tanstack/virtual-core@3.17.7` | `@tanstack%2Fvirtual-core@3.17.7.patch` | Clamp virtualizer `calculateRange` scroll offset to real bounds during end-anchor adjustments (chat history). |
+| `@tanstack/virtual-core@3.17.8` | `@tanstack%2Fvirtual-core@3.17.8.patch` | Clamp virtualizer `calculateRange` scroll offset to real bounds during end-anchor adjustments (chat history). |
 | `ghostty-web@0.4.0` | `ghostty-web@0.4.0.patch` | Safe `fromCodePoint` for bad terminal code points; optional `lineHeight` cell metrics. |
 
 Each `.patch` file starts with a `# TODO(remove): …` header (same criteria as below).
@@ -27,7 +27,7 @@ Each `.patch` file starts with a `# TODO(remove): …` header (same criteria as 
 
 ### `@tanstack/virtual-core`
 
-Remove the patch file **and** the `patchedDependencies` entry when upstream clamps range `scrollOffset` the same way (or an official API makes it unnecessary).
+Remove the patch file **and** the `patchedDependencies` entry when upstream clamps range `scrollOffset` the same way (or an official API makes it unnecessary). 3.17.8 still does not.
 
 Checklist:
 
@@ -35,6 +35,7 @@ Checklist:
 2. Delete the patch + `patchedDependencies` line; `bun install`.
 3. Virtualized chat: scroll up + load more — no blank range / jump from unclamped offset during measure.
 4. Focused UI chat / timeline tests still pass.
+5. Re-check on each `@tanstack/react-virtual` / `virtual-core` bump past 3.17.8. Upstream 3.17.8 still does not include this clamp (3.17.5 only clamps tracked offset at 0).
 
 ### `ghostty-web`
 
