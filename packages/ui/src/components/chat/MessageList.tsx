@@ -1901,7 +1901,7 @@ const StaticHistoryList = React.memo(({ entries, engine, contentRef, scrollRef, 
         // changes when the virtual window shifts — not per scroll frame — so the
         // layout cost is negligible. minHeight + trailing padding reserve the
         // unrendered range without locking the frame to cached sizes. Do not
-        // enable directDomUpdates: that path is absolute+height+transform and
+        // enable directDomUpdates — that path is absolute+height+transform and
         // would kill sticky user headers and fight scrollToFn minHeight.
         return (
             <div
