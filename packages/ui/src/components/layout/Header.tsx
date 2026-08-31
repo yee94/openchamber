@@ -73,21 +73,10 @@ import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeBearerTokenSync } from '@/lib/runtime-auth';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 import type { IconName } from "@/components/icon/icons";
+import { resolveServicesPanelIntent } from '@/components/layout/resolveServicesPanelIntent';
 
 const DESKTOP_HEADER_ICON_BUTTON_CLASS = 'app-region-no-drag inline-flex h-8 w-8 items-center justify-center gap-2 rounded-md typography-ui-label font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:bg-interactive-hover transition-colors';
 const MOBILE_HEADER_ICON_BUTTON_CLASS = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 rounded-md typography-ui-label font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground hover:bg-interactive-hover transition-colors';
-
-/** Toggle/open decision for the shared services panel shortcuts (instance vs usage). */
-export function resolveServicesPanelIntent(input: {
-  isOpen: boolean;
-  activeTab: 'instance' | 'usage' | 'mcp';
-  targetTab: 'instance' | 'usage';
-}): { open: boolean; tab: 'instance' | 'usage' } {
-  if (input.isOpen && input.activeTab === input.targetTab) {
-    return { open: false, tab: input.activeTab };
-  }
-  return { open: true, tab: input.targetTab };
-}
 
 type HeaderIconActionButtonProps = {
   visible?: boolean;

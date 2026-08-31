@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { resolveServicesPanelIntent } from './Header';
+import { resolveServicesPanelIntent } from './resolveServicesPanelIntent';
 
 describe('resolveServicesPanelIntent', () => {
   test('opens onto the target tab when the panel is closed', () => {
