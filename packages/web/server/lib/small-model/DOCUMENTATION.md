@@ -17,7 +17,7 @@ every other runtime API.
 
 - `index.js` — `createSmallModelService(dependencies)` factory. Production
   obtains a single lazy instance from `server/index.js` (`getSmallModelService`)
-  and injects it into feature routes, session assist/title/goal, and scheduled
+  and injects it into feature routes, session title/goal, and scheduled
   tasks. Tests may call the factory with a mock `getModelCatalog`. Returns
   `stop()` to remove the lazy temp directory used by the session path (wired
   from `server/index.js` `stop()`).
@@ -140,7 +140,7 @@ Project-level skills are absent because the temp directory has none.
 
 `server/index.js` creates one lazy `getSmallModelService` and injects
 `{ buildOpenCodeUrl, getOpenCodeAuthHeaders }` into the factory (and into
-session assist/title/goal, scheduled tasks, and `createFeatureRoutesRuntime`).
+session title/goal, scheduled tasks, and `createFeatureRoutesRuntime`).
 Feature routes no longer import `small-model/index.js` top-level exports
 directly.
 

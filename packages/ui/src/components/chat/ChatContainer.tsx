@@ -46,7 +46,6 @@ import MessageList, { type MessageListHandle } from './MessageList';
 import { PermissionCard } from './PermissionCard';
 import { QuestionCard } from './QuestionCard';
 import { StatusRowContainer } from './StatusRowContainer';
-import { SessionRecapNote } from '@/components/chat/SessionRecapSpacer';
 import ScrollToBottomButton from './components/ScrollToBottomButton';
 import { PromptNavigatorRail } from './components/PromptNavigatorRail';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
@@ -513,8 +512,6 @@ const ChatViewport = React.memo(({
                                 ))}
                             </div>
                         )}
-
-                        <SessionRecapNote sessionId={currentSessionId} directory={directory} isMobile={isMobile} />
 
                         <div className="mb-1">
                             <StatusRowContainer />
