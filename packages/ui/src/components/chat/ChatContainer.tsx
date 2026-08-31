@@ -54,6 +54,10 @@ import { useMobileComposerSwap } from './useMobileComposerSwap';
 import { useChatTimelineController } from './hooks/useChatTimelineController';
 import { createAssistantSessionDivider, mergeHostedCurrentSessionHistory, stitchHostedSessionHistory } from './hostedSessionHistory';
 import type { ChatMessageEntry } from './lib/turns/types';
+import {
+    CHAT_TAIL_SPACER_DESKTOP_HEIGHT,
+    CHAT_TAIL_SPACER_MOBILE_HEIGHT,
+} from './lib/scroll/chatTailSpacer';
 import { TimelineDialog } from './TimelineDialog';
 import { useChatTurnNavigation } from './hooks/useChatTurnNavigation';
 import { useChatSurfaceMode } from './useChatSurfaceMode';
@@ -517,7 +521,14 @@ const ChatViewport = React.memo(({
                             <StatusRowContainer />
                         </div>
 
-                        <div className="flex-shrink-0" style={{ height: isMobile ? '40px' : '10vh' }} aria-hidden="true" />
+                        {/* The chrome reservation itself comes from
+                            `.chat-scroll-foot-inset` padding on this content
+                            wrapper, so the tail here is the breathing room only. */}
+                        <div
+                            className="flex-shrink-0"
+                            style={{ height: isMobile ? CHAT_TAIL_SPACER_MOBILE_HEIGHT : CHAT_TAIL_SPACER_DESKTOP_HEIGHT }}
+                            aria-hidden="true"
+                        />
                     </div>
                 </ScrollShadow>
                 <OverlayScrollbar containerRef={scrollRef} suppressVisibility={isProgrammaticFollowActive} userIntentOnly observeMutations={false} />

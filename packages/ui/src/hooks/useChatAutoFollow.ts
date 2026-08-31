@@ -3,6 +3,7 @@ import { useEvent, useEventListener, useResizeObserver } from '@reactuses/core';
 
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 import { createScrollSpy } from '@/components/chat/lib/scroll/scrollSpy';
+import { resolveChatBottomZoneThresholdPx } from '@/components/chat/lib/scroll/chatTailSpacer';
 import { getViewportSessionMemory, useViewportStore, type SessionMemoryState } from '@/sync/viewport-store';
 
 type AutoFollowState = 'following' | 'released';
@@ -125,8 +126,6 @@ export interface UseChatAutoFollowResult {
 // bottom ownership during that transaction.
 // ──────────────────────────────────────────────────────────────────────────
 
-const BOTTOM_SPACER_DESKTOP_VH = 0.10;
-const BOTTOM_SPACER_MOBILE_PX = 40;
 const SAVE_DEBOUNCE_MS = 150;
 const TOUCH_FINGER_DOWN_THRESHOLD = 2;
 // How long an "auto" (programmatic) scroll position stays trusted. Browsers can
@@ -170,7 +169,7 @@ export const isWithinSessionOpenPinGrace = (nowMs: number, graceUntilMs: number)
 
 const now = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
-// The bottom of the chat has an empty spacer (10vh on desktop, 40px on mobile)
+// The bottom of the chat has an empty spacer (10vh on desktop, 80px on mobile)
 // — its height is exactly how far above scrollHeight the user can be while still
 // looking at "empty" space. We use that same value as the threshold for both
 // re-pinning auto-follow and showing the scroll-to-bottom button.
@@ -191,12 +190,6 @@ const readScrollGeometry = (el: HTMLElement): ScrollGeometry => ({
     clientHeight: el.clientHeight,
 });
 
-const computeBottomZoneThresholdFor = (isMobile: boolean, clientHeight: number): number => {
-    if (isMobile) return BOTTOM_SPACER_MOBILE_PX;
-    if (clientHeight <= 0) return 96;
-    return Math.max(48, clientHeight * BOTTOM_SPACER_DESKTOP_VH);
-};
-
 const distanceFromBottomOf = (geometry: ScrollGeometry): number => {
     return geometry.scrollHeight - geometry.scrollTop - geometry.clientHeight;
 };
@@ -210,7 +203,7 @@ const canScrollGeometry = (geometry: ScrollGeometry): boolean => {
 };
 
 const isNearBottomOf = (geometry: ScrollGeometry, isMobile: boolean): boolean => {
-    return distanceFromBottomOf(geometry) <= computeBottomZoneThresholdFor(isMobile, geometry.clientHeight);
+    return distanceFromBottomOf(geometry) <= resolveChatBottomZoneThresholdPx(isMobile, geometry.clientHeight);
 };
 
 const isReleaseKey = (event: KeyboardEvent): boolean => {

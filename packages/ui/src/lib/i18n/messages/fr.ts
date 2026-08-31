@@ -2899,6 +2899,7 @@ export const dict = {
   'mobile.tabs.scheduled': 'Tâches',
   'mobile.tabs.settings': 'Réglages',
   'mobile.surface.closeAria': 'Fermer',
+  'mobile.select.sheetAria': 'Sélectionner une option',
   'mobile.header.openMenuAria': 'Ouvrir le menu',
   'mobile.header.openMetadataAria': 'Ouvrir les métadonnées de session',
   'mobile.header.metadata.context': 'Contexte',

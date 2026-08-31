@@ -28,6 +28,7 @@ import {
     useDirectoryStore as useChildDirectoryStore,
     useDirectorySync,
     useSession,
+    useSessionMaterializationStatus,
     useSessionMessages,
     useSessionStatus,
     useSyncDirectory,
@@ -71,7 +72,7 @@ import { Button } from '@/components/ui/button';
 // useMessageStore removed — messages now come from sync system
 import { getElectronPathForFile, isVSCodeRuntime } from '@/lib/desktop';
 import { isIMECompositionEvent } from '@/lib/ime';
-import { StopIcon } from '@/components/icons/StopIcon';
+import { SendCircleIcon, StopIcon } from '@/components/icons/StopIcon';
 import { resolveComposerActionAvailability } from './chatPromptAvailability';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getCycledPrimaryAgentName, resolveAgentModelSelection, type MobileControlsPanel } from './mobileControlsUtils';
@@ -197,6 +198,7 @@ import {
     parseLatestUserChoiceFromMessages,
     resolvePrimaryComposerSendConfig,
     resolvePrimaryComposerSessionSelection,
+    shouldHoldPrimaryComposerUserPick,
 } from './primaryComposerSelection';
 import { canCompactPastedText, createPastedTextReference, getNextPastedTextReferenceIndex } from './pastedTextReferences';
 import { decorateComposerReference, serializeComposerDocument, validateComposerDocument, type ComposerDocument, type SessionComposerReference } from '@/composer/document';
@@ -778,8 +780,10 @@ const PermissionAutoAcceptButton = React.memo(function PermissionAutoAcceptButto
 
 type ComposerActionButtonsProps = {
     isMobile: boolean;
+    compact?: boolean;
     footerIconButtonClass: string;
     stopFooterIconButtonClass?: string;
+    compactCircleButtonClass?: string;
     sendIconSizeClass: string;
     stopIconSizeClass: string;
     canSend: boolean;
@@ -800,8 +804,10 @@ type ComposerActionButtonsProps = {
 const ComposerActionButtons = React.memo(function ComposerActionButtons(props: ComposerActionButtonsProps) {
     const {
         isMobile,
+        compact = false,
         footerIconButtonClass,
         stopFooterIconButtonClass,
+        compactCircleButtonClass,
         sendIconSizeClass,
         stopIconSizeClass,
         canSend,
@@ -856,12 +862,17 @@ const ComposerActionButtons = React.memo(function ComposerActionButtons(props: C
                 : canAbort
                     ? 'chat.chatInput.actions.queueMessageAria'
                     : 'chat.chatInput.actions.sendMessageAria');
-    const primaryIcon = inFlight ? 'loader-4' : 'send-plane-2';
+    const circleButtonClass = compact
+        ? (compactCircleButtonClass ?? stopFooterIconButtonClass ?? footerIconButtonClass)
+        : (stopFooterIconButtonClass ?? footerIconButtonClass);
+    const circleGlyphClass = stopIconSizeClass;
+    const showSendCircle = !canAbort && (!actionAvailability.sendDisabled || inFlight);
 
     const sendButton = (
         <button
             type={isMobile ? 'button' : 'submit'}
             data-composer-send="true"
+            data-composer-circle={showSendCircle ? 'true' : undefined}
             disabled={actionAvailability.sendDisabled}
             aria-busy={inFlight || undefined}
             {...keepKeyboardFocusProps}
@@ -873,16 +884,22 @@ const ComposerActionButtons = React.memo(function ComposerActionButtons(props: C
                 onPrimaryAction();
             }}
             className={cn(
-                footerIconButtonClass,
-                !actionAvailability.sendDisabled
-                    ? 'text-primary hover:text-primary'
-                    : actionAvailability.disabledClass
+                showSendCircle ? circleButtonClass : footerIconButtonClass,
+                showSendCircle
+                    ? undefined
+                    : actionAvailability.sendDisabled
+                        ? actionAvailability.disabledClass
+                        : 'text-primary hover:text-primary',
             )}
             aria-label={sendInFlight || (!canAbort && inFlight)
                 ? t(queueInFlight ? 'chat.chatInput.actions.queuingMessageAria' : 'chat.chatInput.actions.sendingMessageAria')
                 : t('chat.chatInput.actions.sendMessageAria')}
         >
-            <Icon name={inFlight ? 'loader-4' : 'send-plane-2'} className={cn(sendIconSizeClass, inFlight && 'animate-spin')} />
+            {showSendCircle ? (
+                <SendCircleIcon className={circleGlyphClass} spinning={Boolean(inFlight && !canAbort)} />
+            ) : (
+                <Icon name="send-plane-2" className={sendIconSizeClass} />
+            )}
         </button>
     );
 
@@ -895,12 +912,15 @@ const ComposerActionButtons = React.memo(function ComposerActionButtons(props: C
     // steer while canAbort is true. Stack above the textarea (z-10).
     // Keep the floating control visible while queue admission is in flight even
     // after the composer cleared, so the user sees an immediate "queuing" state.
+    const showFloatingSend = !compact && (hasContent || queueInFlight);
+    const floatingSendReady = !actionAvailability.sendDisabled && !queueInFlight;
     return (
-        <div className="relative z-30 overflow-visible">
-            {(hasContent || queueInFlight) ? (
+        <div className={cn('relative z-30 overflow-visible', compact && 'h-full')}>
+            {showFloatingSend ? (
                 <button
                     type="button"
                     data-composer-send="true"
+                    data-composer-circle={floatingSendReady || queueInFlight ? 'true' : undefined}
                     disabled={actionAvailability.sendDisabled || queueInFlight}
                     aria-busy={queueInFlight || undefined}
                     {...keepKeyboardFocusProps}
@@ -910,15 +930,19 @@ const ComposerActionButtons = React.memo(function ComposerActionButtons(props: C
                         onPrimaryAction();
                     }}
                     className={cn(
-                        footerIconButtonClass,
+                        floatingSendReady || queueInFlight ? circleButtonClass : footerIconButtonClass,
                         'absolute z-30 bottom-full left-1/2 -translate-x-1/2 mb-1',
-                        !actionAvailability.sendDisabled && !queueInFlight
-                            ? 'text-primary hover:text-primary'
-                            : actionAvailability.disabledClass
+                        floatingSendReady || queueInFlight
+                            ? undefined
+                            : actionAvailability.disabledClass,
                     )}
                     aria-label={primaryAria}
                 >
-                    <Icon name={primaryIcon} className={cn(sendIconSizeClass, queueInFlight ? 'animate-spin' : '-rotate-90')} />
+                    {floatingSendReady || queueInFlight ? (
+                        <SendCircleIcon className={circleGlyphClass} spinning={queueInFlight} />
+                    ) : (
+                        <Icon name="send-plane-2" className={sendIconSizeClass} />
+                    )}
                 </button>
             ) : null}
             <button
@@ -926,20 +950,21 @@ const ComposerActionButtons = React.memo(function ComposerActionButtons(props: C
                 data-composer-stop="true"
                 onClick={onAbort}
                 className={cn(
-                    stopFooterIconButtonClass ?? footerIconButtonClass,
-                    // Plain stop square only: black in light mode, white in dark.
-                    'relative z-30 !text-black hover:!text-black dark:!text-white dark:hover:!text-white'
+                    circleButtonClass,
+                    'relative z-30'
                 )}
                 aria-label={t('chat.chatInput.actions.stopGeneratingAria')}
             >
-                <StopIcon className={cn(stopIconSizeClass)} />
+                <StopIcon className={cn(circleGlyphClass)} />
             </button>
         </div>
     );
 }, (prev, next) => (
     prev.isMobile === next.isMobile
+    && prev.compact === next.compact
     && prev.footerIconButtonClass === next.footerIconButtonClass
     && prev.stopFooterIconButtonClass === next.stopFooterIconButtonClass
+    && prev.compactCircleButtonClass === next.compactCircleButtonClass
     && prev.sendIconSizeClass === next.sendIconSizeClass
     && prev.stopIconSizeClass === next.stopIconSizeClass
     && prev.canSend === next.canSend
@@ -1135,6 +1160,10 @@ const ChatInputRuntime: React.FC<ChatInputProps> = ({
         () => parseLatestUserChoiceFromMessages(primarySessionMessages),
         [primarySessionMessages],
     );
+    const primaryTranscriptRenderable = useSessionMaterializationStatus(
+        primarySessionID ?? '',
+        currentSessionDirectoryForSync ?? undefined,
+    ).renderable;
     // Per-session entity for restore cascade tier 3 (session-entity). Narrow
     // subscription: one session entry, not the full sessions array.
     const primarySessionEntity = useSession(
@@ -1147,6 +1176,7 @@ const ChatInputRuntime: React.FC<ChatInputProps> = ({
     const primarySessionEntityVariant = primarySessionEntity?.model?.variant;
     const primaryConfigScopeKey = useConfigStore((state) => state.activeDirectoryKey);
     const primarySelectionEditRevisionRef = React.useRef(0);
+    const primarySelectionPinnedHistoryIdRef = React.useRef<string | null>(null);
     const primarySessionRestoreKeyRef = React.useRef<string | null>(null);
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);
     const primaryNewSessionDraftOpen = Boolean(newSessionDraft?.open);
@@ -1308,12 +1338,31 @@ const ChatInputRuntime: React.FC<ChatInputProps> = ({
 
                 const messages = getSyncMessages(sessionAtStart, sessionDirectoryAfter ?? undefined);
                 const latestChoice = parseLatestUserChoiceFromMessages(messages);
+                if (shouldHoldPrimaryComposerUserPick({
+                    editRevision: editRevisionAtStart,
+                    pinnedHistoryMessageId: primarySelectionPinnedHistoryIdRef.current,
+                    latestHistoryMessageId: latestChoice?.id ?? null,
+                })) {
+                    return;
+                }
                 const memory = useSelectionStore.getState();
+                const sessionRow = getAllSyncSessionMap().get(sessionAtStart);
+                const sessionEntity = sessionRow?.model
+                    ? {
+                        agent: sessionRow.agent,
+                        model: {
+                            id: sessionRow.model.id,
+                            providerID: sessionRow.model.providerID,
+                            variant: sessionRow.model.variant,
+                        },
+                    }
+                    : (sessionRow?.agent ? { agent: sessionRow.agent } : null);
                 const resolved = resolvePrimaryComposerSessionSelection({
                     sessionId: sessionAtStart,
                     latestUserChoice: latestChoice,
                     catalog,
                     memory,
+                    sessionEntity,
                     fallbackAgentName: config.currentAgentName,
                 });
                 if (!resolved) {
@@ -1349,7 +1398,17 @@ const ChatInputRuntime: React.FC<ChatInputProps> = ({
             change: async (selection) => {
                 // Explicit user pick: bump edit revision so an in-flight flush
                 // cannot overwrite the new choice after ensureSessionRenderable.
+                // Pin the latest known history message id (null while loading) so
+                // restore/flush keep this pick until a newer user message arrives.
                 primarySelectionEditRevisionRef.current += 1;
+                const sessionId = useSessionUIStore.getState().currentSessionId;
+                if (sessionId) {
+                    const directory = useSessionUIStore.getState().getDirectoryForSession(sessionId) ?? undefined;
+                    const latestChoice = parseLatestUserChoiceFromMessages(getSyncMessages(sessionId, directory));
+                    primarySelectionPinnedHistoryIdRef.current = latestChoice?.id ?? null;
+                } else {
+                    primarySelectionPinnedHistoryIdRef.current = null;
+                }
                 // setAgent re-applies agent-scoped model memory and would clobber an
                 // explicit model pick if called after setModel. applyPrimaryComposer-
                 // SelectionChange only switches agents when needed, then applies the
@@ -1363,40 +1422,9 @@ const ChatInputRuntime: React.FC<ChatInputProps> = ({
                     setCurrentVariant: config.setCurrentVariant,
                     saveAgentModelSelection: config.saveAgentModelSelection,
                 }, {
-                    sessionId: useSessionUIStore.getState().currentSessionId,
+                    sessionId,
                     memory: useSelectionStore.getState(),
                 });
-                // Pin the current history/memory restore key so the effect does not
-                // re-apply the same latest user message over this explicit pick.
-                // A newer message id (or session switch) still re-resolves.
-                const sessionId = useSessionUIStore.getState().currentSessionId;
-                if (sessionId) {
-                    const directory = useSessionUIStore.getState().getDirectoryForSession(sessionId) ?? undefined;
-                    const latestChoice = parseLatestUserChoiceFromMessages(getSyncMessages(sessionId, directory));
-                    const memory = useSelectionStore.getState();
-                    const resolved = resolvePrimaryComposerSessionSelection({
-                        sessionId,
-                        latestUserChoice: latestChoice,
-                        catalog: {
-                            providers: config.providers,
-                            agents: config.getVisibleAgents(),
-                        },
-                        memory,
-                        fallbackAgentName: selection.agent ?? config.currentAgentName,
-                    });
-                    if (resolved) {
-                        primarySessionRestoreKeyRef.current = [
-                            sessionId,
-                            resolved.source,
-                            resolved.messageId ?? '',
-                            resolved.agent ?? '',
-                            resolved.providerID,
-                            resolved.modelID,
-                            resolved.variant ?? '',
-                            useConfigStore.getState().activeDirectoryKey,
-                        ].join('|');
-                    }
-                }
             },
         },
         resources: {
@@ -1585,13 +1613,17 @@ const ChatInputRuntime: React.FC<ChatInputProps> = ({
         catalog: selectionCatalog,
     }), [selectionCatalog, selectionChange, selectionValue.agent, selectionValue.modelID, selectionValue.providerID, selectionValue.variant, surface.active]);
 
+    // Session switch drops a previous conversation's user-pick hold and restore key.
+    React.useEffect(() => {
+        primarySelectionEditRevisionRef.current = 0;
+        primarySelectionPinnedHistoryIdRef.current = null;
+        primarySessionRestoreKeyRef.current = null;
+    }, [primarySessionID]);
+
     // Primary surface owns session selection restore while ModelControls uses the
     // adapter (which disables ModelControls' own history/memory restore path).
     React.useEffect(() => {
         if (surface.kind !== 'primary' || !primarySessionID) {
-            if (!primarySessionID) {
-                primarySessionRestoreKeyRef.current = null;
-            }
             return;
         }
         if (primaryProviderConfigLoading || primaryAgentConfigLoading) {
@@ -1613,6 +1645,13 @@ const ChatInputRuntime: React.FC<ChatInputProps> = ({
             providers: primarySelectionProviders,
             agents: primarySelectionAgents,
         };
+        if (shouldHoldPrimaryComposerUserPick({
+            editRevision: primarySelectionEditRevisionRef.current,
+            pinnedHistoryMessageId: primarySelectionPinnedHistoryIdRef.current,
+            latestHistoryMessageId: primaryLatestUserChoice?.id ?? null,
+        })) {
+            return;
+        }
         const sessionEntity =
             primarySessionEntityProviderId && primarySessionEntityModelId
                 ? {
@@ -1633,6 +1672,7 @@ const ChatInputRuntime: React.FC<ChatInputProps> = ({
             memory,
             sessionEntity,
             fallbackAgentName: primaryAgentName,
+            transcriptReady: primaryTranscriptRenderable,
         });
         if (!resolved) {
             return;
@@ -1684,6 +1724,7 @@ const ChatInputRuntime: React.FC<ChatInputProps> = ({
         surface.kind,
         primarySessionID,
         primaryLatestUserChoice,
+        primaryTranscriptRenderable,
         primarySelectionProviders,
         primarySelectionAgents,
         primaryProviderConfigLoading,
@@ -6402,8 +6443,9 @@ const ChatInputRuntime: React.FC<ChatInputProps> = ({
     const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : (isVSCode ? 'px-1.5 py-1' : 'px-2.5 py-1.5');
     const buttonSizeClass = isMobile ? 'h-8 w-8' : (isVSCode ? 'h-5 w-5' : 'h-6 w-6');
     const sendIconSizeClass = isMobile ? 'h-4 w-4' : (isVSCode ? 'h-3.5 w-3.5' : 'h-4 w-4');
-    // Solid stop square: keep near the original mobile/desktop sizes.
-    const stopIconSizeClass = isMobile ? 'h-5 w-5' : (isVSCode ? 'h-4 w-4' : 'h-5 w-5');
+    // Mobile: 24px circle inside the 32px send hit target so it matches the model chip.
+    // Desktop/VS Code: the circle fills the already-compact control.
+    const stopIconSizeClass = isMobile ? 'h-6 w-6' : 'size-full';
     const iconSizeClass = isMobile ? 'h-[1.125rem] w-[1.125rem]' : (isVSCode ? 'h-4 w-4' : 'h-[1.125rem] w-[1.125rem]');
 
     const iconButtonBaseClass = cn(
@@ -6411,7 +6453,15 @@ const ChatInputRuntime: React.FC<ChatInputProps> = ({
         COMPOSER_ICON_HOVER_CLASS,
     );
     const footerIconButtonClass = cn(iconButtonBaseClass, buttonSizeClass);
-    const stopFooterIconButtonClass = footerIconButtonClass;
+    const stopFooterIconButtonClass = cn(
+        'flex cursor-pointer items-center justify-center transition-none outline-none focus:outline-none flex-shrink-0 disabled:cursor-not-allowed rounded-full hover:opacity-80',
+        buttonSizeClass,
+    );
+    // Compact pill: same 24px visual as expanded mobile, not stretched to the cap.
+    const compactCircleButtonClass = cn(
+        'flex cursor-pointer items-center justify-center transition-none outline-none focus:outline-none flex-shrink-0 disabled:cursor-not-allowed rounded-full hover:opacity-80',
+        'h-6 w-6',
+    );
     React.useEffect(() => {
         return () => {
             if (abortTimeoutRef.current) {
@@ -6480,6 +6530,7 @@ const ChatInputRuntime: React.FC<ChatInputProps> = ({
                 className={cn(
                     'oc-mobile-composer-compact-chrome',
                     canAbort && 'oc-mobile-composer-compact-chrome--aborting',
+                    canSend && !canAbort && 'oc-mobile-composer-compact-chrome--sending',
                     showScrollToBottom && onScrollToBottom && 'oc-mobile-composer-compact-chrome--with-scroll',
                 )}
             >
@@ -6513,7 +6564,7 @@ const ChatInputRuntime: React.FC<ChatInputProps> = ({
                             />
                         </div>
                     ) : null}
-                    {canAbort ? (
+                    {canAbort || canSend ? (
                         <div
                             data-mobile-composer-compact-slot="action"
                             data-composer-action="true"
@@ -6521,12 +6572,14 @@ const ChatInputRuntime: React.FC<ChatInputProps> = ({
                         >
                             <ComposerActionButtons
                                 isMobile
+                                compact
                                 footerIconButtonClass={footerIconButtonClass}
                                 stopFooterIconButtonClass={stopFooterIconButtonClass}
+                                compactCircleButtonClass={compactCircleButtonClass}
                                 sendIconSizeClass={sendIconSizeClass}
                                 stopIconSizeClass={stopIconSizeClass}
                                 canSend={canSend}
-                                canAbort
+                                canAbort={canAbort}
                                 hasContent={false}
                                 currentSessionId={currentSessionId}
                                 newSessionDraftOpen={newSessionDraftOpen}
