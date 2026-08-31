@@ -28,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - **主页危险操作（移除等）单独成组、行更高更好点。**
 - **Android 字号密度约 0.95：** 在原有物理密度 ~0.9 上相乘，而不是只抬 cap。
 - **Capgo OTA 打包：** 完整发布与仅 OTA 工作流从 Bun mobile workspace 用 `@capgo/cli@8.45.1 --package-json` 打 bundle。
+- **更新说明改读已部署的 CHANGELOG：** EdgeOne `/CHANGELOG.md` 反代到 Vercel 权威源，桌面不再回退到 raw GitHub `main`；按分支发版时大陆更新卡片也能看到对应段落。
 
 ## [1.18.7-beta.1] - 2026-08-31
 
