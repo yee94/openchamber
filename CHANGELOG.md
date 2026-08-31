@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.18.7-beta.2] - 2026-08-31
+
+从 1.19.0-beta.1..beta.36 回移植**与时间线引擎 / iOS 原生壳无关**的产品修复到 1.18 TanStack 线。**不含 LegendList / TimelineList，不含 iPhone 原生 composer / Live Activity / liquid-glass dock。** 聊天列表仍是 1.18.7-beta.1 的单所有者 TanStack Virtual。
+
+### 聊天
+
+- **Send / Stop 实心圆按钮：** 停止方块在 WebKit 上不再被裁掉。
+- **长路径中间截断：** diffs 与变更列表保留文件名可读。
+- **停止生成显示「生成已停止」：** 静音文案，不再当错误横幅。
+- **移除会话回顾（session recap）：** 设置项、时间线占位与服务端 assist runtime 一并去掉；小模型说明只提会话标题与摘要。
+- **思考/撰写状态提示在回合结束后立刻消失：** Changes 出现时不再滞留造成高度跳动。
+- **打开会话不再残留上一个模型图标：** Send 使用当前看到的模型。
+- **手机聊天标题渐变更不透明；** 最新消息下方多留空，方便滚离 web 输入框。
+
+### 修复 / 设置
+
+- **凭证同步改为配置同步勾选项：** 不再单独授权 `auth.json`。
+- **Services 面板快捷键：** 已在该 tab 则关闭，在其他 tab 则切换；桌面开关打开 instance，用量快捷键打开 usage。
+- **Projects 主页按压高亮略加强。**
+- **新会话的项目 / 分支选择器在输入框上方**（与 Changes、To-do 一致；web composer，非原生壳）。
+- **手机 Settings 下拉改为底部 sheet。**
+- **主页危险操作（移除等）单独成组、行更高更好点。**
+- **Android 字号密度约 0.95：** 在原有物理密度 ~0.9 上相乘，而不是只抬 cap。
+- **Capgo OTA 打包：** 完整发布与仅 OTA 工作流从 Bun mobile workspace 用 `@capgo/cli@8.45.1 --package-json` 打 bundle。
+
 ## [1.18.7-beta.1] - 2026-08-31
 
 基于 `v1.18.5` + `1.18.6-beta.1` + `1.18.6-beta.2` 的 1.18 线 beta，**未合入 1.19 / LegendList**。汇总尚未对外铺开的 1.18.6 修复，并加入单所有者 TanStack 聊天滚动物理。
