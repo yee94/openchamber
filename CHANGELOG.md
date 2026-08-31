@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.18.7-beta.1] - 2026-08-31
+
+基于 `v1.18.5` + `1.18.6-beta.1` + `1.18.6-beta.2` 的 1.18 线 beta，**未合入 1.19 / LegendList**。汇总尚未对外铺开的 1.18.6 修复，并加入单所有者 TanStack 聊天滚动物理。
+
+### 聊天
+
+- **单所有者 TanStack 聊天滚动物理：** 历史与实时流式回合共用一个 virtualizer；`useChatAutoFollow` 在 TanStack 路径不再写 `scrollTop`，跟随后交给 `followOnAppend` / `scrollToEnd()`。
+- **TanStack Virtual 升级：** `@tanstack/react-virtual` 3.14.10 / `@tanstack/virtual-core` 3.17.8（保留 1.18 的 `calculateRange` scrollOffset clamp patch）。
+- **流式文字渐入更跟手：** 改用 `requestAnimationFrame` 按实际帧间隔揭示，避免定时器堆积导致的卡顿与追赶。
+
+### 修复
+
+- **助理聊天里的 subagent 可以打开了：** PC / iPad 点 task 行会在右侧 ContextPanel 打开子会话；手机和 VS Code 直接跳进该 subagent 会话。历史记录里的 subagent 同样可点。
+- **`/fork` 后源会话不再卡住：** 一拿到新会话 id 就切路由，源会话可以马上继续操作；离开 fork 路径时不会把草稿写回源会话。
+- **预览 Changes 时不再被刷新拉回顶部：** 编辑或 git status 更新时不再把视图重新钉到文件头，也不再卸掉已渲染的 diff 再挂一次。
+
 ## [1.18.6-beta.2] - 2026-08-28
 
 ### 修复
