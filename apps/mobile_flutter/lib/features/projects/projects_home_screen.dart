@@ -121,7 +121,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                                 ),
                               ],
                             ),
-                            child: const OcGlyph(OcGlyphKind.plus, size: 18, color: Colors.white),
+                            child: OcGlyph(OcGlyphKind.plus, size: 18, color: Theme.of(context).colorScheme.onPrimary),
                           ),
                         ),
                       ],
@@ -136,9 +136,9 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                         onChanged: (value) => setState(() => _query = value),
                         decoration: InputDecoration(
                           hintText: t(context, 'projects.search.placeholder'),
-                          prefixIcon: const Padding(
-                            padding: EdgeInsets.only(left: 10, right: 4),
-                            child: OcGlyph(OcGlyphKind.search, size: 16, color: OcChrome.secondary),
+                          prefixIcon: Padding(
+                            padding: const EdgeInsets.only(left: 10, right: 4),
+                            child: OcGlyph(OcGlyphKind.search, size: 16, color: context.oc.mutedForeground),
                           ),
                           prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 18),
                           filled: true,
@@ -304,7 +304,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                           ].join(' · '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 13, color: OcChrome.secondary),
+                          style: TextStyle(fontSize: 13, color: context.oc.mutedForeground),
                         ),
                       ],
                     ),
@@ -312,19 +312,19 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                   OcGlyph(
                     expanded ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
                     size: 16,
-                    color: OcChrome.secondary,
+                    color: context.oc.mutedForeground,
                   ),
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     onPressed: () {},
-                    icon: const OcGlyph(OcGlyphKind.ellipsis, size: 16, color: OcChrome.secondary),
+                    icon: OcGlyph(OcGlyphKind.ellipsis, size: 16, color: context.oc.mutedForeground),
                   ),
                 ],
               ),
             ),
           ),
           if (expanded) ...[
-            const Divider(height: 1, thickness: 0.5, color: OcChrome.separator),
+            Divider(height: 1, thickness: 0.5, color: context.oc.mobileBorder),
             ..._sessionSlice(context, id, sessions, assignSessionKeys),
           ],
         ],
@@ -342,7 +342,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     final visible = showAll ? sessions : sessions.take(_visibleSlice).toList();
     return [
       for (var i = 0; i < visible.length; i += 1) ...[
-        if (i > 0) const Divider(height: 1, thickness: 0.5, indent: 18, endIndent: 12, color: OcChrome.separator),
+        if (i > 0) Divider(height: 1, thickness: 0.5, indent: 18, endIndent: 12, color: context.oc.mobileBorder),
         _sessionRow(
           context,
           visible[i],
@@ -357,9 +357,9 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
             padding: const EdgeInsets.fromLTRB(18, 10, 16, 14),
             child: Row(
               children: [
-                Text(t(context, 'projects.showMore'), style: const TextStyle(fontSize: 15, color: OcChrome.secondary)),
+                Text(t(context, 'projects.showMore'), style: TextStyle(fontSize: 15, color: context.oc.mutedForeground)),
                 const Spacer(),
-                const OcGlyph(OcGlyphKind.chevronRight, size: 14, color: OcChrome.secondary),
+                OcGlyph(OcGlyphKind.chevronRight, size: 14, color: context.oc.mutedForeground),
               ],
             ),
           ),
@@ -382,7 +382,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
               width: 7,
               height: 7,
               decoration: BoxDecoration(
-                color: row.unread ? Theme.of(context).colorScheme.primary : OcChrome.secondary.withValues(alpha: 0.45),
+                color: row.unread ? Theme.of(context).colorScheme.primary : context.oc.mutedForeground.withValues(alpha: 0.45),
                 shape: BoxShape.circle,
               ),
               child: row.unread && unreadKey ? const SizedBox(key: Key('unread-dot')) : null,
@@ -398,12 +398,12 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
             if (formatRelativeTime(row.updated) != null)
               Text(
                 formatRelativeTime(row.updated)!,
-                style: const TextStyle(fontSize: 13, color: OcChrome.secondary),
+                style: TextStyle(fontSize: 13, color: context.oc.mutedForeground),
               ),
             IconButton(
               visualDensity: VisualDensity.compact,
               onPressed: () {},
-              icon: const OcGlyph(OcGlyphKind.ellipsis, size: 16, color: OcChrome.secondary),
+              icon: OcGlyph(OcGlyphKind.ellipsis, size: 16, color: context.oc.mutedForeground),
             ),
           ],
         ),

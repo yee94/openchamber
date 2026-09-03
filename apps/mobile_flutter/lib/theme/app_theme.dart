@@ -1,37 +1,81 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-import 'ios_chrome.dart';
+import 'oc_tokens.dart';
 
-/// Semantic tokens aligned with OpenChamber `surface.*` / `primary.*`.
-/// Native-first: iOS grouped chrome on every surface; Material 3 on Android
-/// without underline fields or a fake glass dock.
-class OcTokens {
-  static const Color backgroundLight = OcChrome.groupedLight;
-  static const Color backgroundDark = OcChrome.groupedDark;
-  static const Color elevatedLight = OcChrome.cardLight;
-  static const Color elevatedDark = OcChrome.cardDark;
-  static const Color foregroundLight = OcChrome.title;
-  static const Color foregroundDark = Color(0xFFF2F2F7);
-  static const Color mutedLight = OcChrome.secondary;
-  static const Color mutedDark = Color(0xFF8E8E93);
-  static const Color borderLight = Color(0x1F1A1916);
-  static const Color borderDark = Color(0x33F4F1EA);
-  static const Color primary = Color(0xFF2F6FED);
-  static const Color unreadDot = Color(0xFF2F6FED);
-  static const double groupRadius = OcChrome.cardRadius;
-  static const double rowMinHeight = 52;
-  static const double sectionGap = 8;
-  static const double sectionStackGap = 20;
+export 'oc_tokens.dart';
+
+/// Material 3 theme built from official [OcTokens] for [brightness].
+ThemeData materialTheme(Brightness brightness) {
+  final tokens = OcTokens.forBrightness(brightness);
+  final scheme = tokens.colorScheme;
+  return ThemeData(
+    useMaterial3: true,
+    brightness: brightness,
+    colorScheme: scheme,
+    scaffoldBackgroundColor: tokens.pageBackground,
+    canvasColor: tokens.pageBackground,
+    cardColor: tokens.card,
+    dividerColor: tokens.mobileDivider,
+    hintColor: tokens.mutedForeground,
+    extensions: <ThemeExtension<dynamic>>[tokens],
+    appBarTheme: AppBarTheme(
+      backgroundColor: tokens.pageBackground,
+      foregroundColor: tokens.foreground,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      centerTitle: false,
+      titleTextStyle: TextStyle(
+        fontSize: OcTokens.textUiHeader + 3, // 17pt pushed-nav title
+        fontWeight: FontWeight.w600,
+        color: tokens.foreground,
+      ),
+    ),
+    inputDecorationTheme: _inputTheme(tokens),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: tokens.dockFill,
+      indicatorColor: tokens.primary.withValues(alpha: 0.16),
+      elevation: 0,
+    ),
+    radioTheme: RadioThemeData(
+      fillColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return tokens.primary;
+        }
+        return tokens.mutedForeground;
+      }),
+    ),
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+      },
+    ),
+    textTheme: _textTheme(tokens),
+  );
 }
 
-InputDecorationTheme _inputTheme(ColorScheme scheme, bool isDark) {
-  final fill = isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7);
-  final radius = BorderRadius.circular(12);
+TextTheme _textTheme(OcTokens tokens) {
+  final base = Typography.material2021(platform: TargetPlatform.android);
+  final themed = tokens.isDark ? base.white : base.black;
+  return themed.copyWith(
+    bodyLarge: themed.bodyLarge?.copyWith(fontSize: OcTokens.textMarkdown, color: tokens.foreground),
+    bodyMedium: themed.bodyMedium?.copyWith(fontSize: OcTokens.textMarkdown, color: tokens.foreground),
+    bodySmall: themed.bodySmall?.copyWith(fontSize: OcTokens.textMeta, color: tokens.mutedForeground),
+    titleLarge: themed.titleLarge?.copyWith(fontSize: OcTokens.rootTitleSize, color: tokens.foreground),
+    titleMedium: themed.titleMedium?.copyWith(fontSize: OcTokens.textUiHeader, color: tokens.foreground),
+    titleSmall: themed.titleSmall?.copyWith(fontSize: OcTokens.textUiLabel, color: tokens.foreground),
+    labelLarge: themed.labelLarge?.copyWith(fontSize: OcTokens.textUiLabel, color: tokens.foreground),
+    labelMedium: themed.labelMedium?.copyWith(fontSize: OcTokens.textUiLabel, color: tokens.mutedForeground),
+    labelSmall: themed.labelSmall?.copyWith(fontSize: OcTokens.textMicro, color: tokens.mutedForeground),
+  );
+}
+
+InputDecorationTheme _inputTheme(OcTokens tokens) {
+  final radius = BorderRadius.circular(OcTokens.formControlRadius);
   final none = OutlineInputBorder(borderRadius: radius, borderSide: BorderSide.none);
   return InputDecorationTheme(
     filled: true,
-    fillColor: fill,
+    fillColor: tokens.input,
     floatingLabelBehavior: FloatingLabelBehavior.never,
     border: none,
     enabledBorder: none,
@@ -40,64 +84,25 @@ InputDecorationTheme _inputTheme(ColorScheme scheme, bool isDark) {
     errorBorder: none,
     focusedErrorBorder: none,
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-    hintStyle: TextStyle(color: scheme.onSurface.withValues(alpha: 0.4)),
-    labelStyle: TextStyle(color: scheme.onSurface.withValues(alpha: 0.55)),
-  );
-}
-
-ThemeData materialTheme(Brightness brightness) {
-  final isDark = brightness == Brightness.dark;
-  final scheme = ColorScheme(
-    brightness: brightness,
-    primary: OcTokens.primary,
-    onPrimary: Colors.white,
-    secondary: OcTokens.primary,
-    onSecondary: Colors.white,
-    error: const Color(0xFFC62828),
-    onError: Colors.white,
-    surface: isDark ? OcTokens.elevatedDark : OcTokens.elevatedLight,
-    onSurface: isDark ? OcTokens.foregroundDark : OcTokens.foregroundLight,
-  );
-  return ThemeData(
-    useMaterial3: true,
-    colorScheme: scheme,
-    scaffoldBackgroundColor: isDark ? OcTokens.backgroundDark : OcTokens.backgroundLight,
-    canvasColor: isDark ? OcTokens.backgroundDark : OcTokens.backgroundLight,
-    appBarTheme: AppBarTheme(
-      backgroundColor: isDark ? OcTokens.backgroundDark : OcTokens.backgroundLight,
-      foregroundColor: scheme.onSurface,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      centerTitle: false,
-      titleTextStyle: TextStyle(
-        fontSize: 17,
-        fontWeight: FontWeight.w600,
-        color: scheme.onSurface,
-      ),
-    ),
-    inputDecorationTheme: _inputTheme(scheme, isDark),
-    dividerColor: Colors.transparent,
-    navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: isDark ? const Color(0xE61C1C1E) : const Color(0xF2FFFFFF),
-      indicatorColor: OcTokens.primary.withValues(alpha: 0.16),
-      elevation: 0,
-    ),
-    pageTransitionsTheme: const PageTransitionsTheme(
-      builders: {
-        TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
-      },
-    ),
+    hintStyle: TextStyle(color: tokens.mutedForeground.withValues(alpha: 0.8), fontSize: OcTokens.textUiLabel),
+    labelStyle: TextStyle(color: tokens.mutedForeground, fontSize: OcTokens.textUiLabel),
   );
 }
 
 CupertinoThemeData cupertinoTheme(Brightness brightness) {
+  final tokens = OcTokens.forBrightness(brightness);
   return CupertinoThemeData(
     brightness: brightness,
-    primaryColor: OcTokens.primary,
-    scaffoldBackgroundColor:
-        brightness == Brightness.dark ? OcTokens.backgroundDark : OcTokens.backgroundLight,
-    barBackgroundColor: brightness == Brightness.dark
-        ? const Color(0xE61C1C1E)
-        : const Color(0xF2F2F2F7),
+    primaryColor: tokens.primary,
+    applyThemeToAll: true,
+    scaffoldBackgroundColor: tokens.pageBackground,
+    barBackgroundColor: tokens.surfaceElevated,
+    textTheme: CupertinoTextThemeData(
+      primaryColor: tokens.primary,
+      textStyle: TextStyle(
+        fontSize: OcTokens.textMarkdown,
+        color: tokens.foreground,
+      ),
+    ),
   );
 }

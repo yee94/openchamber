@@ -26,7 +26,7 @@ class HighlightedText extends StatelessWidget {
       spans.add(
         TextSpan(
           text: text.substring(index, index + needle.length),
-          style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF2F6FED)),
+          style: TextStyle(fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.primary),
         ),
       );
       start = index + needle.length;

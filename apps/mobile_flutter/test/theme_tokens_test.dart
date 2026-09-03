@@ -1,0 +1,68 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openchamber/theme/app_theme.dart';
+import 'package:openchamber/theme/oklch.dart';
+
+void main() {
+  test('oklch conversion matches Ottosson sRGB for documented dark samples', () {
+    expectNear(oklchColor(0.16, 0.01, 30), const Color(0xFF110C0B));
+    expectNear(oklchColor(0.77, 0.17, 85), const Color(0xFFE5A900));
+    expectNear(oklchColor(0.85, 0.02, 90), const Color(0xFFD3CDBF));
+    expectNear(oklchColor(0.19, 0.01, 40), const Color(0xFF181210));
+  });
+
+  test('OcTokens light and dark follow design-system.css OKLCH, not iOS greys', () {
+    expect(OcTokens.light.primary, isNot(const Color(0xFF2F6FED)));
+    expect(OcTokens.dark.primary, isNot(const Color(0xFF2F6FED)));
+    expectNear(OcTokens.light.background, oklchColor(0.97, 0.02, 85));
+    expectNear(OcTokens.light.primary, oklchColor(0.65, 0.2, 55));
+    expectNear(OcTokens.dark.background, oklchColor(0.16, 0.01, 30));
+    expectNear(OcTokens.dark.primary, oklchColor(0.77, 0.17, 85));
+    expectNear(OcTokens.dark.destructive, oklchColor(0.65, 0.15, 30));
+    expect(OcTokens.light.surfaceElevated, OcTokens.light.card);
+    expect(OcTokens.light.surfaceBackground, OcTokens.light.background);
+    expect(OcTokens.light.surfaceMuted, OcTokens.light.muted);
+    expect(OcTokens.dark.pageBackground, isNot(OcTokens.light.pageBackground));
+  });
+
+  test('mobile geometry rides official rem tokens', () {
+    expect(OcTokens.radius, 10);
+    expect(OcTokens.surfaceRadius, 24);
+    expect(OcTokens.insetRadius, 16);
+    expect(OcTokens.controlRadius, 20);
+    expect(OcTokens.formControlHeight, 36);
+    expect(OcTokens.dockHeight, 68);
+    expect(OcTokens.dockRadius, 34);
+    expect(OcTokens.rootTitleSize, 32);
+    expect(OcTokens.textMarkdown, 15);
+    expect(OcTokens.textUiHeader, 14);
+    expect(OcTokens.textUiLabel, 13);
+    expect(OcTokens.textMeta, 13);
+    expect(OcTokens.pageInlineInset, 18);
+  });
+
+  test('materialTheme attaches OcTokens for both brightnesses', () {
+    final light = materialTheme(Brightness.light);
+    final dark = materialTheme(Brightness.dark);
+    expect(light.extension<OcTokens>(), OcTokens.light);
+    expect(dark.extension<OcTokens>(), OcTokens.dark);
+    expect(light.colorScheme.primary, OcTokens.light.primary);
+    expect(dark.colorScheme.primary, OcTokens.dark.primary);
+    expect(light.scaffoldBackgroundColor, OcTokens.light.pageBackground);
+    expect(dark.scaffoldBackgroundColor, OcTokens.dark.pageBackground);
+  });
+
+  test('resolveOcBrightness honors Light / Dark / System', () {
+    expect(resolveOcBrightness(ThemeMode.light, Brightness.dark), Brightness.light);
+    expect(resolveOcBrightness(ThemeMode.dark, Brightness.light), Brightness.dark);
+    expect(resolveOcBrightness(ThemeMode.system, Brightness.dark), Brightness.dark);
+    expect(resolveOcBrightness(ThemeMode.system, Brightness.light), Brightness.light);
+  });
+}
+
+void expectNear(Color actual, Color expected, {int slop = 1}) {
+  int channel(Color color, double Function(Color c) read) => (read(color) * 255).round();
+  expect((channel(actual, (c) => c.r) - channel(expected, (c) => c.r)).abs(), lessThanOrEqualTo(slop), reason: 'red $actual vs $expected');
+  expect((channel(actual, (c) => c.g) - channel(expected, (c) => c.g)).abs(), lessThanOrEqualTo(slop), reason: 'green $actual vs $expected');
+  expect((channel(actual, (c) => c.b) - channel(expected, (c) => c.b)).abs(), lessThanOrEqualTo(slop), reason: 'blue $actual vs $expected');
+}

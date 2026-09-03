@@ -40,6 +40,20 @@ class _OpenChamberAppState extends State<OpenChamberApp> with WidgetsBindingObse
   }
 
   @override
+  void didChangePlatformBrightness() {
+    if (controller.themeMode == ThemeMode.system) {
+      setState(() {});
+    }
+  }
+
+  Brightness get _resolvedBrightness {
+    return resolveOcBrightness(
+      controller.themeMode,
+      WidgetsBinding.instance.platformDispatcher.platformBrightness,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: controller,
@@ -47,6 +61,8 @@ class _OpenChamberAppState extends State<OpenChamberApp> with WidgetsBindingObse
         final strings = AppStrings.of(controller.locale);
         final useCupertino = defaultTargetPlatform == TargetPlatform.iOS;
         final home = _phaseHome(controller);
+        final brightness = _resolvedBrightness;
+        final material = materialTheme(brightness);
 
         Widget app;
         const delegates = <LocalizationsDelegate<dynamic>>[
@@ -55,15 +71,17 @@ class _OpenChamberAppState extends State<OpenChamberApp> with WidgetsBindingObse
           GlobalCupertinoLocalizations.delegate,
         ];
         if (useCupertino) {
-          app = CupertinoApp(
-            debugShowCheckedModeBanner: false,
-            locale: controller.locale,
-            supportedLocales: AppStrings.supported,
-            localizationsDelegates: delegates,
-            theme: cupertinoTheme(
-              controller.themeMode == ThemeMode.dark ? Brightness.dark : Brightness.light,
+          app = Theme(
+            data: material,
+            child: CupertinoApp(
+              debugShowCheckedModeBanner: false,
+              locale: controller.locale,
+              supportedLocales: AppStrings.supported,
+              localizationsDelegates: delegates,
+              theme: cupertinoTheme(brightness),
+              builder: (context, child) => Theme(data: material, child: child ?? const SizedBox.shrink()),
+              home: home,
             ),
-            home: home,
           );
         } else {
           app = MaterialApp(

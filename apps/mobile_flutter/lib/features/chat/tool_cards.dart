@@ -5,7 +5,6 @@ import '../../data/context_tool_grouping.dart';
 import '../../data/generated_result.dart';
 import '../../data/skill_tool_grouping.dart';
 import '../../l10n/app_strings.dart';
-import '../../theme/app_theme.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
 
@@ -142,7 +141,7 @@ class _AssistantHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              const OcGlyph(OcGlyphKind.sparkles, size: 18, color: OcChrome.secondary),
+              OcGlyph(OcGlyphKind.sparkles, size: 18, color: OcTokens.of(context).mutedForeground),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
@@ -155,16 +154,16 @@ class _AssistantHeader extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: OcChrome.separator),
+                    border: Border.all(color: OcTokens.of(context).mobileBorder),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const OcGlyph(OcGlyphKind.people, size: 11, color: OcChrome.secondary),
+                      OcGlyph(OcGlyphKind.people, size: 11, color: OcTokens.of(context).mutedForeground),
                       const SizedBox(width: 4),
                       Text(
                         role,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: OcChrome.secondary),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: OcTokens.of(context).mutedForeground),
                       ),
                     ],
                   ),
@@ -180,14 +179,14 @@ class _AssistantHeader extends StatelessWidget {
                   Expanded(
                     child: Row(
                       children: [
-                        const OcGlyph(OcGlyphKind.layers, size: 13, color: OcChrome.secondary),
+                        OcGlyph(OcGlyphKind.layers, size: 13, color: OcTokens.of(context).mutedForeground),
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
                             '${t(context, live ? 'chat.activity.active' : 'chat.activity.completedStatus')} ${message.processedLabel}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12, color: OcChrome.secondary),
+                            style: TextStyle(fontSize: 12, color: OcTokens.of(context).mutedForeground),
                           ),
                         ),
                       ],
@@ -256,7 +255,7 @@ class _FileChangeCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const OcGlyph(OcGlyphKind.file, size: 16, color: OcChrome.secondary),
+              OcGlyph(OcGlyphKind.file, size: 16, color: OcTokens.of(context).mutedForeground),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -264,7 +263,7 @@ class _FileChangeCard extends StatelessWidget {
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ),
-              const OcGlyph(OcGlyphKind.chevronRight, size: 16, color: OcChrome.secondary),
+              OcGlyph(OcGlyphKind.chevronRight, size: 16, color: OcTokens.of(context).mutedForeground),
             ],
           ),
           const SizedBox(height: 8),
@@ -287,12 +286,12 @@ class _FileChangeCard extends StatelessWidget {
                       children: [
                         TextSpan(
                           text: '+${part.added.length}',
-                          style: const TextStyle(color: Color(0xFF34C759)),
+                          style: TextStyle(color: OcTokens.of(context).statusSuccess),
                         ),
                         const TextSpan(text: '/'),
                         TextSpan(
                           text: '-${part.removed.length}',
-                          style: const TextStyle(color: Color(0xFFFF3B30)),
+                          style: TextStyle(color: OcTokens.of(context).destructive),
                         ),
                       ],
                     ),
@@ -306,9 +305,9 @@ class _FileChangeCard extends StatelessWidget {
               children: [
                 Text(
                   t(context, 'chat.filesChanged.more', {'count': '${parts.length - visible.length}'}),
-                  style: const TextStyle(fontSize: 13, color: OcChrome.secondary),
+                  style: TextStyle(fontSize: 13, color: OcTokens.of(context).mutedForeground),
                 ),
-                const OcGlyph(OcGlyphKind.chevronRight, size: 12, color: OcChrome.secondary),
+                OcGlyph(OcGlyphKind.chevronRight, size: 12, color: OcTokens.of(context).mutedForeground),
               ],
             ),
         ],
@@ -330,9 +329,9 @@ class UserTurnToolbar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (message.completedClock != null) ...[
-            const OcGlyph(OcGlyphKind.clock, size: 12, color: OcChrome.secondary),
+            OcGlyph(OcGlyphKind.clock, size: 12, color: OcTokens.of(context).mutedForeground),
             const SizedBox(width: 3),
-            Text(message.completedClock!, style: const TextStyle(fontSize: 12, color: OcChrome.secondary)),
+            Text(message.completedClock!, style: TextStyle(fontSize: 12, color: OcTokens.of(context).mutedForeground)),
             const SizedBox(width: 4),
           ],
           _icon(context, key: const Key('chat-action-revert'), glyph: OcGlyphKind.undo, tooltip: t(context, 'chat.messageBody.actions.revert')),
@@ -358,7 +357,7 @@ class UserTurnToolbar extends StatelessWidget {
       padding: const EdgeInsets.all(2),
       constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
       onPressed: () {},
-      icon: OcGlyph(glyph, size: 14, color: OcChrome.secondary),
+      icon: OcGlyph(glyph, size: 14, color: OcTokens.of(context).mutedForeground),
     );
   }
 }
@@ -375,7 +374,7 @@ class _UserMentionRow extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const OcGlyph(OcGlyphKind.link, size: 13, color: OcChrome.secondary),
+          OcGlyph(OcGlyphKind.link, size: 13, color: OcTokens.of(context).mutedForeground),
           const SizedBox(width: 4),
           Flexible(
             child: Text(
@@ -438,14 +437,15 @@ class _TurnFooter extends StatelessWidget {
             children: [
               if (message.tokensPerSecond != null)
                 _metric(
+                  context,
                   key: Key('chat-tps-${message.id}'),
                   glyph: OcGlyphKind.bolt,
                   label: message.tokensPerSecond!,
                 ),
               if (message.processedLabel != null)
-                _metric(glyph: OcGlyphKind.hourglass, label: message.processedLabel!),
+                _metric(context, glyph: OcGlyphKind.hourglass, label: message.processedLabel!),
               if (message.completedClock != null)
-                _metric(glyph: OcGlyphKind.clock, label: message.completedClock!),
+                _metric(context, glyph: OcGlyphKind.clock, label: message.completedClock!),
             ],
           ),
         ],
@@ -453,16 +453,16 @@ class _TurnFooter extends StatelessWidget {
     );
   }
 
-  Widget _metric({Key? key, required OcGlyphKind glyph, required String label}) {
+  Widget _metric(BuildContext context, {Key? key, required OcGlyphKind glyph, required String label}) {
     return Padding(
       padding: const EdgeInsets.only(left: 6),
       child: Row(
         key: key,
         mainAxisSize: MainAxisSize.min,
         children: [
-          OcGlyph(glyph, size: 11, color: OcChrome.secondary),
+          OcGlyph(glyph, size: 11, color: OcTokens.of(context).mutedForeground),
           const SizedBox(width: 3),
-          Text(label, style: const TextStyle(fontSize: 11, color: OcChrome.secondary)),
+          Text(label, style: TextStyle(fontSize: 11, color: OcTokens.of(context).mutedForeground)),
         ],
       ),
     );
@@ -482,7 +482,7 @@ class _TurnFooter extends StatelessWidget {
       padding: const EdgeInsets.all(2),
       constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
       onPressed: onPressed ?? () {},
-      icon: OcGlyph(glyph, size: 15, color: OcChrome.secondary),
+      icon: OcGlyph(glyph, size: 15, color: OcTokens.of(context).mutedForeground),
     );
   }
 }
@@ -611,7 +611,7 @@ class _ActivityDisclosureState extends State<_ActivityDisclosure> {
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
               children: [
-                Icon(Icons.layers_outlined, size: 16, color: OcTokens.mutedLight),
+                Icon(Icons.layers_outlined, size: 16, color: OcTokens.of(context).mutedForeground),
                 const SizedBox(width: 6),
                 Text(
                   status,
@@ -619,7 +619,7 @@ class _ActivityDisclosureState extends State<_ActivityDisclosure> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: OcTokens.mutedLight,
+                    color: OcTokens.of(context).mutedForeground,
                   ),
                 ),
                 const Spacer(),
@@ -627,7 +627,7 @@ class _ActivityDisclosureState extends State<_ActivityDisclosure> {
                   Icon(
                     open ? Icons.expand_less : Icons.expand_more,
                     size: 18,
-                    color: OcTokens.mutedLight,
+                    color: OcTokens.of(context).mutedForeground,
                     semanticLabel: t(
                       context,
                       open ? 'chat.activity.collapseAria' : 'chat.activity.expandAria',
@@ -700,7 +700,7 @@ class _ContextToolGroupState extends State<_ContextToolGroup> {
               Icon(
                 widget.exploring ? Icons.travel_explore : Icons.search,
                 size: 16,
-                color: OcTokens.mutedLight,
+                color: OcTokens.of(context).mutedForeground,
               ),
               const SizedBox(width: 6),
               Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
@@ -711,11 +711,11 @@ class _ContextToolGroupState extends State<_ContextToolGroup> {
                     summary,
                     key: Key('chat-context-summary-${widget.parts.first.id}'),
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: OcTokens.mutedLight, fontSize: 12),
+                    style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: 12),
                   ),
                 ),
               ],
-              Icon(_expanded ? Icons.expand_more : Icons.chevron_right, size: 16, color: OcTokens.mutedLight),
+              Icon(_expanded ? Icons.expand_more : Icons.chevron_right, size: 16, color: OcTokens.of(context).mutedForeground),
             ],
           ),
         ),
@@ -768,7 +768,7 @@ class _SkillToolGroupState extends State<_SkillToolGroup> {
           onTap: () => setState(() => _expanded = !_expanded),
           child: Row(
             children: [
-              Icon(active ? Icons.auto_stories : Icons.menu_book, size: 16, color: OcTokens.mutedLight),
+              Icon(active ? Icons.auto_stories : Icons.menu_book, size: 16, color: OcTokens.of(context).mutedForeground),
               const SizedBox(width: 6),
               Text(t(context, 'chat.tools.display.skill'), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
               if (label.isNotEmpty) ...[
@@ -778,11 +778,11 @@ class _SkillToolGroupState extends State<_SkillToolGroup> {
                     label,
                     key: Key('chat-skill-summary-${widget.parts.first.id}'),
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: OcTokens.mutedLight, fontSize: 12),
+                    style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: 12),
                   ),
                 ),
               ],
-              Icon(_expanded ? Icons.expand_more : Icons.chevron_right, size: 16, color: OcTokens.mutedLight),
+              Icon(_expanded ? Icons.expand_more : Icons.chevron_right, size: 16, color: OcTokens.of(context).mutedForeground),
             ],
           ),
         ),
@@ -839,7 +839,7 @@ class _ExpandableToolCardState extends State<_ExpandableToolCard> {
               onTap: () => setState(() => _expanded = !_expanded),
               child: Text(
                 _expanded ? t(context, 'chat.messageBody.shellCommand.hideOutput') : t(context, 'chat.messageBody.shellCommand.showOutput'),
-                style: TextStyle(color: OcTokens.mutedLight, fontSize: 12),
+                style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: 12),
               ),
             ),
           if (_expanded && output != null)
@@ -875,17 +875,17 @@ class _GeneratedResultCard extends StatelessWidget {
             Text(result.title, style: const TextStyle(fontWeight: FontWeight.w600)),
             if (result.highlights.isNotEmpty) ...[
               const SizedBox(height: 6),
-              Text(t(context, 'chat.generatedResult.commit.highlights'), style: TextStyle(color: OcTokens.mutedLight, fontSize: 12)),
+              Text(t(context, 'chat.generatedResult.commit.highlights'), style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: 12)),
               for (final item in result.highlights) Text('• $item'),
             ],
           ] else ...[
             if (result.title.isNotEmpty) ...[
-              Text(t(context, 'chat.generatedResult.pullRequest.titleLabel'), style: TextStyle(color: OcTokens.mutedLight, fontSize: 12)),
+              Text(t(context, 'chat.generatedResult.pullRequest.titleLabel'), style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: 12)),
               Text(result.title, style: const TextStyle(fontWeight: FontWeight.w600)),
             ],
             if (result.body != null) ...[
               const SizedBox(height: 6),
-              Text(t(context, 'chat.generatedResult.pullRequest.bodyLabel'), style: TextStyle(color: OcTokens.mutedLight, fontSize: 12)),
+              Text(t(context, 'chat.generatedResult.pullRequest.bodyLabel'), style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: 12)),
               Text(result.body!),
             ],
           ],
@@ -1035,7 +1035,7 @@ class _DiffViewerState extends State<_DiffViewer> {
             padding: const EdgeInsets.only(top: 4),
             child: Text(
               t(context, 'chat.diff.moreLines', {'count': '$hidden'}),
-              style: TextStyle(color: OcTokens.mutedLight, fontSize: 12),
+              style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: 12),
             ),
           ),
       ],
@@ -1088,7 +1088,7 @@ class _SideBySideDiff extends StatelessWidget {
                   style: TextStyle(
                     fontFamily: 'monospace',
                     fontSize: 12,
-                    color: row.$1 == null ? OcTokens.mutedLight : Theme.of(context).colorScheme.error,
+                    color: row.$1 == null ? OcTokens.of(context).mutedForeground : Theme.of(context).colorScheme.error,
                   ),
                 ),
               ),
@@ -1099,7 +1099,7 @@ class _SideBySideDiff extends StatelessWidget {
                   style: TextStyle(
                     fontFamily: 'monospace',
                     fontSize: 12,
-                    color: row.$2 == null ? OcTokens.mutedLight : Theme.of(context).colorScheme.primary,
+                    color: row.$2 == null ? OcTokens.of(context).mutedForeground : Theme.of(context).colorScheme.primary,
                   ),
                 ),
               ),
@@ -1153,7 +1153,7 @@ String _prefix(String kind) {
 Color _diffColor(BuildContext context, String kind) {
   if (kind == 'add') return Theme.of(context).colorScheme.primary;
   if (kind == 'remove') return Theme.of(context).colorScheme.error;
-  return OcTokens.mutedLight;
+  return OcTokens.of(context).mutedForeground;
 }
 
 class _MermaidCard extends StatelessWidget {
@@ -1203,12 +1203,12 @@ class _PermissionCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     t(context, 'sessions.sidebar.session.status.permissionRequired'),
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: OcTokens.mutedLight),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: OcTokens.of(context).mutedForeground),
                   ),
                 ),
                 Text(
                   _permissionToolLabel(tool),
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: OcTokens.mutedLight),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: OcTokens.of(context).mutedForeground),
                 ),
               ],
             ),
@@ -1220,7 +1220,7 @@ class _PermissionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (part.patterns.isNotEmpty) ...[
-                  Text(t(context, 'chat.permissionCard.patterns'), style: TextStyle(color: OcTokens.mutedLight, fontSize: 11)),
+                  Text(t(context, 'chat.permissionCard.patterns'), style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: 11)),
                   const SizedBox(height: 4),
                   DecoratedBox(
                     decoration: BoxDecoration(
@@ -1294,7 +1294,7 @@ List<Widget> _permissionBody(BuildContext context, String tool, Map<String, Obje
     final cwd = meta(['cwd', 'working_directory', 'directory', 'path']);
     return [
       if (cwd.isNotEmpty)
-        Text('${t(context, 'chat.permissionCard.workingDirectory')} $cwd', style: TextStyle(color: OcTokens.mutedLight, fontSize: 12)),
+        Text('${t(context, 'chat.permissionCard.workingDirectory')} $cwd', style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: 12)),
       if (command.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(top: 4),
@@ -1319,7 +1319,7 @@ List<Widget> _permissionBody(BuildContext context, String tool, Map<String, Obje
     final url = meta(['url', 'uri', 'endpoint']);
     final method = meta(['method']).isEmpty ? 'GET' : meta(['method']);
     return [
-      Text(t(context, 'chat.permissionCard.request'), style: TextStyle(color: OcTokens.mutedLight, fontSize: 11)),
+      Text(t(context, 'chat.permissionCard.request'), style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: 11)),
       if (url.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(top: 4),
@@ -1334,7 +1334,7 @@ List<Widget> _permissionBody(BuildContext context, String tool, Map<String, Obje
       .join('\n');
   if (details.isEmpty) return const [];
   return [
-    Text(t(context, 'chat.permissionCard.details'), style: TextStyle(color: OcTokens.mutedLight, fontSize: 11)),
+    Text(t(context, 'chat.permissionCard.details'), style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: 11)),
     Text(details, maxLines: 6, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
   ];
 }
@@ -1396,7 +1396,7 @@ class _CardShell extends StatelessWidget {
             if (subtitle != null && subtitle!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
-                child: Text(subtitle!, style: TextStyle(color: OcTokens.mutedLight, fontSize: 12)),
+                child: Text(subtitle!, style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: 12)),
               ),
             if (child != null) Padding(padding: const EdgeInsets.only(top: 8), child: child),
           ],

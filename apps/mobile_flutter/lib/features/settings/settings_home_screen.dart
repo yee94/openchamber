@@ -46,9 +46,9 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
                 onChanged: (value) => setState(() => _query = value),
                 decoration: InputDecoration(
                   hintText: t(context, 'settings.search.placeholder'),
-                  prefixIcon: const Padding(
-                    padding: EdgeInsets.only(left: 10, right: 4),
-                    child: OcGlyph(OcGlyphKind.search, size: 16, color: OcChrome.secondary),
+                  prefixIcon: Padding(
+                    padding: const EdgeInsets.only(left: 10, right: 4),
+                    child: OcGlyph(OcGlyphKind.search, size: 16, color: context.oc.mutedForeground),
                   ),
                   prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 18),
                   suffixIcon: _query.isEmpty
@@ -56,7 +56,7 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
                       : IconButton(
                           tooltip: t(context, 'settings.search.clear'),
                           onPressed: () => setState(() => _query = ''),
-                          icon: const OcGlyph(OcGlyphKind.xmark, size: 16, color: OcChrome.secondary),
+                          icon: OcGlyph(OcGlyphKind.xmark, size: 16, color: context.oc.mutedForeground),
                         ),
                   filled: true,
                   fillColor: Theme.of(context).colorScheme.surface,

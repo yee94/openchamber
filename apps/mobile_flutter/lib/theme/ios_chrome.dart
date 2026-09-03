@@ -2,29 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_strings.dart';
 import 'oc_glyphs.dart';
+import 'oc_tokens.dart';
 
-/// Official mobile chrome shared by iOS (Cupertino + UIKit overlays) and
-/// Android (same IA, Material 3 surfaces, no fake liquid glass).
+export 'oc_tokens.dart' show OcProductChrome, OcTokens, OcTokensContext;
+
+/// Geometry aliases of official `--oc-mobile-*` tokens.
+/// Colors come from [OcTokens.of] so Light / Dark / System switch live.
 class OcChrome {
-  static const Color groupedLight = Color(0xFFF2F2F7);
-  static const Color groupedDark = Color(0xFF000000);
-  static const Color cardLight = Color(0xFFFFFFFF);
-  static const Color cardDark = Color(0xFF1C1C1E);
-  static const Color title = Color(0xFF1C1C1E);
-  static const Color secondary = Color(0xFF8E8E93);
-  static const Color success = Color(0xFF34C759);
-  static const Color pauseAccent = Color(0xFF64D2FF);
-  static const Color agentAccent = Color(0xFF7A5CFF);
-  static const Color separator = Color(0x14000000);
-  static const Color dockFillLight = Color(0xF2FFFFFF);
-  static const Color dockFillDark = Color(0xE61C1C1E);
-  static const double cardRadius = 22;
-  static const double pillRadius = 28;
-  static const double dockRadius = 34;
-  static const double largeTitleSize = 34;
-  static const double pageGutter = 16;
-  static const double tabBarHeight = 64;
-  static const double headerButtonSize = 40;
+  static const Color agentAccent = OcProductChrome.agentAccent;
+  static const double cardRadius = OcTokens.surfaceRadius;
+  static const double pillRadius = OcTokens.controlRadius;
+  static const double dockRadius = OcTokens.dockRadius;
+  static const double largeTitleSize = OcTokens.rootTitleSize;
+  static const double pageGutter = OcTokens.pageInlineInset;
+  static const double tabBarHeight = OcTokens.dockHeight;
+  static const double headerButtonSize = OcTokens.headerButtonSize;
 }
 
 class LargeTitleHeader extends StatelessWidget {
@@ -58,7 +50,7 @@ class LargeTitleHeader extends StatelessWidget {
                       eyebrow!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: OcChrome.secondary),
+                      style: TextStyle(fontSize: OcTokens.textMicro, fontWeight: FontWeight.w500, color: context.oc.mutedForeground),
                     ),
                   ),
                 Text(
@@ -101,11 +93,12 @@ class CircularChromeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final tokens = context.oc;
+    final primary = tokens.primary;
     final fill = !filled
-        ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.92)
+        ? tokens.surfaceElevated.withValues(alpha: 0.92)
         : ink
-            ? OcChrome.title
+            ? tokens.foreground
             : primary;
     final child = Material(
       color: fill,
@@ -119,7 +112,15 @@ class CircularChromeButton extends StatelessWidget {
           width: OcChrome.headerButtonSize,
           height: OcChrome.headerButtonSize,
           child: Center(
-            child: OcGlyph(glyph, size: 18, color: filled ? Colors.white : Theme.of(context).colorScheme.onSurface),
+            child: OcGlyph(
+              glyph,
+              size: 18,
+              color: !filled
+                  ? tokens.foreground
+                  : ink
+                      ? tokens.background
+                      : tokens.primaryForeground,
+            ),
           ),
         ),
       ),
@@ -146,9 +147,9 @@ class GroupedInsetCard extends StatelessWidget {
       margin: margin ?? const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 10),
       padding: padding,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: context.oc.surfaceElevated,
         borderRadius: BorderRadius.circular(OcChrome.cardRadius),
-        border: Border.all(color: OcChrome.separator),
+        border: Border.all(color: context.oc.mobileBorder),
       ),
       clipBehavior: Clip.antiAlias,
       child: child,
@@ -187,7 +188,7 @@ class InsetTextField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(label, style: const TextStyle(fontSize: 13, color: OcChrome.secondary, fontWeight: FontWeight.w500)),
+          Text(label, style: TextStyle(fontSize: OcTokens.textUiLabel, color: context.oc.mutedForeground, fontWeight: FontWeight.w500)),
           const SizedBox(height: 6),
           TextField(
             key: fieldKey ?? key,
@@ -238,9 +239,9 @@ class SearchPillField extends StatelessWidget {
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
           hintText: hint,
-          prefixIcon: const Padding(
-            padding: EdgeInsets.only(left: 10, right: 4),
-            child: OcGlyph(OcGlyphKind.search, size: 16, color: OcChrome.secondary),
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(left: 10, right: 4),
+            child: OcGlyph(OcGlyphKind.search, size: 16, color: context.oc.mutedForeground),
           ),
           prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 18),
           filled: true,
@@ -314,18 +315,18 @@ class SegmentedPill extends StatelessWidget {
                           size: 16,
                           color: selectedIndex == i
                               ? Theme.of(context).colorScheme.primary
-                              : OcChrome.secondary,
+                              : context.oc.mutedForeground,
                         ),
                         const SizedBox(width: 6),
                       ],
                       Text(
                         labels[i],
                         style: TextStyle(
-                          fontSize: 15,
+                          fontSize: OcTokens.textMarkdown,
                           fontWeight: selectedIndex == i ? FontWeight.w700 : FontWeight.w500,
                           color: selectedIndex == i
                               ? Theme.of(context).colorScheme.onSurface
-                              : OcChrome.secondary,
+                              : context.oc.mutedForeground,
                         ),
                       ),
                     ],
@@ -384,7 +385,7 @@ class FilterChipBar extends StatelessWidget {
                             fontWeight: selectedIndex == i ? FontWeight.w700 : FontWeight.w500,
                             color: selectedIndex == i
                                 ? Theme.of(context).colorScheme.onSurface
-                                : OcChrome.secondary,
+                                : context.oc.mutedForeground,
                           ),
                         ),
                       ),
@@ -424,8 +425,8 @@ class StatusAttentionStrip extends StatelessWidget {
             ),
           ),
           if (moreLabel != null) ...[
-            Text(moreLabel!, style: const TextStyle(fontSize: 13, color: OcChrome.secondary)),
-            const OcGlyph(OcGlyphKind.chevronRight, size: 13, color: OcChrome.secondary),
+            Text(moreLabel!, style: TextStyle(fontSize: OcTokens.textUiLabel, color: context.oc.mutedForeground)),
+            OcGlyph(OcGlyphKind.chevronRight, size: 13, color: context.oc.mutedForeground),
           ],
         ],
       ),
@@ -483,7 +484,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12, color: OcChrome.secondary),
+                      style: TextStyle(fontSize: OcTokens.textMicro, color: context.oc.mutedForeground),
                     ),
                 ],
               ),

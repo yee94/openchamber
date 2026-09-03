@@ -135,6 +135,21 @@ void main() {
     expect(find.byKey(const Key('appearance-lang-zh')), findsOneWidget);
     await _writePng(tester, screenshotKey, '06-settings-appearance.png');
 
+    await tester.tap(find.byKey(const Key('appearance-theme-dark')));
+    await _pumpFrames(tester);
+    expect(controller.themeMode, ThemeMode.dark);
+    await _writePng(tester, screenshotKey, '06-settings-appearance-dark.png');
+
+    await tester.tap(find.byKey(const Key('settings-back')));
+    await _pumpFrames(tester);
+    await tester.tap(find.byKey(const Key('tab-scheduled')));
+    await _pumpUntil(tester, find.byKey(const Key('scheduled-task-cron-1')));
+    await _writePng(tester, screenshotKey, '04-scheduled-dark.png');
+
+    await tester.tap(find.byKey(const Key('tab-projects')));
+    await _pumpFrames(tester);
+    await _writePng(tester, screenshotKey, '02-projects-dark.png');
+
     final chatSession = controller.sessions.firstWhere((row) => row.id == 'sess-extra');
     SecondaryChrome.debugReset();
     await tester.pumpWidget(
@@ -151,7 +166,9 @@ void main() {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            theme: _reviewTheme(),
+            theme: _reviewTheme(Brightness.light),
+            darkTheme: _reviewTheme(Brightness.dark),
+            themeMode: ThemeMode.light,
             home: ChatScreen(
               session: chatSession,
               appController: controller,
@@ -213,7 +230,36 @@ void main() {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            theme: _reviewTheme(),
+            theme: _reviewTheme(Brightness.light),
+            darkTheme: _reviewTheme(Brightness.dark),
+            themeMode: ThemeMode.dark,
+            home: ChatScreen(
+              session: chatSession,
+              appController: controller,
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntil(tester, find.byKey(const Key('chat-tool-diff-edit-1')));
+    await _pumpFrames(tester);
+    await _writePng(tester, screenshotKey, '07-chat-dark.png');
+
+    await tester.pumpWidget(
+      StringsScope(
+        strings: AppStrings.of(AppStrings.zhCN),
+        child: RepaintBoundary(
+          key: screenshotKey,
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            locale: AppStrings.zhCN,
+            supportedLocales: AppStrings.supported,
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            theme: _reviewTheme(Brightness.light),
             home: Scaffold(
               appBar: const PushedNavBar(title: '发布说明'),
               body: ListView(
@@ -265,7 +311,6 @@ Future<void> _pumpShell(
   AppController controller,
   Key screenshotKey,
 ) async {
-  final theme = _reviewTheme();
   await tester.pumpWidget(
     AnimatedBuilder(
       animation: controller,
@@ -288,7 +333,9 @@ Future<void> _pumpShell(
                 GlobalWidgetsLocalizations.delegate,
                 GlobalCupertinoLocalizations.delegate,
               ],
-              theme: theme,
+              theme: _reviewTheme(Brightness.light),
+              darkTheme: _reviewTheme(Brightness.dark),
+              themeMode: controller.themeMode,
               home: home,
             ),
           ),
@@ -299,17 +346,10 @@ Future<void> _pumpShell(
   await _pumpFrames(tester);
 }
 
-ThemeData _reviewTheme() {
-  final base = materialTheme(Brightness.light);
+ThemeData _reviewTheme(Brightness brightness) {
+  final base = materialTheme(brightness);
   const fallbacks = <String>['ReviewCjk', 'RobotoReal', 'DroidSansFallback'];
-  return ThemeData(
-    useMaterial3: true,
-    colorScheme: base.colorScheme,
-    scaffoldBackgroundColor: base.scaffoldBackgroundColor,
-    appBarTheme: base.appBarTheme,
-    navigationBarTheme: base.navigationBarTheme,
-    pageTransitionsTheme: base.pageTransitionsTheme,
-    fontFamily: 'ReviewSans',
+  return base.copyWith(
     textTheme: base.textTheme.apply(fontFamily: 'ReviewSans', fontFamilyFallback: fallbacks),
     primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'ReviewSans', fontFamilyFallback: fallbacks),
   );

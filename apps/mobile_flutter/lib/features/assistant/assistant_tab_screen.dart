@@ -133,7 +133,7 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
                                     const SizedBox(width: 8),
                                     Text(
                                       _modeLabel(context, item),
-                                      style: const TextStyle(fontSize: 13, color: OcChrome.secondary),
+                                      style: TextStyle(fontSize: 13, color: context.oc.mutedForeground),
                                     ),
                                   ],
                                 ),
@@ -142,7 +142,7 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
                                   _summary(context, item),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 13, color: OcChrome.secondary, height: 1.35),
+                                  style: TextStyle(fontSize: 13, color: context.oc.mutedForeground, height: 1.35),
                                 ),
                               ],
                             ),
@@ -161,7 +161,7 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
                     children: [
                       Text(t(context, 'assistant.guide.title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 6),
-                      Text(t(context, 'assistant.guide.description'), style: const TextStyle(color: OcChrome.secondary)),
+                      Text(t(context, 'assistant.guide.description'), style: TextStyle(color: context.oc.mutedForeground)),
                       const SizedBox(height: 14),
                       FilledButton(
                         key: const Key('assistant-enabled'),

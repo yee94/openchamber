@@ -6,6 +6,7 @@ import 'package:openchamber/data/secure_store.dart';
 import 'package:openchamber/data/settings_catalog.dart';
 import 'package:openchamber/features/shell/secondary_chrome.dart';
 import 'package:openchamber/features/shell/tab_scaffold.dart';
+import 'package:openchamber/theme/app_theme.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -115,6 +116,36 @@ void main() {
     expect(find.byKey(const Key('settings-chat-render-sorted')), findsOneWidget);
     expect(find.text('This page is structured for the Flutter rewrite. Server-backed controls land in a later slice.'), findsNothing);
     expect(find.textContaining('iosNativeUi'), findsNothing);
+  });
+
+  testWidgets('appearance dark restyles Projects Scheduled and Settings immediately', (tester) async {
+    final controller = await pumpConnected(tester);
+    OcTokens tokensOf(Finder finder) => Theme.of(tester.element(finder)).extension<OcTokens>()!;
+
+    expect(tokensOf(find.byKey(const Key('tab-projects'))).brightness, Brightness.light);
+
+    await tester.tap(find.byKey(const Key('tab-settings')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('settings-slug-appearance')));
+    await tester.tap(find.byKey(const Key('settings-slug-appearance')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('appearance-theme-dark')));
+    await tester.pumpAndSettle();
+    expect(controller.themeMode, ThemeMode.dark);
+    expect(tokensOf(find.byKey(const Key('appearance-theme-dark'))).brightness, Brightness.dark);
+    expect(tokensOf(find.byKey(const Key('appearance-theme-dark'))).pageBackground, OcTokens.dark.pageBackground);
+
+    await tester.tap(find.byKey(const Key('settings-back')));
+    await tester.pumpAndSettle();
+    expect(tokensOf(find.byKey(const Key('settings-slug-appearance'))).pageBackground, OcTokens.dark.pageBackground);
+
+    await tester.tap(find.byKey(const Key('tab-projects')));
+    await tester.pumpAndSettle();
+    expect(tokensOf(find.byKey(const Key('tab-projects'))).pageBackground, OcTokens.dark.pageBackground);
+
+    await tester.tap(find.byKey(const Key('tab-scheduled')));
+    await tester.pumpAndSettle();
+    expect(tokensOf(find.byKey(const Key('tab-scheduled'))).pageBackground, OcTokens.dark.pageBackground);
   });
 
   testWidgets('providers settings lists catalog rows and failed fetch is not empty', (tester) async {

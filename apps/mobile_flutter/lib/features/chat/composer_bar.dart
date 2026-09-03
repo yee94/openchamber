@@ -102,7 +102,7 @@ class ComposerBar extends StatelessWidget {
             Padding(
               key: const Key('composer-dictate-status'),
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-              child: Text(dictationLabel!, style: const TextStyle(fontSize: 12, color: OcChrome.secondary)),
+              child: Text(dictationLabel!, style: TextStyle(fontSize: OcTokens.textMicro, color: context.oc.mutedForeground)),
             ),
           if (showScrollToBottom)
             Align(
@@ -132,7 +132,7 @@ class ComposerBar extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(OcChrome.pillRadius),
-                border: Border.all(color: OcChrome.separator),
+                border: Border.all(color: context.oc.mobileBorder),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.06),

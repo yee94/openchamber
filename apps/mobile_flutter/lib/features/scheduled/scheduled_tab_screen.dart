@@ -168,7 +168,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                           if (run.error != null && run.error!.isNotEmpty) run.error,
                         ].join(' · '),
                       ),
-                      trailing: const OcGlyph(OcGlyphKind.ellipsis, size: 16, color: OcChrome.secondary),
+                      trailing: OcGlyph(OcGlyphKind.ellipsis, size: 16, color: context.oc.mutedForeground),
                       onTap: run.sessionId == null || run.sessionId!.isEmpty ? null : () => _openRun(run.id),
                     ),
                   ),
@@ -199,12 +199,12 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                 height: 28,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: paused ? OcChrome.secondary.withValues(alpha: 0.35) : OcChrome.success,
+                  color: paused ? context.oc.mutedForeground.withValues(alpha: 0.35) : context.oc.statusSuccess,
                 ),
                 child: OcGlyph(
                   paused ? OcGlyphKind.pause : OcGlyphKind.check,
                   size: 14,
-                  color: paused ? OcChrome.secondary : Colors.white,
+                  color: paused ? context.oc.mutedForeground : context.oc.background,
                 ),
               ),
               const SizedBox(width: 12),
@@ -217,7 +217,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: paused ? OcChrome.secondary : Theme.of(context).colorScheme.onSurface,
+                        color: paused ? context.oc.mutedForeground : Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -225,7 +225,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                       paused
                           ? [_humanSchedule(context, task), '—'].join(' · ')
                           : _taskSubtitle(context, task),
-                      style: const TextStyle(fontSize: 13, color: OcChrome.secondary),
+                      style: TextStyle(fontSize: 13, color: context.oc.mutedForeground),
                     ),
                   ],
                 ),
@@ -237,7 +237,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   projectId: task.projectId,
                   taskId: task.id,
                 ),
-                icon: const OcGlyph(OcGlyphKind.ellipsis, size: 16, color: OcChrome.secondary),
+                icon: OcGlyph(OcGlyphKind.ellipsis, size: 16, color: context.oc.mutedForeground),
               ),
             ],
           ),

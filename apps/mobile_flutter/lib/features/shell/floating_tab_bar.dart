@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_strings.dart';
 import '../../native/haptics.dart';
-import '../../theme/app_theme.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
 
@@ -35,9 +34,7 @@ class FloatingCapsuleTabBar extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
         child: Material(
           key: Key('dock-selected-$selectedId'),
-          color: Theme.of(context).brightness == Brightness.dark
-              ? OcChrome.dockFillDark
-              : OcChrome.dockFillLight,
+          color: context.oc.dockFill,
           elevation: 16,
           shadowColor: Colors.black.withValues(alpha: 0.22),
           borderRadius: BorderRadius.circular(OcChrome.dockRadius),
@@ -101,7 +98,7 @@ class _TabSlot extends StatelessWidget {
             child: OcGlyph(
               glyph,
               size: 21,
-              color: selected ? primary : OcTokens.mutedLight,
+              color: selected ? primary : context.oc.mutedForeground,
               strokeWidth: selected ? 2.0 : 1.7,
             ),
           ),
@@ -113,7 +110,7 @@ class _TabSlot extends StatelessWidget {
             style: TextStyle(
               fontSize: 11,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? primary : OcTokens.mutedLight,
+              color: selected ? primary : context.oc.mutedForeground,
             ),
           ),
         ],

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_strings.dart';
-import '../../theme/app_theme.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
 
@@ -60,7 +59,7 @@ class SettingsNavRow extends StatelessWidget {
       minVerticalPadding: 11,
       title: Text(label),
       subtitle: subtitle == null ? null : Text(subtitle!),
-      trailing: trailing ?? const OcGlyph(OcGlyphKind.chevronRight, size: 16, color: OcChrome.secondary),
+      trailing: trailing ?? OcGlyph(OcGlyphKind.chevronRight, size: 16, color: context.oc.mutedForeground),
       onTap: onTap,
     );
   }

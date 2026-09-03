@@ -69,7 +69,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
               padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
               child: Text(
                 t(context, 'connect.welcome.description'),
-                style: const TextStyle(fontSize: 15, color: OcChrome.secondary, height: 1.35),
+                style: TextStyle(fontSize: 15, color: context.oc.mutedForeground, height: 1.35),
               ),
             ),
             const SizedBox(height: 20),
@@ -89,7 +89,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
-              child: Text(t(context, 'connect.scanHint'), style: const TextStyle(fontSize: 13, color: OcChrome.secondary)),
+              child: Text(t(context, 'connect.scanHint'), style: TextStyle(fontSize: 13, color: context.oc.mutedForeground)),
             ),
             const SizedBox(height: 8),
             TextButton(
@@ -102,7 +102,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
                 padding: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 4, OcChrome.pageGutter, 8),
                 child: Text(
                   t(context, 'connect.address.divider'),
-                  style: const TextStyle(fontSize: 13, color: OcChrome.secondary, fontWeight: FontWeight.w500),
+                  style: TextStyle(fontSize: 13, color: context.oc.mutedForeground, fontWeight: FontWeight.w500),
                 ),
               ),
               GroupedInsetCard(
@@ -172,13 +172,13 @@ class _ConnectScreenState extends State<ConnectScreen> {
             const SizedBox(height: 24),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
-              child: Text(t(context, 'connect.saved.title'), style: const TextStyle(fontSize: 13, color: OcChrome.secondary)),
+              child: Text(t(context, 'connect.saved.title'), style: TextStyle(fontSize: 13, color: context.oc.mutedForeground)),
             ),
             const SizedBox(height: 8),
             if (controller.instances.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
-                child: Text(t(context, 'connect.saved.empty'), style: const TextStyle(color: OcChrome.secondary)),
+                child: Text(t(context, 'connect.saved.empty'), style: TextStyle(color: context.oc.mutedForeground)),
               )
             else
               GroupedInsetCard(
@@ -254,7 +254,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
       trailing: IconButton(
         tooltip: t(context, 'connect.delete'),
         onPressed: () => controller.deleteInstance(instance.id),
-        icon: const OcGlyph(OcGlyphKind.xmark, size: 18, color: Color(0xFFFF3B30)),
+        icon: OcGlyph(OcGlyphKind.xmark, size: 18, color: context.oc.destructive),
       ),
     );
   }

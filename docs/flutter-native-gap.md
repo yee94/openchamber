@@ -393,3 +393,52 @@ Yee rejected the Material 3 WidgetTester shots (underline fields, full-width sea
 - No Live Activity / Dynamic Island / WidgetKit.
 - Photo picker: system Photo Picker (`ACTION_PICK_IMAGES`).
 - Haptics: `performHapticFeedback`.
+
+## Thirteenth-slice status (WebView design tokens)
+
+Source of truth: `packages/ui/src/styles/design-system.css` (`:root` / `.dark` OKLCH) and `packages/ui/src/styles/mobile.css` (`--oc-mobile-*`, `--surface-*` fallbacks). Mobile CSS does **not** override `--primary`. Appearance is Light / Dark / System only.
+
+Flutter maps the catalog through `OcTokens` (`apps/mobile_flutter/lib/theme/oc_tokens.dart`) for `Brightness.light` and `Brightness.dark`. OKLCH is converted once (`oklch.dart`). Hex below is the resolved sRGB clip. `.dark` comments in `design-system.css` (e.g. `#151313` / `#edb449`) are approximate annotations, not a second palette.
+
+README hero blue on `+` / selected tab is iOS UIKit tint in the photograph, not `--primary`. Official `--primary` is orange / golden sand. Flutter no longer keeps `0xFF2F6FED`.
+
+Live WebView then overwrites `:root` with Flexoki (`#BC5215` / `#fffdf4`) via ThemeSystem. Flutter Appearance has no theme picker, so Light/Dark follow the design-system defaults — not Flexoki JSON. That is an honest leftover, not a parallel invented palette.
+
+| CSS var | Flutter token | Light (oklch → hex) | Dark (oklch → hex) |
+|---|---|---|---|
+| `--background` / `--surface-background` | `background` / `surfaceBackground` | `oklch(0.97 0.02 85)` → `#fbf4e6` | `oklch(0.16 0.01 30)` → `#110c0b` |
+| `--foreground` / `--surface-foreground` | `foreground` / `surfaceForeground` | `oklch(0.25 0.02 40)` → `#2a1e1a` | `oklch(0.85 0.02 90)` → `#d3cdbf` |
+| `--card` / `--surface-elevated` | `card` / `surfaceElevated` | `oklch(0.99 0.01 90)` → `#fefcf4` | `oklch(0.19 0.01 40)` → `#181210` |
+| `--card-foreground` | `cardForeground` | same as foreground | same as foreground |
+| `--popover` | `popover` | same as card | `oklch(0.24 0.01 40)` → `#241e1c` |
+| `--primary` / `--ring` / `--sidebar-primary` | `primary` / `ring` / `sidebarPrimary` | `oklch(0.65 0.2 55)` → `#e66200` | `oklch(0.77 0.17 85)` → `#e5a900` |
+| `--primary-foreground` | `primaryForeground` | `oklch(0.99 0.01 90)` → `#fefcf4` | `oklch(0.16 0.01 30)` → `#110c0b` |
+| `--secondary` / `--accent` | `secondary` / `accent` | `oklch(0.92 0.02 80)` → `#ece3d6` | `oklch(0.29 0.01 40)` → `#302a28` |
+| `--muted` / `--surface-muted` | `muted` / `surfaceMuted` | `oklch(0.9 0.015 75)` → `#e4ddd3` | `oklch(0.33 0.01 40)` → `#3a3432` |
+| `--muted-foreground` | `mutedForeground` | `oklch(0.45 0.02 50)` → `#5f524c` | `oklch(0.75 0.02 80)` → `#b5ada0` |
+| `--destructive` | `destructive` / `statusError` | `oklch(0.55 0.25 25)` → `#df000d` | `oklch(0.65 0.15 30)` → `#db6656` |
+| `--border` / `--sidebar-border` | `border` / `sidebarBorder` | `oklch(0.85 0.02 70)` → `#d7ccc0` | `oklch(0.31 0.01 35)` → `#352f2d` |
+| `--input` | `input` | `oklch(0.88 0.02 75)` → `#dfd6c9` | same as muted |
+| `--chart-1` | `chart1` / `statusInfo` | `oklch(0.58 0.15 230)` → `#0088c1` | `oklch(0.68 0.12 230)` → `#32a5d4` |
+| `--chart-2` | `chart2` / `statusSuccess` | `oklch(0.58 0.15 145)` → `#33903c` | `oklch(0.68 0.12 145)` → `#66ac69` |
+| `--chart-3` | `chart3` | same as primary | `oklch(0.7 0.13 95)` → `#b89d2b` |
+| `--chart-4` | `chart4` | `oklch(0.55 0.18 30)` → `#c53829` | `oklch(0.65 0.14 45)` → `#d37040` |
+| `--chart-5` | `chart5` | `oklch(0.6 0.16 85)` → `#ab7500` | `oklch(0.68 0.12 55)` → `#d1834b` |
+| `--sidebar` | `sidebar` | `oklch(0.95 0.02 80)` → `#f6ede0` | same as background |
+| `--sidebar-accent` | `sidebarAccent` | `oklch(0.9 0.02 75)` → `#e6dcd0` | same as popover |
+| `--oc-mobile-page-background` | `pageBackground` | muted 18% over background | same mix |
+| `--oc-mobile-border` | `mobileBorder` | foreground 6% | foreground 3% |
+| `--form-surface-border` | `formSurfaceBorder` | foreground 8% | foreground 8% |
+| `--radius` / `--form-control-radius` | `OcTokens.radius` | 10 | 10 |
+| `--oc-mobile-surface-radius` | `surfaceRadius` | 24 | 24 |
+| `--oc-mobile-inset-radius` | `insetRadius` | 16 | 16 |
+| `--oc-mobile-control-radius` | `controlRadius` | 20 | 20 |
+| `--oc-mobile-root-title-size` | `rootTitleSize` | 32 | 32 |
+| `--text-markdown` (mobile) | `textMarkdown` | 15 | 15 |
+| `--text-ui-header` (mobile) | `textUiHeader` | 14 | 14 |
+| `--text-ui-label` / `--text-meta` (mobile) | `textUiLabel` / `textMeta` | 13 | 13 |
+| `--oc-mobile-dock-height` | `dockHeight` | 68 | 68 |
+
+Product chrome **not** in the semantic catalog: agent-count purple `OcProductChrome.agentAccent` (`#7A5CFF`).
+
+`--oc-mobile-glass-fill` is **not** faked in Flutter. iOS keeps `UIGlassEffect` / `UITabBar`. Android/WidgetTester dock and composer stay opaque `surfaceElevated`.
