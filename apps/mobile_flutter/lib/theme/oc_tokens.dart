@@ -147,11 +147,11 @@ class OcTokens extends ThemeExtension<OcTokens> {
   Color get glassFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
-  /// Official `--oc-mobile-glass-fill` 0.68 lifts WidgetTester discs to a
-  /// cream/white coin (centerL≈243 vs page≈229). Quiet white so blur +
-  /// saturate frost content through — not an opaque plate. `+` stays primary.
+  /// Official `--oc-mobile-glass-fill` 0.68 is a WidgetTester coin.
+  /// Quiet white 0.08 + official blur/saturate so content bleeds through.
+  /// `+` stays primary.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.04 : 0.04);
+      .withValues(alpha: isDark ? 0.08 : 0.08);
 
   /// Official `--oc-mobile-glass-highlight` is white / 0.60
   /// (dark 0.18). Inset sheen on the elevated plate.
@@ -172,8 +172,8 @@ class OcTokens extends ThemeExtension<OcTokens> {
 
   /// Official selected-tab fill is `bg-interactive-selection/55`.
   /// Authored `#16121016` already has alpha — mix [OcOptical.dockIconWashAlpha]
-  /// of that. Full 55% over cream dock glass is a beige coin. Geometry
-  /// stays the 58×r29 cell; only the wash thins.
+  /// of that. Do not use the full plate or RGB@0.55 (brown capsule).
+  /// Geometry stays the 58×r29 cell.
   Color get selectedTabWash =>
       interactiveSelection.withValues(alpha: interactiveSelection.a * OcOptical.dockIconWashAlpha);
 

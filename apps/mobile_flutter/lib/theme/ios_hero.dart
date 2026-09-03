@@ -21,9 +21,10 @@ class OcOptical {
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   static const double sessionRowVisualHeight = 40;
-  /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
-  /// 5 + 16 + 2 + 12 + 5 keeps the 40 box with official `gap-0.5`.
-  static const double sessionRowPadV = 5;
+  /// `.oc-mobile-session-row-main` padding-block 0.3125rem.
+  /// Official title column is `gap-0.5` (2); Flutter CJK still reads tight,
+  /// so gap 3 + padV 4.5 keeps the 40 box. Do not grow icons.
+  static const double sessionRowPadV = 4.5;
   static const double moreLinkPadV = 8;
   static const double groupHeaderPadV = 10;
   static const double groupHeaderPadVCompact = 8;
@@ -36,12 +37,12 @@ class OcOptical {
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
-  /// Official title/subtitle column is `gap-0.5` (2). Do not invent 3.
-  /// Air lives in [sessionLineLeading] inside the 16/12 struts — not a
-  /// taller gap. CSS `font-size` is the ink; `line-height` is the strut.
+  /// Official title/subtitle column is `gap-0.5` (2). Review CJK still
+  /// reads tight in the 40 box, so gap 3 with padV 4.5. Air also lives
+  /// in [sessionLineLeading] inside the 16/12 struts.
   /// Official title is `font-medium` / unread `font-semibold`. The review
   /// CJK face is Regular-only, so paint Regular / Medium — do not faux-bold.
-  static const double sessionTitleSubtitleGap = 2;
+  static const double sessionTitleSubtitleGap = 3;
   /// Fraction of the CSS line-height moved into strut `leading` so CJK
   /// glyphs do not fill the 16/12 boxes. Total box stays official —
   /// [ocCssLineBox] must not floor `height` at 1.0 or leading grows the
@@ -186,10 +187,9 @@ class OcOptical {
   /// Not 90271 bricks and not stroke-only outlines.
   static const bool dockGlyphFillBodies = true;
   static const bool dockSelectedFullSlot = true;
-  /// Official selected is `bg-interactive-selection/55`. Full 55% over
-  /// cream dock glass still paints a beige coin. Thin the mix so the
-  /// 58×r29 cell is a hint, not a nested plate. Geometry stays full-slot.
-  static const double dockIconWashAlpha = 0.32;
+  /// Official selected is `bg-interactive-selection/55` on already-
+  /// frosted dock glass. Geometry stays the full 58×r29 slot.
+  static const double dockIconWashAlpha = 0.55;
   /// Official selected tab is `bg-interactive-selection/55` on already-
   /// frosted dock glass — no second BackdropFilter. Nested sigma painted
   /// a cream plate that hid the list. 0 = mix only so rows show through.
