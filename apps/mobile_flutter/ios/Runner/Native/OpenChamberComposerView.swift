@@ -258,17 +258,17 @@ final class OpenChamberGlassBackdrop: UIView {
   }
 
   private func refresh() {
-    if #available(iOS 26.0, *) {
-      let glass = UIGlassEffect(style: .regular)
-      glass.isInteractive = true
-      blur.effect = glass
-      backgroundColor = .clear
-      return
-    }
+    // Do not name `UIGlassEffect` at compile time. macos-15 CI Xcode's SDK
+    // does not have the iOS 26 symbol; `#available(iOS 26.0, *)` still
+    // type-checks the body. Runtime lookup matches Capacitor
+    // `OpenChamberComposerView.makeGlassEffect` fallback.
     if let effectClass = NSClassFromString("UIGlassEffect") as? NSObject.Type {
       let effect = effectClass.init()
-      blur.effect = effect as? UIVisualEffect
-      if blur.effect != nil {
+      if effect.responds(to: NSSelectorFromString("setInteractive:")) {
+        effect.setValue(true, forKey: "interactive")
+      }
+      if let visual = effect as? UIVisualEffect {
+        blur.effect = visual
         backgroundColor = .clear
         return
       }
