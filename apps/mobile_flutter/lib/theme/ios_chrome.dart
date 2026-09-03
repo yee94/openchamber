@@ -96,7 +96,7 @@ class CircularChromeButton extends StatelessWidget {
     final tokens = context.oc;
     final primary = tokens.primary;
     final fill = !filled
-        ? tokens.surfaceElevated.withValues(alpha: 0.92)
+        ? Color.lerp(tokens.surfaceElevated, tokens.muted, 0.55)!
         : ink
             ? tokens.foreground
             : primary;
