@@ -49,9 +49,17 @@ class ChatTranscriptBody extends StatelessWidget {
         ),
       ..._alwaysVisible(context),
     ];
-    return Column(
-      crossAxisAlignment: message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-      children: children,
+    return DefaultTextStyle.merge(
+      style: TextStyle(
+        fontSize: OcTokens.textMarkdown,
+        height: OcOptical.chatBodyHeight,
+        letterSpacing: OcOptical.chatBodyTracking,
+        color: context.oc.foreground,
+      ),
+      child: Column(
+        crossAxisAlignment: message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: children,
+      ),
     );
   }
 
@@ -143,28 +151,43 @@ class _AssistantHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              OcGlyph(OcGlyphKind.sparkles, size: 16, strokeWidth: 1.15, color: OcIosHero.of(context).secondaryLabel),
+              OcGlyph(OcGlyphKind.sparkles, size: 13, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
               const SizedBox(width: 6),
               Flexible(
-                child: Text(name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: OcIosHero.of(context).label)),
+                child: Text(
+                  name,
+                  style: TextStyle(
+                    fontSize: OcOptical.entityTitle,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: OcOptical.entityTitleTracking,
+                    height: OcOptical.entityTitleHeight,
+                    color: context.oc.foreground,
+                  ),
+                ),
               ),
               if (role != null && role.isNotEmpty) ...[
                 const SizedBox(width: 8),
                 Container(
                   key: const Key('chat-role-badge'),
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: OcIosHero.of(context).track,
+                    color: context.oc.muted,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      OcGlyph(OcGlyphKind.robot, size: 10, strokeWidth: 1.1, color: OcIosHero.of(context).secondaryLabel),
+                      OcGlyph(OcGlyphKind.robot, size: 9, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
                       const SizedBox(width: 3),
                       Text(
                         role,
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: OcIosHero.of(context).secondaryLabel),
+                        style: TextStyle(
+                          fontSize: 11,
+                          letterSpacing: 0.3,
+                          height: 1.3,
+                          fontWeight: FontWeight.w500,
+                          color: context.oc.mutedForeground,
+                        ),
                       ),
                     ],
                   ),
@@ -187,7 +210,12 @@ class _AssistantHeader extends StatelessWidget {
                             '${t(context, live ? 'chat.activity.active' : 'chat.activity.completedStatus')} ${message.processedLabel}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 12, color: OcTokens.of(context).mutedForeground),
+                            style: TextStyle(
+                              fontSize: OcOptical.meta,
+                              letterSpacing: OcOptical.metaTracking,
+                              height: OcOptical.metaHeight,
+                              color: OcTokens.of(context).mutedForeground,
+                            ),
                           ),
                         ),
                       ],
@@ -238,11 +266,11 @@ class _FileChangeCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
-        color: OcIosHero.of(context).card,
+        color: context.oc.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: OcIosHero.of(context).isDark ? 0.28 : 0.05),
+            color: Colors.black.withValues(alpha: context.oc.isDark ? 0.28 : 0.05),
             blurRadius: 14,
             spreadRadius: -2,
             offset: const Offset(0, 5),
@@ -254,7 +282,7 @@ class _FileChangeCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              OcGlyph(OcGlyphKind.file, size: 14, color: OcTokens.of(context).mutedForeground),
+              OcGlyph(OcGlyphKind.file, size: 12, strokeWidth: OcOptical.headerGlyphStroke, color: OcTokens.of(context).mutedForeground),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -341,9 +369,17 @@ class UserTurnToolbar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (message.completedClock != null) ...[
-            OcGlyph(OcGlyphKind.clock, size: 12, strokeWidth: 1.1, color: OcIosHero.of(context).secondaryLabel),
+            OcGlyph(OcGlyphKind.clock, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
             const SizedBox(width: 3),
-            Text(message.completedClock!, style: TextStyle(fontSize: 11, color: OcIosHero.of(context).secondaryLabel)),
+            Text(
+              message.completedClock!,
+              style: TextStyle(
+                fontSize: OcOptical.meta,
+                letterSpacing: OcOptical.metaTracking,
+                height: OcOptical.metaHeight,
+                color: context.oc.mutedForeground,
+              ),
+            ),
             const SizedBox(width: 6),
           ],
           _icon(context, key: const Key('chat-action-revert'), glyph: OcGlyphKind.undo, tooltip: t(context, 'chat.messageBody.actions.revert')),
@@ -370,7 +406,7 @@ class UserTurnToolbar extends StatelessWidget {
         onTap: () {},
         child: Padding(
           padding: const EdgeInsets.all(3),
-          child: OcGlyph(glyph, size: 13, strokeWidth: 1.1, color: OcIosHero.of(context).tertiaryLabel),
+          child: OcGlyph(glyph, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
         ),
       ),
     );
@@ -405,17 +441,17 @@ class _FileTypeMark extends StatelessWidget {
       mark = 'F';
     }
     return Container(
-      width: 22,
-      height: 16,
+      width: OcOptical.fileTypeW,
+      height: OcOptical.fileTypeH,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: tint.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(3),
       ),
       child: Text(
         mark,
         textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 7.5, fontWeight: FontWeight.w700, color: tint, height: 1, letterSpacing: -0.2),
+        style: TextStyle(fontSize: OcOptical.fileTypeMark, fontWeight: FontWeight.w700, color: tint, height: 1, letterSpacing: 0.2),
       ),
     );
   }
@@ -487,9 +523,17 @@ class _TurnFooter extends StatelessWidget {
         key: key,
         mainAxisSize: MainAxisSize.min,
         children: [
-          OcGlyph(glyph, size: 11, color: OcTokens.of(context).mutedForeground),
+          OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.headerGlyphStroke, color: OcTokens.of(context).mutedForeground),
           const SizedBox(width: 3),
-          Text(label, style: TextStyle(fontSize: 11, color: OcTokens.of(context).mutedForeground)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: OcOptical.meta,
+              letterSpacing: OcOptical.metaTracking,
+              height: OcOptical.metaHeight,
+              color: OcTokens.of(context).mutedForeground,
+            ),
+          ),
         ],
       ),
     );
@@ -510,7 +554,7 @@ class _TurnFooter extends StatelessWidget {
         onTap: onPressed ?? () {},
         child: Padding(
           padding: const EdgeInsets.all(3),
-          child: OcGlyph(glyph, size: 14, color: OcTokens.of(context).mutedForeground),
+          child: OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.headerGlyphStroke, color: OcTokens.of(context).mutedForeground),
         ),
       ),
     );

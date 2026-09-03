@@ -65,7 +65,7 @@ class OcGlyph extends StatelessWidget {
         painter: _OcGlyphPainter(
           kind: kind,
           color: resolved,
-          strokeWidth: strokeWidth ?? (size < 16 ? 1.1 : 1.2),
+          strokeWidth: strokeWidth ?? (size < 16 ? 1.0 : 1.1),
         ),
       ),
     );

@@ -53,42 +53,20 @@ void main() {
     expect(dark.scaffoldBackgroundColor, OcTokens.dark.pageBackground);
   });
 
-  test('OcIosHero photograph chrome is UIKit blue, not design-system orange', () {
-    expect(OcIosHero.light.tint, OcIosHero.systemBlue);
-    expect(OcIosHero.light.groupedBackground, const Color(0xFFF2F2F7));
-    expect(OcIosHero.light.card, const Color(0xFFFFFFFF));
-    expect(OcIosHero.light.tint, isNot(OcTokens.light.primary));
-    expect(OcTokens.light.primary, isNot(OcIosHero.systemBlue));
-  });
-
-  testWidgets('HeroSurface remaps catalog sand/orange only inside the overlay', (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: materialTheme(Brightness.light),
-        home: HeroSurface(
-          child: Builder(
-            builder: (context) {
-              return ColoredBox(
-                key: const Key('hero-probe'),
-                color: Theme.of(context).scaffoldBackgroundColor,
-                child: Text(
-                  'probe',
-                  key: const Key('hero-primary'),
-                  style: TextStyle(color: OcTokens.of(context).primary),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-    expect(
-      tester.widget<ColoredBox>(find.byKey(const Key('hero-probe'))).color,
-      OcIosHero.light.groupedBackground,
-    );
-    expect(OcTokens.of(tester.element(find.byKey(const Key('hero-primary')))).primary, OcIosHero.systemBlue);
-    expect(materialTheme(Brightness.light).scaffoldBackgroundColor, isNot(OcIosHero.light.groupedBackground));
-    expect(materialTheme(Brightness.light).colorScheme.primary, OcTokens.light.primary);
+  test('OcOptical sizes are smaller/airier than the previous crude chrome', () {
+    expect(OcOptical.largeTitle, 32);
+    expect(OcOptical.largeTitleTracking, greaterThan(0.8));
+    expect(OcOptical.largeTitleHeight, greaterThan(1.15));
+    expect(OcOptical.metaHeight, greaterThanOrEqualTo(1.45));
+    expect(OcOptical.searchButton, 28);
+    expect(OcOptical.addButton, 30);
+    expect(OcOptical.addButton, greaterThan(OcOptical.searchButton));
+    expect(OcOptical.headerGlyph, 11);
+    expect(OcOptical.dockGlyph, 13);
+    expect(OcOptical.leadingCircle, 20);
+    expect(OcOptical.searchButton, lessThan(OcTokens.headerButtonSize));
+    expect(OcOptical.addButton, lessThan(OcTokens.headerButtonSize));
+    expect(OcTokens.light.primary, isNot(const Color(0xFF007AFF)));
   });
 
   test('resolveOcBrightness honors Light / Dark / System', () {

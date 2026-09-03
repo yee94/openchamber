@@ -55,7 +55,13 @@ class ComposerBar extends StatelessWidget {
         focusedBorder: InputBorder.none,
         filled: false,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+        hintStyle: TextStyle(
+          fontSize: OcTokens.textMarkdown,
+          letterSpacing: OcOptical.chatBodyTracking,
+          height: OcOptical.chatBodyHeight,
+          color: context.oc.mutedForeground,
+        ),
         floatingLabelBehavior: FloatingLabelBehavior.never,
       ),
     );
@@ -112,7 +118,7 @@ class ComposerBar extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.only(right: 22, bottom: 6),
                 child: Material(
-                  color: OcIosHero.of(context).card,
+                  color: context.oc.card,
                   shape: const CircleBorder(),
                   elevation: 1,
                   shadowColor: Colors.black.withValues(alpha: 0.10),
@@ -122,10 +128,10 @@ class ComposerBar extends StatelessWidget {
                     highlight: false,
                     onPressed: onScrollToBottom,
                     child: SizedBox(
-                      width: 28,
-                      height: 28,
+                      width: OcOptical.scrollFab,
+                      height: OcOptical.scrollFab,
                       child: Center(
-                        child: OcGlyph(OcGlyphKind.chevronDown, size: 14, strokeWidth: 1.2, color: OcIosHero.of(context).label),
+                        child: OcGlyph(OcGlyphKind.chevronDown, size: OcOptical.scrollChevron, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.foreground),
                       ),
                     ),
                   ),
@@ -163,7 +169,7 @@ class ComposerBar extends StatelessWidget {
                           width: 36,
                           height: 36,
                           child: Center(
-                            child: OcGlyph(OcGlyphKind.plus, size: 17, strokeWidth: 1.15, color: OcIosHero.of(context).label),
+                            child: OcGlyph(OcGlyphKind.plus, size: OcOptical.composerPlus, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.foreground),
                           ),
                         ),
                       ),
@@ -175,7 +181,7 @@ class ComposerBar extends StatelessWidget {
                         tooltip: t(context, 'chat.dictation.start'),
                         visualDensity: VisualDensity.compact,
                         onPressed: onDictate,
-                        icon: OcGlyph(OcGlyphKind.mic, size: 16, strokeWidth: 1.2, color: OcIosHero.of(context).secondaryLabel),
+                        icon: OcGlyph(OcGlyphKind.mic, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
                       ),
                     Pressable(
                       key: const Key('composer-send'),
@@ -183,19 +189,19 @@ class ComposerBar extends StatelessWidget {
                       highlight: false,
                       onPressed: busy ? onStop : onSend,
                       child: Container(
-                        width: 28,
-                        height: 28,
+                        width: OcOptical.sendRing,
+                        height: OcOptical.sendRing,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(color: OcIosHero.of(context).label, width: 1.25),
+                          border: Border.all(color: context.oc.foreground, width: OcOptical.sendRingStroke),
                         ),
                         child: busy
                             ? Container(
-                                width: 8,
-                                height: 8,
+                                width: OcOptical.sendStop,
+                                height: OcOptical.sendStop,
                                 decoration: BoxDecoration(
-                                  color: OcIosHero.of(context).label,
+                                  color: context.oc.foreground,
                                   borderRadius: BorderRadius.circular(1.5),
                                 ),
                               )

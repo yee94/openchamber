@@ -8,7 +8,7 @@ import 'ios_hero.dart';
 import 'oc_glyphs.dart';
 import 'oc_tokens.dart';
 
-export 'ios_hero.dart' show HeroSurface, OcIosHero;
+export 'ios_hero.dart' show OcOptical;
 export 'oc_tokens.dart' show OcProductChrome, OcTokens, OcTokensContext;
 
 /// Geometry aliases of official `--oc-mobile-*` tokens.
@@ -40,7 +40,7 @@ class LargeTitleHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final onSurface = Theme.of(context).colorScheme.onSurface;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 4, OcChrome.pageGutter, 6),
+      padding: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 8, OcChrome.pageGutter, 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -63,10 +63,10 @@ class LargeTitleHeader extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 34,
+                    fontSize: OcOptical.largeTitle,
                     fontWeight: FontWeight.w600,
-                    letterSpacing: -0.6,
-                    height: 1.05,
+                    letterSpacing: OcOptical.largeTitleTracking,
+                    height: OcOptical.largeTitleHeight,
                     color: onSurface,
                   ),
                 ),
@@ -102,13 +102,13 @@ class CircularChromeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hero = OcIosHero.of(context);
-    final diameter = size ?? (filled ? 36.0 : 32.0);
+    final tokens = context.oc;
+    final diameter = size ?? (filled ? OcOptical.addButton : OcOptical.searchButton);
     final fill = !filled
-        ? hero.card
+        ? tokens.card
         : ink
-            ? hero.navy
-            : hero.tint;
+            ? tokens.foreground
+            : tokens.primary;
     final child = Material(
       color: fill,
       shape: const CircleBorder(),
@@ -126,13 +126,9 @@ class CircularChromeButton extends StatelessWidget {
           child: Center(
             child: OcGlyph(
               glyph,
-              size: filled ? 15 : 15,
-              strokeWidth: 1.15,
-              color: !filled
-                  ? hero.secondaryLabel
-                  : ink
-                      ? hero.card
-                      : Colors.white,
+              size: OcOptical.headerGlyph,
+              strokeWidth: OcOptical.headerGlyphStroke,
+              color: !filled ? tokens.mutedForeground : tokens.primaryForeground,
             ),
           ),
         ),
@@ -157,10 +153,10 @@ class GroupedInsetCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: margin ?? const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 8),
+      margin: margin ?? const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 12),
       padding: padding,
       decoration: BoxDecoration(
-        color: OcIosHero.of(context).card,
+        color: context.oc.card,
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
@@ -306,7 +302,7 @@ class SegmentedPill extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 4, OcChrome.pageGutter, 12),
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: OcIosHero.of(context).track,
+        color: context.oc.muted,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -321,11 +317,11 @@ class SegmentedPill extends StatelessWidget {
                 child: OcSelectedSpring(
                   selected: selectedIndex == i,
                   builder: (context, t) {
-                    final hero = OcIosHero.of(context);
+                    final tokens = context.oc;
                     return Container(
                       padding: const EdgeInsets.symmetric(vertical: 6),
                       decoration: BoxDecoration(
-                        color: Color.lerp(Colors.transparent, hero.card, t),
+                        color: Color.lerp(Colors.transparent, tokens.card, t),
                         borderRadius: BorderRadius.circular(9),
                         boxShadow: t > 0.01
                             ? [
@@ -343,18 +339,20 @@ class SegmentedPill extends StatelessWidget {
                           if (icons != null) ...[
                             OcGlyph(
                               icons![i],
-                              size: 14,
-                              strokeWidth: 1.2,
-                              color: Color.lerp(hero.secondaryLabel, hero.label, t),
+                              size: 12,
+                              strokeWidth: OcOptical.headerGlyphStroke,
+                              color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 5),
                           ],
                           Text(
                             labels[i],
                             style: TextStyle(
                               fontSize: 14,
+                              letterSpacing: 0.35,
+                              height: 1.25,
                               fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
-                              color: Color.lerp(hero.secondaryLabel, hero.label, t),
+                              color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
                             ),
                           ),
                         ],
@@ -404,15 +402,17 @@ class FilterChipBar extends StatelessWidget {
                       child: OcSelectedSpring(
                         selected: selectedIndex == i,
                         builder: (context, t) {
-                          final hero = OcIosHero.of(context);
+                          final tokens = context.oc;
                           return Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             child: Text(
                               labels[i],
                               style: TextStyle(
-                                fontSize: 15,
+                                fontSize: 14,
+                                letterSpacing: 0.4,
+                                height: 1.3,
                                 fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
-                                color: Color.lerp(hero.secondaryLabel, hero.label, t),
+                                color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
                               ),
                             ),
                           );
@@ -505,8 +505,9 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w600,
-                      letterSpacing: -0.3,
-                      color: OcIosHero.of(context).label,
+                      letterSpacing: 0.25,
+                      height: 1.25,
+                      color: context.oc.foreground,
                     ),
                   ),
               ],
@@ -526,7 +527,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
               ),
             ),
-          if (trailing != null) trailing! else SizedBox(width: OcChrome.headerButtonSize),
+          if (trailing != null) trailing! else const SizedBox(width: OcOptical.searchButton),
         ],
       ),
     );

@@ -343,8 +343,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
     final inset = MediaQuery.viewInsetsOf(context);
     final atLiveEdge = _atLiveEdge;
-    return HeroSurface(
-      child: Scaffold(
+    return Scaffold(
       resizeToAvoidBottomInset: !ios,
       appBar: PushedNavBar(
         title: widget.session.title,
@@ -352,7 +351,7 @@ class _ChatScreenState extends State<ChatScreen> {
         busy: _busy,
         trailing: CircularChromeButton(
           glyph: OcGlyphKind.ellipsis,
-          size: 32,
+          size: OcOptical.searchButton,
           onPressed: () {},
         ),
       ),
@@ -380,20 +379,19 @@ class _ChatScreenState extends State<ChatScreen> {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Container(
-                            margin: const EdgeInsets.only(bottom: 4),
-                            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                             decoration: BoxDecoration(
-                              color: OcIosHero.of(context).userBubble,
+                              color: Color.lerp(context.oc.card, context.oc.primary, 0.10),
                               borderRadius: BorderRadius.circular(18),
                             ),
                             child: DefaultTextStyle.merge(
                               style: TextStyle(
-                                fontSize: 15,
-                                height: 1.35,
+                                fontSize: OcTokens.textMarkdown,
+                                height: OcOptical.chatBodyHeight,
+                                letterSpacing: OcOptical.chatBodyTracking,
                                 fontWeight: FontWeight.w400,
-                                color: OcIosHero.of(context).isDark
-                                    ? OcIosHero.of(context).label
-                                    : const Color(0xFF3C4A5C),
+                                color: context.oc.foreground,
                               ),
                               child: ChatTranscriptBody(
                                 message: message,
@@ -462,7 +460,6 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
         ],
       ),
-    ),
     );
   }
 }

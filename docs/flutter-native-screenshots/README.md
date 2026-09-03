@@ -13,14 +13,14 @@ No PIN / Face ID. No `iosNativeUi`. Chat is a pushed page.
 | File | Screen |
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |
-| `02-projects.png` | Light README chrome: grouped gray, white cards, circular gray search + UIKit-blue `+`, nested worktrees, 「更多」. Dock 项目 = blue squircle. |
+| `02-projects.png` | Light: catalog sand/orange. Open title tracking, airy session/meta leading, small search/`+`/dock glyphs. Nested worktrees, 「更多」. |
 | `02-projects-dark.png` | Same Projects surface after Appearance → Dark (hero dark overlay). |
 | `03-assistant.png` | Contact cards (name / mode / summary). No 「启用助理」 toggle. |
-| `04-scheduled.png` | Light README chrome: gray segmented track + white pill, text-only filters, navy 28 `+`, hollow green check / faded pause. Dock 计划 only (blue). |
+| `04-scheduled.png` | Light: catalog tokens. Airy title/meta, small status glyphs, small ink `+`. Dock 计划 only. |
 | `04-scheduled-dark.png` | Same Scheduled surface after Appearance → Dark. |
 | `05-settings.png` | Large title, pill search, inset groups. |
 | `06-settings-appearance.png` | Light: language + theme. Latin labels must render. No `iosNativeUi`. |
 | `06-settings-appearance-dark.png` | Appearance after tapping Dark — tokens switch live. |
-| `07-chat.png` | Isolated pushed Chat (light): circular back + truncated title (no subtitle) + spinner + `…`, cool user bubble with actions underneath, Grok 4.6 + Orchestrator pill, compact purple agent chip, file card, footer metrics, 28px scroll circle, ring send. Not UIKit glass. |
+| `07-chat.png` | Isolated pushed Chat (light): no subtitle. Airy body leading. Small header/file/composer glyphs. Ring send. Not UIKit glass. |
 | `07-chat-dark.png` | Same isolated Chat with `ThemeMode.dark`. |
 | `08-permission.png` | Permission card only. |

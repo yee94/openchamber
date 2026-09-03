@@ -29,7 +29,7 @@ class FloatingCapsuleTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     assert(_items.length == 4);
-    final hero = OcIosHero.of(context);
+    final tokens = context.oc;
     return SafeArea(
       top: false,
       child: Padding(
@@ -37,12 +37,12 @@ class FloatingCapsuleTabBar extends StatelessWidget {
         child: DecoratedBox(
           key: Key('dock-selected-$selectedId'),
           decoration: BoxDecoration(
-            color: hero.card,
+            color: tokens.card,
             borderRadius: BorderRadius.circular(OcChrome.dockRadius),
-            border: Border.all(color: hero.separator, width: 0.5),
+            border: Border.all(color: tokens.mobileBorder, width: 0.5),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: hero.isDark ? 0.40 : 0.08),
+                color: Colors.black.withValues(alpha: tokens.isDark ? 0.40 : 0.08),
                 blurRadius: 18,
                 spreadRadius: -2,
                 offset: const Offset(0, 8),
@@ -54,22 +54,22 @@ class FloatingCapsuleTabBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(OcChrome.dockRadius),
             clipBehavior: Clip.antiAlias,
             child: SizedBox(
-            height: OcChrome.tabBarHeight,
-            child: Row(
-              children: [
-                for (final item in _items)
-                  Expanded(
-                    child: _TabSlot(
-                      id: item.id,
-                      glyph: item.glyph,
-                      label: t(context, item.labelKey),
-                      selected: selectedId == item.id,
-                      onTap: () => onSelect(item.id),
+              height: OcChrome.tabBarHeight,
+              child: Row(
+                children: [
+                  for (final item in _items)
+                    Expanded(
+                      child: _TabSlot(
+                        id: item.id,
+                        glyph: item.glyph,
+                        label: t(context, item.labelKey),
+                        selected: selectedId == item.id,
+                        onTap: () => onSelect(item.id),
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
           ),
         ),
       ),
@@ -94,7 +94,7 @@ class _TabSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hero = OcIosHero.of(context);
+    final tokens = context.oc;
     return Pressable(
       key: Key('tab-$id'),
       haptic: HapticStrength.light,
@@ -107,29 +107,31 @@ class _TabSlot extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 28,
-                height: 24,
+                width: OcOptical.dockSquircleW,
+                height: OcOptical.dockSquircleH,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Color.lerp(Colors.transparent, hero.tintFill, t),
-                  borderRadius: BorderRadius.circular(7),
+                  color: Color.lerp(Colors.transparent, tokens.primary.withValues(alpha: 0.14), t),
+                  borderRadius: BorderRadius.circular(OcOptical.dockSquircleRadius),
                 ),
                 child: OcGlyph(
                   glyph,
-                  size: 17,
-                  color: Color.lerp(hero.secondaryLabel, hero.tint, t),
-                  strokeWidth: 1.15 + 0.15 * t,
+                  size: OcOptical.dockGlyph,
+                  color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
+                  strokeWidth: OcOptical.dockGlyphStroke,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               Text(
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: OcOptical.dockLabel,
+                  letterSpacing: OcOptical.dockLabelTracking,
+                  height: 1.2,
                   fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
-                  color: Color.lerp(hero.secondaryLabel, hero.tint, t),
+                  color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
                 ),
               ),
             ],

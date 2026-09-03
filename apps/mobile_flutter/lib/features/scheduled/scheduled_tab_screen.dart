@@ -101,8 +101,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
     final tasks = widget.controller.scheduledTasks;
     final runs = widget.controller.scheduledRuns;
     final filterId = widget.controller.scheduledFilterTaskId;
-    return HeroSurface(
-      child: Scaffold(
+    return Scaffold(
       body: SafeArea(
         bottom: false,
         child: ListView(
@@ -129,7 +128,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   glyph: OcGlyphKind.plus,
                   filled: true,
                   ink: true,
-                  size: 28,
+                  size: OcOptical.addButton,
                   tooltip: t(context, 'scheduled.add'),
                   onPressed: () {},
                 ),
@@ -188,7 +187,6 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
           ],
         ),
       ),
-    ),
     );
   }
 
@@ -200,24 +198,27 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
         haptic: HapticStrength.light,
         onPressed: () => _openTask(task.projectId, task.id),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 4, 14),
+          padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
           child: Row(
             children: [
               Container(
-                width: 26,
-                height: 26,
+                width: OcOptical.scheduleStatus,
+                height: OcOptical.scheduleStatus,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: paused ? OcIosHero.of(context).tertiaryLabel : const Color(0xFF34C759), width: 1.2),
+                  border: Border.all(
+                    color: paused ? context.oc.mutedForeground : context.oc.statusSuccess,
+                    width: 1.05,
+                  ),
                 ),
                 child: OcGlyph(
                   paused ? OcGlyphKind.pause : OcGlyphKind.check,
-                  size: 12,
-                  strokeWidth: 1.2,
-                  color: paused ? const Color(0xFF5AC8FA) : const Color(0xFF34C759),
+                  size: OcOptical.scheduleStatusGlyph,
+                  strokeWidth: OcOptical.headerGlyphStroke,
+                  color: paused ? context.oc.mutedForeground : context.oc.statusSuccess,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -225,17 +226,25 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                     Text(
                       task.name.isEmpty ? task.id : task.name,
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: OcOptical.entityTitle,
                         fontWeight: FontWeight.w500,
-                        color: paused ? OcIosHero.of(context).secondaryLabel : OcIosHero.of(context).label,
+                        letterSpacing: OcOptical.entityTitleTracking,
+                        height: OcOptical.entityTitleHeight,
+                        color: paused ? context.oc.mutedForeground : context.oc.foreground,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 6),
                     Text(
                       paused
                           ? [_humanSchedule(context, task), '—'].join(' · ')
                           : _taskSubtitle(context, task),
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: OcIosHero.of(context).secondaryLabel),
+                      style: TextStyle(
+                        fontSize: OcOptical.meta,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: OcOptical.metaTracking,
+                        height: OcOptical.metaHeight,
+                        color: context.oc.mutedForeground,
+                      ),
                     ),
                   ],
                 ),
@@ -247,7 +256,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   projectId: task.projectId,
                   taskId: task.id,
                 ),
-                icon: OcGlyph(OcGlyphKind.ellipsis, size: 16, color: context.oc.mutedForeground),
+                icon: OcGlyph(OcGlyphKind.ellipsis, size: OcOptical.overflow, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
               ),
             ],
           ),

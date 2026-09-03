@@ -52,8 +52,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         }).toList());
         final inProgress = controller.sessions.where((row) => row.kind == HomeSessionKind.inProgress).toList();
 
-        return HeroSurface(
-          child: Scaffold(
+        return Scaffold(
           body: SafeArea(
             bottom: false,
             child: RefreshIndicator(
@@ -74,7 +73,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                         CircularChromeButton(
                           key: const Key('projects-search-toggle'),
                           glyph: _searchOpen ? OcGlyphKind.xmark : OcGlyphKind.search,
-                          size: 32,
+                          size: OcOptical.searchButton,
                           tooltip: t(context, 'projects.search.aria'),
                           onPressed: () {
                             setState(() {
@@ -111,20 +110,25 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                             haptic: HapticStrength.light,
                             highlight: false,
                             child: Container(
-                              width: 36,
-                              height: 36,
+                              width: OcOptical.addButton,
+                              height: OcOptical.addButton,
                               decoration: BoxDecoration(
-                                color: OcIosHero.of(context).tint,
+                                color: context.oc.primary,
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: OcIosHero.of(context).tint.withValues(alpha: 0.22),
+                                    color: context.oc.primary.withValues(alpha: 0.22),
                                     blurRadius: 8,
                                     offset: const Offset(0, 3),
                                   ),
                                 ],
                               ),
-                              child: const OcGlyph(OcGlyphKind.plus, size: 15, strokeWidth: 1.15, color: Colors.white),
+                              child: OcGlyph(
+                                OcGlyphKind.plus,
+                                size: OcOptical.headerGlyph,
+                                strokeWidth: OcOptical.headerGlyphStroke,
+                                color: context.oc.primaryForeground,
+                              ),
                             ),
                           ),
                         ),
@@ -191,7 +195,6 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
               ),
             ),
           ),
-        ),
         );
       },
     );
@@ -301,30 +304,39 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
       haptic: HapticStrength.light,
       onPressed: onToggle,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(compact ? 14 : 12, compact ? 8 : 10, 8, compact ? 8 : 10),
+        padding: EdgeInsets.fromLTRB(compact ? 14 : 14, compact ? 12 : 14, 10, compact ? 12 : 14),
         child: Row(
           children: [
             Container(
-              width: compact ? 24 : 26,
-              height: compact ? 24 : 26,
+              width: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
+              height: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
               decoration: BoxDecoration(
-                color: OcIosHero.of(context).track,
+                color: context.oc.muted,
                 shape: BoxShape.circle,
               ),
               child: OcGlyph(
                 glyph,
-                size: compact ? 13 : 14,
-                strokeWidth: 1.2,
-                color: OcIosHero.of(context).secondaryLabel,
+                size: compact ? OcOptical.leadingGlyphCompact : OcOptical.leadingGlyph,
+                strokeWidth: OcOptical.headerGlyphStroke,
+                color: context.oc.mutedForeground,
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  HighlightedText(name, query: _query, style: TextStyle(fontSize: compact ? 15 : 16, fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 1),
+                  HighlightedText(
+                    name,
+                    query: _query,
+                    style: TextStyle(
+                      fontSize: compact ? OcOptical.rowTitle : OcOptical.entityTitle,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: compact ? OcOptical.rowTitleTracking : OcOptical.entityTitleTracking,
+                      height: compact ? OcOptical.rowTitleHeight : OcOptical.entityTitleHeight,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   Text(
                     [
                       count == 1
@@ -335,19 +347,26 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                     ].join(' · '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: OcIosHero.of(context).secondaryLabel),
+                    style: TextStyle(
+                      fontSize: OcOptical.meta,
+                      fontWeight: FontWeight.w400,
+                      letterSpacing: OcOptical.metaTracking,
+                      height: OcOptical.metaHeight,
+                      color: context.oc.mutedForeground,
+                    ),
                   ),
                 ],
               ),
             ),
             OcGlyph(
               expanded ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
-              size: 15,
+              size: OcOptical.chevron,
+              strokeWidth: OcOptical.headerGlyphStroke,
               color: context.oc.mutedForeground,
             ),
             Padding(
               padding: const EdgeInsets.only(left: 2, right: 6),
-              child: OcGlyph(OcGlyphKind.ellipsis, size: 14, color: context.oc.mutedForeground),
+              child: OcGlyph(OcGlyphKind.ellipsis, size: OcOptical.overflow, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
             ),
           ],
         ),
@@ -381,9 +400,17 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
             padding: const EdgeInsets.fromLTRB(16, 8, 14, 10),
             child: Row(
               children: [
-                Text(t(context, 'projects.showMore'), style: TextStyle(fontSize: 15, color: context.oc.mutedForeground)),
+                Text(
+                  t(context, 'projects.showMore'),
+                  style: TextStyle(
+                    fontSize: OcOptical.rowTitle,
+                    letterSpacing: OcOptical.rowTitleTracking,
+                    height: OcOptical.rowTitleHeight,
+                    color: context.oc.mutedForeground,
+                  ),
+                ),
                 const Spacer(),
-                OcGlyph(OcGlyphKind.chevronRight, size: 14, color: context.oc.mutedForeground),
+                OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.chevron, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
               ],
             ),
           ),
@@ -397,32 +424,43 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
       haptic: HapticStrength.light,
       onPressed: () => _openChat(context, row),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 5, 8, 5),
+        padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
         child: Row(
           children: [
             Container(
-              width: 5,
-              height: 5,
+              width: OcOptical.sessionBullet,
+              height: OcOptical.sessionBullet,
               decoration: BoxDecoration(
-                color: row.unread ? OcIosHero.of(context).tint : OcIosHero.of(context).tertiaryLabel,
+                color: row.unread ? context.oc.unreadDot : context.oc.mutedForeground.withValues(alpha: 0.45),
                 shape: BoxShape.circle,
               ),
               child: row.unread && unreadKey ? const SizedBox(key: Key('unread-dot')) : null,
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: HighlightedText(
                 row.title,
                 query: _query,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w400),
+                style: const TextStyle(
+                  fontSize: OcOptical.rowTitle,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: OcOptical.rowTitleTracking,
+                  height: OcOptical.rowTitleHeight,
+                ),
               ),
             ),
             if (formatRelativeTime(row.updated) != null)
               Padding(
-                padding: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.only(left: 8, right: 4),
                 child: Text(
                   formatRelativeTime(row.updated)!,
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w400, color: OcIosHero.of(context).secondaryLabel),
+                  style: TextStyle(
+                    fontSize: OcOptical.meta,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: OcOptical.metaTracking,
+                    height: OcOptical.metaHeight,
+                    color: context.oc.mutedForeground,
+                  ),
                 ),
               ),
           ],
