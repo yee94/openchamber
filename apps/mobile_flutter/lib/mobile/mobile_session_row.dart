@@ -10,7 +10,7 @@ import '../theme/ios_chrome.dart';
 /// Official `MobileSessionRow` — one home-list session.
 ///
 /// Source: `packages/ui/src/mobile/projects/MobileSessionRow.tsx`.
-/// Nested title tracking/leading stay packed toward the official row recipe.
+/// Nested title tracking/leading stay open (README air), not CSS `-0.024em`.
 class MobileSessionRow extends StatelessWidget {
   const MobileSessionRow({
     super.key,
