@@ -4,6 +4,9 @@ import '../../data/app_controller.dart';
 import '../../data/assistant_scheduled.dart';
 import '../../data/openchamber_http.dart';
 import '../../l10n/app_strings.dart';
+import '../../motion/pressable.dart';
+import '../../navigation/platform_route.dart';
+import '../../native/haptics.dart';
 import '../../theme/ios_chrome.dart';
 import '../chat/chat_screen.dart';
 
@@ -50,7 +53,7 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
       final session = await widget.controller.openAssistant(match);
       if (!mounted || session == null) return;
       await Navigator.of(context).push(
-        MaterialPageRoute<void>(
+        platformPageRoute<void>(
           builder: (_) => ChatScreen(session: session, appController: widget.controller),
         ),
       );
@@ -97,9 +100,10 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
             else if (snapshot != null && snapshot.enabled && snapshot.assistants.isNotEmpty)
               for (final item in snapshot.assistants)
                 GroupedInsetCard(
-                  child: InkWell(
+                  child: Pressable(
                     key: Key('assistant-item-${item.id}'),
-                    onTap: () => _open(item.id),
+                    haptic: HapticStrength.light,
+                    onPressed: () => _open(item.id),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
                       child: Row(

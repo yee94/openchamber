@@ -7,6 +7,7 @@ import '../../data/home_session.dart';
 import '../../data/relative_time.dart';
 import '../../data/session_index.dart';
 import '../../l10n/app_strings.dart';
+import '../../motion/pressable.dart';
 import '../../navigation/platform_route.dart';
 import '../../native/haptics.dart';
 import '../../theme/ios_chrome.dart';
@@ -36,7 +37,6 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
   final Set<String> _expandedMore = {};
   final Set<String> _expandedWorktrees = {};
   final Set<String> _worktreeToggled = {};
-  final _haptics = NativeHaptics();
 
   AppController get controller => widget.controller;
 
@@ -77,7 +77,6 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                           size: 32,
                           tooltip: t(context, 'projects.search.aria'),
                           onPressed: () {
-                            _haptics.impact(HapticStrength.light);
                             setState(() {
                               _searchOpen = !_searchOpen;
                               if (!_searchOpen) _query = '';
@@ -108,21 +107,25 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                             PopupMenuItem(value: 'scan', child: Text(t(context, 'projects.menu.scanQr'))),
                             PopupMenuItem(value: 'switch', child: Text(t(context, 'projects.menu.switchInstance'))),
                           ],
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: OcIosHero.of(context).tint,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: OcIosHero.of(context).tint.withValues(alpha: 0.22),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
+                          child: Pressable(
+                            haptic: HapticStrength.light,
+                            highlight: false,
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: OcIosHero.of(context).tint,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: OcIosHero.of(context).tint.withValues(alpha: 0.22),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: const OcGlyph(OcGlyphKind.plus, size: 15, strokeWidth: 1.15, color: Colors.white),
                             ),
-                            child: const OcGlyph(OcGlyphKind.plus, size: 15, strokeWidth: 1.15, color: Colors.white),
                           ),
                         ),
                       ],
@@ -294,8 +297,9 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     required VoidCallback onToggle,
     bool compact = false,
   }) {
-    return InkWell(
-      onTap: onToggle,
+    return Pressable(
+      haptic: HapticStrength.light,
+      onPressed: onToggle,
       child: Padding(
         padding: EdgeInsets.fromLTRB(compact ? 14 : 12, compact ? 8 : 10, 8, compact ? 8 : 10),
         child: Row(
@@ -370,8 +374,9 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         ),
       ],
       if (!showAll)
-        InkWell(
-          onTap: () => setState(() => _expandedMore.add(groupId)),
+        Pressable(
+          haptic: HapticStrength.light,
+          onPressed: () => setState(() => _expandedMore.add(groupId)),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 14, 10),
             child: Row(
@@ -387,12 +392,10 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
   }
 
   Widget _sessionRow(BuildContext context, HomeSessionRow row, {Key? key, bool unreadKey = false}) {
-    return InkWell(
+    return Pressable(
       key: key ?? Key('home-session-${row.id}-nested'),
-      onTap: () {
-        _haptics.impact(HapticStrength.light);
-        _openChat(context, row);
-      },
+      haptic: HapticStrength.light,
+      onPressed: () => _openChat(context, row),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 5, 8, 5),
         child: Row(

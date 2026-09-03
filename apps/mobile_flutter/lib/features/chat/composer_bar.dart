@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../data/prompt_attachment.dart';
 import '../../l10n/app_strings.dart';
+import '../../motion/pressable.dart';
+import '../../native/haptics.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
 import 'composer_occupancy.dart';
@@ -114,10 +116,11 @@ class ComposerBar extends StatelessWidget {
                   shape: const CircleBorder(),
                   elevation: 1,
                   shadowColor: Colors.black.withValues(alpha: 0.10),
-                  child: InkWell(
+                  child: Pressable(
                     key: const Key('chat-scroll-to-bottom'),
-                    customBorder: const CircleBorder(),
-                    onTap: onScrollToBottom,
+                    haptic: HapticStrength.light,
+                    highlight: false,
+                    onPressed: onScrollToBottom,
                     child: SizedBox(
                       width: 28,
                       height: 28,
@@ -149,12 +152,21 @@ class ComposerBar extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
                 child: Row(
                   children: [
-                    IconButton(
-                      key: const Key('composer-attach'),
-                      tooltip: t(context, 'chat.composer.attach'),
-                      visualDensity: VisualDensity.compact,
-                      onPressed: onAttach,
-                      icon: OcGlyph(OcGlyphKind.plus, size: 17, strokeWidth: 1.15, color: OcIosHero.of(context).label),
+                    Tooltip(
+                      message: t(context, 'chat.composer.attach'),
+                      child: Pressable(
+                        key: const Key('composer-attach'),
+                        haptic: HapticStrength.medium,
+                        highlight: false,
+                        onPressed: onAttach,
+                        child: SizedBox(
+                          width: 36,
+                          height: 36,
+                          child: Center(
+                            child: OcGlyph(OcGlyphKind.plus, size: 17, strokeWidth: 1.15, color: OcIosHero.of(context).label),
+                          ),
+                        ),
+                      ),
                     ),
                     Expanded(child: field),
                     if (onDictate != null)
@@ -165,18 +177,19 @@ class ComposerBar extends StatelessWidget {
                         onPressed: onDictate,
                         icon: OcGlyph(OcGlyphKind.mic, size: 16, strokeWidth: 1.2, color: OcIosHero.of(context).secondaryLabel),
                       ),
-                    InkWell(
+                    Pressable(
                       key: const Key('composer-send'),
-                      customBorder: const CircleBorder(),
-                      onTap: busy ? onStop : onSend,
+                      haptic: HapticStrength.medium,
+                      highlight: false,
+                      onPressed: busy ? onStop : onSend,
                       child: Container(
                         width: 28,
                         height: 28,
+                        alignment: Alignment.center,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(color: OcIosHero.of(context).label, width: 1.25),
                         ),
-                        alignment: Alignment.center,
                         child: busy
                             ? Container(
                                 width: 8,

@@ -17,6 +17,7 @@ enum OpenChamberPluginRegistry {
     OpenChamberSharePlugin.register(with: messenger)
     OpenChamberDeepLinkPlugin.register(with: messenger)
     OpenChamberHapticsPlugin.register(with: messenger)
+    OpenChamberNavigationPlugin.register(with: messenger)
     OpenChamberPushPlugin.register(with: messenger)
     OpenChamberWidgetSnapshotPlugin.register(with: messenger)
     OpenChamberMediaPlugin.register(with: messenger)
@@ -373,6 +374,93 @@ final class OpenChamberTabBarPlatformView: NSObject, FlutterPlatformView {
   }
 }
 
+/// UIKit press scale for native composer / circular chrome. Not a Flutter clone.
+enum OpenChamberPressMotion {
+  static let scale: CGFloat = 0.975
+
+  static func bind(_ button: UIButton) {
+    button.addTarget(PressMotionTarget.shared, action: #selector(PressMotionTarget.down(_:)), for: .touchDown)
+    button.addTarget(PressMotionTarget.shared, action: #selector(PressMotionTarget.up(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+  }
+}
+
+private final class PressMotionTarget: NSObject {
+  static let shared = PressMotionTarget()
+
+  @objc func down(_ sender: UIButton) {
+    UIView.animate(
+      withDuration: 0.08,
+      delay: 0,
+      usingSpringWithDamping: 0.88,
+      initialSpringVelocity: 0.5,
+      options: [.allowUserInteraction, .beginFromCurrentState]
+    ) {
+      sender.transform = CGAffineTransform(scaleX: OpenChamberPressMotion.scale, y: OpenChamberPressMotion.scale)
+    }
+  }
+
+  @objc func up(_ sender: UIButton) {
+    UIView.animate(
+      withDuration: 0.26,
+      delay: 0,
+      usingSpringWithDamping: 0.82,
+      initialSpringVelocity: 0.2,
+      options: [.allowUserInteraction, .beginFromCurrentState]
+    ) {
+      sender.transform = .identity
+    }
+  }
+}
+
+/// One prepared generator per style — Capacitor `OpenChamberHapticFeedback`.
+enum OpenChamberHapticFeedback {
+  private static var lightGenerator: UIImpactFeedbackGenerator?
+  private static var mediumGenerator: UIImpactFeedbackGenerator?
+  private static var heavyGenerator: UIImpactFeedbackGenerator?
+
+  static func impact(style: UIImpactFeedbackGenerator.FeedbackStyle) {
+    let run = {
+      let generator: UIImpactFeedbackGenerator
+      switch style {
+      case .medium:
+        if let existing = mediumGenerator {
+          generator = existing
+        } else {
+          generator = UIImpactFeedbackGenerator(style: .medium)
+          generator.prepare()
+          mediumGenerator = generator
+        }
+      case .heavy:
+        if let existing = heavyGenerator {
+          generator = existing
+        } else {
+          generator = UIImpactFeedbackGenerator(style: .heavy)
+          generator.prepare()
+          heavyGenerator = generator
+        }
+      default:
+        if let existing = lightGenerator {
+          generator = existing
+        } else {
+          generator = UIImpactFeedbackGenerator(style: .light)
+          generator.prepare()
+          lightGenerator = generator
+        }
+      }
+      generator.impactOccurred()
+      generator.prepare()
+    }
+    if Thread.isMainThread {
+      run()
+    } else {
+      DispatchQueue.main.async(execute: run)
+    }
+  }
+
+  static func impactLight() { impact(style: .light) }
+  static func impactMedium() { impact(style: .medium) }
+}
+
 final class OpenChamberHapticsPlugin: NSObject {
   static func register(with messenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(name: "openchamber/haptics", binaryMessenger: messenger)
@@ -388,9 +476,154 @@ final class OpenChamberHapticsPlugin: NSObject {
       case "heavy": style = .heavy
       default: style = .light
       }
-      UIImpactFeedbackGenerator(style: style).impactOccurred()
+      OpenChamberHapticFeedback.impact(style: style)
       result(nil)
     }
+  }
+}
+
+/// Physical left-edge back. Flutter's Cupertino swipe is disabled; this
+/// recognizer drives `IosNativePageRoute` through `openchamber/navigation`.
+final class OpenChamberNavigationPlugin: NSObject, UIGestureRecognizerDelegate {
+  private static var shared: OpenChamberNavigationPlugin?
+
+  private var channel: FlutterMethodChannel?
+  private var edgePan: UIScreenEdgePanGestureRecognizer?
+  private var hostView: UIView?
+  private var navigationEnabled = false
+  private var progressDisplayLink: CADisplayLink?
+  private var latestProgress: CGFloat = 0
+  private var progressPending = false
+
+  static func register(with messenger: FlutterBinaryMessenger) {
+    let plugin = shared ?? OpenChamberNavigationPlugin()
+    shared = plugin
+    let channel = FlutterMethodChannel(name: "openchamber/navigation", binaryMessenger: messenger)
+    plugin.channel = channel
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "setEnabled" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      let enabled = (call.arguments as? [String: Any])?["enabled"] as? Bool ?? false
+      DispatchQueue.main.async {
+        plugin.setEnabled(enabled)
+        result(nil)
+      }
+    }
+  }
+
+  static func attachHost(_ controller: FlutterViewController?) {
+    guard let controller else { return }
+    DispatchQueue.main.async {
+      shared?.installEdgePan(on: controller.view)
+    }
+  }
+
+  private func setEnabled(_ enabled: Bool) {
+    navigationEnabled = enabled
+    if let view = resolveHostView() {
+      installEdgePan(on: view)
+    }
+    edgePan?.isEnabled = enabled
+    if !enabled {
+      stopProgressDisplayLink()
+    }
+  }
+
+  private func resolveHostView() -> UIView? {
+    if let hostView { return hostView }
+    return UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap(\.windows)
+      .compactMap { $0.rootViewController as? FlutterViewController }
+      .first?
+      .view
+  }
+
+  private func installEdgePan(on view: UIView) {
+    if edgePan != nil, hostView === view {
+      edgePan?.isEnabled = navigationEnabled
+      return
+    }
+    if let edgePan {
+      hostView?.removeGestureRecognizer(edgePan)
+    }
+    let recognizer = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handleEdgePan(_:)))
+    recognizer.edges = .left
+    recognizer.delegate = self
+    recognizer.cancelsTouchesInView = true
+    recognizer.isEnabled = navigationEnabled
+    view.addGestureRecognizer(recognizer)
+    edgePan = recognizer
+    hostView = view
+  }
+
+  func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+    navigationEnabled && gestureRecognizer === edgePan
+  }
+
+  @objc private func handleEdgePan(_ recognizer: UIScreenEdgePanGestureRecognizer) {
+    guard navigationEnabled, let view = recognizer.view else { return }
+    let width = max(view.bounds.width, 1)
+    let progress = min(1, max(0, recognizer.translation(in: view).x / width))
+    switch recognizer.state {
+    case .began:
+      latestProgress = progress
+      progressPending = false
+      startProgressDisplayLink()
+      emit(type: "started", progress: progress, velocityX: 0)
+    case .changed:
+      latestProgress = progress
+      progressPending = true
+    case .ended:
+      stopProgressDisplayLink()
+      let velocity = recognizer.velocity(in: view).x
+      let commit = progress >= 0.35 || (progress >= 0.08 && velocity >= 700)
+      emit(type: commit ? "invoked" : "cancelled", progress: progress, velocityX: velocity)
+    case .cancelled, .failed:
+      stopProgressDisplayLink()
+      emit(type: "cancelled", progress: progress, velocityX: recognizer.velocity(in: view).x)
+    default:
+      break
+    }
+  }
+
+  private func startProgressDisplayLink() {
+    guard progressDisplayLink == nil else { return }
+    let displayLink = CADisplayLink(target: self, selector: #selector(flushProgress))
+    let maximumFramesPerSecond = UIScreen.main.maximumFramesPerSecond
+    if #available(iOS 15.0, *) {
+      displayLink.preferredFrameRateRange = CAFrameRateRange(
+        minimum: Float(max(30, maximumFramesPerSecond / 2)),
+        maximum: Float(maximumFramesPerSecond),
+        preferred: Float(maximumFramesPerSecond)
+      )
+    } else {
+      displayLink.preferredFramesPerSecond = maximumFramesPerSecond
+    }
+    displayLink.add(to: .main, forMode: .common)
+    progressDisplayLink = displayLink
+  }
+
+  private func stopProgressDisplayLink() {
+    progressDisplayLink?.invalidate()
+    progressDisplayLink = nil
+    progressPending = false
+  }
+
+  @objc private func flushProgress() {
+    guard navigationEnabled, progressPending else { return }
+    progressPending = false
+    emit(type: "progressed", progress: latestProgress, velocityX: 0)
+  }
+
+  private func emit(type: String, progress: CGFloat, velocityX: CGFloat) {
+    channel?.invokeMethod("event", arguments: [
+      "type": type,
+      "progress": progress,
+      "velocityX": velocityX,
+    ])
   }
 }
 

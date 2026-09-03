@@ -8,6 +8,9 @@ class NativeHaptics {
   NativeHaptics({MethodChannel? channel})
       : _channel = channel ?? const MethodChannel(OpenChamberChannels.haptics);
 
+  /// Shared fire-and-forget client. Tests inject [channel] on a new instance.
+  static final NativeHaptics instance = NativeHaptics();
+
   final MethodChannel _channel;
 
   Future<void> impact(HapticStrength strength) async {

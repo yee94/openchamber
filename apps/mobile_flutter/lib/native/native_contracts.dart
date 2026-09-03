@@ -71,13 +71,13 @@ const List<NativeContract> flutterNativeContracts = [
   ),
   NativeContract(
     id: 'haptics',
-    status: 'missing',
-    summary: 'light/medium/heavy impact (UIImpactFeedbackGenerator / performHapticFeedback). Always on.',
+    status: 'landed',
+    summary: 'Always-on. iOS reuses prepared UIImpactFeedbackGenerator (light tab/row, medium send/attach/swipe-commit). Android performHapticFeedback. No HapticFeedback-only iOS path.',
   ),
   NativeContract(
     id: 'native-back',
-    status: 'missing',
-    summary: 'TODO: iOS screen-edge pan + Android predictive back driving the pushed Chat / Settings stack.',
+    status: 'landed',
+    summary: 'iOS UIScreenEdgePanGestureRecognizer on the Flutter view drives IosNativePageRoute. Flutter popGestureEnabled is false. Android PredictiveBackPageTransitionsBuilder.',
   ),
   NativeContract(
     id: 'secure-storage',

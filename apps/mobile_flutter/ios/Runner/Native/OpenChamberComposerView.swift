@@ -81,11 +81,11 @@ final class OpenChamberComposerView: UIView, UITextViewDelegate {
     attachButton.setImage(UIImage(systemName: "plus"), for: .normal)
     attachButton.accessibilityIdentifier = "composer-attach"
     let photos = UIAction(title: "Photos", image: UIImage(systemName: "photo.on.rectangle")) { [weak self] _ in
-      UIImpactFeedbackGenerator(style: .light).impactOccurred()
+      OpenChamberHapticFeedback.impactMedium()
       self?.onAttach?()
     }
     let files = UIAction(title: "Files", image: UIImage(systemName: "folder")) { [weak self] _ in
-      UIImpactFeedbackGenerator(style: .light).impactOccurred()
+      OpenChamberHapticFeedback.impactMedium()
       self?.presentDocumentPicker()
     }
     attachButton.menu = UIMenu(children: [photos, files])
@@ -96,6 +96,9 @@ final class OpenChamberComposerView: UIView, UITextViewDelegate {
     sendButton.setImage(UIImage(systemName: "arrow.up"), for: .normal)
     sendButton.accessibilityIdentifier = "composer-send"
     sendButton.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
+    OpenChamberPressMotion.bind(attachButton)
+    OpenChamberPressMotion.bind(sendButton)
+    OpenChamberPressMotion.bind(dictateButton)
     textView.delegate = self
     textView.backgroundColor = .clear
     textView.font = .preferredFont(forTextStyle: .body)
@@ -194,12 +197,12 @@ final class OpenChamberComposerView: UIView, UITextViewDelegate {
       onStop?()
       return
     }
-    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    OpenChamberHapticFeedback.impactMedium()
     onSend?(textView.text ?? "")
   }
 
   @objc private func attachTapped() {
-    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    OpenChamberHapticFeedback.impactMedium()
     onAttach?()
   }
 

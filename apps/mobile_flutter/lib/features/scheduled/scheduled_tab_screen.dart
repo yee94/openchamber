@@ -4,6 +4,9 @@ import '../../data/app_controller.dart';
 import '../../data/assistant_scheduled.dart';
 import '../../data/relative_time.dart';
 import '../../l10n/app_strings.dart';
+import '../../motion/pressable.dart';
+import '../../navigation/platform_route.dart';
+import '../../native/haptics.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
 import '../chat/chat_screen.dart';
@@ -85,7 +88,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
       final session = run.historySession;
       if (session == null || !mounted) return;
       await Navigator.of(context).push(
-        MaterialPageRoute<void>(
+        platformPageRoute<void>(
           builder: (_) => ChatScreen(session: session, appController: widget.controller),
         ),
       );
@@ -160,17 +163,20 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
               else if (runs.value != null)
                 for (final run in runs.value!)
                   GroupedInsetCard(
-                    child: ListTile(
+                    child: Pressable(
                       key: Key('scheduled-run-${run.id}'),
-                      title: Text(run.taskName.isEmpty ? run.id : run.taskName),
-                      subtitle: Text(
-                        [
-                          run.status.isEmpty ? t(context, 'scheduled.status.idle') : run.status,
-                          if (run.error != null && run.error!.isNotEmpty) run.error,
-                        ].join(' · '),
+                      haptic: run.sessionId == null || run.sessionId!.isEmpty ? null : HapticStrength.light,
+                      onPressed: run.sessionId == null || run.sessionId!.isEmpty ? null : () => _openRun(run.id),
+                      child: ListTile(
+                        title: Text(run.taskName.isEmpty ? run.id : run.taskName),
+                        subtitle: Text(
+                          [
+                            run.status.isEmpty ? t(context, 'scheduled.status.idle') : run.status,
+                            if (run.error != null && run.error!.isNotEmpty) run.error,
+                          ].join(' · '),
+                        ),
+                        trailing: OcGlyph(OcGlyphKind.ellipsis, size: 16, color: context.oc.mutedForeground),
                       ),
-                      trailing: OcGlyph(OcGlyphKind.ellipsis, size: 16, color: context.oc.mutedForeground),
-                      onTap: run.sessionId == null || run.sessionId!.isEmpty ? null : () => _openRun(run.id),
                     ),
                   ),
             ],
@@ -189,9 +195,10 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
   Widget _taskCard(BuildContext context, ScheduledTaskRecord task) {
     final paused = !task.enabled;
     final card = GroupedInsetCard(
-      child: InkWell(
+      child: Pressable(
         key: Key('scheduled-task-${task.id}'),
-        onTap: () => _openTask(task.projectId, task.id),
+        haptic: HapticStrength.light,
+        onPressed: () => _openTask(task.projectId, task.id),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 14, 4, 14),
           child: Row(

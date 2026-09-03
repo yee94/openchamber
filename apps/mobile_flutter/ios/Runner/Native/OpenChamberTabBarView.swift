@@ -88,6 +88,7 @@ final class OpenChamberTabBarView: UIView, UITabBarControllerDelegate {
 
   func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
     guard !applying, let id = viewController.tabBarItem.accessibilityIdentifier else { return }
+    OpenChamberHapticFeedback.impactLight()
     onSelect?(id)
   }
 }

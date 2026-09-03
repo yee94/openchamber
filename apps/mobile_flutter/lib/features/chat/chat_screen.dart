@@ -198,7 +198,6 @@ class _ChatScreenState extends State<ChatScreen> {
       _busy = true;
       _errorKey = null;
     });
-    _haptics.impact(HapticStrength.medium);
     _jumpToLatest();
     if (controller == null) {
       _errorKey = 'chat.error.sendFailed';

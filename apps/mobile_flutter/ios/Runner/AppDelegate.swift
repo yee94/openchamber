@@ -14,7 +14,9 @@ import UIKit
     if let url = launchOptions?[.url] as? URL {
       OpenChamberDeepLinkPlugin.pending = url.absoluteString
     }
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    let launched = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    OpenChamberNavigationPlugin.attachHost(window?.rootViewController as? FlutterViewController)
+    return launched
   }
 
   override func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {

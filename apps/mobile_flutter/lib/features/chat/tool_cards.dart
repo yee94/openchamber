@@ -5,6 +5,8 @@ import '../../data/context_tool_grouping.dart';
 import '../../data/generated_result.dart';
 import '../../data/skill_tool_grouping.dart';
 import '../../l10n/app_strings.dart';
+import '../../motion/pressable.dart';
+import '../../native/haptics.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
 
@@ -270,49 +272,55 @@ class _FileChangeCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           for (final part in visible)
-            Padding(
+            Pressable(
               key: keyRows ? Key('chat-tool-diff-${part.id}') : null,
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Row(
-                children: [
-                  _FileTypeMark(path: part.path ?? part.title),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      part.path ?? part.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13),
+              haptic: HapticStrength.light,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    _FileTypeMark(path: part.path ?? part.title),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        part.path ?? part.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13),
+                      ),
                     ),
-                  ),
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: '+${part.added.length}',
-                          style: TextStyle(color: OcTokens.of(context).statusSuccess),
-                        ),
-                        const TextSpan(text: ' '),
-                        TextSpan(
-                          text: '-${part.removed.length}',
-                          style: TextStyle(color: OcTokens.of(context).destructive),
-                        ),
-                      ],
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '+${part.added.length}',
+                            style: TextStyle(color: OcTokens.of(context).statusSuccess),
+                          ),
+                          const TextSpan(text: ' '),
+                          TextSpan(
+                            text: '-${part.removed.length}',
+                            style: TextStyle(color: OcTokens.of(context).destructive),
+                          ),
+                        ],
+                      ),
+                      style: const TextStyle(fontSize: 12),
                     ),
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           if (parts.length > visible.length)
-            Row(
-              children: [
-                Text(
-                  t(context, 'chat.filesChanged.more', {'count': '${parts.length - visible.length}'}),
-                  style: TextStyle(fontSize: 13, color: OcTokens.of(context).mutedForeground),
-                ),
-                OcGlyph(OcGlyphKind.chevronRight, size: 12, color: OcTokens.of(context).mutedForeground),
-              ],
+            Pressable(
+              haptic: HapticStrength.light,
+              child: Row(
+                children: [
+                  Text(
+                    t(context, 'chat.filesChanged.more', {'count': '${parts.length - visible.length}'}),
+                    style: TextStyle(fontSize: 13, color: OcTokens.of(context).mutedForeground),
+                  ),
+                  OcGlyph(OcGlyphKind.chevronRight, size: 12, color: OcTokens.of(context).mutedForeground),
+                ],
+              ),
             ),
         ],
       ),

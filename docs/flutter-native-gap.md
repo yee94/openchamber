@@ -131,7 +131,7 @@ Native contracts / shell
 | Push | landed (host register) | APNs + FCM → `openchamber-push-relay` | Mobile `POST /api/push/apns-token` + `POST /api/push/visibility`. Host binds relay. iOS requests APNs token. Android copies Capacitor `google-services.json` (`com.yee94.openchamber` / `openchamber-8bf7e`) and reads the FCM token via the native Firebase SDK — still **null** if Firebase is unavailable (not invented). Presence skip is **host-side** (`isAnyInteractiveClientVisible`) |
 | WidgetKit + Control Center + NSE | landed | `OpenChamberWidget`, NSE | Snapshot JSON `{attentionCount, recentSessions}` written to App Group `widgetSnapshot` from the live index |
 | Haptics | landed | `OpenChamberHaptics` | light / medium / heavy via method channel |
-| Native back | landed | Flutter routes | iOS `CupertinoPageRoute` edge pan; Android `PredictiveBackPageTransitionsBuilder` |
+| Native back | landed | Capacitor `OpenChamberNavigation` | iOS `UIScreenEdgePanGestureRecognizer` drives `IosNativePageRoute`. Android `PredictiveBackPageTransitionsBuilder`. |
 | Secure storage | landed | Keychain / Android Keystore | Never log tokens |
 | Deep links | landed | `openchamber://` | Pairing cold-launch, share-inbox, session jump URI |
 | Virtual assets / HEIC / Android picker | landed | `OpenChamberVirtualAsset`, `OpenChamberMedia` | Android `ACTION_PICK_IMAGES`, iOS PHPicker, HEIC transcode, in-memory virtual-asset create/append/finish. Composer uploads `PUT /api/fs/prompt-attachments/:id` then `file://` parts. Flutter preview is `Image.memory` — the `openchamber-asset://` scheme is for WebView. |
@@ -369,7 +369,7 @@ Yee rejected the Material 3 WidgetTester shots (underline fields, full-width sea
 | Assistant | Contact cards (avatar, name, mode, summary). Enable guide only when off | Landed. No 「启用助理」 toggle on the catalog. | Official guide hero images are not bundled. |
 | Settings | Large title, pill search, inset groups. Appearance = language + theme | Landed | Detail pages still use compact back + title. |
 | Connect | QR primary, inset grouped fields, no floating-label overlap | Landed | Manual section stays expanded by default so tests can fill URL/token. |
-| Tab dock | Four roots, selected glyph = theme primary. Only the active root keeps the selected pill. | iOS: `UITabBarController`. Android/tests: floating capsule with painted glyphs. Selected pill is instant (no cross-fade that left 项目 selected on 计划). | WidgetTester capsule is Material-elevation, not `UIGlassEffect`. This VM cannot run an iOS Simulator. |
+| Tab dock | Four roots, selected glyph = theme primary. Only the active root keeps the selected pill. | iOS: `UITabBarController`. Android/tests: floating capsule with painted glyphs. Selected pill uses `OcSelectedSpring` (not a 300ms linear fade). | WidgetTester capsule is Material-elevation, not `UIGlassEffect`. This VM cannot run an iOS Simulator. |
 
 ### Native APIs (always on — grep `apps/mobile_flutter/ios`)
 
@@ -384,7 +384,7 @@ Yee rejected the Material 3 WidgetTester shots (underline fields, full-width sea
 | VisionKit QR on MainActor | Wired |
 | Keychain (`SecItem*`) | Wired |
 | Share Extension + App Group + NSE + Widget | Wired (existing targets) |
-| `UIScreenEdgePanGestureRecognizer` | **Not installed as a second recognizer.** Pushed pages use `CupertinoPageRoute`, which is Flutter's system edge-pan back. A second left-edge recognizer would fight that route. |
+| `UIScreenEdgePanGestureRecognizer` | **Installed** on the Flutter view (`OpenChamberNavigationPlugin`). Enabled only while an `IosNativePageRoute` is on the stack. Flutter `popGestureEnabled` is **false** so Cupertino/Material swipes cannot replace it. Progress is coalesced on `CADisplayLink` (same commit rule as Capacitor: ≥0.35 or ≥0.08 + vx≥700). Swipe-commit fires medium impact. |
 
 ### Android degradations (intentional)
 
@@ -442,3 +442,21 @@ Live WebView then overwrites `:root` with Flexoki (`#BC5215` / `#fffdf4`) via Th
 Product chrome **not** in the semantic catalog: agent-count purple `OcProductChrome.agentAccent` (`#7A5CFF`).
 
 `--oc-mobile-glass-fill` is **not** faked in Flutter. iOS keeps `UIGlassEffect` / `UITabBar`. Android/WidgetTester dock and composer stay opaque `surfaceElevated`.
+
+## Fourteenth-slice status (native press / spring / back)
+
+Motion only. Sibling chrome owns color / type / radii / shadows. Chat stays a pushed page (dock hidden). No `iosNativeUi` toggle.
+
+### What is real UIKit vs Flutter spring
+
+| Interaction | iOS | Android / WidgetTester |
+|---|---|---|
+| Card / row / circular + / search / dock-tab press | Flutter `Pressable` scale **0.975** (finger-down 80ms official engage cubic, release 260ms official overshoot cubic). Highlight = `--oc-mobile-press-fill` (foreground 7%). Cancel on drag-out. | Same timing and scale. No glass clone. |
+| iOS composer Send / + / mic | **UIKit** `UIView.animate` spring 0.975 + reused `UIImpactFeedbackGenerator` | Flutter `Pressable` on the solid pill |
+| Haptics | **Always-on UIKit**: one prepared generator per style (`OpenChamberHapticFeedback`). Light = tab + row. Medium = send / + attach / swipe-commit. Never `HapticFeedback.*` on iOS. | `performHapticFeedback` CLOCK_TICK / KEYBOARD_TAP / LONG_PRESS |
+| Interactive back | **`UIScreenEdgePanGestureRecognizer`** on the Flutter view, left edge only, `CADisplayLink` progress. Flutter `IosNativePageRoute.popGestureEnabled = false`. | System predictive back (`PredictiveBackPageTransitionsBuilder`). Already started. |
+| Push / pop Chat | `IosNativePageRoute` = Cupertino slide (UINavigationController), 350ms `fastEaseInToSlowEaseOut`. Not a 300ms linear fade. | `MaterialPageRoute` + predictive back |
+| Tab switch | iOS `UITabBarController` (native). Flutter roots stay `IndexedStack` (instant, not a fade). | Flutter capsule: press scale + `OcSelectedSpring` (iOS CASpring 522.35 / 45.71) on the selected pill |
+| 任务/历史记录 + filter chips | Flutter press + selected CASpring (not an instant snap) | Same |
+
+Feel it on a device: `apps/mobile_flutter/README.md` § Feel press / spring / back. WidgetTester covers press scale, drag-out cancel, selected spring, and that the iOS route refuses a Flutter pop gesture.

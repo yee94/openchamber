@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_strings.dart';
+import '../../motion/pressable.dart';
+import '../../motion/selected_spring.dart';
 import '../../native/haptics.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
@@ -27,7 +29,6 @@ class FloatingCapsuleTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     assert(_items.length == 4);
-    final haptics = NativeHaptics();
     final hero = OcIosHero.of(context);
     return SafeArea(
       top: false,
@@ -63,10 +64,7 @@ class FloatingCapsuleTabBar extends StatelessWidget {
                       glyph: item.glyph,
                       label: t(context, item.labelKey),
                       selected: selectedId == item.id,
-                      onTap: () {
-                        haptics.impact(HapticStrength.light);
-                        onSelect(item.id);
-                      },
+                      onTap: () => onSelect(item.id),
                     ),
                   ),
               ],
@@ -97,40 +95,46 @@ class _TabSlot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hero = OcIosHero.of(context);
-    return InkWell(
+    return Pressable(
       key: Key('tab-$id'),
-      onTap: onTap,
+      haptic: HapticStrength.light,
+      onPressed: onTap,
       borderRadius: BorderRadius.circular(OcChrome.dockRadius),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 28,
-            height: 24,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: selected ? hero.tintFill : Colors.transparent,
-              borderRadius: BorderRadius.circular(7),
-            ),
-            child: OcGlyph(
-              glyph,
-              size: 17,
-              color: selected ? hero.tint : hero.secondaryLabel,
-              strokeWidth: selected ? 1.3 : 1.15,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              color: selected ? hero.tint : hero.secondaryLabel,
-            ),
-          ),
-        ],
+      child: OcSelectedSpring(
+        selected: selected,
+        builder: (context, t) {
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 28,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Color.lerp(Colors.transparent, hero.tintFill, t),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: OcGlyph(
+                  glyph,
+                  size: 17,
+                  color: Color.lerp(hero.secondaryLabel, hero.tint, t),
+                  strokeWidth: 1.15 + 0.15 * t,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
+                  color: Color.lerp(hero.secondaryLabel, hero.tint, t),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

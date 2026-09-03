@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_strings.dart';
+import '../../motion/pressable.dart';
+import '../../native/haptics.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
 
@@ -55,12 +57,15 @@ class SettingsNavRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      minVerticalPadding: 11,
-      title: Text(label),
-      subtitle: subtitle == null ? null : Text(subtitle!),
-      trailing: trailing ?? OcGlyph(OcGlyphKind.chevronRight, size: 16, color: context.oc.mutedForeground),
-      onTap: onTap,
+    return Pressable(
+      haptic: onTap == null ? null : HapticStrength.light,
+      onPressed: onTap,
+      child: ListTile(
+        minVerticalPadding: 11,
+        title: Text(label),
+        subtitle: subtitle == null ? null : Text(subtitle!),
+        trailing: trailing ?? OcGlyph(OcGlyphKind.chevronRight, size: 16, color: context.oc.mutedForeground),
+      ),
     );
   }
 }

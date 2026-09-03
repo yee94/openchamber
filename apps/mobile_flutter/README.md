@@ -36,6 +36,20 @@ flutter run -d android
 
 Linux VM (this cloud image): `flutter analyze` and `flutter test` only. `flutter build ios` needs Xcode.
 
+## Feel press / spring / back on a device
+
+WidgetTester can assert press scale and that Flutter does not own the iOS edge-pan. It cannot film UIKit springs.
+
+On a **real iPhone** (or Simulator with I/O → Touch):
+
+1. Projects: press a session row, the circular search, and `+`. The surface should scale to ~0.975 on finger-down and spring back on release. Drag off the row to cancel.
+2. Dock: tab press is light `UIImpactFeedbackGenerator`. iOS selected chrome is `UITabBar`; Android uses the same 0.975 scale + selected spring (not a linear fade).
+3. Open a session (pushed Chat, dock hidden). Interactive back is `UIScreenEdgePanGestureRecognizer` from the **physical left edge** — do not expect a Material swipe from mid-screen.
+4. Composer: `+` attach and Send use **medium** impact. iOS buttons are UIKit-scaled; Android uses the same Flutter `Pressable` curve.
+5. Schedule: 任务/历史记录 and 全部/已启用/已暂停 press-scale, then the selected pill springs (no instant snap).
+
+Android uses the same timing/scale. Haptics are `performHapticFeedback` (CLOCK_TICK / KEYBOARD_TAP). No fake `UIGlassEffect`.
+
 ## Surfaces
 
 1. Splash → live HTTP onboarding (`GET /health`, `GET/POST /auth/session`, pairing redeem on LAN or the official E2EE relay tunnel). **No local PIN / Face ID lock.**

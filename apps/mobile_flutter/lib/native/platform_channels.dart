@@ -9,6 +9,7 @@ abstract final class OpenChamberChannels {
   static const composer = 'openchamber/composer';
   static const tabBar = 'openchamber/tab_bar';
   static const haptics = 'openchamber/haptics';
+  static const navigation = 'openchamber/navigation';
   static const push = 'openchamber/push';
   static const widgetSnapshot = 'openchamber/widget_snapshot';
   static const media = 'openchamber/media';

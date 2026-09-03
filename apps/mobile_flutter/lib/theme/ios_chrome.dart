@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/app_strings.dart';
+import '../motion/pressable.dart';
+import '../motion/selected_spring.dart';
+import '../native/haptics.dart';
 import 'ios_hero.dart';
 import 'oc_glyphs.dart';
 import 'oc_tokens.dart';
@@ -86,6 +89,7 @@ class CircularChromeButton extends StatelessWidget {
     this.ink = false,
     this.tooltip,
     this.size,
+    this.haptic = HapticStrength.light,
   });
 
   final OcGlyphKind glyph;
@@ -94,6 +98,7 @@ class CircularChromeButton extends StatelessWidget {
   final bool ink;
   final String? tooltip;
   final double? size;
+  final HapticStrength? haptic;
 
   @override
   Widget build(BuildContext context) {
@@ -110,9 +115,11 @@ class CircularChromeButton extends StatelessWidget {
       elevation: filled ? 0.6 : 0.3,
       shadowColor: Colors.black.withValues(alpha: filled ? 0.10 : 0.06),
       surfaceTintColor: Colors.transparent,
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onPressed,
+      child: Pressable(
+        onPressed: onPressed,
+        haptic: haptic,
+        highlight: false,
+        borderRadius: BorderRadius.circular(diameter),
         child: SizedBox(
           width: diameter,
           height: diameter,
@@ -306,52 +313,54 @@ class SegmentedPill extends StatelessWidget {
         children: [
           for (var i = 0; i < labels.length; i += 1)
             Expanded(
-              child: InkWell(
+              child: Pressable(
                 key: Key('segment-$i'),
+                haptic: HapticStrength.light,
+                onPressed: () => onSelected(i),
                 borderRadius: BorderRadius.circular(9),
-                onTap: () => onSelected(i),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  decoration: BoxDecoration(
-                    color: selectedIndex == i ? OcIosHero.of(context).card : Colors.transparent,
-                    borderRadius: BorderRadius.circular(9),
-                    boxShadow: selectedIndex == i
-                        ? [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.06),
-                              blurRadius: 2,
-                              offset: const Offset(0, 1),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (icons != null) ...[
-                        OcGlyph(
-                          icons![i],
-                          size: 14,
-                          strokeWidth: 1.2,
-                          color: selectedIndex == i
-                              ? OcIosHero.of(context).label
-                              : OcIosHero.of(context).secondaryLabel,
-                        ),
-                        const SizedBox(width: 6),
-                      ],
-                      Text(
-                        labels[i],
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: selectedIndex == i ? FontWeight.w600 : FontWeight.w400,
-                          color: selectedIndex == i
-                              ? OcIosHero.of(context).label
-                              : OcIosHero.of(context).secondaryLabel,
-                        ),
+                child: OcSelectedSpring(
+                  selected: selectedIndex == i,
+                  builder: (context, t) {
+                    final hero = OcIosHero.of(context);
+                    return Container(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Color.lerp(Colors.transparent, hero.card, t),
+                        borderRadius: BorderRadius.circular(9),
+                        boxShadow: t > 0.01
+                            ? [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.06 * t),
+                                  blurRadius: 2,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ]
+                            : null,
                       ),
-                    ],
-                  ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (icons != null) ...[
+                            OcGlyph(
+                              icons![i],
+                              size: 14,
+                              strokeWidth: 1.2,
+                              color: Color.lerp(hero.secondaryLabel, hero.label, t),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Text(
+                            labels[i],
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
+                              color: Color.lerp(hero.secondaryLabel, hero.label, t),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -387,22 +396,27 @@ class FilterChipBar extends StatelessWidget {
                 for (var i = 0; i < labels.length; i += 1)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: InkWell(
+                    child: Pressable(
                       key: Key('filter-$i'),
+                      haptic: HapticStrength.light,
+                      onPressed: () => onSelected(i),
                       borderRadius: BorderRadius.circular(16),
-                      onTap: () => onSelected(i),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        child: Text(
-                          labels[i],
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: selectedIndex == i ? FontWeight.w600 : FontWeight.w400,
-                            color: selectedIndex == i
-                                ? OcIosHero.of(context).label
-                                : OcIosHero.of(context).secondaryLabel,
-                          ),
-                        ),
+                      child: OcSelectedSpring(
+                        selected: selectedIndex == i,
+                        builder: (context, t) {
+                          final hero = OcIosHero.of(context);
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            child: Text(
+                              labels[i],
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
+                                color: Color.lerp(hero.secondaryLabel, hero.label, t),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),
