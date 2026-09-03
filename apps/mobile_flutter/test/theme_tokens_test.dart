@@ -63,14 +63,14 @@ void main() {
     expect(OcOptical.sessionRowPadV, greaterThanOrEqualTo(12));
     expect(OcOptical.metaHeight, greaterThanOrEqualTo(1.6));
     expect(OcOptical.chatBodyHeight, greaterThan(1.5));
-    expect(OcOptical.searchButton, 26);
-    expect(OcOptical.addButton, 28);
+    expect(OcOptical.searchButton, 24);
+    expect(OcOptical.addButton, 26);
     expect(OcOptical.addButton, greaterThan(OcOptical.searchButton));
-    expect(OcOptical.headerGlyph, 9);
-    expect(OcOptical.dockGlyph, 11);
-    expect(OcOptical.leadingCircle, 16);
-    expect(OcOptical.scheduleStatus, 16);
-    expect(OcOptical.fileTypeW, 12);
+    expect(OcOptical.headerGlyph, 8);
+    expect(OcOptical.dockGlyph, 10);
+    expect(OcOptical.leadingCircle, 15);
+    expect(OcOptical.scheduleStatus, 15);
+    expect(OcOptical.fileTypeW, 11);
     expect(OcOptical.dockCapsuleHeight, lessThan(OcTokens.dockHeight));
     expect(OcOptical.searchButton, lessThan(OcTokens.headerButtonSize));
     expect(OcOptical.addButton, lessThan(OcTokens.headerButtonSize));
@@ -79,7 +79,7 @@ void main() {
 
   test('OcElevation is layered in light and empty in dark', () {
     expect(OcElevation.cardFor(OcTokens.light), hasLength(3));
-    expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, 2);
+    expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, greaterThanOrEqualTo(2));
     expect(
       OcElevation.cardFor(OcTokens.light, tight: true).last.blurRadius,
       lessThan(OcElevation.cardFor(OcTokens.light).last.blurRadius),

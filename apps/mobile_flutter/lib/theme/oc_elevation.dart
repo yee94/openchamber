@@ -18,15 +18,15 @@ class OcElevation {
     if (tokens.isDark) return const [];
     if (tight) {
       return const [
-        BoxShadow(color: Color(0x07000000), blurRadius: 3),
-        BoxShadow(color: Color(0x08000000), blurRadius: 14),
-        BoxShadow(color: Color(0x0C000000), blurRadius: 22, spreadRadius: -6, offset: Offset(0, 5)),
+        BoxShadow(color: Color(0x05000000), blurRadius: 4),
+        BoxShadow(color: Color(0x07000000), blurRadius: 16),
+        BoxShadow(color: Color(0x0A000000), blurRadius: 26, spreadRadius: -8, offset: Offset(0, 4)),
       ];
     }
     return const [
-      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0C000000), blurRadius: 16),
-      BoxShadow(color: Color(0x12000000), blurRadius: 28, spreadRadius: -8, offset: Offset(0, 8)),
+      BoxShadow(color: Color(0x08000000), blurRadius: 3),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 18),
+      BoxShadow(color: Color(0x0E000000), blurRadius: 32, spreadRadius: -10, offset: Offset(0, 7)),
     ];
   }
 
@@ -47,9 +47,9 @@ class OcElevation {
   static List<BoxShadow> dockFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x08000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0A000000), blurRadius: 14),
-      BoxShadow(color: Color(0x14000000), blurRadius: 24, spreadRadius: -7, offset: Offset(0, 6)),
+      BoxShadow(color: Color(0x06000000), blurRadius: 3),
+      BoxShadow(color: Color(0x08000000), blurRadius: 16),
+      BoxShadow(color: Color(0x0E000000), blurRadius: 28, spreadRadius: -8, offset: Offset(0, 5)),
     ];
   }
 
@@ -59,8 +59,8 @@ class OcElevation {
   static List<BoxShadow> controlFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-      BoxShadow(color: Color(0x1A000000), blurRadius: 6, offset: Offset(0, 2)),
+      BoxShadow(color: Color(0x08000000), blurRadius: 2),
+      BoxShadow(color: Color(0x10000000), blurRadius: 8, offset: Offset(0, 2)),
     ];
   }
 
@@ -70,9 +70,9 @@ class OcElevation {
   static List<BoxShadow> composerFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x08000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0A000000), blurRadius: 12),
-      BoxShadow(color: Color(0x10000000), blurRadius: 18, spreadRadius: -5, offset: Offset(0, 5)),
+      BoxShadow(color: Color(0x06000000), blurRadius: 2),
+      BoxShadow(color: Color(0x08000000), blurRadius: 14),
+      BoxShadow(color: Color(0x0C000000), blurRadius: 22, spreadRadius: -6, offset: Offset(0, 4)),
     ];
   }
 }

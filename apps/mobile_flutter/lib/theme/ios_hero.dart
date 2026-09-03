@@ -16,21 +16,21 @@ class OcOptical {
   /// Do not densify these back toward a packed README photo.
   /// Glyph sizes stay small; colors stay on [OcTokens].
   static const double rowTitle = 15;
-  static const double rowTitleTracking = 0.75;
-  static const double rowTitleHeight = 1.52;
-  static const double sessionRowPadV = 12;
+  static const double rowTitleTracking = 0.9;
+  static const double rowTitleHeight = 1.58;
+  static const double sessionRowPadV = 13;
   static const double moreLinkPadV = 8;
   static const double groupHeaderPadV = 13;
   static const double groupHeaderPadVCompact = 11;
-  static const double groupTitleMetaGap = 7;
+  static const double groupTitleMetaGap = 8;
 
   static const double entityTitle = 16;
-  static const double entityTitleTracking = 0.7;
-  static const double entityTitleHeight = 1.42;
+  static const double entityTitleTracking = 0.8;
+  static const double entityTitleHeight = 1.48;
 
   static const double meta = 13;
-  static const double metaTracking = 0.55;
-  static const double metaHeight = 1.68;
+  static const double metaTracking = 0.65;
+  static const double metaHeight = 1.75;
 
   static const double scheduleCardPadV = 14;
   static const double scheduleTitleMetaGap = 9;
@@ -39,50 +39,50 @@ class OcOptical {
   static const double chatTitleTracking = 0.4;
   static const double chatTitleHeight = 1.32;
   static const double chatHeaderButton = 24;
-  static const double chatBodyHeight = 1.6;
-  static const double chatBodyTracking = 0.42;
+  static const double chatBodyHeight = 1.65;
+  static const double chatBodyTracking = 0.5;
 
   static const double dockLabel = 10;
   static const double dockLabelTracking = 0.55;
   static const double dockLabelGap = 2;
-  static const double dockCapsuleHeight = 56;
-  static const double dockCapsuleRadius = 28;
+  static const double dockCapsuleHeight = 52;
+  static const double dockCapsuleRadius = 26;
 
   /// Header + is a small filled circle; search is smaller still.
   /// Glyphs occupy ~35% of the circle so they do not crowd the rim.
-  static const double searchButton = 26;
-  static const double addButton = 28;
-  static const double headerGlyph = 9;
-  static const double headerGlyphStroke = 1.0;
+  static const double searchButton = 24;
+  static const double addButton = 26;
+  static const double headerGlyph = 8;
+  static const double headerGlyphStroke = 0.95;
 
-  static const double dockGlyph = 11;
-  static const double dockGlyphStroke = 1.0;
-  static const double dockSquircle = 18;
-  static const double dockSquircleRadius = 6;
+  static const double dockGlyph = 10;
+  static const double dockGlyphStroke = 0.95;
+  static const double dockSquircle = 16;
+  static const double dockSquircleRadius = 5.5;
 
-  static const double leadingCircle = 16;
-  static const double leadingCircleCompact = 14;
-  static const double leadingGlyph = 8;
-  static const double leadingGlyphCompact = 7;
+  static const double leadingCircle = 15;
+  static const double leadingCircleCompact = 13;
+  static const double leadingGlyph = 7;
+  static const double leadingGlyphCompact = 6;
 
   static const double sessionBullet = 3;
   static const double overflow = 9;
   static const double chevron = 10;
 
-  static const double scheduleStatus = 16;
-  static const double scheduleStatusGlyph = 7;
+  static const double scheduleStatus = 15;
+  static const double scheduleStatusGlyph = 6;
 
-  static const double fileTypeW = 12;
-  static const double fileTypeH = 9;
-  static const double fileTypeMark = 5;
+  static const double fileTypeW = 11;
+  static const double fileTypeH = 8;
+  static const double fileTypeMark = 4.5;
   static const double fileRowPadV = 3;
 
-  static const double composerPlus = 11;
-  static const double sendRing = 18;
-  static const double sendRingStroke = 1.05;
-  static const double sendStop = 5;
-  static const double scrollFab = 20;
-  static const double scrollChevron = 9;
+  static const double composerPlus = 10;
+  static const double sendRing = 17;
+  static const double sendRingStroke = 0.95;
+  static const double sendStop = 4.5;
+  static const double scrollFab = 18;
+  static const double scrollChevron = 8;
 
   static const double toolbarGlyph = 10;
   static const double footerGlyph = 11;
