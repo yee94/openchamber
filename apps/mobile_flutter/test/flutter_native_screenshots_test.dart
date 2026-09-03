@@ -164,8 +164,11 @@ void main() {
     expect(find.byKey(const Key('composer-dictate')), findsNothing);
     expect(find.text('Grok 4.6'), findsOneWidget);
     expect(find.text('Orchestrator'), findsOneWidget);
+    expect(find.textContaining('已处理'), findsWidgets);
+    expect(find.textContaining('Agent 参与'), findsOneWidget);
     expect(find.byKey(const Key('chat-tool-diff-edit-1')), findsOneWidget);
     expect(find.textContaining('已更改文件'), findsOneWidget);
+    expect(find.textContaining('个文件'), findsWidgets);
     expect(find.textContaining('tok/s'), findsOneWidget);
     expect(find.textContaining('需要权限'), findsNothing);
     expect(find.byKey(const Key('tab-projects')), findsNothing);
@@ -404,6 +407,16 @@ MemoryOpenChamberTransport _seededTransport() {
             'text': '已跑: ToolPart / toolDiffUtils / DiffView 相关测试，58 过。',
           },
           {
+            'id': 'task-1',
+            'type': 'tool',
+            'tool': 'task',
+            'state': {
+              'status': 'completed',
+              'input': {'description': 'patch diff viewer', 'prompt': 'patch diff viewer'},
+              'output': 'done',
+            },
+          },
+          {
             'id': 'edit-1',
             'type': 'tool',
             'tool': 'edit',
@@ -434,6 +447,76 @@ MemoryOpenChamberTransport _seededTransport() {
               'input': {'path': 'toolDiffUtils.ts'},
               'output':
                   '--- a/toolDiffUtils.ts\n+++ b/toolDiffUtils.ts\n@@\n-x\n+y\n',
+            },
+          },
+          {
+            'id': 'edit-4',
+            'type': 'tool',
+            'tool': 'edit',
+            'state': {
+              'status': 'completed',
+              'input': {'path': 'DiffView.tsx'},
+              'output': '--- a/DiffView.tsx\n+++ b/DiffView.tsx\n@@\n-old\n+new\n+line\n',
+            },
+          },
+          {
+            'id': 'edit-5',
+            'type': 'tool',
+            'tool': 'edit',
+            'state': {
+              'status': 'completed',
+              'input': {'path': 'chat_screen.dart'},
+              'output': '--- a/chat_screen.dart\n+++ b/chat_screen.dart\n@@\n-a\n+b\n',
+            },
+          },
+          {
+            'id': 'edit-6',
+            'type': 'tool',
+            'tool': 'edit',
+            'state': {
+              'status': 'completed',
+              'input': {'path': 'ios_chrome.dart'},
+              'output': '--- a/ios_chrome.dart\n+++ b/ios_chrome.dart\n@@\n-a\n+b\n+c\n',
+            },
+          },
+          {
+            'id': 'edit-7',
+            'type': 'tool',
+            'tool': 'edit',
+            'state': {
+              'status': 'completed',
+              'input': {'path': 'composer_bar.dart'},
+              'output': '--- a/composer_bar.dart\n+++ b/composer_bar.dart\n@@\n-a\n+b\n',
+            },
+          },
+          {
+            'id': 'edit-8',
+            'type': 'tool',
+            'tool': 'edit',
+            'state': {
+              'status': 'completed',
+              'input': {'path': 'tab_scaffold.dart'},
+              'output': '--- a/tab_scaffold.dart\n+++ b/tab_scaffold.dart\n@@\n-a\n+b\n',
+            },
+          },
+          {
+            'id': 'edit-9',
+            'type': 'tool',
+            'tool': 'edit',
+            'state': {
+              'status': 'completed',
+              'input': {'path': 'secondary_chrome.dart'},
+              'output': '--- a/secondary_chrome.dart\n+++ b/secondary_chrome.dart\n@@\n-a\n+b\n',
+            },
+          },
+          {
+            'id': 'edit-10',
+            'type': 'tool',
+            'tool': 'edit',
+            'state': {
+              'status': 'completed',
+              'input': {'path': 'app_theme.dart'},
+              'output': '--- a/app_theme.dart\n+++ b/app_theme.dart\n@@\n-a\n+b\n+c\n',
             },
           },
         ],
