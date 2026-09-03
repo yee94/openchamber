@@ -441,7 +441,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   )
                 : ListenableBuilder(
-                    listenable: Listenable.merge([_busy, _atLiveEdge]),
+                    listenable: Listenable.merge([_busy, _atLiveEdge, _timeline]),
                     builder: (context, _) {
                       return ComposerBar(
                         controller: _composer,
