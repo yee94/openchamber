@@ -19,24 +19,33 @@ class MobileFloatingSurface extends GroupedInsetCard {
 }
 
 /// Official `MobileLabeledSurfaceGroup` — inset group inside a floating surface.
+///
+/// Source: `packages/ui/src/mobile/MobileSurface.tsx` +
+/// `.oc-mobile-labeled-surface-group` (inset radius, 1px border, no shadow).
 class MobileLabeledSurfaceGroup extends StatelessWidget {
   const MobileLabeledSurfaceGroup({
     super.key,
-    required this.label,
+    this.label,
     this.children = const [],
   });
 
-  final Widget label;
+  final Widget? label;
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        label,
-        ...children,
-      ],
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(OcTokens.insetRadius),
+        border: Border.all(color: context.oc.mobileBorder),
+        color: Colors.transparent,
+      ),
+      child: Column(
+        children: [
+          if (label != null) label!,
+          ...children,
+        ],
+      ),
     );
   }
 }

@@ -1,0 +1,234 @@
+import 'dart:ui';
+
+/// Official `packages/ui/src/components/icon/sprite.ts` paths (24×24 viewBox).
+/// Flutter paints these so glyph *shape* matches WebView `Icon`, while
+/// [OcOptical] tokens own the on-screen size. Hit areas stay on the widget.
+class OcOfficialSprite {
+  const OcOfficialSprite({this.paths = const [], this.circles = const []});
+
+  final List<String> paths;
+  final List<(double cx, double cy, double r)> circles;
+}
+
+/// Homepage / dock / header roles only — names from MobileProjectCard,
+/// MobileWorktreeGroupLabel, MobileTabBar, MobileTabPageHeader.
+OcOfficialSprite? officialSpriteFor(String kindName) {
+  return switch (kindName) {
+    'search' => const OcOfficialSprite(
+        paths: ['m21 21-4.34-4.34'],
+        circles: [(11, 11, 8)],
+      ),
+    'plus' => const OcOfficialSprite(paths: ['M5 12h14', 'M12 5v14']),
+    'folder' => const OcOfficialSprite(
+        paths: [
+          'm6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2',
+        ],
+      ),
+    'sparkles' => const OcOfficialSprite(
+        paths: [
+          'M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z',
+          'M20 2v4',
+          'M22 4h-4',
+        ],
+        circles: [(4, 20, 2)],
+      ),
+    'calendar' => const OcOfficialSprite(
+        paths: [
+          'M16 14v2.2l1.6 1',
+          'M16 2v4',
+          'M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5',
+          'M3 10h5',
+          'M8 2v4',
+        ],
+        circles: [(16, 16, 6)],
+      ),
+    'gear' => const OcOfficialSprite(
+        paths: [
+          'M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915',
+        ],
+        circles: [(12, 12, 3)],
+      ),
+    'code' => const OcOfficialSprite(
+        paths: ['m18 16 4-4-4-4', 'm6 8-4 4 4 4', 'm14.5 4-5 16'],
+      ),
+    'branch' => const OcOfficialSprite(
+        paths: ['M6 15.4V3', 'M18 8.6c0 4.6-3.4 7.4-9.4 8'],
+        circles: [(18, 6, 2.6), (6, 18, 2.6)],
+      ),
+    'ellipsis' => const OcOfficialSprite(
+        circles: [(12, 12, 1), (19, 12, 1), (5, 12, 1)],
+      ),
+    'chevronDown' => const OcOfficialSprite(paths: ['m6 9 6 6 6-6']),
+    'chevronRight' => const OcOfficialSprite(paths: ['m9 6 6 6-6 6']),
+    'chevronBack' => const OcOfficialSprite(paths: ['m15 18-6-6 6-6']),
+    'xmark' => const OcOfficialSprite(paths: ['M18 6 6 18', 'm6 6 12 12']),
+    _ => null,
+  };
+}
+
+/// Paint a 24×24 official sprite into [size]. [strokeWidth] is the viewBox
+/// stroke (1.5 regular / 2 medium), matching `Icon.tsx`.
+void paintOfficialSprite({
+  required Canvas canvas,
+  required Size size,
+  required OcOfficialSprite sprite,
+  required Color color,
+  required double strokeWidth,
+}) {
+  if (size.width <= 0 || size.height <= 0) return;
+  canvas.save();
+  canvas.scale(size.width / 24, size.height / 24);
+  final stroke = Paint()
+    ..color = color
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = strokeWidth
+    ..strokeCap = StrokeCap.round
+    ..strokeJoin = StrokeJoin.round;
+  for (final d in sprite.paths) {
+    canvas.drawPath(parseSvgPath(d), stroke);
+  }
+  for (final circle in sprite.circles) {
+    canvas.drawCircle(Offset(circle.$1, circle.$2), circle.$3, stroke);
+  }
+  canvas.restore();
+}
+
+Path parseSvgPath(String d) {
+  final path = Path();
+  final tokens = _tokenizeSvgPath(d);
+  var i = 0;
+  var x = 0.0;
+  var y = 0.0;
+  var startX = 0.0;
+  var startY = 0.0;
+  var lastCmd = '';
+
+  double num() {
+    if (i >= tokens.length || tokens[i] is! double) {
+      throw FormatException('SVG path expected number at $i in "$d"');
+    }
+    return tokens[i++] as double;
+  }
+
+  bool hasNumber() => i < tokens.length && tokens[i] is double;
+
+  String takeCommand(String fallback) {
+    if (i < tokens.length && tokens[i] is String) {
+      return tokens[i++] as String;
+    }
+    if (fallback == 'M') return 'L';
+    if (fallback == 'm') return 'l';
+    return fallback;
+  }
+
+  while (i < tokens.length) {
+    final cmd = takeCommand(lastCmd);
+    lastCmd = cmd;
+    final relative = cmd == cmd.toLowerCase();
+    switch (cmd) {
+      case 'M':
+      case 'm':
+        x = relative ? x + num() : num();
+        y = relative ? y + num() : num();
+        path.moveTo(x, y);
+        startX = x;
+        startY = y;
+        lastCmd = relative ? 'm' : 'M';
+      case 'L':
+      case 'l':
+        x = relative ? x + num() : num();
+        y = relative ? y + num() : num();
+        path.lineTo(x, y);
+      case 'H':
+      case 'h':
+        x = relative ? x + num() : num();
+        path.lineTo(x, y);
+      case 'V':
+      case 'v':
+        y = relative ? y + num() : num();
+        path.lineTo(x, y);
+      case 'C':
+      case 'c':
+        final x1 = relative ? x + num() : num();
+        final y1 = relative ? y + num() : num();
+        final x2 = relative ? x + num() : num();
+        final y2 = relative ? y + num() : num();
+        x = relative ? x + num() : num();
+        y = relative ? y + num() : num();
+        path.cubicTo(x1, y1, x2, y2, x, y);
+      case 'A':
+      case 'a':
+        final rx = num();
+        final ry = num();
+        final rotation = num();
+        final large = num();
+        final sweep = num();
+        final nx = relative ? x + num() : num();
+        final ny = relative ? y + num() : num();
+        path.arcToPoint(
+          Offset(nx, ny),
+          radius: Radius.elliptical(rx.abs(), ry.abs()),
+          rotation: rotation * 3.141592653589793 / 180,
+          largeArc: large != 0,
+          clockwise: sweep != 0,
+        );
+        x = nx;
+        y = ny;
+      case 'Z':
+      case 'z':
+        path.close();
+        x = startX;
+        y = startY;
+      default:
+        throw FormatException('Unsupported SVG command $cmd in "$d"');
+    }
+    // Repeat the same command while numbers remain (SVG implicit repeats).
+    if (hasNumber() && cmd != 'Z' && cmd != 'z') {
+      lastCmd = cmd == 'M'
+          ? 'L'
+          : cmd == 'm'
+              ? 'l'
+              : cmd;
+    }
+  }
+  return path;
+}
+
+List<Object> _tokenizeSvgPath(String d) {
+  final out = <Object>[];
+  final buffer = StringBuffer();
+
+  void flushNumber() {
+    if (buffer.isEmpty) return;
+    out.add(double.parse(buffer.toString()));
+    buffer.clear();
+  }
+
+  for (var i = 0; i < d.length; i += 1) {
+    final ch = d[i];
+    final code = ch.codeUnitAt(0);
+    final isLetter = (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+    if (isLetter) {
+      flushNumber();
+      out.add(ch);
+      continue;
+    }
+    if (ch == ',' || ch == ' ' || ch == '\n' || ch == '\t') {
+      flushNumber();
+      continue;
+    }
+    if (ch == '-' && buffer.isNotEmpty && buffer.toString() != 'e' && buffer.toString() != 'E' && !buffer.toString().endsWith('e') && !buffer.toString().endsWith('E')) {
+      flushNumber();
+      buffer.write(ch);
+      continue;
+    }
+    if (ch == '.' && buffer.toString().contains('.')) {
+      flushNumber();
+      buffer.write(ch);
+      continue;
+    }
+    buffer.write(ch);
+  }
+  flushNumber();
+  return out;
+}

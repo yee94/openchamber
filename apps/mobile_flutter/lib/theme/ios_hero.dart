@@ -75,14 +75,17 @@ class OcOptical {
 
   /// Official `Button` `mobileIcon` is the disc (40). Search is `mobileGlass`
   /// (light plate + outside shadow), `+` is primary round. Glyph is `size-5`.
+  /// Hit area is the disc; visual glyph is [headerGlyph].
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
   static const double headerGlyph = 20;
-  static const double headerGlyphStroke = 1.75;
-  /// In-card strokes stay thinner than header medium, not hairline.
-  /// Official Remix `weight="medium"` stroke, same as header discs.
-  static const double listGlyphStroke = 1.75;
+  /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
+  static const double headerGlyphStroke = 1.5;
+  /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
+  static const double listGlyphStroke = 1.5;
+  /// Search-field prefix `Icon name="search" className="size-4"`.
+  static const double searchFieldGlyph = 16;
 
   /// Official `.oc-mobile-collapsing-header` — exact rem tokens, not optical guesses.
   static const double collapsingActionSize = 40;
@@ -104,18 +107,24 @@ class OcOptical {
   /// Official dock `Icon` is `size-[23px]` medium. Selected chrome is the
   /// full tab slot (icon + label), matching `.oc-mobile-tab-button`.
   static const double dockGlyph = 23;
-  static const double dockGlyphStroke = 1.75;
+  /// Official dock `Icon weight="medium"` (`ICON_STROKE_WIDTH_MEDIUM` = 2).
+  static const double dockGlyphStroke = 2;
   static const bool dockSelectedFullSlot = true;
   static const double dockIconWashAlpha = 0.55;
   static const double dockIconGlowAlpha = 0.0;
   static const double dockIconGlowBlur = 0;
 
-  /// Official project-shell icon 2.375rem; glyph `1.125rem` (18). Worktree
-  /// label uses `size-3.5` (14), not a second 38px card icon.
+  /// Official project-shell icon 2.375rem; glyph `1.125rem` (18) `code-box`.
+  /// Worktree label: `.oc-mobile-group-label-icon` 1.125rem box + `git-branch`
+  /// `size-3.5` (14). Hit areas (36/40) stay separate from these visuals.
   static const double leadingCircle = 38;
   static const double leadingCircleCompact = 22;
   static const double leadingGlyph = 18;
   static const double leadingGlyphCompact = 14;
+  static const double worktreeIconBox = 18;
+  static const double worktreeGlyph = 14;
+  /// Session / worktree `more-2` `size-3.5`. Project action is `size-4`.
+  static const double sessionMore = 14;
 
   static const double sessionBullet = 5;
   static const double overflow = 16;

@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'oc_official_sprites.dart';
+
 /// Vector chrome glyphs. WidgetTester cannot be trusted to load
 /// CupertinoIcons.ttf / MaterialIcons, so homepage / composer / dock
 /// icons are painted paths — the same shapes on device and in goldens.
@@ -69,7 +71,7 @@ class OcGlyph extends StatelessWidget {
         painter: _OcGlyphPainter(
           kind: kind,
           color: resolved,
-          strokeWidth: strokeWidth ?? (size >= 16 ? 1.75 : 1.45),
+          strokeWidth: strokeWidth ?? 1.5,
           filled: filled,
         ),
       ),
@@ -92,6 +94,17 @@ class _OcGlyphPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final official = officialSpriteFor(kind.name);
+    if (official != null) {
+      paintOfficialSprite(
+        canvas: canvas,
+        size: size,
+        sprite: official,
+        color: color,
+        strokeWidth: strokeWidth,
+      );
+      return;
+    }
     final stroke = Paint()
       ..color = color
       ..style = PaintingStyle.stroke

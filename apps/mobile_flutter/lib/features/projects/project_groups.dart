@@ -1,9 +1,14 @@
 import '../../data/home_session.dart';
 
 class WorktreeHomeGroup {
-  const WorktreeHomeGroup({required this.name, required this.sessions});
+  const WorktreeHomeGroup({
+    required this.name,
+    required this.path,
+    required this.sessions,
+  });
 
   final String name;
+  final String path;
   final List<HomeSessionRow> sessions;
 
   int get sessionCount => sessions.length;
@@ -36,7 +41,7 @@ class ProjectHomeGroup {
   }
 
   String? get pathHint {
-    final normalized = path.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+    final normalized = normalizeProjectPath(path);
     if (normalized.isEmpty) return null;
     final parts = normalized.split('/').where((part) => part.isNotEmpty).toList();
     if (parts.length <= 1) return normalized;
@@ -45,38 +50,85 @@ class ProjectHomeGroup {
   }
 }
 
-/// Group catalog rows the way official `MobileProjectsHome` does:
-/// one project, one floating surface. Linked worktrees stay inset groups
-/// inside that surface — never their own elevated cards.
+String normalizeProjectPath(String path) {
+  return path.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+}
+
+String projectPathLabel(String path) {
+  final normalized = normalizeProjectPath(path);
+  if (normalized.isEmpty) return path;
+  final parts = normalized.split('/').where((part) => part.isNotEmpty).toList();
+  return parts.isEmpty ? normalized : parts.last;
+}
+
+void _sortByActivity(List<HomeSessionRow> rows) {
+  rows.sort((a, b) {
+    final byUpdated = b.updated.compareTo(a.updated);
+    if (byUpdated != 0) return byUpdated;
+    return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+  });
+}
+
+/// Official `useMobileProjectsHomeModel` buckets by **worktree directory**,
+/// not git branch (`packages/ui/src/mobile/projects/useMobileProjectsHomeModel.ts`).
+///
+/// Root path (no linked worktree) is the project's main workspace — sessions
+/// list flat under one `MobileFloatingSurface`. Linked worktrees are other
+/// directories on the same project. Branch names never become their own cards.
 List<ProjectHomeGroup> groupSessionsByProject(List<HomeSessionRow> rows) {
   final byProject = <String, List<HomeSessionRow>>{};
   for (final row in rows) {
     byProject.putIfAbsent(row.projectLabel, () => []).add(row);
   }
   return byProject.entries.map((entry) {
-    final all = entry.value;
-    final path = all.map((row) => row.directory).whereType<String>().firstWhere(
-          (value) => value.isNotEmpty,
-          orElse: () => '',
-        );
-    final main = <HomeSessionRow>[];
-    final branches = <String, List<HomeSessionRow>>{};
+    final all = List<HomeSessionRow>.from(entry.value);
+    final directoryCounts = <String, int>{};
     for (final row in all) {
-      final branch = row.branch?.trim();
-      if (branch == null || branch.isEmpty || branch == 'main') {
-        main.add(row);
-      } else {
-        branches.putIfAbsent(branch, () => []).add(row);
+      final path = normalizeProjectPath(row.directory ?? '');
+      if (path.isEmpty) continue;
+      directoryCounts[path] = (directoryCounts[path] ?? 0) + 1;
+    }
+    String mainPath = '';
+    var mainCount = -1;
+    for (final item in directoryCounts.entries) {
+      if (item.value > mainCount) {
+        mainPath = item.key;
+        mainCount = item.value;
       }
     }
+    if (mainPath.isEmpty) {
+      mainPath = all
+          .map((row) => normalizeProjectPath(row.directory ?? ''))
+          .firstWhere((value) => value.isNotEmpty, orElse: () => '');
+    }
+
+    final main = <HomeSessionRow>[];
+    final linked = <String, List<HomeSessionRow>>{};
+    for (final row in all) {
+      final path = normalizeProjectPath(row.directory ?? '');
+      if (path.isEmpty || path == mainPath) {
+        main.add(row);
+      } else {
+        linked.putIfAbsent(path, () => []).add(row);
+      }
+    }
+    _sortByActivity(main);
+    for (final bucket in linked.values) {
+      _sortByActivity(bucket);
+    }
+
     return ProjectHomeGroup(
       id: entry.key,
       name: entry.key,
-      path: path,
+      path: mainPath,
       sessions: main,
       worktrees: [
-        for (final branch in branches.entries)
-          WorktreeHomeGroup(name: branch.key, sessions: branch.value),
+        for (final item in linked.entries)
+          WorktreeHomeGroup(
+            name: projectPathLabel(item.key),
+            path: item.key,
+            sessions: item.value,
+          ),
       ],
     );
   }).toList();

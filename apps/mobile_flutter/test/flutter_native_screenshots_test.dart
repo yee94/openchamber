@@ -85,9 +85,12 @@ void main() {
     expect(find.textContaining('Code/github'), findsWidgets);
     expect(find.textContaining('个会话'), findsWidgets);
     expect(find.textContaining('更多'), findsWidgets);
-    expect(find.textContaining('feat/opencode2up'), findsWidgets);
-    expect(find.textContaining('feat/remove-ctx', skipOffstage: false), findsWidgets);
-    expect(find.textContaining('ios-native', skipOffstage: false), findsWidgets);
+    expect(find.byKey(const Key('home-project-openchamber')), findsOneWidget);
+    expect(find.byKey(const Key('home-project-stack-openchamber')), findsOneWidget);
+    expect(find.textContaining('feat/opencode2up'), findsNothing);
+    expect(find.textContaining('feat/remove-ctx'), findsNothing);
+    expect(find.textContaining('ios-native'), findsNothing);
+    expect(find.text('发布说明'), findsOneWidget);
     expect(find.byKey(const Key('projects-attention-strip')), findsNothing);
     expect(find.byType(MobileTabPageHeader), findsOneWidget);
     expect(find.byKey(const Key('mobile-tab-page-header-slot')), findsOneWidget);

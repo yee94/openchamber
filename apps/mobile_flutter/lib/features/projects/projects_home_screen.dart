@@ -140,7 +140,12 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                     hintText: t(context, 'projects.search.placeholder'),
                     prefixIcon: Padding(
                       padding: const EdgeInsets.only(left: 10, right: 4),
-                      child: OcGlyph(OcGlyphKind.search, size: 16, color: context.oc.mutedForeground),
+                      child: OcGlyph(
+                        OcGlyphKind.search,
+                        size: OcOptical.searchFieldGlyph,
+                        strokeWidth: OcOptical.listGlyphStroke,
+                        color: context.oc.mutedForeground,
+                      ),
                     ),
                     prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 18),
                     filled: true,
@@ -188,28 +193,17 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     );
   }
 
-  bool _isWorktreeExpanded(String id, WorktreeHomeGroup tree) {
+  /// Official linked worktrees start collapsed; only search or an explicit
+  /// toggle opens them (`useMobileProjectsHomeModel` `expanded` for `kind !== 'main'`).
+  bool _isWorktreeExpanded(String id) {
     if (_query.trim().isNotEmpty) return true;
-    if (tree.sessions.any((row) => row.kind != HomeSessionKind.catalog)) return true;
     if (_worktreeToggled.contains(id)) return _expandedWorktrees.contains(id);
-    return tree.sessionCount >= 3;
+    return false;
   }
 
-  /// Main-workspace rows only. Worktree sessions stay in their nested groups.
-  List<HomeSessionRow> _mainSessions(ProjectHomeGroup group) {
-    final seen = <String>{};
-    final out = <HomeSessionRow>[];
-    void add(HomeSessionRow row) {
-      if (seen.add(row.id)) out.add(row);
-    }
-    for (final row in group.sessions) {
-      if (row.kind != HomeSessionKind.catalog) add(row);
-    }
-    for (final row in group.sessions) {
-      add(row);
-    }
-    return out;
-  }
+  /// Main-workspace rows only. Same-directory branches stay here — they are
+  /// not extra cards. Official: `mainWorkspace.sessions` under one shell.
+  List<HomeSessionRow> _mainSessions(ProjectHomeGroup group) => group.sessions;
 
   Widget _projectSurface(BuildContext context, ProjectHomeGroup group) {
     final expanded = !_collapsed.contains(group.id);
@@ -239,7 +233,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
               padding: const EdgeInsets.fromLTRB(12, 2, 12, 14),
               child: Column(
                 children: [
-                  if (mains.isNotEmpty) _insetGroup(context, children: _sessionSlice(context, group.id, mains, true)),
+                  if (mains.isNotEmpty) _insetGroup(children: _sessionSlice(context, group.id, mains, true)),
                   for (var i = 0; i < group.worktrees.length; i += 1) ...[
                     if (mains.isNotEmpty || i > 0) const SizedBox(height: 10),
                     _worktreeGroup(context, group.id, group.worktrees[i]),
@@ -252,31 +246,19 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     );
   }
 
-  Widget _insetGroup(BuildContext context, {Widget? label, required List<Widget> children}) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(OcTokens.insetRadius),
-        border: Border.all(color: context.oc.mobileBorder),
-      ),
-      child: Column(
-        children: [
-          if (label != null) label,
-          ...children,
-        ],
-      ),
-    );
+  Widget _insetGroup({Widget? label, required List<Widget> children}) {
+    return MobileLabeledSurfaceGroup(label: label, children: children);
   }
 
   Widget _worktreeGroup(BuildContext context, String projectId, WorktreeHomeGroup tree) {
-    final id = '$projectId::${tree.name}';
-    final expanded = _isWorktreeExpanded(id, tree);
+    final id = '$projectId::${tree.path}';
+    final expanded = _isWorktreeExpanded(id);
     return _insetGroup(
-      context,
       label: Pressable(
         key: Key('home-worktree-$id'),
         haptic: HapticStrength.light,
         onPressed: () => setState(() {
-          final next = !_isWorktreeExpanded(id, tree);
+          final next = !_isWorktreeExpanded(id);
           _worktreeToggled.add(id);
           if (next) {
             _expandedWorktrees.add(id);
@@ -288,11 +270,17 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
           padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
           child: Row(
             children: [
-              OcGlyph(
-                OcGlyphKind.branch,
-                size: OcOptical.leadingGlyphCompact,
-                strokeWidth: OcOptical.listGlyphStroke,
-                color: context.oc.mutedForeground,
+              SizedBox(
+                width: OcOptical.worktreeIconBox,
+                height: OcOptical.worktreeIconBox,
+                child: Center(
+                  child: OcGlyph(
+                    OcGlyphKind.branch,
+                    size: OcOptical.worktreeGlyph,
+                    strokeWidth: OcOptical.listGlyphStroke,
+                    color: context.oc.mutedForeground,
+                  ),
+                ),
               ),
               const SizedBox(width: 7),
               Expanded(
@@ -331,7 +319,8 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                 child: Center(
                   child: OcGlyph(
                     OcGlyphKind.ellipsis,
-                    size: 14,
+                    size: OcOptical.sessionMore,
+                    strokeWidth: OcOptical.listGlyphStroke,
                     color: context.oc.mutedForeground,
                   ),
                 ),

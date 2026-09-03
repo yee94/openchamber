@@ -111,7 +111,12 @@ class MobileProjectCard extends StatelessWidget {
               width: 36,
               height: 36,
               child: Center(
-                child: OcGlyph(OcGlyphKind.ellipsis, size: OcOptical.overflow, color: context.oc.mutedForeground),
+                child: OcGlyph(
+                  OcGlyphKind.ellipsis,
+                  size: OcOptical.overflow,
+                  strokeWidth: OcOptical.listGlyphStroke,
+                  color: context.oc.mutedForeground,
+                ),
               ),
             ),
           ],
