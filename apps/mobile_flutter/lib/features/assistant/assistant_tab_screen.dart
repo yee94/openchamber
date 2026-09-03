@@ -7,6 +7,7 @@ import '../../l10n/app_strings.dart';
 import '../../motion/pressable.dart';
 import '../../navigation/platform_route.dart';
 import '../../native/haptics.dart';
+import '../../mobile/mobile_surface.dart';
 import '../../theme/ios_chrome.dart';
 import '../chat/chat_screen.dart';
 
@@ -80,14 +81,9 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
   Widget build(BuildContext context) {
     final resource = widget.controller.assistantSnapshot;
     final snapshot = resource.value;
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.only(bottom: 24),
-          children: [
-            LargeTitleHeader(title: t(context, 'tabs.assistant')),
+    return MobileTabPageScaffold(
+      title: t(context, 'tabs.assistant'),
+      children: [
             if (_actionError != null)
               ListTile(title: Text(t(context, _actionError!), style: TextStyle(color: Theme.of(context).colorScheme.error))),
             if (resource.errorKey != null)
@@ -99,7 +95,7 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
               )
             else if (snapshot != null && snapshot.enabled && snapshot.assistants.isNotEmpty)
               for (final item in snapshot.assistants)
-                GroupedInsetCard(
+                MobileFloatingSurface(
                   child: Pressable(
                     key: Key('assistant-item-${item.id}'),
                     haptic: HapticStrength.light,
@@ -157,7 +153,7 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
                   ),
                 )
             else if (snapshot != null && !snapshot.enabled)
-              GroupedInsetCard(
+              MobileFloatingSurface(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
                   child: Column(
@@ -183,16 +179,14 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
                 ),
               )
             else
-              GroupedInsetCard(
+              MobileFloatingSurface(
                 child: ListTile(
                   key: const Key('assistant-empty'),
                   title: Text(t(context, 'assistant.empty.title')),
                   subtitle: Text(t(context, 'assistant.empty.description')),
                 ),
               ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 }

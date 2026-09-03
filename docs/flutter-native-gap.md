@@ -364,11 +364,11 @@ Yee rejected the Material 3 WidgetTester shots (underline fields, full-width sea
 
 | Surface | README target | Flutter now | Remaining pixel gap |
 |---|---|---|---|
-| Projects | Open CJK/Latin tracking on titles + session rows. Small thin glyphs. Search smaller than `+`. Nested worktrees. | Type: large title 32 / 1.6 / 1.28. Session rows 15 / 0.9 / 1.58 with 9px pad (tracking stays open). Meta 13 / 0.65 / 1.75. Icons: search 24 / `+` 26 / glyph 8; leading 13; dock 9 in 16×16 squircle. Soft card/dock lift. Catalog orange/sand. | WidgetTester dock is opaque, not `UITabBar` / `UIGlassEffect`. Session count is fixture-driven (20, not 50). |
+| Projects | Shared `MobileTabPageHeader` (sticky, fixed height, collapse fade). One `MobileFloatingSurface` + `MobileProjectCard` + `MobileSessionRow`. Main sessions under the project header; linked worktrees collapsible. No announcement/Live Activity banner. | Same widget tree. Header layout = safe-area + 12 + 40. Title scales 1→0.625 over 48px. Search/`+` are official 40px. Nested rows stay packed (15 / 0.4 / 1.32, pad 6). Catalog orange/sand. | WidgetTester header fade is a solid color-mix, not UIKit blur. Dock/composer stay opaque. Fixture 20 sessions, not 50. |
 | Chat | Pushed (dock hidden). Slim header. Open body leading. Ring send. | Same IA. Plain back chevron (no circular housing). Header title 15 / w500. Body height 1.65 / tracking 0.5. File marks 10×7. Composer `+` 10, send ring 17 / stop 4.5. User bubble is a primary wash on `OcTokens.card`. | **WidgetTester ≠ live iOS glass.** Real iOS keeps `UITextView` + `UIGlassEffect`. No official Grok brand asset. File-type marks are painted MD/TS/TSX. |
-| Scheduled | Open title↔meta leading. Small status glyphs. Shared filter capsule. `+` is catalog primary, not ink black. | Title 16 / 0.8 / 1.48. Meta 13 / 0.65 / 1.75 with 11px gap. Status circle 13 / glyph 5. `+` 26 filled primary. Filter chips sit in one muted track. Paused rows are greyscale + 0.78 fade. | Create-task `+` is chrome-only. Overflow `...` still calls run-now. |
-| Assistant | Contact cards (avatar, name, mode, summary). Enable guide only when off | Landed. No 「启用助理」 toggle on the catalog. | Official guide hero images are not bundled. |
-| Settings | Large title, pill search, inset groups. Appearance = language + theme | Landed | Detail pages still use compact back + title. |
+| Scheduled | Same `MobileTabPageHeader` as Projects. Open title↔meta leading. Shared filter capsule. | Shared collapsing header. Title 16 / 0.8 / 1.48. Filter chips in one muted track. Paused rows greyscale + 0.78. `+` is catalog primary 40. | Create-task `+` is chrome-only. Overflow `...` still calls run-now. |
+| Assistant | Same shared header. Contact cards (avatar, name, mode, summary). Enable guide only when off | Shared collapsing header. No 「启用助理」 toggle on the catalog. | Official guide hero images are not bundled. |
+| Settings | Same shared header. Pill search, inset groups. Appearance = language + theme | Shared collapsing header. | Detail pages still use compact back + title. |
 | Connect | QR primary, inset grouped fields, no floating-label overlap | Landed | Manual section stays expanded by default so tests can fill URL/token. |
 | Tab dock | Four roots, selected glyph = theme primary. Only the active root keeps the selected pill. | iOS: `UITabBarController`. Android/tests: floating capsule with painted glyphs. Selected pill uses `OcSelectedSpring` (not a 300ms linear fade). | WidgetTester capsule is Material-elevation, not `UIGlassEffect`. This VM cannot run an iOS Simulator. |
 
@@ -443,6 +443,19 @@ Live WebView then overwrites `:root` with Flexoki (`#BC5215` / `#fffdf4`) via Th
 Product chrome **not** in the semantic catalog: agent-count purple `OcProductChrome.agentAccent` (`#7A5CFF`).
 
 `--oc-mobile-glass-fill` is **not** faked in Flutter. iOS keeps `UIGlassEffect` / `UITabBar`. Android/WidgetTester dock and composer stay opaque `surfaceElevated`.
+
+## Official widget map (main → Flutter)
+
+| Official (main) | Flutter |
+|---|---|
+| `MobileTabPageHeader` | `MobileTabPageHeader` (`lib/mobile/mobile_tab_page_header.dart`) |
+| `MobileTabPageScaffold` | `MobileTabPageScaffold` (`lib/mobile/mobile_surface.dart`) |
+| `MobileFloatingSurface` | `MobileFloatingSurface` (extends `GroupedInsetCard`) |
+| `MobileLabeledSurfaceGroup` | `MobileLabeledSurfaceGroup` |
+| `MobileProjectCard` | `MobileProjectCard` (`lib/mobile/mobile_project_card.dart`) |
+| `MobileSessionRow` | `MobileSessionRow` (`lib/mobile/mobile_session_row.dart`) |
+
+Root tabs (项目 / 计划 / 助理 / 设置) all use `MobileTabPageScaffold`. Chat stays `PushedNavBar`. Connect keeps in-flow `LargeTitleHeader` (not a root tab). There is no status/attention/Dynamic Island banner above the title.
 
 ## Fourteenth-slice status (native press / spring / back)
 

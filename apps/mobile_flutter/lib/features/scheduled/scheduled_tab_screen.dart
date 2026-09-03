@@ -7,6 +7,7 @@ import '../../l10n/app_strings.dart';
 import '../../motion/pressable.dart';
 import '../../navigation/platform_route.dart';
 import '../../native/haptics.dart';
+import '../../mobile/mobile_surface.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
 import '../chat/chat_screen.dart';
@@ -101,14 +102,9 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
     final tasks = widget.controller.scheduledTasks;
     final runs = widget.controller.scheduledRuns;
     final filterId = widget.controller.scheduledFilterTaskId;
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: ListView(
-          clipBehavior: Clip.none,
-          padding: const EdgeInsets.only(bottom: 24),
-          children: [
-            LargeTitleHeader(title: t(context, 'tabs.scheduled')),
+    return MobileTabPageScaffold(
+      title: t(context, 'tabs.scheduled'),
+      children: [
             SegmentedPill(
               labels: [t(context, 'scheduled.views.tasks'), t(context, 'scheduled.views.history')],
               icons: const [OcGlyphKind.calendar, OcGlyphKind.clock],
@@ -184,9 +180,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
                 child: Text(t(context, 'scheduled.partialFailure')),
               ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 

@@ -104,7 +104,7 @@ class _TabSlot extends StatelessWidget {
                 height: OcOptical.dockSquircle,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Color.lerp(Colors.transparent, tokens.primary.withValues(alpha: 0.14), t),
+                  color: Color.lerp(Colors.transparent, tokens.primary.withValues(alpha: 0.2), t),
                   borderRadius: BorderRadius.circular(OcOptical.dockSquircleRadius),
                 ),
                 child: OcGlyph(

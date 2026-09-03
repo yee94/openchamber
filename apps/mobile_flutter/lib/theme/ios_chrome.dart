@@ -449,39 +449,6 @@ class FilterChipBar extends StatelessWidget {
   }
 }
 
-class StatusAttentionStrip extends StatelessWidget {
-  const StatusAttentionStrip({super.key, required this.label, this.moreLabel});
-
-  final String label;
-  final String? moreLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      key: const Key('projects-attention-strip'),
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter, vertical: 8),
-      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.86),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w500),
-            ),
-          ),
-          if (moreLabel != null) ...[
-            Text(moreLabel!, style: TextStyle(fontSize: OcTokens.textUiLabel, color: context.oc.mutedForeground)),
-            OcGlyph(OcGlyphKind.chevronRight, size: 13, color: context.oc.mutedForeground),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
   const PushedNavBar({
     super.key,

@@ -18,6 +18,7 @@ import 'package:openchamber/features/shell/tab_scaffold.dart';
 import 'package:openchamber/features/splash/splash_screen.dart';
 import 'package:openchamber/l10n/app_strings.dart';
 import 'package:openchamber/data/dictation.dart';
+import 'package:openchamber/mobile/mobile_tab_page_header.dart';
 import 'package:openchamber/theme/app_theme.dart';
 import 'package:openchamber/theme/ios_chrome.dart';
 import 'review_fonts.dart';
@@ -84,8 +85,9 @@ void main() {
     expect(find.textContaining('feat/opencode2up'), findsWidgets);
     expect(find.textContaining('feat/remove-ctx', skipOffstage: false), findsWidgets);
     expect(find.textContaining('ios-native', skipOffstage: false), findsWidgets);
-    expect(find.textContaining('NPM 全 package fix'), findsWidgets);
-    expect(find.byKey(const Key('projects-attention-strip')), findsOneWidget);
+    expect(find.byKey(const Key('projects-attention-strip')), findsNothing);
+    expect(find.byType(MobileTabPageHeader), findsOneWidget);
+    expect(find.byKey(const Key('mobile-tab-page-header-spacer')), findsOneWidget);
     expect(find.textContaining('置顶'), findsNothing);
     expect(find.byKey(const Key('tab-projects')), findsOneWidget);
     await tester.tap(find.byKey(const Key('projects-plus-menu')));
@@ -102,6 +104,7 @@ void main() {
     expect(find.text('启用助理'), findsNothing);
     expect(find.textContaining('连续模式'), findsWidgets);
     expect(find.byKey(const Key('tab-assistant')), findsOneWidget);
+    expect(find.byType(MobileTabPageHeader), findsOneWidget);
     await _writePng(tester, screenshotKey, '03-assistant.png');
 
     await tester.tap(find.byKey(const Key('tab-scheduled')));
@@ -116,11 +119,13 @@ void main() {
     expect(find.text('已暂停'), findsWidgets);
     expect(find.byKey(const Key('dock-selected-scheduled')), findsOneWidget);
     expect(find.byKey(const Key('dock-selected-projects')), findsNothing);
+    expect(find.byType(MobileTabPageHeader), findsOneWidget);
     await _writePng(tester, screenshotKey, '04-scheduled.png');
 
     await tester.tap(find.byKey(const Key('tab-settings')));
     await _pumpFrames(tester);
     expect(find.byKey(const Key('settings-search')), findsOneWidget);
+    expect(find.byType(MobileTabPageHeader), findsOneWidget);
     expect(find.byKey(const Key('settings-slug-appearance')), findsOneWidget);
     expect(find.byKey(const Key('settings-slug-iosNativeUi'), skipOffstage: false), findsNothing);
     await _writePng(tester, screenshotKey, '05-settings.png');

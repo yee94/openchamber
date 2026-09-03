@@ -12,14 +12,13 @@ class OcOptical {
   static const double largeTitleTracking = 1.6;
   static const double largeTitleHeight = 1.28;
 
-  /// Yee: type was too tight. Open CJK/Latin tracking + leading.
-  /// Do not densify these back toward a packed README photo.
+  /// Large titles stay open. Nested session / file rows pack toward README.
   /// Glyph sizes stay small; colors stay on [OcTokens].
   static const double rowTitle = 15;
-  static const double rowTitleTracking = 0.9;
-  static const double rowTitleHeight = 1.58;
-  static const double sessionRowPadV = 9;
-  static const double moreLinkPadV = 6;
+  static const double rowTitleTracking = 0.4;
+  static const double rowTitleHeight = 1.32;
+  static const double sessionRowPadV = 6;
+  static const double moreLinkPadV = 5;
   static const double groupHeaderPadV = 11;
   static const double groupHeaderPadVCompact = 9;
   static const double groupTitleMetaGap = 8;
@@ -39,8 +38,8 @@ class OcOptical {
   static const double chatTitleTracking = 0.4;
   static const double chatTitleHeight = 1.32;
   static const double chatHeaderButton = 24;
-  static const double chatBodyHeight = 1.65;
-  static const double chatBodyTracking = 0.5;
+  static const double chatBodyHeight = 1.42;
+  static const double chatBodyTracking = 0.28;
 
   static const double dockLabel = 10;
   static const double dockLabelTracking = 0.55;
@@ -48,17 +47,25 @@ class OcOptical {
   static const double dockCapsuleHeight = 52;
   static const double dockCapsuleRadius = 26;
 
-  /// Header + is a small filled circle; search is smaller still.
-  /// Glyphs occupy ~35% of the circle so they do not crowd the rim.
-  static const double searchButton = 24;
-  static const double addButton = 26;
-  static const double headerGlyph = 8;
+  /// Official `Button size="mobileIcon"` is 2.5rem (40). Search and + share
+  /// that circle so the glass disc is not a tiny sibling of an oversized +.
+  /// Glyphs follow official `size-5` (20). Nested list/dock glyphs stay small.
+  static const double searchButton = 40;
+  static const double addButton = 40;
+  static const double headerGlyph = 20;
   static const double headerGlyphStroke = 0.95;
+
+  /// `--oc-mobile-collapsing-action-size` / expand-shift / collapse distance.
+  static const double collapsingActionSize = 40;
+  static const double collapsingTopPad = 12;
+  static const double collapsingExpandShift = 10;
+  static const double titleCollapseDistance = 48;
+  static const double titleCollapseScaleEnd = 0.625;
 
   static const double dockGlyph = 9;
   static const double dockGlyphStroke = 0.9;
-  static const double dockSquircle = 16;
-  static const double dockSquircleRadius = 5.5;
+  static const double dockSquircle = 18;
+  static const double dockSquircleRadius = 6;
 
   static const double leadingCircle = 13;
   static const double leadingCircleCompact = 11;
@@ -75,7 +82,7 @@ class OcOptical {
   static const double fileTypeW = 10;
   static const double fileTypeH = 7;
   static const double fileTypeMark = 4;
-  static const double fileRowPadV = 2;
+  static const double fileRowPadV = 1;
 
   static const double composerRadius = 22;
   static const double composerPlus = 10;

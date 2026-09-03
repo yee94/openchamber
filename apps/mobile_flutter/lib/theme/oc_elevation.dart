@@ -2,15 +2,16 @@ import 'package:flutter/material.dart';
 
 import 'oc_tokens.dart';
 
-/// Official `--oc-mobile-float-shadow` / `--oc-mobile-shadow-*` layers.
+/// Official `--oc-mobile-float-shadow` / `--oc-mobile-glass-shadow` layers.
 ///
-/// Light: soft outside-only lift (README photos). Dark: no drop shadow —
-/// hairline borders on the owning widget. Not Material 3 elevation.
-/// Not a Flutter glass clone (no blur / inset highlight).
+/// Light: soft outside-only lift. Dark: no drop shadow — hairline borders on
+/// the owning widget. Not Material 3 elevation. Not a Flutter glass clone
+/// (no blur / inset highlight — iOS glass stays on UIKit overlays).
 class OcElevation {
   const OcElevation._();
 
-  /// Project / settings cards. Maps `--oc-mobile-float-shadow` without inset.
+  /// Project / settings cards. Maps `--oc-mobile-float-shadow` without inset:
+  /// `0 0 2px / 0.04`, `0 0 12px / 0.05`, `0 10px 24px -6px / 0.1`.
   static List<BoxShadow> card(BuildContext context, {bool tight = false}) =>
       cardFor(OcTokens.of(context), tight: tight);
 
@@ -18,15 +19,15 @@ class OcElevation {
     if (tokens.isDark) return const [];
     if (tight) {
       return const [
-        BoxShadow(color: Color(0x04000000), blurRadius: 5),
-        BoxShadow(color: Color(0x06000000), blurRadius: 20),
-        BoxShadow(color: Color(0x08000000), blurRadius: 30, spreadRadius: -10, offset: Offset(0, 3)),
+        BoxShadow(color: Color(0x0A000000), blurRadius: 2),
+        BoxShadow(color: Color(0x0D000000), blurRadius: 10),
+        BoxShadow(color: Color(0x14000000), blurRadius: 18, spreadRadius: -6, offset: Offset(0, 8)),
       ];
     }
     return const [
-      BoxShadow(color: Color(0x08000000), blurRadius: 3),
-      BoxShadow(color: Color(0x0A000000), blurRadius: 18),
-      BoxShadow(color: Color(0x0E000000), blurRadius: 32, spreadRadius: -10, offset: Offset(0, 7)),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 12),
+      BoxShadow(color: Color(0x1A000000), blurRadius: 24, spreadRadius: -6, offset: Offset(0, 10)),
     ];
   }
 
@@ -36,8 +37,8 @@ class OcElevation {
   static List<BoxShadow> groupedFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x06000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0A000000), blurRadius: 12, spreadRadius: -4, offset: Offset(0, 3)),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 12, spreadRadius: -4, offset: Offset(0, 3)),
     ];
   }
 
@@ -47,9 +48,9 @@ class OcElevation {
   static List<BoxShadow> dockFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x06000000), blurRadius: 3),
-      BoxShadow(color: Color(0x08000000), blurRadius: 16),
-      BoxShadow(color: Color(0x0E000000), blurRadius: 28, spreadRadius: -8, offset: Offset(0, 5)),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0F000000), blurRadius: 12),
+      BoxShadow(color: Color(0x1F000000), blurRadius: 20, spreadRadius: -6, offset: Offset(0, 8)),
     ];
   }
 
@@ -59,20 +60,20 @@ class OcElevation {
   static List<BoxShadow> controlFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x08000000), blurRadius: 2),
-      BoxShadow(color: Color(0x10000000), blurRadius: 8, offset: Offset(0, 2)),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 2),
+      BoxShadow(color: Color(0x1F000000), blurRadius: 8, offset: Offset(0, 2)),
     ];
   }
 
-  /// Composer pill — same family as dock, slightly tighter.
+  /// Composer pill — same family as dock (`--oc-mobile-glass-shadow`).
   static List<BoxShadow> composer(BuildContext context) => composerFor(OcTokens.of(context));
 
   static List<BoxShadow> composerFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x06000000), blurRadius: 2),
-      BoxShadow(color: Color(0x08000000), blurRadius: 14),
-      BoxShadow(color: Color(0x0C000000), blurRadius: 22, spreadRadius: -6, offset: Offset(0, 4)),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0F000000), blurRadius: 12),
+      BoxShadow(color: Color(0x1F000000), blurRadius: 20, spreadRadius: -6, offset: Offset(0, 8)),
     ];
   }
 }

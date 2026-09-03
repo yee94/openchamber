@@ -4,6 +4,7 @@ import '../../data/app_controller.dart';
 import '../../data/settings_catalog.dart';
 import '../../l10n/app_strings.dart';
 import '../../navigation/platform_route.dart';
+import '../../mobile/mobile_surface.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
 import 'settings_pages.dart';
@@ -29,16 +30,9 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
         .toList();
     final groups = groupMobileSettingsPages(matches);
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        bottom: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-            LargeTitleHeader(title: t(context, 'settings.home.title')),
+    return MobileTabPageScaffold(
+      title: t(context, 'settings.home.title'),
+      children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 16),
               child: TextField(
@@ -108,10 +102,7 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
                   }).toList(),
                 );
               }),
-          ],
-          ),
-        ),
-      ),
+      ],
     );
   }
 }
