@@ -188,8 +188,8 @@ class OcOptical {
   /// grid / holed gear. Not hairline outlines and not brick mass.
   static const bool dockGlyphFillBodies = true;
   static const bool dockSelectedFullSlot = true;
-  /// Official selected class is `bg-interactive-selection/55`. The
-  /// authored token already carries that alpha — see [OcTokens.selectedTabWash].
+  /// Official selected class is `bg-interactive-selection/55`.
+  /// [OcTokens.selectedTabWash] multiplies authored alpha by this.
   static const double dockIconWashAlpha = 0.55;
   /// Official selected tab is `bg-interactive-selection/55` on already-
   /// frosted dock glass — no second BackdropFilter. Nested sigma painted
@@ -198,7 +198,7 @@ class OcOptical {
   /// Official `--oc-mobile-glass-blur` on the 36 `mobileGlass` disc.
   static const double chipBlur = 20;
   /// WidgetTester cream + [chipBlur] paints a solid disc. 0 = page bleed
-  /// through a clear chip. Contact rim only — no inset sheen coin.
+  /// through a clear chip. No contact rim — that read as a painted disc.
   static const double chipBleedBlur = 0;
   /// Official `.oc-mobile-floating-surface` `blur(22px) saturate(1.35)`.
   /// Distinct from control-scale [chipBlur] / [glassSaturate].

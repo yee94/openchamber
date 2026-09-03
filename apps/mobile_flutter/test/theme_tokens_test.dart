@@ -42,9 +42,12 @@ void main() {
     expect(OcTokens.dark.glassHighlight.a, closeTo(0.18, 0.01));
     expect(OcTokens.light.glassHighlight.a, lessThan(OcTokens.light.floatHighlight.a));
     expect(OcTokens.light.dockPlate.a, lessThan(OcTokens.light.glassFill.a));
-    expect(OcTokens.light.selectedTabWash, OcTokens.light.interactiveSelection);
-    expect(OcTokens.light.selectedTabWash.a, closeTo(0.086, 0.005));
-    expect(OcTokens.dark.selectedTabWash, OcTokens.dark.interactiveSelection);
+    expect(
+      OcTokens.light.selectedTabWash.a,
+      closeTo(OcTokens.light.interactiveSelection.a * OcOptical.dockIconWashAlpha, 0.005),
+    );
+    expect(OcTokens.light.selectedTabWash.a, lessThan(OcTokens.light.interactiveSelection.a));
+    expect(OcTokens.light.selectedTabWash.a, greaterThan(0.03));
     expect(OcOptical.dockIconWashAlpha, closeTo(0.55, 0.01));
     expect(
       (OcTokens.light.selectedTabWash.r - OcTokens.light.primary.r).abs(),
@@ -274,7 +277,7 @@ void main() {
       OcElevation.chipFor(OcTokens.light).every((s) => s.blurStyle != BlurStyle.inner),
       isTrue,
     );
-    // OcGlassChip and primary `+` share contact-only chip shadow.
+    // Primary `+` stays contact-only. OcGlassChip no longer paints a rim.
     expect(OcElevation.chipFor(OcTokens.light), hasLength(1));
     expect(OcElevation.glassHighlightFor(OcTokens.light), hasLength(1));
     expect(OcElevation.glassHighlightFor(OcTokens.light).single.blurStyle, BlurStyle.inner);

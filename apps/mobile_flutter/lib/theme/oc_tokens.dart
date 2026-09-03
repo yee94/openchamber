@@ -148,7 +148,8 @@ class OcTokens extends ThemeExtension<OcTokens> {
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
   /// Page-bleed chip: clear fill. Cream + blur paints a plate; 0.68
-  /// without blur is a coin. Contact rim only — no inset/umbra.
+  /// without blur is a coin. No painted disc — search drops the
+  /// contact rim that read as ΔL≈+21 on cream (wake-0732).
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: 0);
 
@@ -170,11 +171,11 @@ class OcTokens extends ThemeExtension<OcTokens> {
       foreground.withValues(alpha: isDark ? 0.122 : 0.086);
 
   /// Official selected-tab fill is `bg-interactive-selection/55`.
-  /// Authored `#16121016` already *is* that mix. Double-dipping
-  /// 0.086×0.55 vanishes on WidgetTester cream. Paint the authored
-  /// token, mix-only — no RGB@0.55, no nested frost (wake-0729).
-  /// Soft cream pill on WidgetTester is an accepted residual.
-  Color get selectedTabWash => interactiveSelection;
+  /// Mix the authored token at [OcOptical.dockIconWashAlpha] so the
+  /// 58×r29 cell is a through-wash, not a second cream plate (wake-0732).
+  /// Do not use RGB@0.55 or a nested frost.
+  Color get selectedTabWash =>
+      interactiveSelection.withValues(alpha: interactiveSelection.a * OcOptical.dockIconWashAlpha);
 
   /// `--oc-mobile-header-fade` = surface-background 85%.
   Color get headerFade => background.withValues(alpha: 0.85);
