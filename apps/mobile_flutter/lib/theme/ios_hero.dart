@@ -45,8 +45,9 @@ class OcOptical {
   /// Fraction of the CSS line-height moved into strut `leading` so CJK
   /// glyphs do not fill the 16/12 boxes. Total box stays official —
   /// [ocCssLineBox] must not floor `height` at 1.0 or leading grows the
-  /// row instead of opening air inside it.
-  static const double sessionLineLeading = 0.399;
+  /// row instead of opening air inside it. Official gap-0.5 stays 2;
+  /// more air is this leading, not an invented gap.
+  static const double sessionLineLeading = 0.48;
   /// `.oc-mobile-session-status` 0.75rem; `.oc-mobile-session-row-main` gap 0.5rem.
   static const double sessionStatus = 12;
   static const double sessionRowMainGap = 8;

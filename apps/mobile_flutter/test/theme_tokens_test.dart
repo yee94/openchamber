@@ -116,9 +116,9 @@ void main() {
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.sessionLineLeading, closeTo(0.399, 0.001));
-    expect(OcOptical.sessionLineLeading, greaterThan(0.35));
-    expect(OcOptical.sessionLineLeading, lessThan(0.40));
+    expect(OcOptical.sessionLineLeading, closeTo(0.48, 0.001));
+    expect(OcOptical.sessionLineLeading, greaterThan(0.40));
+    expect(OcOptical.sessionLineLeading, lessThan(0.55));
     for (final box in [OcOptical.rowTitleHeight, OcOptical.sessionSubtitleHeight]) {
       final height = (box - OcOptical.sessionLineLeading).clamp(0.5, box);
       expect(height + OcOptical.sessionLineLeading, closeTo(box, 0.001));
@@ -269,6 +269,10 @@ void main() {
     expect(
       OcElevation.chipFor(OcTokens.light).every((s) => s.blurStyle != BlurStyle.inner),
       isTrue,
+    );
+    expect(
+      [...OcElevation.chipFor(OcTokens.light), ...OcElevation.glassHighlightFor(OcTokens.light)],
+      hasLength(2),
     );
     expect(OcElevation.glassHighlightFor(OcTokens.light).single.blurStyle, BlurStyle.inner);
     expect(
