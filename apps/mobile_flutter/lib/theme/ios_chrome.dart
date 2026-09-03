@@ -113,8 +113,10 @@ class OcGlassChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          // Shadows live outside the clip. Fill is WidgetTester frost,
-          // not cream paint and not a 0.82 coin. No 8px umbra / + glow.
+          // Official `mobileGlass`: glass-fill 0.68 + frost + control
+          // near-pair. Shadows stay outside the clip. No 8px umbra /
+          // primary glow — those mint coins. The 0.68 white plate is
+          // what lifts the chip off the cream page.
           boxShadow: [
             ...OcElevation.control(context),
             ...OcElevation.glassHighlight(context),
@@ -122,7 +124,7 @@ class OcGlassChip extends StatelessWidget {
         ),
         child: ClipOval(
           child: OcFrosted(
-            fill: context.oc.glassChipFill,
+            fill: context.oc.glassFill,
             child: Center(child: child),
           ),
         ),

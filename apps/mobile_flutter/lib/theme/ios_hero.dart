@@ -45,7 +45,7 @@ class OcOptical {
   static const double sessionTitleSubtitleGap = 2;
   /// Fraction of the CSS line-height moved into strut `leading` so CJK
   /// glyphs do not fill the 16/12 boxes. Total box stays official.
-  static const double sessionLineLeading = 0.28;
+  static const double sessionLineLeading = 0.32;
   /// `.oc-mobile-session-status` 0.75rem; `.oc-mobile-session-row-main` gap 0.5rem.
   static const double sessionStatus = 12;
   static const double sessionRowMainGap = 8;
@@ -134,8 +134,8 @@ class OcOptical {
   static const double addButton = 40;
   static const double headerDisc = 40;
   /// Official hit is 40 (`mobileIcon`). Painted plate is 36. Search is
-  /// WidgetTester frost + glassChipFill, not cream paint. No 8px umbra /
-  /// + glow.
+  /// WidgetTester frost + official `glassFill` (0.68 white), not cream
+  /// paint and not a 0.82 coin. No 8px umbra / + glow.
   static const double headerDiscVisual = 36;
   static const double headerGlyph = 20;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.

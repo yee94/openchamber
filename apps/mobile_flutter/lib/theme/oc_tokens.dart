@@ -146,10 +146,12 @@ class OcTokens extends ThemeExtension<OcTokens> {
   Color get glassFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
-  /// Circular `mobileGlass` chips. Official fill is 0.68 + live blur.
-  /// Pair with [OcFrosted] on the 36 disc — opaque 0.48–0.82 paint is a
-  /// cream/white coin. 0.58 under official 0.68 keeps a white glass
-  /// plate that frost can still read through. 40 hit / 36 visual.
+  /// Circular `Button` `mobileGlass` chips. Official
+  /// `--oc-mobile-glass-fill` is white / 0.68 (dark 0.66) + live blur.
+  /// Under-filling to 0.58 still composites to page cream. Header search
+  /// uses [glassFill] so the disc is a white/glass plate against the
+  /// page, not cream paint. Composer / pill tracks keep this quieter
+  /// mix so content can still read through. 40 hit / 36 visual.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: isDark ? 0.42 : 0.58);
 
