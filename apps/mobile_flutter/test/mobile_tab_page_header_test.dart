@@ -41,7 +41,7 @@ void main() {
     expect(expanded.height, 47 + OcOptical.collapsingTopPad + OcOptical.collapsingActionSize);
     expect(
       tester.getSize(find.byKey(const Key('mobile-tab-page-header-slot'))).height,
-      expanded.height,
+      expanded.height - MobileTabPageHeader.restPeek,
     );
     expect(tester.getSize(find.byKey(const Key('mobile-tab-page-header-spacer'))).height, 10);
 
