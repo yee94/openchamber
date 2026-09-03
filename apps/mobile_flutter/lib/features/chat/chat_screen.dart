@@ -58,8 +58,11 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _live.selectSession(widget.session.id);
-    SecondaryChrome.chatOpened();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToLatest());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      SecondaryChrome.chatOpened();
+      _jumpToLatest();
+    });
     widget.appController?.addListener(_onApp);
     unawaited(_load());
   }

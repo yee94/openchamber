@@ -45,7 +45,10 @@ class _MobileTabScaffoldState extends State<MobileTabScaffold> {
   }
 
   void _onSecondaryChrome() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   void _select(String id) {
