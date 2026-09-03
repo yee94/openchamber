@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../data/oauth.dart';
 import '../data/pairing_payload.dart';
 import 'platform_channels.dart';
 
@@ -13,7 +14,7 @@ class IncomingDeepLink {
   final DeepLinkKind kind;
 }
 
-enum DeepLinkKind { pairing, shareInbox, session, settings, unknown }
+enum DeepLinkKind { pairing, shareInbox, session, settings, oauth, unknown }
 
 IncomingDeepLink classifyDeepLink(String raw) {
   final trimmed = raw.trim();
@@ -29,6 +30,9 @@ IncomingDeepLink classifyDeepLink(String raw) {
   }
   if (trimmed.startsWith('openchamber://settings') || trimmed.startsWith('openchamber://view/')) {
     return IncomingDeepLink(raw: trimmed, kind: DeepLinkKind.settings);
+  }
+  if (isOAuthCallbackLink(trimmed)) {
+    return IncomingDeepLink(raw: trimmed, kind: DeepLinkKind.oauth);
   }
   return IncomingDeepLink(raw: trimmed);
 }

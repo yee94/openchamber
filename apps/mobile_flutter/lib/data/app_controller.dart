@@ -7,11 +7,13 @@ import 'package:flutter/services.dart';
 
 import '../l10n/app_strings.dart';
 import '../native/deep_link.dart';
+import '../native/external_browser.dart';
 import '../native/live_activity_controller.dart';
 import '../native/platform_channels.dart';
 import '../native/push_registration.dart';
 import '../native/qr_scanner.dart';
 import '../native/share_targeting.dart';
+import 'oauth.dart';
 import 'assistant_scheduled.dart';
 import 'chat_timeline.dart';
 import 'home_session.dart';
@@ -42,11 +44,13 @@ class AppController extends ChangeNotifier {
     OpenChamberApi? api,
     NativePush? push,
     OpenRelayTunnel? openRelayTunnel,
+    ExternalBrowser? browser,
   })  : _store = store,
         _qrScanner = qrScanner ?? QrScanner(),
         _deepLinks = deepLinks ?? DeepLinkListener(),
         _api = api ?? OpenChamberApi(transport: _defaultTransport()),
         _push = push ?? NativePush(),
+        browser = browser ?? ExternalBrowser(),
         _instances = seed?.instances ?? const [],
         _activeId = seed?.activeId {
     _directTransport = _api.transport;
@@ -66,6 +70,8 @@ class AppController extends ChangeNotifier {
   final DeepLinkListener _deepLinks;
   final OpenChamberApi _api;
   final NativePush _push;
+  final ExternalBrowser browser;
+  OAuthCallback? pendingOAuthCallback;
   late final OpenChamberTransport _directTransport;
   late final OpenRelayTunnel _openRelayTunnel;
   late final InstanceRepository _repository = InstanceRepository(_store);
@@ -167,12 +173,76 @@ class AppController extends ChangeNotifier {
       await connect(pairingLink: raw);
       return;
     }
+    if (link.kind == DeepLinkKind.oauth) {
+      pendingOAuthCallback = parseOAuthCallbackUri(raw);
+      notifyListeners();
+      return;
+    }
     pendingDeepLink = link;
     notifyListeners();
   }
 
   IncomingDeepLink? pendingDeepLink;
   final LiveActivityController liveActivity = LiveActivityController();
+
+  OAuthCallback? takeOAuthCallback() {
+    final value = pendingOAuthCallback;
+    pendingOAuthCallback = null;
+    return value;
+  }
+
+  Future<ProviderOAuthStart> startProviderOAuth(String providerId, {int method = 0}) async {
+    final payload = await remoteSettings.startProviderOAuth(providerId, method: method);
+    final start = parseProviderOAuthStart(payload);
+    if (start.canOpenBrowser) {
+      await browser.open(start.url!);
+    }
+    if (start.isAuto) {
+      await remoteSettings.completeProviderOAuth(providerId, method: method);
+    }
+    return start;
+  }
+
+  Future<void> completeProviderOAuth(String providerId, {int method = 0, String? code}) {
+    return remoteSettings.completeProviderOAuth(providerId, method: method, code: code);
+  }
+
+  Future<String> startMcpOAuth(String name, {String? directory}) async {
+    final payload = await remoteSettings.startMcpOAuth(name);
+    final url = parseMcpAuthorizationUrl(payload);
+    if (url == null || url.isEmpty) {
+      throw const OpenChamberHttpException(500, '/api/mcp/auth');
+    }
+    final state = mcpOAuthStateKey(url);
+    if (state != null) {
+      await remoteSettings.queueMcpAuthPending(state: state, name: name, directory: directory);
+    }
+    await browser.open(url);
+    return url;
+  }
+
+  Future<void> completeMcpOAuth({required String name, required String code, String? state}) async {
+    await remoteSettings.completeMcpOAuth(name: name, code: code);
+    if (state != null && state.isNotEmpty) {
+      await remoteSettings.clearMcpAuthPending(state);
+    }
+  }
+
+  Future<void> replyToPermission({
+    required HomeSessionRow session,
+    required String requestId,
+    required String reply,
+  }) async {
+    final base = activeBase;
+    if (base == null) throw const OpenChamberHttpException(0, OpenChamberPaths.permissions, code: 'no_server');
+    await _api.replyToPermission(
+      base: base,
+      bearer: activeBearer,
+      requestId: requestId,
+      reply: reply,
+      directory: session.directory,
+    );
+  }
 
   Future<bool> scanAndConnect() async {
     try {
@@ -1064,6 +1134,37 @@ class AppController extends ChangeNotifier {
       scheduledTasks = SettingsResource(value: previous.value, errorKey: 'settings.error.loadFailed');
     }
     notifyListeners();
+  }
+
+  Future<void> runScheduledTaskNow({required String projectId, required String taskId}) async {
+    final previous = scheduledTasks.value;
+    if (previous != null) {
+      scheduledTasks = SettingsResource(
+        value: previous
+            .map((task) => task.projectId == projectId && task.id == taskId ? task.copyWith(lastStatus: 'running') : task)
+            .toList(),
+      );
+      notifyListeners();
+    }
+    final base = activeBase;
+    if (base == null) {
+      scheduledTasks = SettingsResource(value: previous, errorKey: 'settings.error.needsServer');
+      notifyListeners();
+      return;
+    }
+    try {
+      await _api.runScheduledTaskNow(
+        base: base,
+        bearer: activeBearer,
+        projectId: projectId,
+        taskId: taskId,
+      );
+      await loadScheduledTasks();
+      await loadScheduledRuns(projectId: projectId, taskId: taskId);
+    } on OpenChamberHttpException {
+      scheduledTasks = SettingsResource(value: previous, errorKey: 'settings.error.saveFailed');
+      notifyListeners();
+    }
   }
 
   Future<void> loadScheduledRuns({required String projectId, required String taskId}) async {

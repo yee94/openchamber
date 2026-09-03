@@ -17,6 +17,7 @@ import 'composer_bar.dart';
 import 'composer_occupancy.dart';
 import 'ios_composer_host.dart';
 import 'reverse_chat_list.dart';
+import 'tool_cards.dart';
 
 /// Pushed secondary page — never a dock tab.
 /// 1.19.3-beta.5: re-entry jumps to the latest message (reverse index 0).
@@ -232,6 +233,17 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  Future<void> _replyPermission(String requestId, String reply) async {
+    final controller = widget.appController;
+    if (controller == null) return;
+    try {
+      await controller.replyToPermission(session: widget.session, requestId: requestId, reply: reply);
+      await _reloadFromLive();
+    } on OpenChamberHttpException {
+      if (mounted) setState(() => _errorKey = 'chat.error.permissionFailed');
+    }
+  }
+
   Future<void> _stop() async {
     _poll?.cancel();
     _haptics.impact(HapticStrength.heavy);
@@ -284,7 +296,12 @@ class _ChatScreenState extends State<ChatScreen> {
                           : Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Text(message.body),
+                    child: ChatTranscriptBody(
+                      message: message,
+                      onPermission: widget.appController == null
+                          ? null
+                          : (requestId, reply) => _replyPermission(requestId, reply),
+                    ),
                   ),
                 );
               },

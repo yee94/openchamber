@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
+import '../../data/assistant_scheduled.dart';
 import '../../l10n/app_strings.dart';
 import '../chat/chat_screen.dart';
 import '../settings/settings_primitives.dart';
@@ -32,6 +33,19 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
 
   void _onChanged() {
     if (mounted) setState(() {});
+  }
+
+  String _taskSubtitle(BuildContext context, ScheduledTaskRecord task) {
+    final status = task.enabled ? task.statusLabel() : t(context, 'scheduled.disabled');
+    final schedule = task.scheduleLabel();
+    final next = task.nextRunAt == null ? null : t(context, 'scheduled.nextRun');
+    final error = task.lastError;
+    return [
+      status,
+      if (schedule != status) schedule,
+      if (next != null) next,
+      if (error != null && error.isNotEmpty) error,
+    ].join(' · ');
   }
 
   Future<void> _openTask(String projectId, String taskId) async {
@@ -85,8 +99,17 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                 for (final task in tasks.value!)
                   SettingsNavRow(
                     key: Key('scheduled-task-${task.id}'),
-                    label: task.name,
-                    subtitle: task.lastStatus ?? (task.enabled ? null : t(context, 'scheduled.disabled')),
+                    label: task.name.isEmpty ? task.id : task.name,
+                    subtitle: _taskSubtitle(context, task),
+                    trailing: IconButton(
+                      key: Key('scheduled-run-now-${task.id}'),
+                      tooltip: t(context, 'scheduled.runNow'),
+                      onPressed: () => widget.controller.runScheduledTaskNow(
+                        projectId: task.projectId,
+                        taskId: task.id,
+                      ),
+                      icon: Icon(task.isRunning ? Icons.hourglass_top : Icons.play_arrow),
+                    ),
                     onTap: () => _openTask(task.projectId, task.id),
                   ),
               ],
@@ -107,8 +130,11 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   for (final run in runs.value!)
                     SettingsNavRow(
                       key: Key('scheduled-run-${run.id}'),
-                      label: run.taskName,
-                      subtitle: run.status,
+                      label: run.taskName.isEmpty ? run.id : run.taskName,
+                      subtitle: [
+                        run.status.isEmpty ? t(context, 'scheduled.status.idle') : run.status,
+                        if (run.error != null && run.error!.isNotEmpty) run.error,
+                      ].join(' · '),
                       onTap: run.sessionId == null || run.sessionId!.isEmpty ? null : () => _openRun(run.id),
                     ),
               ],

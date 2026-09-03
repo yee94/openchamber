@@ -44,7 +44,10 @@ abstract final class OpenChamberPaths {
   static const scheduledTasks = '/api/openchamber/scheduled-tasks';
   static const scheduledTaskRuns = '/api/openchamber/scheduled-task-runs';
   static const pluginsEntry = '/api/config/plugins/entry';
+  static const pluginsFile = '/api/config/plugins/file';
   static const skillsInstall = '/api/config/skills/install';
+  static const mcpAuthPending = '/api/mcp/auth/pending';
+  static const permissions = '/api/permission';
   static String quota(String providerId) =>
       '/api/quota/${Uri.encodeComponent(providerId)}';
   static String promptAttachment(String attachmentId) =>
@@ -63,6 +66,20 @@ abstract final class OpenChamberPaths {
       '/api/config/mcp/${Uri.encodeComponent(name)}';
   static String pluginEntry(String id) =>
       '/api/config/plugins/entry/${Uri.encodeComponent(id)}';
+  static String pluginFile(String id) =>
+      '/api/config/plugins/file/${Uri.encodeComponent(id)}';
+  static String providerOAuthAuthorize(String providerId) =>
+      '/api/provider/${Uri.encodeComponent(providerId)}/oauth/authorize';
+  static String providerOAuthCallback(String providerId) =>
+      '/api/provider/${Uri.encodeComponent(providerId)}/oauth/callback';
+  static String mcpAuthStart(String name) =>
+      '/api/mcp/${Uri.encodeComponent(name)}/auth';
+  static String mcpAuthCallback(String name) =>
+      '/api/mcp/${Uri.encodeComponent(name)}/auth/callback';
+  static String permissionReply(String requestId) =>
+      '/api/permission/${Uri.encodeComponent(requestId)}/reply';
+  static String scheduledTaskRun(String projectId, String taskId) =>
+      '/api/projects/${Uri.encodeComponent(projectId)}/scheduled-tasks/${Uri.encodeComponent(taskId)}/run';
   static String configSkill(String name) =>
       '/api/config/skills/${Uri.encodeComponent(name)}';
   static String configCommand(String name) =>

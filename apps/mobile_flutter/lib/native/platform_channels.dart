@@ -13,6 +13,7 @@ abstract final class OpenChamberChannels {
   static const widgetSnapshot = 'openchamber/widget_snapshot';
   static const media = 'openchamber/media';
   static const virtualAsset = 'openchamber/virtual_asset';
+  static const externalBrowser = 'openchamber/external_browser';
 }
 
 abstract final class OpenChamberPlatformViews {

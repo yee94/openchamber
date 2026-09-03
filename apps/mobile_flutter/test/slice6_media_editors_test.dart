@@ -155,7 +155,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('settings-item-anthropic')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('settings-oauth-gap')), findsOneWidget);
+    expect(find.byKey(const Key('settings-oauth-start')), findsOneWidget);
     await tester.enterText(find.byKey(const Key('settings-editor-field-key')), 'sk-test');
     await tester.tap(find.byKey(const Key('settings-editor-save')));
     await tester.pumpAndSettle();

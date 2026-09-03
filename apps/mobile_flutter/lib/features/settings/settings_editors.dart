@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
@@ -96,9 +98,10 @@ class _EntityEditorSettingsPageState extends State<EntityEditorSettingsPage> {
             _FieldSpec(id: 'key', labelKey: 'settings.providers.apiKey', obscure: true),
           ],
           extra: [
-            ListTile(
-              key: const Key('settings-oauth-gap'),
-              title: Text(t(context, 'settings.oauth.needsBrowser')),
+            _OAuthActions(
+              kind: SettingsEditorKind.providers,
+              itemId: item.id,
+              controller: widget.controller,
             ),
           ],
           onSave: (values) => _run(() => widget.controller.remoteSettings.saveProviderApiKey(item.id, values['key'] ?? '')),
@@ -202,9 +205,10 @@ class _EntityEditorSettingsPageState extends State<EntityEditorSettingsPage> {
             _FieldSpec(id: 'url', labelKey: 'settings.editor.url', initial: item?.meta['url']),
           ],
           extra: [
-            ListTile(
-              key: const Key('settings-oauth-gap'),
-              title: Text(t(context, 'settings.oauth.needsBrowser')),
+            _OAuthActions(
+              kind: SettingsEditorKind.mcp,
+              itemId: item?.id ?? '',
+              controller: widget.controller,
             ),
           ],
           onSave: (values) => _run(() {
@@ -227,22 +231,46 @@ class _EntityEditorSettingsPageState extends State<EntityEditorSettingsPage> {
           onDelete: item == null ? null : () => _run(() => widget.controller.remoteSettings.deleteMcp(item.id)),
         );
       case SettingsEditorKind.plugins:
+        final isFile = item?.meta['kind'] == 'file';
+        Map<String, String> file = const {};
+        if (isFile && item != null) {
+          try {
+            file = await widget.controller.remoteSettings.readPluginFile(item.id);
+          } on OpenChamberHttpException {
+            if (mounted) setState(() => _actionError = 'settings.error.loadFailed');
+            return;
+          }
+        }
         await _showFields(
           titleKey: item == null ? 'settings.editor.create' : 'settings.editor.edit',
           fields: [
-            _FieldSpec(id: 'spec', labelKey: 'settings.editor.spec', initial: item?.meta['spec'] ?? item?.title),
-            _FieldSpec(id: 'scope', labelKey: 'settings.editor.scope', initial: item?.meta['scope'] ?? 'user'),
-          ],
-          extra: [
-            ListTile(title: Text(t(context, 'settings.plugins.fileWriteUnavailable'))),
+            if (!isFile) _FieldSpec(id: 'spec', labelKey: 'settings.editor.spec', initial: item?.meta['spec'] ?? item?.title),
+            _FieldSpec(id: 'scope', labelKey: 'settings.editor.scope', initial: file['scope'] ?? item?.meta['scope'] ?? 'user'),
+            _FieldSpec(id: 'fileName', labelKey: 'settings.plugins.fileName', initial: file['fileName'] ?? item?.meta['fileName']),
+            _FieldSpec(id: 'content', labelKey: 'settings.plugins.fileContent', initial: file['content'], maxLines: 8),
           ],
           onSave: (values) => _run(() {
+            final fileName = values['fileName']?.trim() ?? '';
+            if (isFile && item != null) {
+              return widget.controller.remoteSettings.updatePluginFile(id: item.id, content: values['content'] ?? '');
+            }
+            if (fileName.isNotEmpty) {
+              return widget.controller.remoteSettings.createPluginFile(
+                fileName: fileName,
+                content: values['content'] ?? '',
+                scope: values['scope'] ?? 'user',
+              );
+            }
             if (item == null) {
               return widget.controller.remoteSettings.createPlugin(spec: values['spec'] ?? '', scope: values['scope'] ?? 'user');
             }
             return widget.controller.remoteSettings.updatePlugin(id: item.id, spec: values['spec'] ?? '', scope: values['scope']);
           }),
-          onDelete: item == null ? null : () => _run(() => widget.controller.remoteSettings.deletePlugin(item.id)),
+          onDelete: item == null
+              ? null
+              : () => _run(() => isFile
+                  ? widget.controller.remoteSettings.deletePluginFile(item.id)
+                  : widget.controller.remoteSettings.deletePlugin(item.id)),
         );
       case SettingsEditorKind.skills:
         await _showFields(
@@ -429,6 +457,135 @@ class _EditorDialogState extends State<_EditorDialog> {
           },
           child: Text(t(context, 'settings.editor.save')),
         ),
+      ],
+    );
+  }
+}
+
+class _OAuthActions extends StatefulWidget {
+  const _OAuthActions({
+    required this.kind,
+    required this.itemId,
+    required this.controller,
+  });
+
+  final SettingsEditorKind kind;
+  final String itemId;
+  final AppController controller;
+
+  @override
+  State<_OAuthActions> createState() => _OAuthActionsState();
+}
+
+class _OAuthActionsState extends State<_OAuthActions> {
+  final _code = TextEditingController();
+  String? _errorKey;
+  String? _hint;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onController);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onController);
+    _code.dispose();
+    super.dispose();
+  }
+
+  void _onController() {
+    final callback = widget.controller.pendingOAuthCallback;
+    if (callback == null || !mounted) return;
+    if (callback.hasCode) {
+      _code.text = callback.code!;
+      widget.controller.takeOAuthCallback();
+      unawaited(_complete());
+    }
+  }
+
+  Future<void> _start() async {
+    if (widget.itemId.isEmpty) return;
+    setState(() {
+      _busy = true;
+      _errorKey = null;
+    });
+    try {
+      if (widget.kind == SettingsEditorKind.providers) {
+        final start = await widget.controller.startProviderOAuth(widget.itemId);
+        if (!mounted) return;
+        setState(() {
+          _hint = start.instructions ?? (start.canOpenBrowser ? 'settings.oauth.openedBrowser' : 'settings.oauth.missingUrl');
+        });
+      } else {
+        await widget.controller.startMcpOAuth(widget.itemId);
+        if (!mounted) return;
+        setState(() => _hint = 'settings.oauth.openedBrowser');
+      }
+    } on OpenChamberHttpException {
+      if (mounted) setState(() => _errorKey = 'settings.oauth.startFailed');
+    } catch (_) {
+      if (mounted) setState(() => _errorKey = 'settings.oauth.browserFailed');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _complete() async {
+    if (widget.itemId.isEmpty) return;
+    setState(() {
+      _busy = true;
+      _errorKey = null;
+    });
+    try {
+      final callback = widget.controller.takeOAuthCallback();
+      final code = _code.text.trim().isNotEmpty ? _code.text.trim() : callback?.code;
+      if (widget.kind == SettingsEditorKind.providers) {
+        await widget.controller.completeProviderOAuth(widget.itemId, code: code);
+      } else {
+        if (code == null || code.isEmpty) {
+          setState(() => _errorKey = 'settings.oauth.codeRequired');
+          return;
+        }
+        await widget.controller.completeMcpOAuth(name: widget.itemId, code: code, state: callback?.state);
+      }
+      if (mounted) setState(() => _hint = 'settings.oauth.completed');
+    } on OpenChamberHttpException {
+      if (mounted) setState(() => _errorKey = 'settings.oauth.completeFailed');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        ListTile(
+          key: const Key('settings-oauth-start'),
+          title: Text(t(context, 'settings.oauth.authorize')),
+          subtitle: Text(t(context, _hint ?? 'settings.oauth.authorizeHint')),
+          enabled: !_busy && widget.itemId.isNotEmpty,
+          onTap: _start,
+        ),
+        TextField(
+          key: const Key('settings-oauth-code'),
+          controller: _code,
+          decoration: InputDecoration(labelText: t(context, 'settings.oauth.code')),
+        ),
+        ListTile(
+          key: const Key('settings-oauth-complete'),
+          title: Text(t(context, 'settings.oauth.complete')),
+          enabled: !_busy && widget.itemId.isNotEmpty,
+          onTap: _complete,
+        ),
+        if (_errorKey != null)
+          ListTile(
+            key: const Key('settings-oauth-error'),
+            title: Text(t(context, _errorKey!)),
+          ),
       ],
     );
   }

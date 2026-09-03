@@ -1,3 +1,4 @@
+import 'chat_parts.dart';
 import 'chat_timeline.dart';
 import 'home_session.dart';
 import 'openchamber_http.dart';
@@ -187,7 +188,190 @@ class OpenChamberApi {
     if (!response.ok) {
       throw OpenChamberHttpException(response.status, OpenChamberPaths.sessionMessages(sessionId));
     }
-    return parseTurnPageMessages(response.body);
+    List<PermissionRequestRecord> permissions = const [];
+    try {
+      final permissionPayload = await getPermissions(base: base, bearer: bearer, directory: directory);
+      permissions = parsePermissionList(permissionPayload, sessionId: sessionId);
+    } on OpenChamberHttpException {
+      // Transcript still renders; missing permission list is not empty success.
+    }
+    return parseTurnPageMessages(response.body, permissions: permissions);
+  }
+
+  Future<Object?> getPermissions({required Uri base, String? bearer, String? directory}) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'GET',
+        path: OpenChamberPaths.permissions,
+        query: {
+          if (directory != null && directory.isNotEmpty) 'directory': directory,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> replyToPermission({
+    required Uri base,
+    String? bearer,
+    required String requestId,
+    required String reply,
+    String? directory,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.permissionReply(requestId),
+        body: {
+          'reply': reply,
+          if (directory != null && directory.isNotEmpty) 'directory': directory,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> startProviderOAuth({
+    required Uri base,
+    String? bearer,
+    required String providerId,
+    int method = 0,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.providerOAuthAuthorize(providerId),
+        body: {'method': method},
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> completeProviderOAuth({
+    required Uri base,
+    String? bearer,
+    required String providerId,
+    int method = 0,
+    String? code,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.providerOAuthCallback(providerId),
+        body: {
+          'method': method,
+          if (code != null && code.isNotEmpty) 'code': code,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> startMcpOAuth({required Uri base, String? bearer, required String name}) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.mcpAuthStart(name),
+        body: {'name': name},
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> completeMcpOAuth({
+    required Uri base,
+    String? bearer,
+    required String name,
+    required String code,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.mcpAuthCallback(name),
+        body: {'name': name, 'code': code},
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> queueMcpAuthPending({
+    required Uri base,
+    String? bearer,
+    required String state,
+    required String name,
+    String? directory,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.mcpAuthPending,
+        body: {
+          'state': state,
+          'name': name,
+          'directory': directory,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> getMcpAuthPending({required Uri base, String? bearer, required String state}) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'GET',
+        path: OpenChamberPaths.mcpAuthPending,
+        query: {'state': state},
+      ),
+      bearer,
+    );
+  }
+
+  Future<void> clearMcpAuthPending({required Uri base, String? bearer, required String state}) async {
+    try {
+      await _requireOk(
+        base,
+        OpenChamberRequest(
+          method: 'DELETE',
+          path: OpenChamberPaths.mcpAuthPending,
+          query: {'state': state},
+        ),
+        bearer,
+      );
+    } on OpenChamberHttpException {
+      // Cleanup is best-effort, same as the official callback page.
+    }
+  }
+
+  Future<Object?> getPluginFile({required Uri base, String? bearer, required String id}) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(method: 'GET', path: OpenChamberPaths.pluginFile(id)),
+      bearer,
+    );
+  }
+
+  Future<Object?> runScheduledTaskNow({
+    required Uri base,
+    String? bearer,
+    required String projectId,
+    required String taskId,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.scheduledTaskRun(projectId, taskId),
+      ),
+      bearer,
+    );
   }
 
   Future<void> promptAsync({
@@ -702,25 +886,6 @@ class OpenChamberApi {
   }
 }
 
-List<ChatMessage> parseTurnPageMessages(Object? payload) {
-  if (payload is! Map) return const [];
-  final records = payload['records'];
-  if (records is! List) return const [];
-  final messages = <ChatMessage>[];
-  for (final record in records) {
-    if (record is! Map) continue;
-    final info = record['info'];
-    if (info is! Map) continue;
-    final id = info['id']?.toString() ?? '';
-    if (id.isEmpty) continue;
-    final role = info['role']?.toString() ?? '';
-    final parts = record['parts'];
-    final body = _textFromParts(parts);
-    if (body.isEmpty && role.isEmpty) continue;
-    messages.add(ChatMessage(id: id, body: body, isUser: role == 'user'));
-  }
-  return messages;
-}
 
 Map<String, String> parseSessionStatusMap(Object? payload) {
   Object? root = payload;
@@ -749,19 +914,6 @@ CreatedSession? parseCreatedSession(Object? payload) {
   );
 }
 
-String _textFromParts(Object? parts) {
-  if (parts is! List) return '';
-  final chunks = <String>[];
-  for (final part in parts) {
-    if (part is! Map) continue;
-    final type = part['type']?.toString();
-    if (type == 'text') {
-      final text = part['text']?.toString();
-      if (text != null && text.isNotEmpty) chunks.add(text);
-    }
-  }
-  return chunks.join('\n');
-}
 
 /// In-memory transport for widget/unit tests. Speaks the official paths only.
 class MemoryOpenChamberTransport implements OpenChamberTransport {
@@ -827,6 +979,25 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   final List<List<Map<String, Object?>>> sentPromptParts = [];
   final List<Map<String, Object?>> uploadedAttachments = [];
   final List<Map<String, Object?>> createdSessions = [];
+  final List<Map<String, Object?>> oauthCalls = [];
+  final List<Map<String, Object?>> permissionReplies = [];
+  final Map<String, Map<String, Object?>> mcpPending = {};
+  final Map<String, Map<String, Object?>> pluginFiles = {
+    'file-1': {
+      'id': 'file-1',
+      'fileName': 'local.ts',
+      'scope': 'user',
+      'content': 'export const ping = () => 1\n',
+    },
+  };
+  List<Object?> permissions = [
+    {
+      'id': 'perm-1',
+      'sessionID': 'sess-catalog',
+      'permission': 'bash',
+      'patterns': ['git status'],
+    },
+  ];
   List<String> eventChunks = const [];
   Object? scheduledTasks = defaultTestScheduledTasks;
   Object? scheduledRuns = defaultTestScheduledRuns;
@@ -857,6 +1028,54 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
     list.add(created);
     root['entries'] = list;
     plugins = root;
+  }
+
+  void _appendPluginFile(Map<String, Object?> created) {
+    final root = plugins is Map ? Map<String, Object?>.from((plugins as Map).map((key, value) => MapEntry(key.toString(), value))) : <String, Object?>{'files': <Object?>[]};
+    final list = [...(root['files'] is List ? (root['files'] as List) : const [])];
+    list.add({'id': created['id'], 'fileName': created['fileName'], 'scope': created['scope'], 'kind': 'file'});
+    root['files'] = list;
+    plugins = root;
+  }
+
+  void _removePluginFile(String id) {
+    final root = plugins is Map ? Map<String, Object?>.from((plugins as Map).map((key, value) => MapEntry(key.toString(), value))) : <String, Object?>{};
+    final list = [...(root['files'] is List ? (root['files'] as List) : const [])]
+        .where((item) => item is! Map || item['id']?.toString() != id)
+        .toList();
+    root['files'] = list;
+    plugins = root;
+  }
+
+  void _markScheduledRunning(String path) {
+    final parts = path.split('/');
+    final taskId = parts.length >= 2 ? Uri.decodeComponent(parts[parts.length - 2]) : '';
+    final root = scheduledTasks is Map ? Map<String, Object?>.from((scheduledTasks as Map).map((key, value) => MapEntry(key.toString(), value))) : <String, Object?>{};
+    final tasks = [...(root['tasks'] is List ? (root['tasks'] as List) : const [])].map((item) {
+      if (item is! Map) return item;
+      final task = item['task'] is Map ? Map<String, Object?>.from(item['task'] as Map) : <String, Object?>{};
+      if (task['id']?.toString() != taskId) return item;
+      final state = task['state'] is Map ? Map<String, Object?>.from(task['state'] as Map) : <String, Object?>{};
+      state['lastStatus'] = 'running';
+      task['state'] = state;
+      return {...item, 'task': task};
+    }).toList();
+    root['tasks'] = tasks;
+    scheduledTasks = root;
+    final runsRoot = scheduledRuns is Map ? Map<String, Object?>.from((scheduledRuns as Map).map((key, value) => MapEntry(key.toString(), value))) : <String, Object?>{'runs': <Object?>[]};
+    final runs = [...(runsRoot['runs'] is List ? (runsRoot['runs'] as List) : const [])];
+    runs.insert(0, {
+      'id': 'run-live',
+      'projectId': 'proj-1',
+      'taskId': taskId,
+      'taskName': 'Nightly review',
+      'status': 'running',
+      'sessionId': 'sess-catalog',
+      'directory': '/workspace/openchamber',
+      'startedAt': 3,
+    });
+    runsRoot['runs'] = runs;
+    scheduledRuns = runsRoot;
   }
 
   OpenChamberResponse _mutateNamedList(
@@ -1077,7 +1296,14 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
           'enabled': true,
           'schedule': {'kind': 'daily', 'time': '02:00'},
           'execution': {'prompt': 'Review the diff', 'providerID': 'anthropic', 'modelID': 'claude-sonnet-4'},
-          'state': {'createdAt': 1, 'updatedAt': 2, 'lastStatus': 'success', 'lastSessionId': 'sess-catalog'},
+          'state': {
+            'createdAt': 1,
+            'updatedAt': 2,
+            'lastStatus': 'success',
+            'lastSessionId': 'sess-catalog',
+            'nextRunAt': 1893456000000,
+            'lastError': null,
+          },
         },
       },
     ],
@@ -1119,7 +1345,9 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
     'entries': [
       {'id': 'plug-1', 'spec': 'opencode-plugin/example', 'scope': 'user'},
     ],
-    'files': <Object?>[],
+    'files': [
+      {'id': 'file-1', 'fileName': 'local.ts', 'scope': 'user', 'kind': 'file'},
+    ],
   };
 
   static const Map<String, Object?> defaultTestSkills = {
@@ -1345,8 +1573,93 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         if (request.path.startsWith('/api/auth/')) {
           return OpenChamberResponse(status: mutationStatus, body: const {'ok': true});
         }
+        if (request.path.contains('/oauth/authorize') && request.path.startsWith('/api/provider/')) {
+          oauthCalls.add({'path': request.path, 'method': request.method, ...?request.body});
+          return OpenChamberResponse(
+            status: mutationStatus,
+            body: {
+              'url': 'https://example.invalid/oauth/provider',
+              'method': 'code',
+            },
+          );
+        }
+        if (request.path.contains('/oauth/callback') && request.path.startsWith('/api/provider/')) {
+          oauthCalls.add({'path': request.path, 'method': request.method, ...?request.body});
+          return OpenChamberResponse(status: mutationStatus, body: const {'ok': true});
+        }
         if (request.path.contains('/auth') && request.path.startsWith('/api/provider/')) {
           return OpenChamberResponse(status: mutationStatus, body: const {'ok': true});
+        }
+        if (request.path == OpenChamberPaths.mcpAuthPending) {
+          final state = request.query['state'] ?? request.body?['state']?.toString() ?? '';
+          if (request.method == 'POST') {
+            mcpPending[state] = {
+              'name': request.body?['name'],
+              'directory': request.body?['directory'],
+            };
+            return OpenChamberResponse(status: mutationStatus, body: const {'ok': true});
+          }
+          if (request.method == 'GET') {
+            final pending = mcpPending[state];
+            if (pending == null) return const OpenChamberResponse(status: 404, body: {'error': 'missing'});
+            return OpenChamberResponse(status: 200, body: pending);
+          }
+          mcpPending.remove(state);
+          return OpenChamberResponse(status: mutationStatus, body: const {'ok': true});
+        }
+        if (request.path.startsWith('/api/mcp/') && request.path.endsWith('/auth')) {
+          oauthCalls.add({'path': request.path, 'method': request.method, ...?request.body});
+          return OpenChamberResponse(
+            status: mutationStatus,
+            body: {
+              'authorizationUrl': 'https://example.invalid/oauth/mcp?state=mcp-state-1',
+            },
+          );
+        }
+        if (request.path.startsWith('/api/mcp/') && request.path.endsWith('/auth/callback')) {
+          oauthCalls.add({'path': request.path, 'method': request.method, ...?request.body});
+          return OpenChamberResponse(status: mutationStatus, body: const {'ok': true});
+        }
+        if (request.path == OpenChamberPaths.permissions) {
+          return OpenChamberResponse(status: 200, body: permissions);
+        }
+        if (request.path.startsWith('/api/permission/') && request.path.endsWith('/reply')) {
+          permissionReplies.add({'path': request.path, ...?request.body});
+          final id = request.path.split('/')[3];
+          permissions = permissions.where((item) => item is! Map || item['id'] != id).toList();
+          return OpenChamberResponse(status: mutationStatus, body: const {'ok': true});
+        }
+        if (request.path == OpenChamberPaths.pluginsFile && request.method == 'POST') {
+          final created = <String, Object?>{
+            'id': 'file-${pluginFiles.length + 1}',
+            'fileName': request.body?['fileName'],
+            'scope': request.body?['scope'] ?? 'user',
+            'content': request.body?['content'] ?? '',
+          };
+          pluginFiles[created['id']!.toString()] = created;
+          _appendPluginFile(created);
+          return OpenChamberResponse(status: mutationStatus, body: created);
+        }
+        if (request.path.startsWith('/api/config/plugins/file/')) {
+          final id = Uri.decodeComponent(request.path.split('/').last);
+          if (request.method == 'GET') {
+            final file = pluginFiles[id];
+            if (file == null) return const OpenChamberResponse(status: 404, body: {'error': 'missing'});
+            return OpenChamberResponse(status: 200, body: file);
+          }
+          if (request.method == 'DELETE') {
+            pluginFiles.remove(id);
+            _removePluginFile(id);
+            return OpenChamberResponse(status: mutationStatus, body: const {'ok': true});
+          }
+          final current = Map<String, Object?>.from(pluginFiles[id] ?? {'id': id});
+          current['content'] = request.body?['content'] ?? current['content'];
+          pluginFiles[id] = current;
+          return OpenChamberResponse(status: mutationStatus, body: current);
+        }
+        if (request.path.contains('/scheduled-tasks/') && request.path.endsWith('/run')) {
+          _markScheduledRunning(request.path);
+          return OpenChamberResponse(status: mutationStatus, body: const {'sessionId': 'sess-catalog'});
         }
         if (request.path.startsWith('/api/config/agents/')) {
           return _mutateNamedList(request, current: agents, assign: (next) => agents = next, idKey: 'name');

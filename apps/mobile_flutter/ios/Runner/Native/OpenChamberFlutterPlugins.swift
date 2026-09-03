@@ -21,6 +21,7 @@ enum OpenChamberPluginRegistry {
     OpenChamberWidgetSnapshotPlugin.register(with: messenger)
     OpenChamberMediaPlugin.register(with: messenger)
     OpenChamberVirtualAssetPlugin.register(with: messenger)
+    OpenChamberExternalBrowserPlugin.register(with: messenger)
     registrar.register(OpenChamberComposerFactory(messenger: messenger), withId: "openchamber/composer_view")
     registrar.register(OpenChamberTabBarFactory(messenger: messenger), withId: "openchamber/tab_bar_view")
   }
@@ -610,7 +611,7 @@ final class OpenChamberPhotoPickerCoordinator: NSObject, PHPickerViewControllerD
     }
   }
 
-  private static func mime(for provider: NSItemProvider) -> String {
+  nonisolated private static func mime(for provider: NSItemProvider) -> String {
     if provider.hasItemConformingToTypeIdentifier(UTType.heic.identifier) { return "image/heic" }
     if provider.hasItemConformingToTypeIdentifier("public.heif") { return "image/heif" }
     if provider.hasItemConformingToTypeIdentifier(UTType.png.identifier) { return "image/png" }
@@ -662,6 +663,37 @@ final class OpenChamberVirtualAssetPlugin: NSObject {
         result(nil)
       default:
         result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+}
+
+/// Official Capacitor name is OpenChamberExternalBrowser (`open` + http(s) URL).
+final class OpenChamberExternalBrowserPlugin: NSObject {
+  static func register(with messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(name: "openchamber/external_browser", binaryMessenger: messenger)
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "open" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      let raw = ((call.arguments as? [String: Any])?["url"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      guard let url = URL(string: raw),
+            let scheme = url.scheme?.lowercased(),
+            (scheme == "http" || scheme == "https"),
+            url.host != nil
+      else {
+        result(FlutterError(code: "invalid_url", message: "An http(s) URL is required.", details: nil))
+        return
+      }
+      Task { @MainActor in
+        UIApplication.shared.open(url, options: [:]) { opened in
+          if opened {
+            result(nil)
+          } else {
+            result(FlutterError(code: "unavailable", message: "The browser is unavailable.", details: nil))
+          }
+        }
       }
     }
   }

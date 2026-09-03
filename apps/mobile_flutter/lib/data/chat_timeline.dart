@@ -10,16 +10,64 @@
 /// newest message (visual bottom). Prepending older items appends to the
 /// unreversed oldest-first buffer, which becomes high indices — the reverse
 /// scroller keeps its bottom-relative offset.
+enum ChatPartKind { text, diff, fileOp, permission, task, tool }
+
+class ChatPart {
+  const ChatPart({
+    required this.id,
+    required this.kind,
+    required this.title,
+    this.subtitle,
+    this.body,
+    this.status,
+    this.toolName,
+    this.path,
+    this.added = const [],
+    this.removed = const [],
+    this.permissionId,
+    this.tokensPerSecond,
+  });
+
+  final String id;
+  final ChatPartKind kind;
+  final String title;
+  final String? subtitle;
+  final String? body;
+  final String? status;
+  final String? toolName;
+  final String? path;
+  final List<String> added;
+  final List<String> removed;
+  final String? permissionId;
+  final String? tokensPerSecond;
+
+  bool get isPendingPermission => kind == ChatPartKind.permission && permissionId != null;
+}
+
 class ChatMessage {
   const ChatMessage({
     required this.id,
     required this.body,
     required this.isUser,
+    this.parts = const [],
+    this.tokensPerSecond,
   });
 
   final String id;
   final String body;
   final bool isUser;
+  final List<ChatPart> parts;
+  final String? tokensPerSecond;
+
+  ChatMessage copyWith({List<ChatPart>? parts}) {
+    return ChatMessage(
+      id: id,
+      body: body,
+      isUser: isUser,
+      parts: parts ?? this.parts,
+      tokensPerSecond: tokensPerSecond,
+    );
+  }
 }
 
 class ReverseChatController {

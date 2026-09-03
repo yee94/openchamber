@@ -95,6 +95,11 @@ const List<NativeContract> flutterNativeContracts = [
     summary: 'Android ACTION_PICK_IMAGES + iOS PHPicker, HEIC→JPEG transcode, virtual-asset create/append/finish. Composer uploads PUT /api/fs/prompt-attachments then file:// parts.',
   ),
   NativeContract(
+    id: 'external-browser',
+    status: 'landed',
+    summary: 'OpenChamberExternalBrowser analogue: http(s) system browser via openchamber/external_browser. Provider/MCP OAuth uses official authorize + callback + mcp/auth/pending.',
+  ),
+  NativeContract(
     id: 'app-icon-badge',
     status: 'landed',
     summary: 'iOS applicationIconBadgeNumber from session-index attentionCount when writing the widget snapshot. Android has no official badge API without a posted notification.',

@@ -13,6 +13,7 @@ object NativePlugins {
         engine.plugins.add(QrScanPlugin())
         engine.plugins.add(MediaPlugin())
         engine.plugins.add(VirtualAssetPlugin())
+        engine.plugins.add(ExternalBrowserPlugin())
         val messenger = engine.dartExecutor.binaryMessenger
         deepLinkChannel = MethodChannel(messenger, "openchamber/deep_link").also { channel ->
             channel.setMethodCallHandler { call, result ->

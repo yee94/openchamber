@@ -438,6 +438,106 @@ class SettingsRemoteStore {
     );
   }
 
+  Future<Map<String, String>> readPluginFile(String id) async {
+    final payload = await _api.getPluginFile(base: _requireBase(), bearer: _bearer(), id: id);
+    final root = asObjectMap(payload);
+    return {
+      'fileName': root['fileName']?.toString() ?? '',
+      'scope': root['scope']?.toString() ?? 'user',
+      'content': root['content']?.toString() ?? '',
+    };
+  }
+
+  Future<void> createPluginFile({required String fileName, required String content, String scope = 'user'}) {
+    return _mutate(
+      after: loadPlugins,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'POST',
+        path: OpenChamberPaths.pluginsFile,
+        body: {'fileName': fileName, 'content': content, 'scope': scope},
+      ),
+    );
+  }
+
+  Future<void> updatePluginFile({required String id, required String content}) {
+    return _mutate(
+      after: loadPlugins,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'PUT',
+        path: OpenChamberPaths.pluginFile(id),
+        body: {'content': content},
+      ),
+    );
+  }
+
+  Future<void> deletePluginFile(String id) {
+    return _mutate(
+      after: loadPlugins,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'DELETE',
+        path: OpenChamberPaths.pluginFile(id),
+      ),
+    );
+  }
+
+  Future<Object?> startProviderOAuth(String providerId, {int method = 0}) {
+    return _api.startProviderOAuth(
+      base: _requireBase(),
+      bearer: _bearer(),
+      providerId: providerId,
+      method: method,
+    );
+  }
+
+  Future<void> completeProviderOAuth(String providerId, {int method = 0, String? code}) {
+    return _mutate(
+      after: loadProviders,
+      run: () => _api.completeProviderOAuth(
+        base: _requireBase(),
+        bearer: _bearer(),
+        providerId: providerId,
+        method: method,
+        code: code,
+      ),
+    );
+  }
+
+  Future<Object?> startMcpOAuth(String name) {
+    return _api.startMcpOAuth(base: _requireBase(), bearer: _bearer(), name: name);
+  }
+
+  Future<void> completeMcpOAuth({required String name, required String code}) {
+    return _mutate(
+      after: loadMcp,
+      run: () => _api.completeMcpOAuth(
+        base: _requireBase(),
+        bearer: _bearer(),
+        name: name,
+        code: code,
+      ),
+    );
+  }
+
+  Future<void> queueMcpAuthPending({required String state, required String name, String? directory}) {
+    return _api.queueMcpAuthPending(
+      base: _requireBase(),
+      bearer: _bearer(),
+      state: state,
+      name: name,
+      directory: directory,
+    );
+  }
+
+  Future<void> clearMcpAuthPending(String state) {
+    return _api.clearMcpAuthPending(base: _requireBase(), bearer: _bearer(), state: state);
+  }
+
   Future<void> createSkill({required String name, required String description, String? instructions}) {
     return _mutate(
       after: loadSkills,
@@ -719,7 +819,7 @@ List<SettingsNamedItem> parseMcpServers(Object? payload) {
 
 List<SettingsNamedItem> parsePluginEntries(Object? payload) {
   final root = asObjectMap(payload);
-  return asObjectList(root['entries']).map((item) {
+  final entries = asObjectList(root['entries']).map((item) {
     final id = item['id']?.toString() ?? item['spec']?.toString() ?? '';
     final spec = item['spec']?.toString() ?? id;
     return SettingsNamedItem(
@@ -727,11 +827,27 @@ List<SettingsNamedItem> parsePluginEntries(Object? payload) {
       title: spec,
       subtitle: item['scope']?.toString(),
       meta: {
+        'kind': 'entry',
         'spec': spec,
         if (item['scope'] != null) 'scope': item['scope'].toString(),
       },
     );
-  }).where((item) => item.id.isNotEmpty).toList();
+  });
+  final files = asObjectList(root['files']).map((item) {
+    final id = item['id']?.toString() ?? '';
+    final name = item['fileName']?.toString() ?? id;
+    return SettingsNamedItem(
+      id: id,
+      title: name,
+      subtitle: item['scope']?.toString() ?? 'file',
+      meta: {
+        'kind': 'file',
+        'fileName': name,
+        if (item['scope'] != null) 'scope': item['scope'].toString(),
+      },
+    );
+  });
+  return [...entries, ...files].where((item) => item.id.isNotEmpty).toList();
 }
 
 List<SettingsNamedItem> parseSkills(Object? payload) {

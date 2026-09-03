@@ -67,7 +67,11 @@ class ScheduledTaskRecord {
     this.enabled = true,
     this.lastStatus,
     this.lastSessionId,
+    this.lastError,
+    this.nextRunAt,
     this.prompt,
+    this.scheduleKind,
+    this.scheduleTime,
   });
 
   final String projectId;
@@ -76,7 +80,47 @@ class ScheduledTaskRecord {
   final bool enabled;
   final String? lastStatus;
   final String? lastSessionId;
+  final String? lastError;
+  final num? nextRunAt;
   final String? prompt;
+  final String? scheduleKind;
+  final String? scheduleTime;
+
+  bool get isRunning => lastStatus == 'running';
+
+  String statusLabel() {
+    if (!enabled) return 'disabled';
+    final status = lastStatus?.trim();
+    if (status != null && status.isNotEmpty) return status;
+    return 'idle';
+  }
+
+  ScheduledTaskRecord copyWith({String? lastStatus}) {
+    return ScheduledTaskRecord(
+      projectId: projectId,
+      id: id,
+      name: name,
+      enabled: enabled,
+      lastStatus: lastStatus ?? this.lastStatus,
+      lastSessionId: lastSessionId,
+      lastError: lastError,
+      nextRunAt: nextRunAt,
+      prompt: prompt,
+      scheduleKind: scheduleKind,
+      scheduleTime: scheduleTime,
+    );
+  }
+
+  String scheduleLabel() {
+    final kind = scheduleKind?.trim();
+    final time = scheduleTime?.trim();
+    if (kind != null && kind.isNotEmpty && time != null && time.isNotEmpty) {
+      return '$kind · $time';
+    }
+    if (kind != null && kind.isNotEmpty) return kind;
+    if (prompt != null && prompt!.trim().isNotEmpty) return prompt!.trim();
+    return statusLabel();
+  }
 }
 
 class ScheduledRunRecord {
@@ -145,6 +189,7 @@ List<ScheduledTaskRecord> parseScheduledTasks(Object? payload) {
     final task = asObjectMap(item['task']);
     final state = asObjectMap(task['state']);
     final execution = asObjectMap(task['execution']);
+    final schedule = asObjectMap(task['schedule']);
     return ScheduledTaskRecord(
       projectId: item['projectId']?.toString() ?? '',
       id: task['id']?.toString() ?? '',
@@ -152,7 +197,11 @@ List<ScheduledTaskRecord> parseScheduledTasks(Object? payload) {
       enabled: task['enabled'] != false,
       lastStatus: state['lastStatus']?.toString(),
       lastSessionId: state['lastSessionId']?.toString(),
+      lastError: state['lastError']?.toString() ?? state['error']?.toString(),
+      nextRunAt: state['nextRunAt'] is num ? state['nextRunAt'] as num : null,
       prompt: execution['prompt']?.toString(),
+      scheduleKind: schedule['kind']?.toString() ?? schedule['type']?.toString(),
+      scheduleTime: schedule['time']?.toString() ?? schedule['cron']?.toString(),
     );
   }).where((item) => item.id.isNotEmpty && item.projectId.isNotEmpty).toList();
 }
