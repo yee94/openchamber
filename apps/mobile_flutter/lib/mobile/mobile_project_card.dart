@@ -9,7 +9,8 @@ import '../theme/oc_glyphs.dart';
 
 /// Official `MobileProjectCard` — project header inside a floating surface.
 ///
-/// Source: `packages/ui/src/mobile/projects/MobileProjectCard.tsx`.
+/// Source: `packages/ui/src/mobile/projects/MobileProjectCard.tsx` +
+/// `.oc-mobile-project-shell` / `.oc-mobile-project-card` in `mobile.css`.
 class MobileProjectCard extends StatelessWidget {
   const MobileProjectCard({
     super.key,
@@ -36,91 +37,117 @@ class MobileProjectCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final metaStyle = TextStyle(
+      fontSize: OcOptical.meta,
+      fontWeight: FontWeight.w400,
+      letterSpacing: OcOptical.metaTracking,
+      height: OcOptical.metaHeight,
+      color: context.oc.mutedForeground,
+    );
     return Pressable(
       haptic: HapticStrength.light,
       onPressed: onToggle,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          OcOptical.projectTriggerPad,
-          compact ? OcOptical.groupHeaderPadVCompact : OcOptical.projectTriggerPad,
-          OcOptical.projectTriggerPad,
-          compact ? OcOptical.groupHeaderPadVCompact : OcOptical.projectTriggerPad,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: compact ? 0 : OcOptical.projectHeaderHeight,
         ),
-        child: Row(
-          children: [
-            Container(
-              width: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
-              height: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
-              decoration: BoxDecoration(
-                color: context.oc.glassChipFill,
-                shape: BoxShape.circle,
-                border: Border.all(color: context.oc.mobileBorder, width: 0.5),
-                boxShadow: OcElevation.control(context),
-              ),
-              alignment: Alignment.center,
-              child: OcGlyph(
-                glyph,
-                size: compact ? OcOptical.leadingGlyphCompact : OcOptical.leadingGlyph,
-                strokeWidth: OcOptical.headerGlyphStroke,
-                color: context.oc.mutedForeground,
-              ),
-            ),
-            const SizedBox(width: OcOptical.projectTriggerGap),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  HighlightedText(
-                    name,
-                    query: highlightQuery,
-                    style: TextStyle(
-                      fontSize: compact ? OcOptical.rowTitle : OcOptical.projectTitle,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: compact ? OcOptical.rowTitleTracking : OcOptical.projectTitleTracking,
-                      height: compact ? OcOptical.rowTitleHeight : OcOptical.projectTitleHeight,
-                    ),
-                  ),
-                  const SizedBox(height: OcOptical.groupTitleMetaGap),
-                  Text(
-                    [
-                      count == 1
-                          ? t(context, 'projects.sessionsCount.one')
-                          : t(context, 'projects.sessionsCount', {'count': '$count'}),
-                      if (activity != null) activity,
-                      if (pathHint != null && pathHint!.isNotEmpty) pathHint,
-                    ].join(' · '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: OcOptical.meta,
-                      fontWeight: FontWeight.w400,
-                      letterSpacing: OcOptical.metaTracking,
-                      height: OcOptical.metaHeight,
-                      color: context.oc.mutedForeground,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            OcGlyph(
-              expanded ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
-              size: OcOptical.chevron,
-              strokeWidth: OcOptical.listGlyphStroke,
-              color: context.oc.mutedForeground,
-            ),
-            SizedBox(
-              width: 36,
-              height: 36,
-              child: Center(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            OcOptical.projectTriggerPad,
+            compact ? OcOptical.groupHeaderPadVCompact : OcOptical.projectTriggerPad,
+            OcOptical.projectTriggerPad,
+            compact ? OcOptical.groupHeaderPadVCompact : OcOptical.projectTriggerPad,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
+                height: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
+                decoration: BoxDecoration(
+                  color: context.oc.glassChipFill,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: context.oc.mobileBorder, width: 0.5),
+                  boxShadow: OcElevation.control(context),
+                ),
+                alignment: Alignment.center,
                 child: OcGlyph(
-                  OcGlyphKind.ellipsis,
-                  size: OcOptical.overflow,
-                  strokeWidth: OcOptical.listGlyphStroke,
+                  glyph,
+                  size: compact ? OcOptical.leadingGlyphCompact : OcOptical.leadingGlyph,
+                  strokeWidth: OcOptical.headerGlyphStroke,
                   color: context.oc.mutedForeground,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: OcOptical.projectTriggerGap),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    HighlightedText(
+                      name,
+                      query: highlightQuery,
+                      style: TextStyle(
+                        fontSize: compact ? OcOptical.rowTitle : OcOptical.projectTitle,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: compact ? OcOptical.rowTitleTracking : OcOptical.projectTitleTracking,
+                        height: compact ? OcOptical.rowTitleHeight : OcOptical.projectTitleHeight,
+                      ),
+                    ),
+                    const SizedBox(height: OcOptical.groupTitleMetaGap),
+                    Row(
+                      children: [
+                        Text(
+                          count == 1
+                              ? t(context, 'projects.sessionsCount.one')
+                              : t(context, 'projects.sessionsCount', {'count': '$count'}),
+                          style: metaStyle,
+                        ),
+                        if (activity != null && activity!.isNotEmpty) ...[
+                          const SizedBox(width: OcOptical.entityMetaGap),
+                          Text('·', style: metaStyle.copyWith(color: context.oc.mutedForeground.withValues(alpha: 0.5))),
+                          const SizedBox(width: OcOptical.entityMetaGap),
+                          Text(activity!, style: metaStyle),
+                        ],
+                        if (pathHint != null && pathHint!.isNotEmpty) ...[
+                          const SizedBox(width: OcOptical.entityMetaGap),
+                          Text('·', style: metaStyle.copyWith(color: context.oc.mutedForeground.withValues(alpha: 0.5))),
+                          const SizedBox(width: OcOptical.entityMetaGap),
+                          Expanded(
+                            child: Text(
+                              pathHint!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: metaStyle,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              OcGlyph(
+                expanded ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
+                size: OcOptical.chevron,
+                strokeWidth: OcOptical.listGlyphStroke,
+                color: context.oc.mutedForeground,
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: OcOptical.projectActionMargin),
+                child: SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: Center(
+                    child: OcGlyph(
+                      OcGlyphKind.ellipsis,
+                      size: OcOptical.overflow,
+                      strokeWidth: OcOptical.listGlyphStroke,
+                      color: context.oc.mutedForeground,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

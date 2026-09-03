@@ -208,14 +208,21 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
   Widget _projectSurface(BuildContext context, ProjectHomeGroup group) {
     final expanded = !_collapsed.contains(group.id);
     final mains = _mainSessions(group);
-    // Official main sessions stay under the project header. Linked worktrees
-    // are independent floating cards so page cream shows between surfaces.
-    return Column(
-      key: Key('home-project-stack-${group.id}'),
-      children: [
-        MobileFloatingSurface(
+    // Official: one `MobileFloatingSurface` / project-shell. Main sessions and
+    // linked worktrees share `.oc-mobile-project-groups` padding + gap.
+    return Align(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: OcTokens.dockMaxWidth),
+        child: MobileFloatingSurface(
           key: Key('home-project-${group.id}'),
+          margin: const EdgeInsets.fromLTRB(
+            OcChrome.pageGutter,
+            0,
+            OcChrome.pageGutter,
+            OcOptical.pageProjectGap,
+          ),
           child: Column(
+            key: Key('home-project-stack-${group.id}'),
             children: [
               MobileProjectCard(
                 name: group.name,
@@ -232,17 +239,31 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                   }
                 }),
               ),
-              if (expanded && mains.isNotEmpty)
+              if (expanded)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 2, 12, 14),
-                  child: _insetGroup(children: _sessionSlice(context, group.id, mains, true)),
+                  padding: const EdgeInsets.fromLTRB(
+                    OcOptical.projectGroupsPadInline,
+                    OcOptical.projectGroupsPadTop,
+                    OcOptical.projectGroupsPadInline,
+                    OcOptical.projectGroupsPadBottom,
+                  ),
+                  child: Column(
+                    children: [
+                      if (mains.isNotEmpty)
+                        _insetGroup(
+                          children: _sessionSlice(context, group.id, mains, true, clipFirst: true),
+                        ),
+                      for (var i = 0; i < group.worktrees.length; i += 1) ...[
+                        if (mains.isNotEmpty || i > 0) const SizedBox(height: OcOptical.projectGroupGap),
+                        _worktreeGroup(context, group.id, group.worktrees[i]),
+                      ],
+                    ],
+                  ),
                 ),
             ],
           ),
         ),
-        if (expanded)
-          for (final tree in group.worktrees) _worktreeCard(context, group.id, tree),
-      ],
+      ),
     );
   }
 
@@ -250,17 +271,12 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     return MobileLabeledSurfaceGroup(label: label, children: children);
   }
 
-  Widget _worktreeCard(BuildContext context, String projectId, WorktreeHomeGroup tree) {
+  Widget _worktreeGroup(BuildContext context, String projectId, WorktreeHomeGroup tree) {
     final id = '$projectId::${tree.path}';
     final expanded = _isWorktreeExpanded(id);
-    return MobileFloatingSurface(
-      key: Key('home-worktree-surface-$id'),
-      child: Column(
-        children: [
-          _worktreeLabel(context, id, tree, expanded),
-          if (expanded) ..._sessionSlice(context, id, tree.sessions, true),
-        ],
-      ),
+    return _insetGroup(
+      label: _worktreeLabel(context, id, tree, expanded),
+      children: expanded ? _sessionSlice(context, id, tree.sessions, true, clipFirst: false) : const [],
     );
   }
 
@@ -283,7 +299,12 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         }
       }),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+        padding: const EdgeInsets.fromLTRB(
+          OcOptical.worktreeLabelPadLeft,
+          OcOptical.worktreeLabelPadV,
+          OcOptical.worktreeLabelPadRight,
+          OcOptical.worktreeLabelPadV,
+        ),
         child: Row(
           children: [
             SizedBox(
@@ -298,17 +319,17 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 7),
+            const SizedBox(width: OcOptical.worktreeLabelGap),
             Expanded(
               child: Text(
                 tree.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: OcOptical.projectTitle,
+                  fontSize: OcOptical.rowTitle,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: OcOptical.projectTitleTracking,
-                  height: OcOptical.projectTitleHeight,
+                  letterSpacing: OcOptical.rowTitleTracking,
+                  height: OcOptical.rowTitleHeight,
                   color: context.oc.foreground,
                 ),
               ),
@@ -351,10 +372,12 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     BuildContext context,
     String groupId,
     List<HomeSessionRow> sessions,
-    bool assignSessionKeys,
-  ) {
+    bool assignSessionKeys, {
+    required bool clipFirst,
+  }) {
     final showAll = _expandedMore.contains(groupId) || sessions.length <= _visibleSlice;
     final visible = showAll ? sessions : sessions.take(_visibleSlice).toList();
+    final hasMore = !showAll;
     return [
       for (var i = 0; i < visible.length; i += 1)
         MobileSessionRow(
@@ -362,13 +385,14 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
           row: visible[i],
           highlightQuery: _query,
           showUnreadKey: assignSessionKeys,
-          showBottomDivider: true,
+          showBottomDivider: i < visible.length - 1 || hasMore,
+          clipStart: clipFirst && i == 0,
+          clipEnd: !hasMore && i == visible.length - 1,
           onSelect: () => _openChat(context, visible[i]),
         ),
-      if (!showAll)
+      if (hasMore)
         Column(
           children: [
-            Divider(height: 1, thickness: 1, color: context.oc.mobileBorder),
             Pressable(
               haptic: HapticStrength.light,
               onPressed: () => setState(() => _expandedMore.add(groupId)),

@@ -34,6 +34,7 @@ class MobileLabeledSurfaceGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final inner = OcTokens.insetRadius - 1;
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(OcTokens.insetRadius),
@@ -42,7 +43,21 @@ class MobileLabeledSurfaceGroup extends StatelessWidget {
       ),
       child: Column(
         children: [
-          if (label != null) label!,
+          if (label != null)
+            DecoratedBox(
+              decoration: BoxDecoration(
+                border: children.isEmpty
+                    ? null
+                    : Border(bottom: BorderSide(color: context.oc.mobileDivider, width: 1)),
+                borderRadius: children.isEmpty
+                    ? BorderRadius.circular(inner)
+                    : BorderRadius.vertical(top: Radius.circular(inner)),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: OcOptical.worktreeLabelMinHeight),
+                child: label,
+              ),
+            ),
           ...children,
         ],
       ),

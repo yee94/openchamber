@@ -7,7 +7,7 @@ Real `apps/mobile_flutter` widgets, captured with `WidgetTester` + `RenderRepain
 - Regenerator: `apps/mobile_flutter/test/flutter_native_screenshots_test.dart`
 - Fonts: `test/review_fonts.dart` loads Roboto + DroidSansFallback so Latin digits and Chinese copy render. **Chrome icons are painted `OcGlyph` paths** — do not accept empty-square CupertinoIcons tofu.
 - WidgetTester runs as Android. Header / dock / composer use `BackdropFilter` + official `--oc-mobile-glass-fill` (0.68). That is **not** a `UIGlassEffect` clone. Real iOS still keeps live glass on UIKit overlays. Mid-scroll proof: `02-projects-scrolled.png`. This Linux VM cannot run an iOS Simulator. Goldens reserve `viewPadding.top = 47` for the status area; they do **not** paint a fake UIKit status bar.
-- Projects golden expands linked worktree groups after connect so the main workspace stays under the project card and each linked worktree is its own floating card (official model still starts worktrees collapsed). Cream shows between those surfaces.
+- Projects golden expands linked worktree groups after connect so one project shell shows main sessions plus inset worktree groups (official model still starts worktrees collapsed). `.oc-mobile-project-groups` padding (2 / 12 / 14) sits between the project header and the session body.
 
 No PIN / Face ID. No `iosNativeUi`. Chat is a pushed page.
 
@@ -18,7 +18,7 @@ Recapture after restoring Yee-open type (tracking + line-height) on top of the s
 | File | Screen |
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |
-| `02-projects.png` | Light: catalog sand/orange. Overlay collapsing header. Project card + separate floating worktree cards. Dock uses medium filled official sprites; selected pill is a soft selection wash. |
+| `02-projects.png` | Light: catalog sand/orange. Overlay collapsing header. One project shell: header + padded session/worktree groups. |
 | `02-projects-scrolled.png` | Same Projects list jumped just past the official 48px collapse. Title is compact; cards stay visible under the translucent header (not an emptied mid-scroll). |
 | `02-projects-dark.png` | Same Projects surface after Appearance → Dark (catalog `OcTokens`, not a photo recolor). |
 | `03-assistant.png` | Contact cards (name / mode / summary). No 「启用助理」 toggle. |

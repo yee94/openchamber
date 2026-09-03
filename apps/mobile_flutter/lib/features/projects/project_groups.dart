@@ -73,9 +73,9 @@ void _sortByActivity(List<HomeSessionRow> rows) {
 /// not git branch (`packages/ui/src/mobile/projects/useMobileProjectsHomeModel.ts`).
 ///
 /// Root path (no linked worktree) is the project's main workspace — sessions
-/// list flat under the project `MobileFloatingSurface`. Linked worktrees are
-/// other directories on the same project and render as their own floating
-/// cards. Branch names never become their own cards.
+/// list flat under one project `MobileFloatingSurface`. Linked worktrees are
+/// other directories on the same project and render as inset labeled groups
+/// inside that shell. Branch names never become their own cards.
 List<ProjectHomeGroup> groupSessionsByProject(List<HomeSessionRow> rows) {
   final byProject = <String, List<HomeSessionRow>>{};
   for (final row in rows) {

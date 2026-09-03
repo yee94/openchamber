@@ -10,41 +10,76 @@ class OcOptical {
   static const double largeTitleTracking = -1.28;
   static const double largeTitleHeight = 1.2;
 
-  /// Official `.oc-mobile-session-title` is 12 / 16 / −0.012em.
-  /// Root `--oc-mobile-session-row-height` is 2.875rem (46). Projects home and
-  /// scheduled cards sit in `.oc-mobile-project-shell`, which tightens the
-  /// visual slot to 2.5rem (40). 40 ≥ 36 touch min, so hit == visual — no
-  /// extra outer pad (that would balloon the card).
+  /// Official `.oc-mobile-session-title` is 0.75rem / 1rem / −0.012em.
+  /// `.oc-mobile-project-shell` sets `--oc-mobile-session-row-height` to
+  /// 2.5rem (40). 40 ≥ 36 touch min, so hit == visual.
   static const double rowTitle = 12;
-  static const double rowTitleTracking = -0.14;
-  static const double rowTitleHeight = 1.33;
+  static const double rowTitleTracking = -0.144;
+  static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   static const double sessionRowVisualHeight = 40;
+  /// `.oc-mobile-session-row-main` padding-block 0.3125rem.
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
   static const double groupHeaderPadV = 10;
   static const double groupHeaderPadVCompact = 8;
-  /// Official project-shell `.oc-mobile-project-trigger` padding / gap.
+  /// `.oc-mobile-project-shell .oc-mobile-project-trigger`: padding 0.625rem,
+  /// gap 0.4375rem. Not the standalone trigger padding 0.75rem.
   static const double projectTriggerPad = 10;
   static const double projectTriggerGap = 7;
-  /// Official title column `gap-1` (4). Meta chips use 0.3125rem horizontally.
+  /// Project title column `flex-col gap-1` = 0.25rem. Must not collapse.
   static const double groupTitleMetaGap = 4;
-  static const double sessionRowPadH = 12;
+  /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
+  static const double sessionRowPadH = 16;
+  static const double sessionRowPadRight = 2;
+  /// Title vs subtitle column `flex-col gap-0.5` = 0.125rem.
+  static const double sessionTitleSubtitleGap = 2;
+  /// `.oc-mobile-session-status` 0.75rem; `.oc-mobile-session-row-main` gap 0.5rem.
+  static const double sessionStatus = 12;
+  static const double sessionRowMainGap = 8;
 
-  /// Root `--oc-mobile-entity-title` 16 / 20. Project-shell tightens to 14 / 18.
+  /// `.oc-mobile-project-card` min-height = 4.625rem.
+  static const double projectHeaderHeight = 74;
+  /// `.oc-mobile-project-groups` padding: 0.125rem 0.75rem 0.875rem.
+  static const double projectGroupsPadTop = 2;
+  static const double projectGroupsPadInline = 12;
+  static const double projectGroupsPadBottom = 14;
+  /// `--oc-mobile-project-group-gap` inside the shell.
+  static const double projectGroupGap = 10;
+  /// `MobileProjectsHome` `gap-5`.
+  static const double pageProjectGap = 20;
+  /// `.oc-mobile-entity-meta` gap 0.3125rem.
+  static const double entityMetaGap = 5;
+  /// `.oc-mobile-project-action` margin-right 0.25rem.
+  static const double projectActionMargin = 4;
+  /// `.oc-mobile-group-label` min-height 2.625rem.
+  static const double worktreeLabelMinHeight = 42;
+  /// `.oc-mobile-group-label-trigger` padding 0.375rem 0.625rem.
+  static const double worktreeLabelPadV = 6;
+  static const double worktreeLabelPadLeft = 10;
+  /// `.oc-mobile-worktree-label-trigger` padding-right 0.125rem.
+  static const double worktreeLabelPadRight = 2;
+  static const double worktreeLabelGap = 7;
+
+  /// Root `--oc-mobile-entity-title` 16 / 20. Project-shell tightens to
+  /// 0.875rem / 1.125rem / letter-spacing -0.024em.
   static const double entityTitle = 16;
   static const double entityTitleTracking = 0.04;
   static const double entityTitleHeight = 1.25;
   static const double projectTitle = 14;
-  static const double projectTitleTracking = -0.34;
-  static const double projectTitleHeight = 1.29;
+  static const double projectTitleTracking = -0.336;
+  static const double projectTitleHeight = 18 / 14;
 
+  /// `.oc-mobile-entity-meta` 0.75rem / 0.9375rem.
   static const double meta = 12;
-  static const double metaTracking = 0.02;
-  static const double metaHeight = 1.25;
+  static const double metaTracking = 0;
+  static const double metaHeight = 15 / 12;
+  /// `.oc-mobile-session-subtitle` / `.oc-mobile-session-time` 0.625rem / 0.75rem.
   static const double sessionTime = 10;
   static const double sessionTimeTracking = 0.0;
-  static const double sessionTimeHeight = 1.2;
+  static const double sessionTimeHeight = 12 / 10;
+  static const double sessionSubtitle = sessionTime;
+  static const double sessionSubtitleHeight = sessionTimeHeight;
 
   static const double scheduleCardPadV = 10;
   /// Official scheduled meta `mt-1` (4).
