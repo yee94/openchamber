@@ -34,6 +34,7 @@ class FloatingCapsuleTabBar extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
         child: Material(
+          key: Key('dock-selected-$selectedId'),
           color: Theme.of(context).brightness == Brightness.dark
               ? OcChrome.dockFillDark
               : OcChrome.dockFillLight,
@@ -91,8 +92,7 @@ class _TabSlot extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
+          Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
               color: selected ? primary.withValues(alpha: 0.16) : Colors.transparent,

@@ -10,8 +10,10 @@ import 'package:openchamber/data/chat_timeline.dart';
 import 'package:openchamber/data/instance_store.dart';
 import 'package:openchamber/data/openchamber_api.dart';
 import 'package:openchamber/data/secure_store.dart';
+import 'package:openchamber/features/chat/chat_screen.dart';
 import 'package:openchamber/features/chat/tool_cards.dart';
 import 'package:openchamber/features/connect/connect_screen.dart';
+import 'package:openchamber/features/shell/secondary_chrome.dart';
 import 'package:openchamber/features/shell/tab_scaffold.dart';
 import 'package:openchamber/features/splash/splash_screen.dart';
 import 'package:openchamber/l10n/app_strings.dart';
@@ -34,6 +36,8 @@ void main() {
   setUpAll(() async {
     await loadReviewFonts();
   });
+
+  setUp(SecondaryChrome.debugReset);
 
   testWidgets('write zh-CN Flutter widget screenshots for visual review', (tester) async {
     tester.view.physicalSize = Size(logical.width * dpr, logical.height * dpr);
@@ -103,6 +107,8 @@ void main() {
     expect(find.text('任务'), findsWidgets);
     expect(find.text('历史记录'), findsWidgets);
     expect(find.text('已暂停'), findsWidgets);
+    expect(find.byKey(const Key('dock-selected-scheduled')), findsOneWidget);
+    expect(find.byKey(const Key('dock-selected-projects')), findsNothing);
     await _writePng(tester, screenshotKey, '04-scheduled.png');
 
     await tester.tap(find.byKey(const Key('tab-settings')));
@@ -122,13 +128,34 @@ void main() {
     expect(find.byKey(const Key('appearance-lang-zh')), findsOneWidget);
     await _writePng(tester, screenshotKey, '06-settings-appearance.png');
 
-    await tester.tap(find.byKey(const Key('settings-back')));
+    final chatSession = controller.sessions.firstWhere((row) => row.id == 'sess-extra');
+    SecondaryChrome.debugReset();
+    await tester.pumpWidget(
+      StringsScope(
+        strings: AppStrings.of(AppStrings.zhCN),
+        child: RepaintBoundary(
+          key: screenshotKey,
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            locale: AppStrings.zhCN,
+            supportedLocales: AppStrings.supported,
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            theme: _reviewTheme(),
+            home: ChatScreen(
+              session: chatSession,
+              appController: controller,
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntil(tester, find.byKey(const Key('chat-tool-diff-edit-1')));
     await _pumpFrames(tester);
-    await tester.tap(find.byKey(const Key('tab-projects')));
-    await _pumpFrames(tester);
-
-    await tester.tap(find.byKey(const Key('home-session-sess-pinned')));
-    await _pumpUntil(tester, find.byKey(const Key('reverse-chat-list')));
+    expect(find.byKey(const Key('chat-back')), findsOneWidget);
     expect(find.byKey(const Key('reverse-chat-list')), findsOneWidget);
     expect(find.byKey(const Key('composer-field')), findsOneWidget);
     expect(find.text('点击输入'), findsOneWidget);
@@ -141,6 +168,9 @@ void main() {
     expect(find.textContaining('已更改文件'), findsOneWidget);
     expect(find.textContaining('tok/s'), findsOneWidget);
     expect(find.textContaining('需要权限'), findsNothing);
+    expect(find.byKey(const Key('tab-projects')), findsNothing);
+    expect(find.byKey(const Key('projects-plus-menu')), findsNothing);
+    expect(find.text('项目'), findsNothing);
     await tester.ensureVisible(find.byKey(const Key('chat-tool-diff-edit-1')));
     await tester.pump();
     await _writePng(tester, screenshotKey, '07-chat.png');

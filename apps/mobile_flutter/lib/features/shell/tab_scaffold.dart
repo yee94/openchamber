@@ -11,6 +11,7 @@ import '../scheduled/scheduled_tab_screen.dart';
 import '../settings/settings_home_screen.dart';
 import 'floating_tab_bar.dart';
 import 'ios_tab_bar_host.dart';
+import 'secondary_chrome.dart';
 
 /// Official homepage dock: four roots only.
 /// Source: `packages/ui/src/mobile/mobileTabs.ts` + OpenChamberTabBar.
@@ -31,9 +32,20 @@ class _MobileTabScaffoldState extends State<MobileTabScaffold> {
   final TextEditingController _warmComposer = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    SecondaryChrome.listenable.addListener(_onSecondaryChrome);
+  }
+
+  @override
   void dispose() {
+    SecondaryChrome.listenable.removeListener(_onSecondaryChrome);
     _warmComposer.dispose();
     super.dispose();
+  }
+
+  void _onSecondaryChrome() {
+    if (mounted) setState(() {});
   }
 
   void _select(String id) {
@@ -54,9 +66,12 @@ class _MobileTabScaffoldState extends State<MobileTabScaffold> {
     ];
 
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
+    final hideDock = SecondaryChrome.hideHomepageDock;
     final safeBottom = MediaQuery.paddingOf(context).bottom;
-    final dockReserve = ios ? iosTabBarDockHeight + safeBottom : OcChrome.tabBarHeight + safeBottom + 16;
-    final onProjects = _index == 0;
+    final dockReserve = hideDock
+        ? safeBottom
+        : (ios ? iosTabBarDockHeight + safeBottom : OcChrome.tabBarHeight + safeBottom + 16);
+    final onProjects = _index == 0 && !hideDock;
 
     return Stack(
       key: const Key('mobile-tab-scaffold'),
@@ -91,23 +106,24 @@ class _MobileTabScaffoldState extends State<MobileTabScaffold> {
               ),
             ),
           ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: ios
-              ? SizedBox(
-                  height: dockReserve,
-                  child: IosTabBarHost(
+        if (!hideDock)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ios
+                ? SizedBox(
+                    height: dockReserve,
+                    child: IosTabBarHost(
+                      selectedId: mobileTabIds[_index],
+                      onSelect: _select,
+                    ),
+                  )
+                : FloatingCapsuleTabBar(
                     selectedId: mobileTabIds[_index],
                     onSelect: _select,
                   ),
-                )
-              : FloatingCapsuleTabBar(
-                  selectedId: mobileTabIds[_index],
-                  onSelect: _select,
-                ),
-        ),
+          ),
       ],
     );
   }

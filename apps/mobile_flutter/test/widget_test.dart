@@ -4,10 +4,13 @@ import 'package:openchamber/app.dart';
 import 'package:openchamber/data/app_controller.dart';
 import 'package:openchamber/data/secure_store.dart';
 import 'package:openchamber/data/settings_catalog.dart';
+import 'package:openchamber/features/shell/secondary_chrome.dart';
 import 'package:openchamber/features/shell/tab_scaffold.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(SecondaryChrome.debugReset);
 
   Future<AppController> pumpConnected(WidgetTester tester) async {
     final controller = AppController(store: MemorySecureStore());
@@ -56,6 +59,16 @@ void main() {
     expect(find.byKey(const Key('chat-back')), findsOneWidget);
     expect(find.text('Release notes'), findsOneWidget);
     expect(find.text('Open a session from Projects.'), findsOneWidget);
+    expect(find.byKey(const Key('tab-projects')), findsNothing);
+  });
+
+  testWidgets('scheduled dock selects only Schedule', (tester) async {
+    await pumpConnected(tester);
+    await tester.tap(find.byKey(const Key('tab-scheduled')));
+    await tester.pump();
+    expect(find.byKey(const Key('dock-selected-scheduled')), findsOneWidget);
+    expect(find.byKey(const Key('dock-selected-projects')), findsNothing);
+    expect(find.byKey(const Key('tab-projects')), findsOneWidget);
   });
 
   testWidgets('session search matches titles and hides non-matches', (tester) async {

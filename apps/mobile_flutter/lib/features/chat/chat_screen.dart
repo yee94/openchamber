@@ -16,6 +16,7 @@ import '../../native/live_activity_controller.dart';
 import '../../native/media_channel.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
+import '../shell/secondary_chrome.dart';
 import 'composer_bar.dart';
 import 'composer_occupancy.dart';
 import 'ios_composer_host.dart';
@@ -57,6 +58,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _live.selectSession(widget.session.id);
+    SecondaryChrome.chatOpened();
     WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToLatest());
     widget.appController?.addListener(_onApp);
     unawaited(_load());
@@ -82,6 +84,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    SecondaryChrome.chatClosed();
     widget.appController?.removeListener(_onApp);
     _poll?.cancel();
     _composer.dispose();
