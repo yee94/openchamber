@@ -9,7 +9,6 @@ void main() {
       'folder',
       'sparkles',
       'calendar',
-      'gear',
       'code',
       'branch',
       'ellipsis',
@@ -36,9 +35,10 @@ void main() {
     expect(path.getBounds().height, greaterThan(10));
   });
 
-  test('dock calendar-schedule has no fillable body rect', () {
+  test('dock calendar is the official grid sprite, not calendar-schedule', () {
     final calendar = officialSpriteFor('calendar')!;
-    expect(calendar.rects, isEmpty);
-    expect(calendar.circles.single.$3, greaterThan(2.6));
+    expect(calendar.rects, isNotEmpty);
+    expect(calendar.circles.every((c) => c.$3 <= 1.2), isTrue);
+    expect(officialSpriteFor('gear'), isNull);
   });
 }

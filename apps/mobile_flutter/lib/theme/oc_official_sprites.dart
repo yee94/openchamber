@@ -37,24 +37,22 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
         ],
         circles: [(4, 20, 2)],
       ),
-    // Official dock / scheduled-view role is Remix `calendar-schedule`
-    // (calendar + clock), not the plain grid `calendar`.
+    // Official `calendar` sprite (grid + header). Not `calendar-schedule`
+    // (clock overlay). Date dots are the calendar body cells.
     'calendar' => const OcOfficialSprite(
-        paths: [
-          'M16 14v2.2l1.6 1',
-          'M16 2v4',
-          'M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5',
-          'M3 10h5',
-          'M8 2v4',
+        paths: ['M8 2v4', 'M16 2v4', 'M3 10h18'],
+        rects: [(3, 4, 18, 18, 2)],
+        circles: [
+          (8, 14, 1.1),
+          (12, 14, 1.1),
+          (16, 14, 1.1),
+          (8, 18, 1.1),
+          (12, 18, 1.1),
+          (16, 18, 1.1),
         ],
-        circles: [(16, 16, 6)],
       ),
-    'gear' => const OcOfficialSprite(
-        paths: [
-          'M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915',
-        ],
-        circles: [(12, 12, 3)],
-      ),
+    // `gear` is painted by OcGlyph `_gear` (six teeth + hollow hub).
+    // Official `settings-3` lobes bloom into a flower at 23px medium.
     'code' => const OcOfficialSprite(
         paths: ['m18 16 4-4-4-4', 'm6 8-4 4 4 4', 'm14.5 4-5 16'],
       ),

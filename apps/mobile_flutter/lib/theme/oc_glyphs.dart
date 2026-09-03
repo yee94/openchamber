@@ -447,22 +447,29 @@ class _OcGlyphPainter extends CustomPainter {
   }
 
   void _gear(Canvas canvas, Size size, Paint paint, bool filled) {
-    // Remix `settings-3`: six rounded lobes + hollow hub. Medium is stroke.
+    // Six teeth + hollow hub. Always stroke the rings so `filled` cannot
+    // close the hole into a flower/blob.
     final w = size.width;
     final h = size.height;
     final c = Offset(w * 0.5, h * 0.5);
-    canvas.drawCircle(c, w * 0.28, paint);
-    canvas.drawCircle(c, w * 0.12, paint);
+    final stroke = Paint()
+      ..color = paint.color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = paint.strokeWidth > 0 ? paint.strokeWidth : 1.75
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawCircle(c, w * 0.26, stroke);
+    canvas.drawCircle(c, w * 0.11, stroke);
     for (var i = 0; i < 6; i += 1) {
       canvas.save();
       canvas.translate(c.dx, c.dy);
       canvas.rotate(i * math.pi / 3);
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(0, -w * 0.38), width: w * 0.16, height: w * 0.14),
-          Radius.circular(w * 0.04),
+          Rect.fromCenter(center: Offset(0, -w * 0.38), width: w * 0.15, height: w * 0.13),
+          Radius.circular(w * 0.035),
         ),
-        filled ? (Paint()..color = paint.color..style = PaintingStyle.fill) : paint,
+        stroke,
       );
       canvas.restore();
     }

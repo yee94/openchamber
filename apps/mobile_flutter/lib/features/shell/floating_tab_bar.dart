@@ -140,10 +140,9 @@ class _TabSlot extends StatelessWidget {
                       size: OcOptical.dockGlyphVisual,
                       color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
                       strokeWidth: OcOptical.dockGlyphStrokeVisual,
-                      // Official `Icon` is `fill="none"` + medium stroke 2.
-                      // Filling calendar-schedule's open body paints a primary
-                      // square that replaces the glyph.
-                      filled: false,
+                      // Official dock `Icon` is 23px medium sprites. Date-cell
+                      // dots / sparkle accents fill; open paths stay stroke.
+                      filled: true,
                     ),
                     const SizedBox(height: OcOptical.dockLabelGap),
                     Text(

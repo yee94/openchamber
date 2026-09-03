@@ -155,7 +155,7 @@ class OcTokens extends ThemeExtension<OcTokens> {
   /// Official `--oc-mobile-glass-highlight` is white / 0.60. WidgetTester
   /// uses a quieter inset so the 36 disc is not a coin rim.
   Color get glassHighlight => const Color(0xFFFFFFFF)
-      .withValues(alpha: isDark ? 0.10 : 0.18);
+      .withValues(alpha: isDark ? 0.08 : 0.14);
 
   /// Official dock plate is `--oc-mobile-float-background` (elevated 45%)
   /// plus glass blur — same token as [floatSurface], not glass-fill 0.68.
@@ -170,12 +170,9 @@ class OcTokens extends ThemeExtension<OcTokens> {
       foreground.withValues(alpha: isDark ? 0.122 : 0.086);
 
   /// Official selected-tab fill: `color-mix(in srgb, var(--interactive-selection) 55%, transparent)`.
-  /// `--interactive-selection` is already `#16121016` / `#f1ece81f`. Multiplying
-  /// that alpha by 0.55 vanishes on WidgetTester 0.45 frost (orange recolor,
-  /// no pill). Replacing it with 0.55 is a brown capsule. Paint the selection
-  /// ink at a frost-readable plate so the 58×r29 slot exists; glyphs stay
-  /// `text-primary`.
-  Color get selectedTabWash => foreground.withValues(alpha: isDark ? 0.18 : 0.14);
+  /// Keep a visible full-cell wash — not RGB@0.55 (capsule) and not a 0.14
+  /// beige slab. Authored `#16121016` / `#f1ece81f` is the plate.
+  Color get selectedTabWash => interactiveSelection;
 
   /// `--oc-mobile-header-fade` = surface-background 85%.
   Color get headerFade => background.withValues(alpha: 0.85);
