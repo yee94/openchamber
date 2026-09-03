@@ -52,10 +52,9 @@ class FloatingCapsuleTabBar extends StatelessWidget {
             key: Key('dock-selected-$selectedId'),
             decoration: BoxDecoration(
               borderRadius: radius,
-              boxShadow: [
-                ...OcElevation.dock(context),
-                ...OcElevation.highlight(context),
-              ],
+              // Near-pair contact + halo only. Inset sheen lifted the
+              // stadium into a cream plate over the list.
+              boxShadow: OcElevation.dock(context),
             ),
             child: ClipRRect(
               borderRadius: radius,

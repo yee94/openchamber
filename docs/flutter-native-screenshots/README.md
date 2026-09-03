@@ -6,7 +6,7 @@ Real `apps/mobile_flutter` widgets, captured with `WidgetTester` + `RenderRepain
 - Locale: **zh-CN**
 - Regenerator: `apps/mobile_flutter/test/flutter_native_screenshots_test.dart`
 - Fonts: `test/review_fonts.dart` loads Roboto + DroidSansFallback so Latin digits and Chinese copy render. **Chrome icons are painted `OcGlyph` paths** — do not accept empty-square CupertinoIcons tofu.
-- WidgetTester runs as Android. Header / dock / composer use `BackdropFilter` + official saturate. Search chips use quiet `glassChipFill` (0.08) plus official contact + inset highlight — **not** a `UIGlassEffect` clone. Real iOS still keeps live glass on UIKit overlays. Mid-scroll proof: `02-projects-scrolled.png`. This Linux VM cannot run an iOS Simulator. Goldens reserve `viewPadding.top = 47` for the status area; they do **not** paint a fake UIKit status bar.
+- WidgetTester runs as Android. Header / dock / composer use `BackdropFilter` + official saturate. Search chips use quiet `glassChipFill` (0.04) plus contact shadow only — **not** a `UIGlassEffect` clone and not an inset sheen plate. Real iOS still keeps live glass on UIKit overlays. Mid-scroll proof: `02-projects-scrolled.png`. This Linux VM cannot run an iOS Simulator. Goldens reserve `viewPadding.top = 47` for the status area; they do **not** paint a fake UIKit status bar.
 - Projects golden expands linked worktree groups after connect so one project shell shows main sessions plus inset worktree groups (official model still starts worktrees collapsed). `.oc-mobile-project-groups` padding (2 / 12 / 14) sits between the project header and the session body.
 
 No PIN / Face ID. No `iosNativeUi`. Chat is a pushed page.

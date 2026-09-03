@@ -498,18 +498,18 @@ class _OcGlyphPainter extends CustomPainter {
   }
 
   void _gear(Canvas canvas, Size size, Paint paint, bool filled) {
-    // Six spaced rectangular cogs + a larger hub. Not an 8-tooth
-    // sunburst and not settings-3 flower lobes.
+    // Narrow 8-tooth holed cog. Not settings-3 flower lobes and not
+    // a six-cog sun on the 23px dock slot.
     final w = size.width;
     final h = size.height;
     final c = Offset(w * 0.5, h * 0.5);
-    final rim = w * 0.30;
-    final hole = w * 0.19;
+    final rim = w * 0.28;
+    final hole = w * 0.14;
     final tooth = RRect.fromRectAndRadius(
       Rect.fromCenter(
-        center: Offset(0, -(rim + w * 0.02)),
-        width: w * 0.16,
-        height: w * 0.07,
+        center: Offset(0, -(rim + w * 0.018)),
+        width: w * 0.12,
+        height: w * 0.08,
       ),
       Radius.circular(w * 0.02),
     );
@@ -524,10 +524,10 @@ class _OcGlyphPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     void teeth(Paint p) {
-      for (var i = 0; i < 6; i += 1) {
+      for (var i = 0; i < 8; i += 1) {
         canvas.save();
         canvas.translate(c.dx, c.dy);
-        canvas.rotate(i * math.pi / 3);
+        canvas.rotate(i * math.pi / 4);
         canvas.drawRRect(tooth, p);
         canvas.restore();
       }

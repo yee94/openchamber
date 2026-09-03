@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'ios_hero.dart';
 import 'oklch.dart';
 
 /// Official Capacitor WebView semantic catalog for both brightnesses.
@@ -146,11 +147,11 @@ class OcTokens extends ThemeExtension<OcTokens> {
   Color get glassFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
-  /// 0.12–0.68 still a cream plate (center–ring ΔL). Quieter white so
-  /// official blur + saturate can bleed content through the disc.
-  /// 40 hit / 36 visual. `+` stays primary.
+  /// Official `--oc-mobile-glass-fill` 0.68 lifts WidgetTester discs to a
+  /// cream/white coin (centerL≈243 vs page≈229). Quiet white so blur +
+  /// saturate frost content through — not an opaque plate. `+` stays primary.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.08 : 0.08);
+      .withValues(alpha: isDark ? 0.04 : 0.04);
 
   /// Official `--oc-mobile-glass-highlight` is white / 0.60
   /// (dark 0.18). Inset sheen on the elevated plate.
@@ -169,13 +170,12 @@ class OcTokens extends ThemeExtension<OcTokens> {
   Color get interactiveSelection =>
       foreground.withValues(alpha: isDark ? 0.122 : 0.086);
 
-  /// Official selected-tab fill: `bg-interactive-selection/55` =
-  /// `color-mix(..., var(--interactive-selection) 55%, transparent)` over
-  /// glass. Authored `#16121016` already has alpha — mix 55% of that, do
-  /// not use the full plate (beige slab) or RGB@0.55 (brown capsule).
-  /// Geometry stays the 58×r29 cell; only the wash drops.
+  /// Official selected-tab fill is `bg-interactive-selection/55`.
+  /// Authored `#16121016` already has alpha — mix [OcOptical.dockIconWashAlpha]
+  /// of that. Full 55% over cream dock glass is a beige coin. Geometry
+  /// stays the 58×r29 cell; only the wash thins.
   Color get selectedTabWash =>
-      interactiveSelection.withValues(alpha: interactiveSelection.a * 0.55);
+      interactiveSelection.withValues(alpha: interactiveSelection.a * OcOptical.dockIconWashAlpha);
 
   /// `--oc-mobile-header-fade` = surface-background 85%.
   Color get headerFade => background.withValues(alpha: 0.85);
