@@ -123,7 +123,7 @@ void main() {
     );
   });
 
-  testWidgets('projects search chip is contact-only, no inset sheen', (tester) async {
+  testWidgets('projects search chip has no painted disc rim', (tester) async {
     await pumpConnected(tester);
     final discs = tester.widgetList<DecoratedBox>(
       find.descendant(
@@ -131,16 +131,15 @@ void main() {
         matching: find.byType(DecoratedBox),
       ),
     );
-    final chip = discs.firstWhere((box) {
+    final circular = discs.where((box) {
       final decoration = box.decoration;
       return decoration is BoxDecoration && decoration.shape == BoxShape.circle;
     });
-    final decoration = chip.decoration as BoxDecoration;
-    expect(decoration.boxShadow, OcElevation.chipFor(OcTokens.light));
-    expect(
-      decoration.boxShadow!.every((s) => s.blurStyle != BlurStyle.inner && s.offset == Offset.zero),
-      isTrue,
-    );
+    expect(circular, isEmpty);
+    expect(find.descendant(
+      of: find.byKey(const Key('projects-search-toggle')),
+      matching: find.byType(OcGlassChip),
+    ), findsOneWidget);
   });
 
   testWidgets('settings home lists every mobile slug and search filters', (tester) async {
