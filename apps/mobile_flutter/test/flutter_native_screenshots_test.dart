@@ -246,9 +246,17 @@ void main() {
     expect(find.byKey(const Key('chat-action-revert')), findsWidgets);
     expect(find.byKey(const Key('chat-action-edit')), findsWidgets);
     expect(find.textContaining('绘画的内容在这里写'), findsOneWidget);
-    expect(find.textContaining('已处理'), findsWidgets);
+    expect(find.text('已处理'), findsOneWidget);
+    expect(find.textContaining('已处理 '), findsNothing);
+    expect(find.byKey(const Key('chat-activity-status-m-asst')), findsOneWidget);
+    expect(find.byKey(const Key('chat-activity-duration-m-asst')), findsOneWidget);
+    expect(find.byKey(const Key('chat-footer-duration-m-asst')), findsOneWidget);
+    expect(find.byKey(const Key('chat-action-fork-m-asst')), findsOneWidget);
     expect(find.textContaining('Agent 参与'), findsOneWidget);
     expect(find.byKey(const Key('chat-tool-diff-edit-1')), findsOneWidget);
+    expect(find.byKey(const Key('chat-file-slash-edit-1')), findsOneWidget);
+    expect(find.text('+70'), findsOneWidget);
+    expect(find.text('-15'), findsOneWidget);
     expect(find.textContaining('已更改文件'), findsOneWidget);
     expect(find.textContaining('个文件'), findsWidgets);
     expect(find.textContaining('+5 个文件'), findsOneWidget);

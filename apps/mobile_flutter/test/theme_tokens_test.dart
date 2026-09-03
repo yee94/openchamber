@@ -134,8 +134,10 @@ void main() {
     expect(OcOptical.fileTypeW, 11);
     expect(OcOptical.fileRowPadV, 4);
     expect(OcOptical.composerRadius, 24);
-    expect(OcOptical.composerPlus, 26);
-    expect(OcOptical.composerPlusStroke, 2.4);
+    expect(OcOptical.composerPlus, 20);
+    expect(OcOptical.composerPlusStroke, 1.5);
+    expect(OcOptical.footerGlyphStroke, 2);
+    expect(OcOptical.footerMeta, 11);
     expect(OcOptical.sendRing, 32);
     expect(OcOptical.sendStop, 12);
     expect(OcOptical.scrollFab, 36);

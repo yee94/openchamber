@@ -17,6 +17,10 @@ void main() {
       'chevronRight',
       'chevronBack',
       'xmark',
+      'bolt',
+      'clock',
+      'layers',
+      'share',
     ]) {
       final sprite = officialSpriteFor(name);
       expect(sprite, isNotNull, reason: name);

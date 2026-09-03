@@ -323,6 +323,7 @@ class _FileChangeCard extends StatelessWidget {
                           ),
                         ],
                       ),
+                      key: Key('chat-file-slash-${part.id}'),
                       style: const TextStyle(
                         fontSize: OcOptical.meta,
                         letterSpacing: OcOptical.metaTracking,
@@ -474,11 +475,10 @@ class _TurnFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.only(top: 12),
       child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
         crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 8,
+        spacing: 12,
         runSpacing: 6,
         children: [
           Row(
@@ -494,6 +494,12 @@ class _TurnFooter extends StatelessWidget {
                   tooltip: t(context, isSpeaking ? 'chat.messageBody.tts.stopSpeaking' : 'chat.messageBody.tts.readAloud'),
                   onPressed: onSpeak,
                 ),
+              _footerIcon(
+                context,
+                key: Key('chat-action-fork-${message.id}'),
+                glyph: OcGlyphKind.branch,
+                tooltip: t(context, 'chat.messageBody.actions.fork'),
+              ),
             ],
           ),
           Row(
@@ -507,9 +513,19 @@ class _TurnFooter extends StatelessWidget {
                   label: message.tokensPerSecond!,
                 ),
               if (message.processedLabel != null)
-                _metric(context, glyph: OcGlyphKind.hourglass, label: message.processedLabel!),
+                _metric(
+                  context,
+                  key: Key('chat-footer-duration-${message.id}'),
+                  glyph: OcGlyphKind.hourglass,
+                  label: message.processedLabel!,
+                ),
               if (message.completedClock != null)
-                _metric(context, glyph: OcGlyphKind.clock, label: message.completedClock!),
+                _metric(
+                  context,
+                  key: Key('chat-footer-clock-${message.id}'),
+                  glyph: OcGlyphKind.clock,
+                  label: message.completedClock!,
+                ),
             ],
           ),
         ],
@@ -524,14 +540,13 @@ class _TurnFooter extends StatelessWidget {
         key: key,
         mainAxisSize: MainAxisSize.min,
         children: [
-          OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.listGlyphStroke, color: OcTokens.of(context).mutedForeground),
-          const SizedBox(width: 3),
+          OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.footerGlyphStroke, color: OcTokens.of(context).mutedForeground),
+          const SizedBox(width: 4),
           Text(
             label,
             style: TextStyle(
-              fontSize: OcOptical.meta,
-              letterSpacing: OcOptical.metaTracking,
-              height: OcOptical.metaHeight,
+              fontSize: OcOptical.footerMeta,
+              height: OcOptical.footerMetaHeight,
               color: OcTokens.of(context).mutedForeground,
             ),
           ),
@@ -555,7 +570,7 @@ class _TurnFooter extends StatelessWidget {
         onTap: onPressed ?? () {},
         child: Padding(
           padding: const EdgeInsets.all(3),
-          child: OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.listGlyphStroke, color: OcTokens.of(context).mutedForeground),
+          child: OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.footerGlyphStroke, color: OcTokens.of(context).mutedForeground),
         ),
       ),
     );
@@ -690,30 +705,52 @@ class _ActivityDisclosureState extends State<_ActivityDisclosure> {
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
               children: [
-                Icon(Icons.layers_outlined, size: 16, color: OcTokens.of(context).mutedForeground),
-                const SizedBox(width: 6),
-                Text(
-                  widget.processedLabel == null
-                      ? status
-                      : '$status ${widget.processedLabel}',
-                  key: Key('chat-activity-status-${widget.messageId}'),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: OcTokens.of(context).mutedForeground,
+                OcGlyph(
+                  OcGlyphKind.layers,
+                  size: OcOptical.footerGlyph,
+                  strokeWidth: OcOptical.listGlyphStroke,
+                  color: OcTokens.of(context).mutedForeground,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          status,
+                          key: Key('chat-activity-status-${widget.messageId}'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: OcOptical.meta,
+                            fontWeight: FontWeight.w500,
+                            height: OcOptical.metaHeight,
+                            color: OcTokens.of(context).foreground.withValues(alpha: 0.85),
+                          ),
+                        ),
+                      ),
+                      if (!widget.active && widget.processedLabel != null) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          widget.processedLabel!,
+                          key: Key('chat-activity-duration-${widget.messageId}'),
+                          style: TextStyle(
+                            fontSize: OcOptical.meta,
+                            height: OcOptical.metaHeight,
+                            color: OcTokens.of(context).mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                const Spacer(),
                 if (widget.agentCount > 0) _AgentCountChip(count: widget.agentCount),
                 if (!lockedOpen)
-                  Icon(
-                    open ? Icons.expand_less : Icons.expand_more,
-                    size: 18,
+                  OcGlyph(
+                    open ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
+                    size: OcOptical.chevron,
+                    strokeWidth: OcOptical.listGlyphStroke,
                     color: OcTokens.of(context).mutedForeground,
-                    semanticLabel: t(
-                      context,
-                      open ? 'chat.activity.collapseAria' : 'chat.activity.expandAria',
-                    ),
                   ),
               ],
             ),

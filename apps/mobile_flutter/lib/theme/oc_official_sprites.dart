@@ -62,6 +62,29 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
     'chevronRight' => const OcOfficialSprite(paths: ['m9 6 6 6-6 6']),
     'chevronBack' => const OcOfficialSprite(paths: ['m15 18-6-6 6-6']),
     'xmark' => const OcOfficialSprite(paths: ['M18 6 6 18', 'm6 6 12 12']),
+    'bolt' => const OcOfficialSprite(
+        paths: [
+          'M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2',
+        ],
+      ),
+    'clock' => const OcOfficialSprite(
+        paths: ['M12 7v5.25l3.25 1.75'],
+        circles: [(12, 12, 9)],
+      ),
+    'layers' => const OcOfficialSprite(
+        paths: [
+          'M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z',
+          'M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12',
+          'M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17',
+        ],
+      ),
+    'share' => const OcOfficialSprite(
+        paths: [
+          'M12 2v13',
+          'm16 6-4-4-4 4',
+          'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8',
+        ],
+      ),
     _ => null,
   };
 }

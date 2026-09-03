@@ -141,8 +141,9 @@ class OcOptical {
   static const double fileRowPadV = 4;
 
   static const double composerRadius = 24;
-  static const double composerPlus = 26;
-  static const double composerPlusStroke = 2.4;
+  /// Official composer attach `Icon name="attachment-2" className="size-5"`.
+  static const double composerPlus = 20;
+  static const double composerPlusStroke = 1.5;
   static const double sendRing = 32;
   static const double sendRingStroke = 0;
   static const double sendStop = 12;
@@ -152,5 +153,10 @@ class OcOptical {
   static const double glassBlur = 20;
 
   static const double toolbarGlyph = 16;
+  /// Official `MESSAGE_ACTION_ICON_CLASS` `size-3.5` / medium stroke.
   static const double footerGlyph = 14;
+  static const double footerGlyphStroke = 2;
+  /// Official `MESSAGE_FOOTER_META_CLASS` `text-[11px] leading-none`.
+  static const double footerMeta = 11;
+  static const double footerMetaHeight = 1.0;
 }
