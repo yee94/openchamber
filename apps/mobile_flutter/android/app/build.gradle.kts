@@ -50,6 +50,15 @@ android {
     }
 
     buildTypes {
+        // Side-by-side with the official Capacitor release (`com.yee94.openchamber`):
+        // same applicationIdSuffix convention as packages/mobile (`bun run
+        // build:android:debug` → com.yee94.openchamber.debug). Launcher label is
+        // "OpenChamber v2" so the Flutter debug icon is distinct from "OpenChamber".
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            resValue("string", "app_name", "OpenChamber v2")
+        }
         release {
             if (hasCiSigning) {
                 signingConfig = signingConfigs.getByName("release")

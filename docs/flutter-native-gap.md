@@ -120,7 +120,7 @@ Native contracts / shell
 
 | Contract | Status | Main source | Notes |
 |---|---|---|---|
-| Connection onboarding | landed | `MobileApp.tsx`, HANDOFF, `mobileConnections.ts` | Live `GET /health`, `GET/POST /auth/session`, pairing redeem. Persist **full** lan+relay candidate set. 1.5s LAN headstart then relay race. Auto-connect last token. Delete-active → connect. Badge `已连接 · 局域网` / `已连接 · 中继`. |
+| Connection onboarding | landed | `MobileApp.tsx`, HANDOFF, `mobileConnections.ts` | Live `GET /health`, `GET/POST /auth/session`, pairing redeem. Persist **full** lan+relay candidate set. 1.5s LAN headstart then relay race. **Relay-only payload skips the headstart** (no 1.5s stall, no LAN error). Auto-connect last token. Delete-active → connect. Badge `已连接 · 局域网` / `已连接 · 中继`. |
 | QR pairing | landed | `mobileQrScan.ts`, `connectionPayload.ts` | Persist full v2 candidates (`lan` + `relayUrl` + `hostEncPubJwk` + grant + `serverId`). Redeem on the first reachable transport (LAN race, then official E2EE tunnel). Reload must not drop relay. |
 | iOS composer | landed | `OpenChamberComposer` | UIKit platform view, always on |
 | Android composer | landed | IME viewInsets | Material + solid inset surface. ImeSync analogue still later |
@@ -128,7 +128,7 @@ Native contracts / shell
 | Android dock | landed (capsule) | Web `MobileTabBar` | Flutter floating capsule, same four roots. Not liquid glass |
 | Live Activity / Dynamic Island | landed | `OpenChamberLiveActivity` | Driven from `GET /api/session/status` busy/retry; start after 5s; `pushType` nil; no rebuild after dismiss |
 | Share-in | landed | Share extension + `ShareReceiverActivity` | Exact instance+assistant. Catalog published from saved instances |
-| Push | landed (host register) | APNs + FCM → `openchamber-push-relay` | Mobile `POST /api/push/apns-token` + `POST /api/push/visibility`. Host binds relay. iOS requests APNs token. Android copies Capacitor `google-services.json` (`com.yee94.openchamber` / `openchamber-8bf7e`) and reads the FCM token via the native Firebase SDK — still **null** if Firebase is unavailable (not invented). Presence skip is **host-side** (`isAnyInteractiveClientVisible`) |
+| Push | landed (host register) | APNs + FCM → `openchamber-push-relay` | Mobile `POST /api/push/apns-token` + `POST /api/push/visibility`. Host binds relay. iOS requests APNs token. Android copies Capacitor `google-services.json` (`com.yee94.openchamber` **and** `com.yee94.openchamber.debug` / `openchamber-8bf7e`) and reads the FCM token via the native Firebase SDK — still **null** if Firebase is unavailable (not invented). The Flutter **debug** APK uses the `.debug` package already listed in that file, so FCM can initialize without a second Firebase project. Presence skip is **host-side** (`isAnyInteractiveClientVisible`) |
 | WidgetKit + Control Center + NSE | landed | `OpenChamberWidget`, NSE | Snapshot JSON `{attentionCount, recentSessions}` written to App Group `widgetSnapshot` from the live index |
 | Haptics | landed | `OpenChamberHaptics` | light / medium / heavy via method channel |
 | Native back | landed | Capacitor `OpenChamberNavigation` | iOS `UIScreenEdgePanGestureRecognizer` drives `IosNativePageRoute`. Android `PredictiveBackPageTransitionsBuilder`. |
@@ -169,7 +169,7 @@ Capacitor pipelines on `main` are unchanged (`mobile-ci.yml`, `mobile-release.ym
 
 | Workflow | Trigger | What |
 |---|---|---|
-| `.github/workflows/flutter-mobile-ci.yml` | **push to `work/flutter-native` only** + `workflow_dispatch` | Parallel `analyze-test` / `android-debug` / `ios-simulator`. Flutter **3.32.8** pinned. No `pull_request`. iOS job is a real `flutter build ios --simulator --no-codesign` and asserts `Runner.app`. **#13 (`332ad6f82`, [run 33713282610](https://github.com/yee94/openchambery/actions/runs/33713282610))** and **#14 (`77baf9b6f`, [run 33714058628](https://github.com/yee94/openchambery/actions/runs/33714058628))** fully green. |
+| `.github/workflows/flutter-mobile-ci.yml` | **push to `work/flutter-native` only** + `workflow_dispatch` | Parallel `analyze-test` / `android-debug` / `ios-simulator`. Flutter **3.32.8** pinned. No `pull_request`. Android debug APK is **side-by-side** (`com.yee94.openchamber.debug`, label **OpenChamber v2**). Artifact `openchamber-flutter-android-debug-apk-<shortsha>` (14 days) contains `openchamber-v2-debug-<shortsha>.apk`. iOS job is a real `flutter build ios --simulator --no-codesign` and asserts `Runner.app`. **#13 (`332ad6f82`, [run 33713282610](https://github.com/yee94/openchambery/actions/runs/33713282610))** and **#14 (`77baf9b6f`, [run 33714058628](https://github.com/yee94/openchambery/actions/runs/33714058628))** fully green. |
 | `.github/workflows/flutter-mobile-release.yml` | `workflow_dispatch` only | Decode **existing** Android keystore + iOS p12 / four profiles; signed Android APK/AAB; iOS archive/export + TestFlight gated by `build_ios` (default **false**) |
 
 Secret names reused (do not invent new ones; do not print values):
@@ -190,6 +190,34 @@ Second-slice Flutter Xcode project has **four native targets**. Release workflow
 
 Capgo (`mobile-beta-ota.yml`) stays Capacitor/WebView. Flutter does not consume Capgo channels.
 
+## Android debug sideload (Yee walk — no LAN)
+
+The official Capacitor daily app is `com.yee94.openchamber` / **OpenChamber**. A Flutter debug APK with that same applicationId cannot install beside it (different signing key). Debug now follows Capacitor’s `applicationIdSuffix ".debug"` convention:
+
+| Build | applicationId | Launcher label |
+|---|---|---|
+| Capacitor / Flutter **release** | `com.yee94.openchamber` | OpenChamber |
+| Flutter **debug** (this CI APK) | `com.yee94.openchamber.debug` | **OpenChamber v2** |
+
+What still keys off the **base** id / class namespace (not broken by the suffix):
+
+- Deep link scheme remains `openchamber://` (not package-specific). Both apps may offer to open a pairing link — pick **OpenChamber v2** for this walk.
+- Android share receiver / Direct Share shortcuts use the Java class `com.yee94.openchamber.ShareReceiverActivity` (namespace, not applicationId). Each install has its own shortcut catalog.
+- iOS App Group `group.com.yee94.openchamber` is unchanged (iOS bundle id is not suffixed).
+- About still prints the product id `com.yee94.openchamber` (`AppVersion.applicationId`). The installed debug package is `.debug`.
+
+**FCM:** `apps/mobile_flutter/android/app/google-services.json` already lists both `com.yee94.openchamber` and `com.yee94.openchamber.debug` (copied from Capacitor; Firebase project `openchamber-8bf7e`; no new secrets / no second project). The Google Services plugin can select the debug client. The native channel still returns **null** if Firebase init or token fetch fails — not a fake token. If a device walk sees no push token, treat that row as skipped for the v2 debug APK.
+
+**Relay-only:** a pairing payload with no LAN candidate calls `probeRelay` immediately (`hasDirect == false`). No 1.5s headstart, no LAN probe, no “LAN failed” / `connect.error.unreachable` from a missing LAN host. Status is `已连接 · 中继` / `Connected · Relay`. Covered by fake-transport tests in `connection_candidates_test.dart`. Do not run live `wss://` from CI.
+
+### Download and install (GitHub login required)
+
+1. Open the Flutter Mobile CI run for this commit (Actions → **Flutter Mobile CI** on `work/flutter-native`, or **Run workflow**).
+2. Wait until **Android debug APK** is green. Heavy concurrency **cancels** older runs on a newer push — if cancelled, re-dispatch instead of installing an older artifact.
+3. Artifacts → `openchamber-flutter-android-debug-apk-<shortsha>` (zip, 14-day retention, not a GitHub Release).
+4. Unzip. Install `openchamber-v2-debug-<shortsha>.apk` (unknown-sources / adb). Official **OpenChamber** stays installed.
+5. Pair with an **Anywhere** / relay (`wss`) payload. Do not require a `192.168.x` host.
+
 ## Acceptance checklist
 
 | Check | This slice |
@@ -199,7 +227,7 @@ Capgo (`mobile-beta-ota.yml`) stays Capacitor/WebView. Flutter does not consume 
 | Android emulator LAN HTTP + IME composer | Manifest allows cleartext; composer uses solid `viewInsets` |
 | Settings slug walkthrough | Widget test walks all slugs + About |
 | Keyboard / IME | Android solid viewInsets. iOS UIKit composer owns IME |
-| Pairing | v2 parse + redeem on LAN or official E2EE tunnel. Tunnel-open failure stays on connect |
+| Pairing | v2 parse + redeem on LAN or official E2EE tunnel. **Relay-only** (no LAN candidate) goes straight to the tunnel — no 1.5s stall, no “LAN failed” error. Tunnel-open failure stays on connect |
 | Chat scroll | Reverse list prepend test + re-enter latest |
 | No PIN lock | Widget test asserts no Face ID / PIN / passcode lock |
 | No Chat dock tab | Widget test: 4 destinations |
@@ -327,7 +355,7 @@ Read on main (do not invent): skill grouping is `isSkillGroupTool` + `SkillToolG
 
 ## Remaining gaps
 
-1. Device-only checks (do not invent another slice): live hosted-provider / MCP OAuth in a real system browser; a relay-paired **phone** on a live `wss://` host (home LAN ↔ away relay hot-switch); live microphone PCM on a real device; the iOS Local Network prompt on a real iPhone. Memory/fake transport proves the 1.5s LAN/relay race, full-candidate persist+reload, and candidates-refresh hot-switch. **Not 真机过.**
+1. Device-only checks (do not invent another slice): live hosted-provider / MCP OAuth in a real system browser; a relay-paired **phone** on a live `wss://` host (home LAN ↔ away relay hot-switch); live microphone PCM on a real device; the iOS Local Network prompt on a real iPhone. Memory/fake transport proves the 1.5s LAN/relay race, **relay-only (no LAN, no 1.5s stall)**, full-candidate persist+reload, and candidates-refresh hot-switch. **Not 真机过.**
 2. Android launcher badge — official Push Relay (`packages/relay-server/src/push/schema.js`) rejects `platform === 'android'` and only builds APNs `aps.badge`. There is no FCM send path to hang `NotificationCompat.setNumber` on. Do not invent ShortcutBadger. iOS badge is local `attentionCount` + `aps.badge`.
 3. Capgo / plan / notes / Todo / Chat dock tab / `iosNativeUi` — will not port.
 4. Pierre `@pierre/diffs` / `beautiful-mermaid` SVG — will not add packages.

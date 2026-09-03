@@ -26,6 +26,47 @@ void main() {
     expect(plist, contains('<key>NSCameraUsageDescription</key>'));
   });
 
+  test('Android debug identity is side-by-side with Capacitor release', () {
+    final gradle = File('android/app/build.gradle.kts').readAsStringSync();
+    expect(gradle, contains('applicationId = "com.yee94.openchamber"'));
+    expect(gradle, contains('applicationIdSuffix = ".debug"'));
+    expect(gradle, contains('resValue("string", "app_name", "OpenChamber v2")'));
+    final manifest = File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+    expect(manifest, contains('android:label="@string/app_name"'));
+    expect(manifest, contains('android:scheme="openchamber"'));
+    final strings = File('android/app/src/main/res/values/strings.xml').readAsStringSync();
+    expect(strings, contains('<string name="app_name">OpenChamber</string>'));
+    final services = File('android/app/google-services.json').readAsStringSync();
+    expect(services, contains('"package_name": "com.yee94.openchamber"'));
+    expect(services, contains('"package_name": "com.yee94.openchamber.debug"'));
+  });
+
+  test('relay-only probe skips the 1.5s headstart and never probes LAN', () async {
+    var waited = false;
+    var lanProbed = false;
+    final started = Stopwatch()..start();
+    final result = await probeConnectionCandidates<String>(
+      hasDirect: false,
+      hasRelay: true,
+      probeDirects: () async {
+        lanProbed = true;
+        return CandidateProbeOutcome.unreachable();
+      },
+      probeRelay: () async => CandidateProbeOutcome.ok('relay'),
+      headstart: const Duration(seconds: 5),
+      wait: (duration) async {
+        waited = true;
+        await Future<void>.delayed(duration);
+      },
+    );
+    started.stop();
+    expect(result.status, ProbeStatus.ok);
+    expect(result.value, 'relay');
+    expect(lanProbed, isFalse);
+    expect(waited, isFalse);
+    expect(started.elapsed, lessThan(const Duration(milliseconds: 500)));
+  });
+
   test('LAN wins inside headstart', () async {
     final lan = Completer<CandidateProbeOutcome<String>>();
     final relay = Completer<CandidateProbeOutcome<String>>();
@@ -209,6 +250,55 @@ void main() {
       'Connected · Local network',
     );
     expect(http.calls.any((call) => call.path == OpenChamberPaths.connectionCandidates), isTrue);
+  });
+
+  test('relay-only pairing connects promptly and reports relay status, never LAN', () async {
+    final http = MemoryOpenChamberTransport()
+      ..redeem = {
+        'ok': true,
+        'clientToken': 'oc_client_pair',
+        'server': {'label': 'Studio'},
+      };
+    final hostKeys = generateEcdhKeyPair();
+    final controller = AppController(
+      store: MemorySecureStore(),
+      api: OpenChamberApi(transport: http),
+      relayRaceHeadstart: const Duration(seconds: 5),
+      openRelayTunnel: (relay) => _openMemoryTunnel(http, hostKeys),
+    );
+    await controller.bootstrap(skipDelay: true);
+    final encoded = encodePairingConnectionPayload(
+      PairingConnectionPayload(
+        pairingId: 'pair_relay_only_walk',
+        secret: 'one-time-secret',
+        label: 'Studio',
+        candidates: [
+          PairingRelayCandidate(
+            relayUrl: 'wss://relay.example/ws',
+            serverId: 'srv_test',
+            hostEncPubJwk: hostKeys.publicJwk,
+          ),
+        ],
+      ),
+    );
+    final started = Stopwatch()..start();
+    expect(await controller.connect(pairingLink: encoded), isTrue);
+    started.stop();
+    expect(started.elapsed, lessThan(const Duration(milliseconds: 1500)));
+    expect(controller.connectErrorKey, isNull);
+    expect(controller.activeTransportKind, ActiveTransportKind.relay);
+    expect(controller.activeConnectionStatusKey, 'mobile.instances.status.connectedRelay');
+    expect(
+      AppStrings.of(AppStrings.zhCN).t(controller.activeConnectionStatusKey!),
+      '已连接 · 中继',
+    );
+    expect(
+      AppStrings.of(AppStrings.en).t(controller.activeConnectionStatusKey!),
+      'Connected · Relay',
+    );
+    expect(controller.activeConnectionStatusKey, isNot(contains('connectedDirect')));
+    expect(controller.activeInstance?.url, 'relay://srv_test');
+    expect(directCandidatesOf(controller.activeInstance!.transportCandidates), isEmpty);
   });
 }
 

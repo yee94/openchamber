@@ -12,6 +12,11 @@ on:
     branches:
       - work/flutter-native
   workflow_dispatch:
+    inputs:
+      reason:
+        description: Optional note for this on-demand Flutter Android debug APK
+        required: false
+        type: string
 
 concurrency:
   group: flutter-mobile-ci-work-flutter-native
@@ -63,12 +68,33 @@ jobs:
         working-directory: apps/mobile_flutter
         run: flutter build apk --debug
 
+      - name: Name side-by-side debug APK
+        id: apk
+        working-directory: apps/mobile_flutter
+        run: |
+          SHA="${GITHUB_SHA:0:7}"
+          METADATA="$(find build/app/outputs -name output-metadata.json | head -n 1)"
+          test -n "$METADATA"
+          python3 - <<PY
+          import json
+          from pathlib import Path
+          meta = json.loads(Path(r"""$METADATA""").read_text())
+          application_id = meta.get("applicationId")
+          if application_id != "com.yee94.openchamber.debug":
+              raise SystemExit(f"expected com.yee94.openchamber.debug, got {application_id}")
+          PY
+          NAME="openchamber-v2-debug-${SHA}.apk"
+          cp build/app/outputs/flutter-apk/app-debug.apk "$GITHUB_WORKSPACE/$NAME"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "file=$NAME" >> "$GITHUB_OUTPUT"
+
       - name: Upload Android debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: openchamber-flutter-android-debug-apk
-          path: apps/mobile_flutter/build/app/outputs/flutter-apk/app-debug.apk
+          name: openchamber-flutter-android-debug-apk-${{ steps.apk.outputs.sha }}
+          path: ${{ github.workspace }}/${{ steps.apk.outputs.file }}
           if-no-files-found: error
+          retention-days: 14
 
   ios-simulator:
     name: iOS simulator build
