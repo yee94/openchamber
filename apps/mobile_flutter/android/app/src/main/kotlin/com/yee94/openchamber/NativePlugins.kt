@@ -14,6 +14,7 @@ object NativePlugins {
         engine.plugins.add(MediaPlugin())
         engine.plugins.add(VirtualAssetPlugin())
         engine.plugins.add(ExternalBrowserPlugin())
+        engine.plugins.add(VoicePlugin())
         val messenger = engine.dartExecutor.binaryMessenger
         deepLinkChannel = MethodChannel(messenger, "openchamber/deep_link").also { channel ->
             channel.setMethodCallHandler { call, result ->

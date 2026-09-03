@@ -44,6 +44,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _busy = false;
   String? _errorKey;
   String? _dictationLabel;
+  String? _speakingMessageId;
   Timer? _poll;
 
   DictationSession get _dictation => widget.appController?.dictation ?? UnavailableDictation();
@@ -256,6 +257,30 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _speak(ChatMessage message) async {
+    final controller = widget.appController;
+    if (controller == null) return;
+    if (_speakingMessageId == message.id) {
+      await controller.stopSpeaking();
+      if (mounted) setState(() => _speakingMessageId = null);
+      return;
+    }
+    final text = message.parts
+        .where((part) => part.kind == ChatPartKind.text)
+        .map((part) => part.body?.trim() ?? '')
+        .where((item) => item.isNotEmpty)
+        .join('\n');
+    final spoken = text.isNotEmpty ? text : message.body;
+    setState(() => _speakingMessageId = message.id);
+    try {
+      await controller.speakMessage(spoken);
+    } on OpenChamberHttpException {
+      if (mounted) setState(() => _errorKey = 'chat.error.ttsFailed');
+    } finally {
+      if (mounted) setState(() => _speakingMessageId = null);
+    }
+  }
+
   Future<void> _dictate() async {
     final session = _dictation;
     if (session.status == DictationStatus.recording) {
@@ -335,6 +360,10 @@ class _ChatScreenState extends State<ChatScreen> {
                       message: message,
                       isLastAssistant: isLastAssistant,
                       isTurnLive: _busy && isLastAssistant,
+                      isSpeaking: _speakingMessageId == message.id,
+                      onSpeak: message.isUser || widget.appController == null
+                          ? null
+                          : () => _speak(message),
                       onPermission: widget.appController == null
                           ? null
                           : (requestId, reply) => _replyPermission(requestId, reply),

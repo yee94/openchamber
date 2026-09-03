@@ -72,7 +72,7 @@ Native contracts / shell
 | Appearance `iosNativeUi` | **not present** | Do not rebuild. Native is always on. |
 | Plan mode / project notes / Todo | **not present** | Removed in 1.19.2. Do not rebuild. |
 | Capgo OTA | **not ported** | WebView web-bundle hot update only. Flutter ships IPA/APK. |
-| Flutter CI | landed | `.github/workflows/flutter-mobile-ci.yml` automatic on this track. **#13** `332ad6f82` and **#14** `77baf9b6f` both fully green (analyze + Android APK + iOS simulator). **#15** `10f97ff86` iOS simulator **failed** (`OpenChamberFlutterPlugins.swift:598` missing `await` on MainActor `mime`). **#16** `37074feea` fully green: https://github.com/yee94/openchambery/actions/runs/33715865698. **#17** `1f32bed56` fully green (analyze + Android debug APK + iOS simulator): https://github.com/yee94/openchambery/actions/runs/33716649360. Linux analyze-test alone is never treated as green. |
+| Flutter CI | landed | `.github/workflows/flutter-mobile-ci.yml` automatic on this track. **#13** `332ad6f82` and **#14** `77baf9b6f` both fully green (analyze + Android APK + iOS simulator). **#15** `10f97ff86` iOS simulator **failed** (`OpenChamberFlutterPlugins.swift:598` missing `await` on MainActor `mime`). **#16** `37074feea` fully green: https://github.com/yee94/openchambery/actions/runs/33715865698. **#17** `1f32bed56` fully green: https://github.com/yee94/openchambery/actions/runs/33716649360. **#18** `74aec2072` fully green (analyze + Android debug APK + iOS simulator): https://github.com/yee94/openchambery/actions/runs/33717269010. Linux analyze-test alone is never treated as green. |
 | Signed release workflow | landed | `.github/workflows/flutter-mobile-release.yml` — existing secret names only |
 
 ## Settings slug checklist (`MOBILE_SETTINGS_PAGE_SLUGS`)
@@ -250,7 +250,7 @@ flutter build apk --release
 | Surface | Status | Notes |
 |---|---|---|
 | E2EE relay tunnel | landed (HTTP mux) | Byte-compatible port of `protocol.ts` / `crypto.ts` / `handshake.ts` / `tunnel-codec.ts` / `tunnel-client.ts` fetch path. Layer 1 `ws/wss` + `v=1&role=client&serverId` (+ optional `grant`). Layer 2 ECDH P-256 + HKDF-SHA-256 (`openchamber-relay-v1`) + AES-256-GCM. Layer 3 HTTP frames, odd client stream ids, negotiated single-frame batches. Dummy parse base `http://tunnel.invalid`. **Not invented.** |
-| Tunneled WebSockets | **gap** | `openWebSocket` / `WsOpen`…`WsClose` / `oc_url_token` from `packages/ui/src/lib/relay/tunnel-client.ts` and `packages/ui/src/lib/runtime-auth.ts` are **not** ported. Health / redeem / auth / session-index / prompt / SSE do not need them. Event pipeline on main prefers `/api/global/event/ws` then falls back to SSE (`event-pipeline.ts`). Flutter uses SSE only. |
+| Tunneled WebSockets | landed (dictation) | Slice 10 ports `openWebSocket` / `WsOpen`…`WsClose` / `oc_url_token` for `/api/dictation/ws`. Event pipeline still uses SSE, not `/api/global/event/ws`. |
 | Frame-batching window | partial | Handshake advertises `batch`; single-frame `0x00` envelopes are sent. The 150ms multi-frame body batcher from `createOutboundFrameBatcher` is not ported — legal per protocol. |
 | Live event path | landed (SSE) | `GET /api/global/event` with bearer + `Last-Event-ID`. Poll remains reconnect fallback. |
 | Android FCM | landed (native SDK) | Copied `packages/mobile/android/app/google-services.json`. No new secret names. Token still null if Firebase init/token fails. |
@@ -264,7 +264,7 @@ flutter build apk --release
 | Settings completeness | landed (list + official fields) | Every `MOBILE_SETTINGS_PAGE_SLUGS` page except already-real instances/appearance/about now reads official APIs. Slice 6 adds create/edit/delete. Slice 7 adds Provider/MCP OAuth and plugin file write. |
 | Settings blob | landed | GET/PUT `/api/config/settings` is a merge PUT, same as `createWebSettingsAPI`. Failure keeps the previous snapshot. |
 | Notifications finish | landed | Toggles PUT `nativeNotificationsEnabled` / `notifyOnCompletion` / `notifyOnError` / `notifyOnQuestion`. Background push still uses `POST /api/push/apns-token`. |
-| Tunneled WebSockets | **gap** | Still not ported. SSE-through-HTTP-mux is enough for chat + live events. |
+| Tunneled WebSockets | landed (dictation) | Slice 10. SSE remains the live event path. |
 | Virtual assets / HEIC / picker | landed | See sixth-slice. |
 
 ## Sixth-slice status
@@ -316,7 +316,7 @@ Read on main (do not invent): skill grouping is `isSkillGroupTool` + `SkillToolG
 | Surface | Status | Main source | Notes |
 |---|---|---|---|
 | Skill-tool grouping | landed | `skillToolGrouping.ts`, `SkillToolGroup.tsx` | Consecutive `skill` (including `runtime.skill:N`) collapse to “Load Skill” + names (3 visible, overflow). Lone skill still uses the group header. |
-| Composer voice (STT) | landed (mic chrome) | `ComposerDictation`, `dictation-client.ts` | Mic on Material composer + iOS UIKit composer (`composer-dictate`). Official path is `/api/dictation/ws` + 16 kHz PCM. Production is `UnavailableDictation` (failure stays visible). Tests use `MemoryDictation`. No live PCM / WS. |
+| Composer voice (STT) | landed | `ComposerDictation`, `dictation-client.ts` | Slice 10: official `/api/dictation/ws` + 16 kHz PCM. `UnavailableDictation` is no longer the production path. |
 | Bash / fetch / search cards | landed | `ToolPart.tsx`, `toolPresentation.tsx` | Expandable Shell Command / Fetch URL / Web Search (and Code Search) with command/url/query titles, not raw JSON. |
 | Question card | landed | `toolPresentation.tsx` `question` | First-class Question card. |
 | Image preview | landed | `FileAttachment.tsx` `tool: 'image-preview'` | `type: file` + `image/*` is a named Image card **outside** Activity. No invented image-gen tool. |
@@ -327,12 +327,22 @@ Read on main (do not invent): skill grouping is `isSkillGroupTool` + `SkillToolG
 
 ## Remaining gaps
 
-1. Tunneled WebSockets + `oc_url_token` (`packages/ui/src/lib/relay/tunnel-client.ts` `openWebSocket`, `packages/ui/src/lib/runtime-auth.ts`)
+1. Event-pipeline WebSocket (`/api/global/event/ws`) — Flutter still uses official SSE. Not required for dictation/TTS.
 2. Experimental session-list fallback when index returns 501
 3. Live hosted-provider / MCP OAuth in a real system browser — memory transport + widget path only from this Linux VM
 4. Capgo / plan / notes / Todo / Chat dock tab — will not port
-5. A relay-paired **phone** talking to a real hosted relay was **not** exercised from this Linux VM. Dart client ↔ Dart host memory-wire proves redeem + session-index. Live `wss://` + real host private key is still a device/network check.
+5. A relay-paired **phone** talking to a real hosted relay, and live microphone PCM on a real device, were **not** exercised from this Linux VM. Dart client ↔ Dart host memory-wire proves redeem + session-index + tunneled dictation frames. Live `wss://` + real host private key is still a device/network check.
 6. Android launcher badge — no official API without posting a notification. iOS badge is local `attentionCount`.
 7. Pierre `@pierre/diffs` SVG hunk chrome and `beautiful-mermaid` SVG / pan-zoom — not ported; no new packages.
-8. Live composer STT: official `/api/dictation/ws` + 16 kHz PCM capture — mic chrome only; no PCM / WS.
-9. Message-body TTS (`/api/tts/speak` / `/api/dictation/tts/speak`) — not ported.
+
+## Tenth-slice status
+
+Read on main (do not invent): composer STT is `/api/dictation/ws` + `audio/pcm;rate=16000;bits=16` via `openRuntimeWebSocket` and `oc_url_token`. Message actions expose Read aloud (`POST /api/tts/speak`). TTS is HTTP, not a socket.
+
+| Surface | Status | Main source | Notes |
+|---|---|---|---|
+| Composer dictation PCM + WS | landed | `dictation-client.ts`, `use-dictation-audio-source.ts` | Production `OfficialDictation` opens `/api/dictation/ws`, waits `ready`, `start`/`chunk`/`finish`. Native iOS/Android capture emits ~1s 16 kHz PCM16LE base64. No on-device STT. |
+| Tunneled WebSockets + `oc_url_token` | landed (dictation) | `tunnel-client.ts` `openWebSocket`, `runtime-auth.ts` | `WsOpen`/`WsOpened`/`WsText`/`WsClose`. Mint `POST /auth/url-token` before connect. Needed because dictation is a WebSocket. |
+| Message TTS | landed | `MessageBody.tsx`, `useServerTTS.ts` | Assistant Read aloud → `POST /api/tts/speak` `{text, voice, speed, summarize:false}` then native playback. |
+| Event `/api/global/event/ws` | **gap** | `event-pipeline.ts` | SSE remains the live event path. Not required for dictation/TTS. |
+| Capgo / plan / notes / Todo / Chat dock / iosNativeUi | **will not port** | — | Unchanged. |

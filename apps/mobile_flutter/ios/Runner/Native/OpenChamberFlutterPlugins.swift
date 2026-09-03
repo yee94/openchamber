@@ -22,6 +22,8 @@ enum OpenChamberPluginRegistry {
     OpenChamberMediaPlugin.register(with: messenger)
     OpenChamberVirtualAssetPlugin.register(with: messenger)
     OpenChamberExternalBrowserPlugin.register(with: messenger)
+    OpenChamberDictationPlugin.register(with: messenger)
+    OpenChamberTtsPlugin.register(with: messenger)
     registrar.register(OpenChamberComposerFactory(messenger: messenger), withId: "openchamber/composer_view")
     registrar.register(OpenChamberTabBarFactory(messenger: messenger), withId: "openchamber/tab_bar_view")
   }
@@ -697,5 +699,153 @@ final class OpenChamberExternalBrowserPlugin: NSObject {
         }
       }
     }
+  }
+}
+
+/// Official 16 kHz PCM16LE capture for `/api/dictation/ws`.
+final class OpenChamberDictationPlugin: NSObject, FlutterStreamHandler {
+  private var engine: AVAudioEngine?
+  private var sink: FlutterEventSink?
+  private var pending = Data()
+  private let bytesPerSecond = 16000 * 2
+
+  static func register(with messenger: FlutterBinaryMessenger) {
+    let plugin = OpenChamberDictationPlugin()
+    let methods = FlutterMethodChannel(name: "openchamber/dictation", binaryMessenger: messenger)
+    let events = FlutterEventChannel(name: "openchamber/dictation_pcm", binaryMessenger: messenger)
+    events.setStreamHandler(plugin)
+    methods.setMethodCallHandler { call, result in
+      Task { @MainActor in
+        switch call.method {
+        case "start":
+          do {
+            try plugin.start()
+            result(nil)
+          } catch {
+            result(FlutterError(code: "dictation", message: error.localizedDescription, details: nil))
+          }
+        case "stop":
+          plugin.stop()
+          result(nil)
+        default:
+          result(FlutterMethodNotImplemented)
+        }
+      }
+    }
+  }
+
+  func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+    sink = events
+    return nil
+  }
+
+  func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    sink = nil
+    return nil
+  }
+
+  @MainActor
+  func start() throws {
+    let session = AVAudioSession.sharedInstance()
+    try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth])
+    try session.setActive(true)
+    let engine = AVAudioEngine()
+    let input = engine.inputNode
+    let inputFormat = input.outputFormat(forBus: 0)
+    guard let outputFormat = AVAudioFormat(
+      commonFormat: .pcmFormatInt16,
+      sampleRate: 16000,
+      channels: 1,
+      interleaved: true
+    ) else {
+      throw NSError(domain: "openchamber.dictation", code: 1)
+    }
+    let converter = AVAudioConverter(from: inputFormat, to: outputFormat)
+    input.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
+      guard let self, let converter else { return }
+      let ratio = outputFormat.sampleRate / inputFormat.sampleRate
+      let frameCount = AVAudioFrameCount(Double(buffer.frameLength) * ratio)
+      guard let converted = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: max(1, frameCount)) else { return }
+      var error: NSError?
+      var consumed = false
+      converter.convert(to: converted, error: &error) { _, outStatus in
+        if consumed {
+          outStatus.pointee = .endOfStream
+          return nil
+        }
+        consumed = true
+        outStatus.pointee = .haveData
+        return buffer
+      }
+      if error != nil { return }
+      guard let channel = converted.int16ChannelData else { return }
+      let bytes = Data(bytes: channel[0], count: Int(converted.frameLength) * 2)
+      self.pending.append(bytes)
+      while self.pending.count >= self.bytesPerSecond {
+        let chunk = self.pending.prefix(self.bytesPerSecond)
+        self.pending.removeFirst(self.bytesPerSecond)
+        self.sink?(["audio": chunk.base64EncodedString()])
+      }
+    }
+    try engine.start()
+    self.engine = engine
+  }
+
+  @MainActor
+  func stop() {
+    engine?.inputNode.removeTap(onBus: 0)
+    engine?.stop()
+    engine = nil
+    if !pending.isEmpty {
+      sink?(["audio": pending.base64EncodedString()])
+      pending = Data()
+    }
+    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+  }
+}
+
+final class OpenChamberTtsPlugin: NSObject, AVAudioPlayerDelegate {
+  private var player: AVAudioPlayer?
+
+  static func register(with messenger: FlutterBinaryMessenger) {
+    let plugin = OpenChamberTtsPlugin()
+    let channel = FlutterMethodChannel(name: "openchamber/tts", binaryMessenger: messenger)
+    channel.setMethodCallHandler { call, result in
+      Task { @MainActor in
+        switch call.method {
+        case "play":
+          let encoded = (call.arguments as? [String: Any])?["audio"] as? String
+          do {
+            try plugin.play(encoded)
+            result(nil)
+          } catch {
+            result(FlutterError(code: "tts", message: error.localizedDescription, details: nil))
+          }
+        case "stop":
+          plugin.stop()
+          result(nil)
+        default:
+          result(FlutterMethodNotImplemented)
+        }
+      }
+    }
+  }
+
+  @MainActor
+  func play(_ encoded: String?) throws {
+    stop()
+    guard let encoded, let data = Data(base64Encoded: encoded) else {
+      throw NSError(domain: "openchamber.tts", code: 1)
+    }
+    try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
+    try AVAudioSession.sharedInstance().setActive(true)
+    player = try AVAudioPlayer(data: data)
+    player?.play()
+  }
+
+  @MainActor
+  func stop() {
+    player?.stop()
+    player = nil
   }
 }

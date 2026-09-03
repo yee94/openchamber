@@ -13,6 +13,7 @@ import '../native/platform_channels.dart';
 import '../native/push_registration.dart';
 import '../native/qr_scanner.dart';
 import '../native/share_targeting.dart';
+import '../native/tts_playback.dart';
 import 'dictation.dart';
 import 'oauth.dart';
 import 'assistant_scheduled.dart';
@@ -53,11 +54,17 @@ class AppController extends ChangeNotifier {
         _api = api ?? OpenChamberApi(transport: _defaultTransport()),
         _push = push ?? NativePush(),
         browser = browser ?? ExternalBrowser(),
-        dictation = dictation ?? UnavailableDictation(),
         _instances = seed?.instances ?? const [],
         _activeId = seed?.activeId {
     _directTransport = _api.transport;
     _openRelayTunnel = openRelayTunnel ?? _defaultOpenRelay;
+    this.dictation = dictation ??
+        OfficialDictation(
+          resolveBase: () => activeBase,
+          resolveBearer: () => activeBearer,
+          resolveTransport: () => _api.transport,
+          api: _api,
+        );
     remoteSettings = SettingsRemoteStore(
       api: _api,
       base: () => activeBase,
@@ -74,7 +81,7 @@ class AppController extends ChangeNotifier {
   final OpenChamberApi _api;
   final NativePush _push;
   final ExternalBrowser browser;
-  final DictationSession dictation;
+  late final DictationSession dictation;
   OAuthCallback? pendingOAuthCallback;
   late final OpenChamberTransport _directTransport;
   late final OpenRelayTunnel _openRelayTunnel;
@@ -1236,6 +1243,28 @@ class AppController extends ChangeNotifier {
           )
           .timeout(const Duration(milliseconds: 80));
     } catch (_) {}
+  }
+
+  Future<void> speakMessage(String text) async {
+    final base = activeBase;
+    if (base == null || text.trim().isEmpty) {
+      throw const OpenChamberHttpException(0, OpenChamberPaths.ttsSpeak, code: 'no_text');
+    }
+    final bytes = await _api.speakTts(base: base, bearer: activeBearer, text: text);
+    if (bytes.isEmpty) {
+      throw const OpenChamberHttpException(0, OpenChamberPaths.ttsSpeak);
+    }
+    try {
+      await TtsPlayback().play(bytes);
+    } on MissingPluginException {
+      // Widget tests and Linux have no audio device. The HTTP speak still happened.
+    }
+  }
+
+  Future<void> stopSpeaking() async {
+    try {
+      await TtsPlayback().stop();
+    } on MissingPluginException {}
   }
 
   SavedInstance? _mostRecentInstance() {

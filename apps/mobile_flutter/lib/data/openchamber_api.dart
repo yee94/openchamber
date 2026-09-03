@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'chat_parts.dart';
 import 'chat_timeline.dart';
 import 'home_session.dart';
@@ -687,6 +689,50 @@ class OpenChamberApi {
 
   Future<Object?> getTtsStatus({required Uri base, String? bearer}) {
     return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.ttsStatus), bearer);
+  }
+
+  Future<String?> mintUrlToken({required Uri base, String? bearer}) async {
+    final response = await _transport.send(
+      base,
+      OpenChamberRequest(method: 'POST', path: OpenChamberPaths.authUrlToken, bearer: bearer),
+    );
+    if (!response.ok) {
+      throw OpenChamberHttpException(response.status, OpenChamberPaths.authUrlToken);
+    }
+    final token = response.map['token']?.toString().trim() ?? '';
+    return token.isEmpty ? null : token;
+  }
+
+  Future<List<int>> speakTts({
+    required Uri base,
+    String? bearer,
+    required String text,
+    String voice = 'nova',
+    double speed = 0.9,
+  }) async {
+    final response = await _transport.send(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.ttsSpeak,
+        bearer: bearer,
+        rawResponse: true,
+        body: {
+          'text': text.trim(),
+          'voice': voice,
+          'speed': speed,
+          'summarize': false,
+        },
+        timeout: const Duration(seconds: 30),
+      ),
+    );
+    if (!response.ok) {
+      throw OpenChamberHttpException(response.status, OpenChamberPaths.ttsSpeak);
+    }
+    final body = response.body;
+    if (body is List<int>) return body;
+    if (body is String) return utf8.encode(body);
+    return const [];
   }
 
   Future<Object?> getSmallModel({required Uri base, String? bearer}) {
@@ -1517,6 +1563,10 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         return OpenChamberResponse(status: catalogStatus, body: dictationStatus);
       case OpenChamberPaths.ttsStatus:
         return OpenChamberResponse(status: catalogStatus, body: ttsStatus);
+      case OpenChamberPaths.authUrlToken:
+        return OpenChamberResponse(status: catalogStatus, body: {'token': 'oc_url_test', 'expiresAt': DateTime.now().millisecondsSinceEpoch + 60000});
+      case OpenChamberPaths.ttsSpeak:
+        return OpenChamberResponse(status: catalogStatus, body: utf8.encode('ID3fake-tts'));
       case OpenChamberPaths.smallModel:
         return OpenChamberResponse(status: catalogStatus, body: smallModel);
       default:

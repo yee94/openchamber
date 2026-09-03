@@ -12,14 +12,18 @@ class ChatTranscriptBody extends StatelessWidget {
     super.key,
     required this.message,
     this.onPermission,
+    this.onSpeak,
     this.isLastAssistant = false,
     this.isTurnLive = false,
+    this.isSpeaking = false,
   });
 
   final ChatMessage message;
   final void Function(String requestId, String reply)? onPermission;
+  final VoidCallback? onSpeak;
   final bool isLastAssistant;
   final bool isTurnLive;
+  final bool isSpeaking;
 
   @override
   Widget build(BuildContext context) {
@@ -89,7 +93,32 @@ class ChatTranscriptBody extends StatelessWidget {
         ),
       );
     }
+    if (!message.isUser && onSpeak != null && _hasSpeakableText) {
+      out.add(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: IconButton(
+            key: Key('chat-tts-${message.id}'),
+            tooltip: t(
+              context,
+              isSpeaking ? 'chat.messageBody.tts.stopSpeaking' : 'chat.messageBody.tts.readAloud',
+            ),
+            onPressed: onSpeak,
+            icon: Icon(isSpeaking ? Icons.stop_circle_outlined : Icons.volume_up_outlined, size: 18),
+          ),
+        ),
+      );
+    }
     return out;
+  }
+
+  bool get _hasSpeakableText {
+    final fromParts = message.parts
+        .where((part) => part.kind == ChatPartKind.text)
+        .map((part) => part.body?.trim() ?? '')
+        .where((text) => text.isNotEmpty)
+        .join('\n');
+    return fromParts.isNotEmpty || message.body.trim().isNotEmpty;
   }
 }
 

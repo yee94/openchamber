@@ -127,6 +127,8 @@ class MemoryRelayHost {
   EstablishedChannel? _channel;
   final _assembler = FragmentAssembler();
   final _requests = <int, _HostHttp>{};
+  String? lastWsQuery;
+  final _wsPaths = <int, String>{};
 
   void _listen() {
     _sub = wire.messages.listen((raw) async {
@@ -156,9 +158,78 @@ class MemoryRelayHost {
         } else if (assembled.frameType == TunnelFrameType.streamEnd) {
           final pending = _requests.remove(assembled.streamId);
           if (pending != null) unawaited(_handleRequest(pending));
+        } else if (assembled.frameType == TunnelFrameType.wsOpen) {
+          unawaited(_handleWsOpen(assembled));
+        } else if (assembled.frameType == TunnelFrameType.wsText) {
+          unawaited(_handleWsText(assembled));
+        } else if (assembled.frameType == TunnelFrameType.wsClose) {
+          _wsPaths.remove(assembled.streamId);
         }
       }
     });
+  }
+
+  Future<void> _handleWsOpen(TunnelFrame frame) async {
+    final payload = decodeJsonPayload(frame.payload);
+    final path = payload is Map ? payload['path']?.toString() ?? '' : '';
+    lastWsQuery = payload is Map ? payload['query']?.toString() : null;
+    _wsPaths[frame.streamId] = path;
+    _sendFrame(encodeTunnelFrame(TunnelFrameType.wsOpened, frame.streamId, encodeJsonPayload({})));
+    if (path == OpenChamberPaths.dictationWs) {
+      _sendFrame(
+        encodeTunnelFrame(
+          TunnelFrameType.wsText,
+          frame.streamId,
+          Uint8List.fromList(utf8.encode(jsonEncode({'type': 'ready'}))),
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleWsText(TunnelFrame frame) async {
+    final path = _wsPaths[frame.streamId];
+    final text = utf8.decode(frame.payload);
+    if (path != OpenChamberPaths.dictationWs) {
+      _sendFrame(
+        encodeTunnelFrame(
+          TunnelFrameType.wsText,
+          frame.streamId,
+          Uint8List.fromList(utf8.encode('echo:$text')),
+        ),
+      );
+      return;
+    }
+    Map<String, Object?> message;
+    try {
+      final decoded = jsonDecode(text);
+      if (decoded is! Map) return;
+      message = Map<String, Object?>.from(decoded);
+    } catch (_) {
+      return;
+    }
+    final type = message['type']?.toString();
+    final id = message['dictationId']?.toString() ?? '';
+    if (type == 'start') {
+      _sendFrame(
+        encodeTunnelFrame(
+          TunnelFrameType.wsText,
+          frame.streamId,
+          Uint8List.fromList(utf8.encode(jsonEncode({'type': 'ack', 'dictationId': id}))),
+        ),
+      );
+    } else if (type == 'finish') {
+      _sendFrame(
+        encodeTunnelFrame(
+          TunnelFrameType.wsText,
+          frame.streamId,
+          Uint8List.fromList(utf8.encode(jsonEncode({
+            'type': 'final',
+            'dictationId': id,
+            'text': 'tunneled transcript',
+          }))),
+        ),
+      );
+    }
   }
 
   Future<void> _handleRequest(_HostHttp pending) async {
@@ -245,14 +316,47 @@ class _HostHttp {
 }
 
 class _PendingHttp {
-  _PendingHttp({required this.streaming});
+  _PendingHttp({required this.streaming, this.rawResponse = false});
 
   final bool streaming;
+  final bool rawResponse;
   final completer = Completer<OpenChamberResponse>();
   final bodyController = StreamController<List<int>>.broadcast();
   int? status;
   Map<String, String> headers = const {};
   final body = BytesBuilder(copy: false);
+}
+
+class TunnelWebSocket {
+  TunnelWebSocket(this._sendText, this._close);
+
+  final void Function(String text) _sendText;
+  final Future<void> Function() _close;
+  // Non-broadcast so dictation `ready` is not dropped before OfficialDictationClient listens.
+  final _incoming = StreamController<String>();
+  final opened = Completer<void>();
+
+  Stream<String> get messages => _incoming.stream;
+
+  void deliverText(String text) {
+    if (!_incoming.isClosed) _incoming.add(text);
+  }
+
+  void markOpened() {
+    if (!opened.isCompleted) opened.complete();
+  }
+
+  void fail(Object error) {
+    if (!opened.isCompleted) opened.completeError(error);
+    if (!_incoming.isClosed) _incoming.addError(error);
+  }
+
+  void sendText(String text) => _sendText(text);
+
+  Future<void> close() async {
+    await _close();
+    if (!_incoming.isClosed) await _incoming.close();
+  }
 }
 
 /// Official relay HTTP mux client.
@@ -278,6 +382,7 @@ class RelayTunnelTransport implements OpenChamberTransport {
   final _assembler = FragmentAssembler();
   final _streams = StreamIdAllocator();
   final _pending = <int, _PendingHttp>{};
+  final _sockets = <int, TunnelWebSocket>{};
   Future<void> _sendLock = Future<void>.value();
 
   static final dummyBase = Uri.parse(tunnelParseBase);
@@ -330,6 +435,11 @@ class RelayTunnelTransport implements OpenChamberTransport {
         continue;
       }
       final pending = _pending[assembled.streamId];
+      final socket = _sockets[assembled.streamId];
+      if (socket != null) {
+        _onWsFrame(socket, assembled);
+        continue;
+      }
       if (pending == null) continue;
       switch (assembled.frameType) {
         case TunnelFrameType.httpResponse:
@@ -377,8 +487,25 @@ class RelayTunnelTransport implements OpenChamberTransport {
     }
   }
 
+  void _onWsFrame(TunnelWebSocket socket, TunnelFrame assembled) {
+    switch (assembled.frameType) {
+      case TunnelFrameType.wsOpened:
+        socket.markOpened();
+      case TunnelFrameType.wsText:
+        socket.deliverText(utf8.decode(assembled.payload));
+      case TunnelFrameType.wsClose:
+      case TunnelFrameType.streamAbort:
+        _sockets.remove(assembled.streamId);
+        socket.fail(OpenChamberHttpException(0, 'relay-ws', code: _abortReason(assembled.payload)));
+        unawaited(socket.close());
+    }
+  }
+
   OpenChamberResponse _bufferedResponse(_PendingHttp pending) {
     final bytes = pending.body.takeBytes();
+    if (pending.rawResponse) {
+      return OpenChamberResponse(status: pending.status ?? 502, body: bytes);
+    }
     Object? decoded;
     if (bytes.isNotEmpty) {
       final raw = utf8.decode(bytes);
@@ -427,7 +554,7 @@ class RelayTunnelTransport implements OpenChamberTransport {
       throw const OpenChamberHttpException(0, 'relay-tunnel', code: 'not_ready');
     }
     final streamId = _streams.next();
-    final pending = _PendingHttp(streaming: streaming);
+    final pending = _PendingHttp(streaming: streaming, rawResponse: request.rawResponse);
     _pending[streamId] = pending;
     await _sendPlain(
       encodeTunnelFrame(
@@ -506,8 +633,52 @@ class RelayTunnelTransport implements OpenChamberTransport {
     return out.stream;
   }
 
+  Future<TunnelWebSocket> openWebSocket({required String path, String query = ''}) async {
+    if (_channel == null) {
+      throw const OpenChamberHttpException(0, 'relay-tunnel', code: 'not_ready');
+    }
+    final streamId = _streams.next();
+    late final TunnelWebSocket socket;
+    socket = TunnelWebSocket(
+      (text) {
+        unawaited(
+          _sendPlain(
+            encodeTunnelFrame(TunnelFrameType.wsText, streamId, Uint8List.fromList(utf8.encode(text))),
+          ),
+        );
+      },
+      () async {
+        _sockets.remove(streamId);
+        await _sendPlain(
+          encodeTunnelFrame(
+            TunnelFrameType.wsClose,
+            streamId,
+            encodeJsonPayload({'code': 1000, 'reason': 'client'}),
+          ),
+        );
+      },
+    );
+    _sockets[streamId] = socket;
+    await _sendPlain(
+      encodeTunnelFrame(
+        TunnelFrameType.wsOpen,
+        streamId,
+        encodeJsonPayload({
+          'path': path,
+          'query': query,
+        }),
+      ),
+    );
+    await socket.opened.future.timeout(const Duration(seconds: 10));
+    return socket;
+  }
+
   @override
   Future<void> close() async {
+    for (final socket in _sockets.values) {
+      socket.fail(const OpenChamberHttpException(0, 'relay-tunnel', code: 'closed'));
+    }
+    _sockets.clear();
     for (final pending in _pending.values) {
       if (!pending.completer.isCompleted) {
         pending.completer.completeError(const OpenChamberHttpException(0, 'relay-tunnel', code: 'closed'));

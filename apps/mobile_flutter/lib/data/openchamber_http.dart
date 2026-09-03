@@ -38,7 +38,10 @@ abstract final class OpenChamberPaths {
   static const behaviorAgentsMd = '/api/behavior/agents-md';
   static const smallModel = '/api/small-model';
   static const dictationStatus = '/api/dictation/status';
+  static const dictationWs = '/api/dictation/ws';
   static const ttsStatus = '/api/tts/status';
+  static const ttsSpeak = '/api/tts/speak';
+  static const authUrlToken = '/auth/url-token';
   static const assistants = '/api/openchamber/assistants';
   static const assistantsSettings = '/api/openchamber/assistants/settings';
   static const scheduledTasks = '/api/openchamber/scheduled-tasks';
@@ -155,6 +158,7 @@ class OpenChamberRequest {
     this.bearer,
     this.extraHeaders = const {},
     this.stream = false,
+    this.rawResponse = false,
     this.timeout = const Duration(seconds: 8),
   });
 
@@ -167,6 +171,8 @@ class OpenChamberRequest {
   final String? bearer;
   final Map<String, String> extraHeaders;
   final bool stream;
+  /// When true, [OpenChamberResponse.body] is raw bytes (TTS audio).
+  final bool rawResponse;
   final Duration timeout;
 }
 
@@ -230,6 +236,13 @@ class LiveOpenChamberTransport implements OpenChamberTransport {
       httpRequest.add(utf8.encode(jsonEncode(request.body)));
     }
     final httpResponse = await httpRequest.close().timeout(request.timeout);
+    if (request.rawResponse) {
+      final builder = BytesBuilder(copy: false);
+      await for (final chunk in httpResponse) {
+        builder.add(chunk);
+      }
+      return OpenChamberResponse(status: httpResponse.statusCode, body: builder.takeBytes());
+    }
     final raw = await utf8.decodeStream(httpResponse);
     Object? decoded;
     if (raw.isNotEmpty) {
