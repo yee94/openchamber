@@ -464,22 +464,16 @@ class _FileTypeMark extends StatelessWidget {
     final tokens = OcTokens.of(context);
     final lower = path.toLowerCase();
     final Color tint;
-    final String mark;
     if (lower.endsWith('.md')) {
       tint = tokens.chart1;
-      mark = 'MD';
     } else if (lower.endsWith('.tsx') || lower.endsWith('.jsx')) {
       tint = const Color(0xFF61DAFB);
-      mark = 'TSX';
     } else if (lower.endsWith('.ts') || lower.endsWith('.js')) {
       tint = const Color(0xFF3178C6);
-      mark = 'TS';
     } else if (lower.endsWith('.dart')) {
       tint = const Color(0xFF0175C2);
-      mark = 'DT';
     } else {
       tint = tokens.mutedForeground;
-      mark = 'F';
     }
     return OcGlyph(
       OcGlyphKind.file,
