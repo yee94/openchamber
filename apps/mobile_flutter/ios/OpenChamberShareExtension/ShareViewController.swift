@@ -92,7 +92,7 @@ final class ShareViewController: SLComposeServiceViewController {
       var responder: UIResponder? = self
       while let current = responder {
         if let application = current as? UIApplication {
-          application.open(url)
+          _ = await application.open(url)
           break
         }
         responder = current.next
