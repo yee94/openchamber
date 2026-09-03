@@ -77,6 +77,7 @@ class OcOptical {
   static const double fileTypeMark = 4.5;
   static const double fileRowPadV = 3;
 
+  static const double composerRadius = 22;
   static const double composerPlus = 10;
   static const double sendRing = 17;
   static const double sendRingStroke = 0.95;
