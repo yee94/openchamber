@@ -39,6 +39,19 @@ class MobileTabPageHeader extends StatelessWidget {
 
   static double layoutHeight(double safeAreaTop) => safeAreaTop + topPad + actionSize;
 
+  /// In-flow clearance so overlay chrome does not cover the first card at rest.
+  static Widget layoutSlot({required double safeTop}) {
+    return SizedBox(
+      key: const Key('mobile-tab-page-header-slot'),
+      height: layoutHeight(safeTop),
+    );
+  }
+
+  static const expandShiftSpacer = SizedBox(
+    key: Key('mobile-tab-page-header-spacer'),
+    height: expandShift,
+  );
+
   static double fadeHeight(double safeAreaTop) {
     // Official: safe-area + --oc-mobile-detail-navigation-height (3.5rem) + 1.75rem.
     return safeAreaTop + 56 + 28;

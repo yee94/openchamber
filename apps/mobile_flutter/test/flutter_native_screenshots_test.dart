@@ -18,6 +18,7 @@ import 'package:openchamber/features/shell/tab_scaffold.dart';
 import 'package:openchamber/features/splash/splash_screen.dart';
 import 'package:openchamber/l10n/app_strings.dart';
 import 'package:openchamber/data/dictation.dart';
+import 'package:openchamber/mobile/mobile_surface.dart';
 import 'package:openchamber/mobile/mobile_tab_page_header.dart';
 import 'package:openchamber/theme/app_theme.dart';
 import 'package:openchamber/theme/ios_chrome.dart';
@@ -87,7 +88,14 @@ void main() {
     expect(find.textContaining('ios-native', skipOffstage: false), findsWidgets);
     expect(find.byKey(const Key('projects-attention-strip')), findsNothing);
     expect(find.byType(MobileTabPageHeader), findsOneWidget);
+    expect(find.byKey(const Key('mobile-tab-page-header-slot')), findsOneWidget);
     expect(find.byKey(const Key('mobile-tab-page-header-spacer')), findsOneWidget);
+    expect(find.byType(MobileFloatingSurface), findsWidgets);
+    expect(tester.getSize(find.byKey(const Key('dock-capsule'))).height, OcTokens.dockHeight);
+    expect(
+      tester.getSize(find.byKey(const Key('dock-capsule'))).width,
+      lessThan(logical.width),
+    );
     expect(find.textContaining('置顶'), findsNothing);
     expect(find.byKey(const Key('tab-projects')), findsOneWidget);
     await tester.tap(find.byKey(const Key('projects-plus-menu')));

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_strings.dart';
@@ -8,7 +10,10 @@ import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
 
 /// Flutter-painted homepage dock for Android and WidgetTester.
-/// Real iOS uses [IosTabBarHost] / UITabBarController — this is not a glass clone.
+///
+/// Official analogue: `MobileFloatingBottomBar` + `MobileTabBar` selected
+/// `bg-interactive-selection/55` on the **whole** tab slot. Real iOS uses
+/// [IosTabBarHost] / UITabBarController — this is not a glass clone.
 class FloatingCapsuleTabBar extends StatelessWidget {
   const FloatingCapsuleTabBar({
     super.key,
@@ -30,37 +35,51 @@ class FloatingCapsuleTabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     assert(_items.length == 4);
     final tokens = context.oc;
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 6),
-        child: DecoratedBox(
-          key: Key('dock-selected-$selectedId'),
-          decoration: BoxDecoration(
-            color: tokens.card,
-            borderRadius: BorderRadius.circular(OcOptical.dockCapsuleRadius),
-            border: Border.all(color: tokens.mobileBorder, width: 0.5),
-            boxShadow: OcElevation.dock(context),
-          ),
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(OcOptical.dockCapsuleRadius),
-            clipBehavior: Clip.antiAlias,
-            child: SizedBox(
-              height: OcChrome.tabBarHeight,
-              child: Row(
-                children: [
-                  for (final item in _items)
-                    Expanded(
-                      child: _TabSlot(
-                        id: item.id,
-                        glyph: item.glyph,
-                        label: t(context, item.labelKey),
-                        selected: selectedId == item.id,
-                        onTap: () => onSelect(item.id),
-                      ),
-                    ),
-                ],
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    final radius = BorderRadius.circular(OcTokens.dockRadius);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        OcTokens.dockInlineInset,
+        0,
+        OcTokens.dockInlineInset,
+        math.max(OcOptical.dockBottomPad, safeBottom),
+      ),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: OcOptical.dockMaxWidth),
+          child: DecoratedBox(
+            key: Key('dock-selected-$selectedId'),
+            decoration: BoxDecoration(
+              color: tokens.dockFill,
+              borderRadius: radius,
+              border: Border.all(color: tokens.mobileBorder, width: 0.5),
+              boxShadow: OcElevation.dock(context),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: radius,
+              clipBehavior: Clip.antiAlias,
+              child: SizedBox(
+                key: const Key('dock-capsule'),
+                height: OcTokens.dockHeight,
+                child: Padding(
+                  padding: const EdgeInsets.all(OcOptical.dockInnerInset),
+                  child: Row(
+                    children: [
+                      for (final item in _items)
+                        Expanded(
+                          child: _TabSlot(
+                            id: item.id,
+                            glyph: item.glyph,
+                            label: t(context, item.labelKey),
+                            selected: selectedId == item.id,
+                            onTap: () => onSelect(item.id),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -88,48 +107,48 @@ class _TabSlot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.oc;
-    return Pressable(
-      key: Key('tab-$id'),
-      haptic: HapticStrength.light,
-      onPressed: onTap,
-      borderRadius: BorderRadius.circular(OcOptical.dockCapsuleRadius),
-      child: OcSelectedSpring(
-        selected: selected,
-        builder: (context, t) {
-          return Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: OcOptical.dockSquircle,
-                height: OcOptical.dockSquircle,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Color.lerp(Colors.transparent, tokens.primary.withValues(alpha: 0.2), t),
-                  borderRadius: BorderRadius.circular(OcOptical.dockSquircleRadius),
-                ),
-                child: OcGlyph(
-                  glyph,
-                  size: OcOptical.dockGlyph,
-                  color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
-                  strokeWidth: OcOptical.dockGlyphStroke,
-                ),
+    final tabRadius = BorderRadius.circular(OcOptical.dockTabRadius);
+    return SizedBox.expand(
+      child: Pressable(
+        key: Key('tab-$id'),
+        haptic: HapticStrength.light,
+        onPressed: onTap,
+        borderRadius: tabRadius,
+        child: OcSelectedSpring(
+          selected: selected,
+          builder: (context, t) {
+            return DecoratedBox(
+              decoration: BoxDecoration(
+                color: Color.lerp(Colors.transparent, tokens.interactiveSelection, t),
+                borderRadius: tabRadius,
               ),
-              SizedBox(height: OcOptical.dockLabelGap),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: OcOptical.dockLabel,
-                  letterSpacing: OcOptical.dockLabelTracking,
-                  height: 1.2,
-                  fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
-                  color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
-                ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  OcGlyph(
+                    glyph,
+                    size: OcOptical.dockGlyph,
+                    color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
+                    strokeWidth: OcOptical.dockGlyphStroke,
+                  ),
+                  SizedBox(height: OcOptical.dockLabelGap),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: OcOptical.dockLabel,
+                      letterSpacing: OcOptical.dockLabelTracking,
+                      height: 1.2,
+                      fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
+                      color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

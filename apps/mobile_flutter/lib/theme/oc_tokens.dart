@@ -138,6 +138,9 @@ class OcTokens extends ThemeExtension<OcTokens> {
   /// Opaque Android/test dock fill. Not `--oc-mobile-glass-fill`.
   Color get dockFill => surfaceElevated;
 
+  /// Official selected-tab wash: `bg-interactive-selection/55`.
+  Color get interactiveSelection => primary.withValues(alpha: 0.55);
+
   bool get isDark => brightness == Brightness.dark;
 
   static OcTokens of(BuildContext context) {

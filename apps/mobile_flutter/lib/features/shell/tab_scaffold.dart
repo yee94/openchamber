@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -73,7 +75,9 @@ class _MobileTabScaffoldState extends State<MobileTabScaffold> {
     final safeBottom = MediaQuery.paddingOf(context).bottom;
     final dockReserve = hideDock
         ? safeBottom
-        : (ios ? iosTabBarDockHeight + safeBottom : OcChrome.tabBarHeight + safeBottom + 16);
+        : (ios
+            ? iosTabBarDockHeight + safeBottom
+            : OcTokens.dockHeight + math.max(OcOptical.dockBottomPad, safeBottom));
     final onProjects = _index == 0 && !hideDock;
 
     return Stack(

@@ -33,12 +33,21 @@ void main() {
     await tester.pump();
 
     expect(find.byType(MobileTabPageHeader), findsOneWidget);
+    expect(find.byKey(const Key('mobile-tab-page-header-slot')), findsOneWidget);
     expect(find.byKey(const Key('mobile-tab-page-header-spacer')), findsOneWidget);
     expect(find.byKey(const Key('projects-attention-strip')), findsNothing);
 
     final expanded = tester.getSize(find.byKey(const Key('mobile-tab-page-header')));
     expect(expanded.height, 47 + OcOptical.collapsingTopPad + OcOptical.collapsingActionSize);
+    expect(
+      tester.getSize(find.byKey(const Key('mobile-tab-page-header-slot'))).height,
+      expanded.height,
+    );
     expect(tester.getSize(find.byKey(const Key('mobile-tab-page-header-spacer'))).height, 10);
+
+    final headerRect = tester.getRect(find.byType(MobileTabPageHeader));
+    final rowAtRest = tester.getTopLeft(find.text('row-0')).dy;
+    expect(rowAtRest, greaterThan(headerRect.bottom));
 
     final titleAtRest = tester.widget<Transform>(find.byKey(const Key('mobile-tab-page-title')));
     expect(titleAtRest.transform.storage[0], closeTo(1, 0.001));
@@ -54,5 +63,9 @@ void main() {
     expect(header.collapse, closeTo(1, 0.02));
     final titleCollapsed = tester.widget<Transform>(find.byKey(const Key('mobile-tab-page-title')));
     expect(titleCollapsed.transform.storage[0], closeTo(0.625, 0.02));
+
+    final headerBottom = tester.getBottomLeft(find.byType(MobileTabPageHeader)).dy;
+    final rowTop = tester.getTopLeft(find.text('row-0')).dy;
+    expect(rowTop, lessThan(headerBottom));
   });
 }

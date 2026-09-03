@@ -7,6 +7,7 @@ import 'package:openchamber/data/settings_catalog.dart';
 import 'package:openchamber/features/shell/secondary_chrome.dart';
 import 'package:openchamber/features/shell/tab_scaffold.dart';
 import 'package:openchamber/theme/app_theme.dart';
+import 'package:openchamber/theme/ios_chrome.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -49,6 +50,10 @@ void main() {
     expect(find.byKey(const Key('tab-scheduled')), findsOneWidget);
     expect(find.byKey(const Key('tab-settings')), findsOneWidget);
     expect(find.byKey(const Key('tab-chat'), skipOffstage: false), findsNothing);
+    expect(find.byKey(const Key('dock-capsule')), findsOneWidget);
+    final capsule = tester.getSize(find.byKey(const Key('dock-capsule')));
+    expect(capsule.height, OcTokens.dockHeight);
+    expect(capsule.width, lessThan(tester.view.physicalSize.width / tester.view.devicePixelRatio));
   });
 
   testWidgets('chat is a pushed secondary page from Projects', (tester) async {

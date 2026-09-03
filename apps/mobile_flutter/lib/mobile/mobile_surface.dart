@@ -43,8 +43,12 @@ class MobileLabeledSurfaceGroup extends StatelessWidget {
 
 /// Official `MobileTabPageScaffold` — one page rhythm for the four root tabs.
 ///
-/// Header overlay is sticky (fixed layout height). A static in-flow spacer
-/// (`0.625rem`) scrolls away natively. iOS does not get a Flutter glass fill.
+/// Flutter analogue of sticky `.oc-mobile-collapsing-header`: a [Stack] overlay
+/// so scrolling content passes **under** the translucent header / status area.
+/// The scroll body keeps an in-flow [MobileTabPageHeader.layoutSlot] plus the
+/// official `0.625rem` expand-shift spacer. Children stay a built [Column]
+/// (not a lazy sliver) so settings slugs remain hittable via `ensureVisible`.
+/// iOS does not get a Flutter glass fill.
 class MobileTabPageScaffold extends StatefulWidget {
   const MobileTabPageScaffold({
     super.key,
@@ -97,6 +101,7 @@ class _MobileTabPageScaffoldState extends State<MobileTabPageScaffold> {
 
   @override
   Widget build(BuildContext context) {
+    final safeTop = MediaQuery.paddingOf(context).top;
     Widget scroll = SingleChildScrollView(
       controller: _scroll,
       clipBehavior: Clip.none,
@@ -106,10 +111,8 @@ class _MobileTabPageScaffoldState extends State<MobileTabPageScaffold> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(
-              key: Key('mobile-tab-page-header-spacer'),
-              height: MobileTabPageHeader.expandShift,
-            ),
+            MobileTabPageHeader.layoutSlot(safeTop: safeTop),
+            MobileTabPageHeader.expandShiftSpacer,
             ...widget.children,
           ],
         ),
@@ -121,20 +124,26 @@ class _MobileTabPageScaffoldState extends State<MobileTabPageScaffold> {
     }
 
     return Scaffold(
-      body: Column(
+      body: Stack(
+        clipBehavior: Clip.none,
         children: [
-          ValueListenableBuilder<double>(
-            valueListenable: _collapse,
-            builder: (context, collapse, _) {
-              return MobileTabPageHeader(
-                title: widget.title,
-                eyebrow: widget.eyebrow,
-                trailing: widget.trailing,
-                collapse: collapse,
-              );
-            },
+          Positioned.fill(child: scroll),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: ValueListenableBuilder<double>(
+              valueListenable: _collapse,
+              builder: (context, collapse, _) {
+                return MobileTabPageHeader(
+                  title: widget.title,
+                  eyebrow: widget.eyebrow,
+                  trailing: widget.trailing,
+                  collapse: collapse,
+                );
+              },
+            ),
           ),
-          Expanded(child: scroll),
         ],
       ),
     );

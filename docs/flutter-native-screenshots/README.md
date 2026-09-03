@@ -15,7 +15,7 @@ Recapture after restoring Yee-open type (tracking + line-height) on top of the s
 | File | Screen |
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |
-| `02-projects.png` | Light: catalog sand/orange. Shared collapsing header (not a banner). Official 40px search/`+`. Nested worktrees in one floating surface. |
+| `02-projects.png` | Light: catalog sand/orange. Overlay collapsing header (content can scroll under). Official 40px search/`+`. One elevated card per project and per branch. Floating 68px dock pill. |
 | `02-projects-dark.png` | Same Projects surface after Appearance → Dark (catalog `OcTokens`, not a photo recolor). |
 | `03-assistant.png` | Contact cards (name / mode / summary). No 「启用助理」 toggle. |
 | `04-scheduled.png` | Light: catalog tokens. Open title/meta leading, filter capsule track, primary `+` 28. Dock 计划 only. |

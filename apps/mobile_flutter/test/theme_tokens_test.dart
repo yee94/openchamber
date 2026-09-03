@@ -61,7 +61,9 @@ void main() {
     expect(OcOptical.rowTitleTracking, greaterThan(0.2));
     expect(OcOptical.rowTitleHeight, lessThan(1.45));
     expect(OcOptical.sessionRowPadV, lessThan(8));
-    expect(OcOptical.metaHeight, greaterThanOrEqualTo(1.6));
+    expect(OcOptical.metaHeight, greaterThanOrEqualTo(1.35));
+    expect(OcOptical.entityTitleHeight, lessThanOrEqualTo(1.38));
+    expect(OcOptical.scheduleTitleMetaGap, lessThanOrEqualTo(8));
     expect(OcOptical.chatBodyHeight, lessThan(1.55));
     expect(OcOptical.searchButton, 40);
     expect(OcOptical.addButton, 40);
@@ -69,11 +71,13 @@ void main() {
     expect(OcOptical.collapsingActionSize, 40);
     expect(OcOptical.titleCollapseDistance, 48);
     expect(OcOptical.titleCollapseScaleEnd, 0.625);
-    expect(OcOptical.dockGlyph, 9);
+    expect(OcOptical.dockGlyph, 11);
     expect(OcOptical.leadingCircle, 13);
     expect(OcOptical.scheduleStatus, 13);
     expect(OcOptical.fileTypeW, 10);
-    expect(OcOptical.dockCapsuleHeight, lessThan(OcTokens.dockHeight));
+    expect(OcOptical.dockCapsuleHeight, OcTokens.dockHeight);
+    expect(OcOptical.dockCapsuleRadius, OcTokens.dockRadius);
+    expect(OcOptical.dockBottomPad, OcTokens.pageGap);
     expect(OcOptical.searchButton, greaterThan(OcTokens.headerButtonSize));
     expect(OcTokens.light.primary, isNot(const Color(0xFF007AFF)));
   });

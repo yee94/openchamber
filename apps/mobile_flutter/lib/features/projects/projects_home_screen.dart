@@ -207,65 +207,70 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
 
   Widget _projectSurface(BuildContext context, ProjectHomeGroup group) {
     final expanded = !_collapsed.contains(group.id);
-    return MobileFloatingSurface(
-      child: Column(
-        children: [
-          MobileProjectCard(
-            name: group.name,
-            count: group.sessionCount,
-            activity: formatRelativeTime(group.latestUpdated),
-            pathHint: group.pathHint,
-            expanded: expanded,
-            highlightQuery: _query,
-            onToggle: () => setState(() {
-              if (_collapsed.contains(group.id)) {
-                _collapsed.remove(group.id);
-              } else {
-                _collapsed.add(group.id);
-              }
-            }),
-          ),
-          if (expanded) ...[
-            Divider(height: 1, thickness: 0.5, color: context.oc.mobileBorder),
-            ..._sessionSlice(context, group.id, _mainSessions(group), true),
-            for (final tree in group.worktrees) ...[
-              Divider(height: 1, thickness: 0.5, color: context.oc.mobileBorder),
-              _worktreeSection(context, group.id, tree),
+    return Column(
+      key: Key('home-project-stack-${group.id}'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        MobileFloatingSurface(
+          key: Key('home-project-${group.id}'),
+          child: Column(
+            children: [
+              MobileProjectCard(
+                name: group.name,
+                count: group.sessionCount,
+                activity: formatRelativeTime(group.latestUpdated),
+                pathHint: group.pathHint,
+                expanded: expanded,
+                highlightQuery: _query,
+                onToggle: () => setState(() {
+                  if (_collapsed.contains(group.id)) {
+                    _collapsed.remove(group.id);
+                  } else {
+                    _collapsed.add(group.id);
+                  }
+                }),
+              ),
+              if (expanded) ..._sessionSlice(context, group.id, _mainSessions(group), true),
             ],
-          ],
-        ],
-      ),
+          ),
+        ),
+        if (expanded)
+          for (final tree in group.worktrees) _worktreeCard(context, group.id, tree),
+      ],
     );
   }
 
-  Widget _worktreeSection(BuildContext context, String projectId, WorktreeHomeGroup tree) {
+  Widget _worktreeCard(BuildContext context, String projectId, WorktreeHomeGroup tree) {
     final id = '$projectId::${tree.name}';
     final expanded = _isWorktreeExpanded(id, tree);
     final activity = formatRelativeTime(
       tree.sessions.fold<num>(0, (latest, row) => row.updated > latest ? row.updated : latest),
     );
-    return MobileLabeledSurfaceGroup(
-      label: MobileProjectCard(
-        name: tree.name,
-        glyph: OcGlyphKind.branch,
-        count: tree.sessionCount,
-        activity: activity,
-        expanded: expanded,
-        compact: true,
-        highlightQuery: _query,
-        onToggle: () => setState(() {
-          final next = !_isWorktreeExpanded(id, tree);
-          _worktreeToggled.add(id);
-          if (next) {
-            _expandedWorktrees.add(id);
-          } else {
-            _expandedWorktrees.remove(id);
-          }
-        }),
+    return MobileFloatingSurface(
+      key: Key('home-worktree-$id'),
+      child: Column(
+        children: [
+          MobileProjectCard(
+            name: tree.name,
+            glyph: OcGlyphKind.branch,
+            count: tree.sessionCount,
+            activity: activity,
+            expanded: expanded,
+            compact: true,
+            highlightQuery: _query,
+            onToggle: () => setState(() {
+              final next = !_isWorktreeExpanded(id, tree);
+              _worktreeToggled.add(id);
+              if (next) {
+                _expandedWorktrees.add(id);
+              } else {
+                _expandedWorktrees.remove(id);
+              }
+            }),
+          ),
+          if (expanded) ..._sessionSlice(context, id, tree.sessions, true),
+        ],
       ),
-      children: [
-        if (expanded) ..._sessionSlice(context, id, tree.sessions, true),
-      ],
     );
   }
 
