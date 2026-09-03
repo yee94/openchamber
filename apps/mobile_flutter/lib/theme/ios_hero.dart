@@ -18,10 +18,10 @@ class OcOptical {
   static const double rowTitle = 15;
   static const double rowTitleTracking = 0.9;
   static const double rowTitleHeight = 1.58;
-  static const double sessionRowPadV = 13;
-  static const double moreLinkPadV = 8;
-  static const double groupHeaderPadV = 13;
-  static const double groupHeaderPadVCompact = 11;
+  static const double sessionRowPadV = 9;
+  static const double moreLinkPadV = 6;
+  static const double groupHeaderPadV = 11;
+  static const double groupHeaderPadVCompact = 9;
   static const double groupTitleMetaGap = 8;
 
   static const double entityTitle = 16;
@@ -32,8 +32,8 @@ class OcOptical {
   static const double metaTracking = 0.65;
   static const double metaHeight = 1.75;
 
-  static const double scheduleCardPadV = 14;
-  static const double scheduleTitleMetaGap = 9;
+  static const double scheduleCardPadV = 13;
+  static const double scheduleTitleMetaGap = 11;
 
   static const double chatTitle = 15;
   static const double chatTitleTracking = 0.4;
@@ -55,27 +55,27 @@ class OcOptical {
   static const double headerGlyph = 8;
   static const double headerGlyphStroke = 0.95;
 
-  static const double dockGlyph = 10;
-  static const double dockGlyphStroke = 0.95;
+  static const double dockGlyph = 9;
+  static const double dockGlyphStroke = 0.9;
   static const double dockSquircle = 16;
   static const double dockSquircleRadius = 5.5;
 
-  static const double leadingCircle = 15;
-  static const double leadingCircleCompact = 13;
-  static const double leadingGlyph = 7;
-  static const double leadingGlyphCompact = 6;
+  static const double leadingCircle = 13;
+  static const double leadingCircleCompact = 11;
+  static const double leadingGlyph = 6;
+  static const double leadingGlyphCompact = 5;
 
   static const double sessionBullet = 3;
-  static const double overflow = 9;
-  static const double chevron = 10;
+  static const double overflow = 7;
+  static const double chevron = 8;
 
-  static const double scheduleStatus = 15;
-  static const double scheduleStatusGlyph = 6;
+  static const double scheduleStatus = 13;
+  static const double scheduleStatusGlyph = 5;
 
-  static const double fileTypeW = 11;
-  static const double fileTypeH = 8;
-  static const double fileTypeMark = 4.5;
-  static const double fileRowPadV = 3;
+  static const double fileTypeW = 10;
+  static const double fileTypeH = 7;
+  static const double fileTypeMark = 4;
+  static const double fileRowPadV = 2;
 
   static const double composerRadius = 22;
   static const double composerPlus = 10;
@@ -85,6 +85,6 @@ class OcOptical {
   static const double scrollFab = 18;
   static const double scrollChevron = 8;
 
-  static const double toolbarGlyph = 10;
-  static const double footerGlyph = 11;
+  static const double toolbarGlyph = 8;
+  static const double footerGlyph = 9;
 }

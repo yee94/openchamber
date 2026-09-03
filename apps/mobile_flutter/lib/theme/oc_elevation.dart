@@ -18,9 +18,9 @@ class OcElevation {
     if (tokens.isDark) return const [];
     if (tight) {
       return const [
-        BoxShadow(color: Color(0x05000000), blurRadius: 4),
-        BoxShadow(color: Color(0x07000000), blurRadius: 16),
-        BoxShadow(color: Color(0x0A000000), blurRadius: 26, spreadRadius: -8, offset: Offset(0, 4)),
+        BoxShadow(color: Color(0x04000000), blurRadius: 5),
+        BoxShadow(color: Color(0x06000000), blurRadius: 20),
+        BoxShadow(color: Color(0x08000000), blurRadius: 32, spreadRadius: -10, offset: Offset(0, 3)),
       ];
     }
     return const [

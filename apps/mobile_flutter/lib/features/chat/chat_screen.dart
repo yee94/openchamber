@@ -12,6 +12,7 @@ import '../../data/message_id.dart';
 import '../../data/openchamber_http.dart';
 import '../../data/prompt_attachment.dart';
 import '../../l10n/app_strings.dart';
+import '../../motion/pressable.dart';
 import '../../native/haptics.dart';
 import '../../native/live_activity_controller.dart';
 import '../../native/media_channel.dart';
@@ -349,10 +350,22 @@ class _ChatScreenState extends State<ChatScreen> {
         title: widget.session.title,
         leadingKey: const Key('chat-back'),
         busy: _busy,
-        trailing: CircularChromeButton(
-          glyph: OcGlyphKind.ellipsis,
-          size: OcOptical.chatHeaderButton,
+        trailing: Pressable(
+          haptic: HapticStrength.light,
+          highlight: false,
           onPressed: () {},
+          child: SizedBox(
+            width: 36,
+            height: 36,
+            child: Center(
+              child: OcGlyph(
+                OcGlyphKind.ellipsis,
+                size: OcOptical.overflow,
+                strokeWidth: OcOptical.headerGlyphStroke,
+                color: context.oc.foreground,
+              ),
+            ),
+          ),
         ),
       ),
       body: Column(

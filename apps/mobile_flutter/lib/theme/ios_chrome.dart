@@ -505,12 +505,27 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
       padding: const EdgeInsets.fromLTRB(10, 2, 10, 4),
       child: Row(
         children: [
-          CircularChromeButton(
-            key: leadingKey,
-            glyph: OcGlyphKind.chevronBack,
-            size: OcOptical.chatHeaderButton,
-            tooltip: t(context, 'chat.back'),
-            onPressed: () => Navigator.of(context).maybePop(),
+          Tooltip(
+            message: t(context, 'chat.back'),
+            child: Pressable(
+              key: leadingKey,
+              haptic: HapticStrength.light,
+              highlight: false,
+              onPressed: () => Navigator.of(context).maybePop(),
+              child: SizedBox(
+                width: 36,
+                height: 36,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: OcGlyph(
+                    OcGlyphKind.chevronBack,
+                    size: OcOptical.chevron,
+                    strokeWidth: OcOptical.headerGlyphStroke,
+                    color: context.oc.foreground,
+                  ),
+                ),
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(
