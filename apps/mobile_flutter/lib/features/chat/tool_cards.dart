@@ -97,24 +97,15 @@ class ChatTranscriptBody extends StatelessWidget {
         ));
       }
     }
-    if (message.tokensPerSecond != null || message.processedLabel != null || message.completedClock != null) {
+    if (!message.isUser) {
+      out.add(_TurnFooter(
+        message: message,
+        isSpeaking: isSpeaking,
+        onSpeak: onSpeak,
+        canSpeak: onSpeak != null && _hasSpeakableText,
+      ));
+    } else if (message.tokensPerSecond != null || message.processedLabel != null || message.completedClock != null) {
       out.add(_MetricsRow(message: message));
-    }
-    if (!message.isUser && onSpeak != null && _hasSpeakableText) {
-      out.add(
-        Align(
-          alignment: Alignment.centerLeft,
-          child: IconButton(
-            key: Key('chat-tts-${message.id}'),
-            tooltip: t(
-              context,
-              isSpeaking ? 'chat.messageBody.tts.stopSpeaking' : 'chat.messageBody.tts.readAloud',
-            ),
-            onPressed: onSpeak,
-            icon: Icon(isSpeaking ? Icons.stop_circle_outlined : Icons.volume_up_outlined, size: 18),
-          ),
-        ),
-      );
     }
     return out;
   }
@@ -154,12 +145,24 @@ class _AssistantHeader extends StatelessWidget {
               if (role != null && role.isNotEmpty) ...[
                 const SizedBox(width: 8),
                 Container(
+                  key: const Key('chat-role-badge'),
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).scaffoldBackgroundColor,
+                    color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: OcChrome.separator),
                   ),
-                  child: Text(role, style: const TextStyle(fontSize: 12, color: OcChrome.secondary)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const OcGlyph(OcGlyphKind.people, size: 11, color: OcChrome.secondary),
+                      const SizedBox(width: 4),
+                      Text(
+                        role,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: OcChrome.secondary),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ],
@@ -169,25 +172,54 @@ class _AssistantHeader extends StatelessWidget {
             Row(
               children: [
                 if (message.processedLabel != null)
-                  Text(
-                    '${t(context, live ? 'chat.activity.active' : 'chat.activity.completedStatus')} ${message.processedLabel}',
-                    style: const TextStyle(fontSize: 12, color: OcChrome.secondary),
-                  ),
-                const Spacer(),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const OcGlyph(OcGlyphKind.layers, size: 13, color: OcChrome.secondary),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            '${t(context, live ? 'chat.activity.active' : 'chat.activity.completedStatus')} ${message.processedLabel}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12, color: OcChrome.secondary),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  const Spacer(),
                 if (message.agentCount > 0)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        t(context, 'chat.agentsInvolved', {'count': '${message.agentCount}'}),
-                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary),
-                      ),
-                      OcGlyph(
-                        OcGlyphKind.chevronRight,
-                        size: 12,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ],
+                  Container(
+                    key: const Key('chat-agent-count'),
+                    padding: const EdgeInsets.fromLTRB(6, 3, 4, 3),
+                    decoration: BoxDecoration(
+                      color: OcChrome.agentAccent.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 16,
+                          height: 16,
+                          decoration: const BoxDecoration(
+                            color: OcChrome.agentAccent,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: OcGlyph(OcGlyphKind.sparkles, size: 9, color: Colors.white),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          t(context, 'chat.agentsInvolved', {'count': '${message.agentCount}'}),
+                          style: const TextStyle(fontSize: 12, color: OcChrome.agentAccent, fontWeight: FontWeight.w600),
+                        ),
+                        const OcGlyph(OcGlyphKind.chevronRight, size: 12, color: OcChrome.agentAccent),
+                      ],
+                    ),
                   ),
               ],
             ),
@@ -265,9 +297,14 @@ class _FileChangeCard extends StatelessWidget {
               ),
             ),
           if (parts.length > visible.length)
-            Text(
-              t(context, 'chat.filesChanged.more', {'count': '${parts.length - visible.length}'}),
-              style: const TextStyle(fontSize: 13, color: OcChrome.secondary),
+            Row(
+              children: [
+                Text(
+                  t(context, 'chat.filesChanged.more', {'count': '${parts.length - visible.length}'}),
+                  style: const TextStyle(fontSize: 13, color: OcChrome.secondary),
+                ),
+                const OcGlyph(OcGlyphKind.chevronRight, size: 12, color: OcChrome.secondary),
+              ],
             ),
         ],
       ),
@@ -302,6 +339,100 @@ class _MetricsRow extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _TurnFooter extends StatelessWidget {
+  const _TurnFooter({
+    required this.message,
+    required this.canSpeak,
+    required this.isSpeaking,
+    this.onSpeak,
+  });
+
+  final ChatMessage message;
+  final bool canSpeak;
+  final bool isSpeaking;
+  final VoidCallback? onSpeak;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        runSpacing: 6,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _footerIcon(context, key: const Key('chat-action-copy'), glyph: OcGlyphKind.copy, tooltip: t(context, 'chat.messageBody.actions.copyAnswer')),
+              _footerIcon(context, key: const Key('chat-action-share'), glyph: OcGlyphKind.share, tooltip: t(context, 'chat.messageBody.actions.shareAnswer')),
+              _footerIcon(context, key: const Key('chat-action-up'), glyph: OcGlyphKind.thumbUp, tooltip: t(context, 'chat.messageBody.actions.goodResponse')),
+              _footerIcon(context, key: const Key('chat-action-down'), glyph: OcGlyphKind.thumbDown, tooltip: t(context, 'chat.messageBody.actions.badResponse')),
+              if (canSpeak)
+                _footerIcon(
+                  context,
+                  key: Key('chat-tts-${message.id}'),
+                  glyph: OcGlyphKind.speaker,
+                  tooltip: t(context, isSpeaking ? 'chat.messageBody.tts.stopSpeaking' : 'chat.messageBody.tts.readAloud'),
+                  onPressed: onSpeak,
+                ),
+            ],
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (message.tokensPerSecond != null)
+                _metric(
+                  key: Key('chat-tps-${message.id}'),
+                  glyph: OcGlyphKind.bolt,
+                  label: message.tokensPerSecond!,
+                ),
+              if (message.processedLabel != null)
+                _metric(glyph: OcGlyphKind.hourglass, label: message.processedLabel!),
+              if (message.completedClock != null)
+                _metric(glyph: OcGlyphKind.clock, label: message.completedClock!),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric({Key? key, required OcGlyphKind glyph, required String label}) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: Row(
+        key: key,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          OcGlyph(glyph, size: 11, color: OcChrome.secondary),
+          const SizedBox(width: 3),
+          Text(label, style: const TextStyle(fontSize: 11, color: OcChrome.secondary)),
+        ],
+      ),
+    );
+  }
+
+  Widget _footerIcon(
+    BuildContext context, {
+    required Key key,
+    required OcGlyphKind glyph,
+    required String tooltip,
+    VoidCallback? onPressed,
+  }) {
+    return IconButton(
+      key: key,
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+      padding: const EdgeInsets.all(2),
+      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+      onPressed: onPressed ?? () {},
+      icon: OcGlyph(glyph, size: 15, color: OcChrome.secondary),
     );
   }
 }

@@ -12,6 +12,10 @@ class OcChrome {
   static const Color cardDark = Color(0xFF1C1C1E);
   static const Color title = Color(0xFF1C1C1E);
   static const Color secondary = Color(0xFF8E8E93);
+  static const Color success = Color(0xFF34C759);
+  static const Color pauseAccent = Color(0xFF64D2FF);
+  static const Color agentAccent = Color(0xFF7A5CFF);
+  static const Color separator = Color(0x14000000);
   static const Color dockFillLight = Color(0xF2FFFFFF);
   static const Color dockFillDark = Color(0xE61C1C1E);
   static const double cardRadius = 22;
@@ -137,6 +141,7 @@ class GroupedInsetCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(OcChrome.cardRadius),
+        border: Border.all(color: OcChrome.separator),
       ),
       clipBehavior: Clip.antiAlias,
       child: child,
@@ -289,7 +294,7 @@ class SegmentedPill extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
                     color: selectedIndex == i
-                        ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.12)
+                        ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.16)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(OcChrome.pillRadius),
                   ),
@@ -301,7 +306,7 @@ class SegmentedPill extends StatelessWidget {
                           icons![i],
                           size: 16,
                           color: selectedIndex == i
-                              ? Theme.of(context).colorScheme.onSurface
+                              ? Theme.of(context).colorScheme.primary
                               : OcChrome.secondary,
                         ),
                         const SizedBox(width: 6),
@@ -310,7 +315,7 @@ class SegmentedPill extends StatelessWidget {
                         labels[i],
                         style: TextStyle(
                           fontSize: 15,
-                          fontWeight: selectedIndex == i ? FontWeight.w600 : FontWeight.w500,
+                          fontWeight: selectedIndex == i ? FontWeight.w700 : FontWeight.w500,
                           color: selectedIndex == i
                               ? Theme.of(context).colorScheme.onSurface
                               : OcChrome.secondary,
@@ -348,41 +353,40 @@ class FilterChipBar extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(OcChrome.pillRadius),
-              ),
-              child: Row(
-                children: [
-                  for (var i = 0; i < labels.length; i += 1)
-                    Expanded(
-                      child: InkWell(
-                        key: Key('filter-$i'),
-                        borderRadius: BorderRadius.circular(OcChrome.pillRadius),
-                        onTap: () => onSelected(i),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Text(
-                            labels[i],
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: selectedIndex == i ? FontWeight.w600 : FontWeight.w500,
-                              color: selectedIndex == i
-                                  ? Theme.of(context).colorScheme.onSurface
-                                  : OcChrome.secondary,
-                            ),
+            child: Row(
+              children: [
+                for (var i = 0; i < labels.length; i += 1)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: InkWell(
+                      key: Key('filter-$i'),
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () => onSelected(i),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: selectedIndex == i
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.14)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          labels[i],
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: selectedIndex == i ? FontWeight.w700 : FontWeight.w500,
+                            color: selectedIndex == i
+                                ? Theme.of(context).colorScheme.onSurface
+                                : OcChrome.secondary,
                           ),
                         ),
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
-          if (trailing != null) ...[const SizedBox(width: 10), trailing!],
+          if (trailing != null) trailing!,
         ],
       ),
     );

@@ -78,6 +78,7 @@ void main() {
 
     expect(find.byKey(const Key('unread-dot')), findsOneWidget);
     expect(find.textContaining('openchamber'), findsWidgets);
+    expect(find.textContaining('Code/github'), findsWidgets);
     expect(find.textContaining('个会话'), findsWidgets);
     expect(find.textContaining('更多'), findsWidgets);
     expect(find.textContaining('feat/opencode2up'), findsWidgets);
@@ -164,20 +165,27 @@ void main() {
     expect(find.byKey(const Key('composer-attach')), findsOneWidget);
     expect(find.byKey(const Key('composer-send')), findsOneWidget);
     expect(find.byKey(const Key('composer-dictate')), findsNothing);
-    expect(find.text('Grok 4.6'), findsOneWidget);
-    expect(find.text('Orchestrator'), findsOneWidget);
+    expect(find.text('Grok 4.6'), findsWidgets);
+    expect(find.byKey(const Key('chat-role-badge')), findsWidgets);
+    expect(find.text('Orchestrator'), findsWidgets);
+    expect(find.byKey(const Key('chat-agent-count')), findsOneWidget);
+    expect(find.byKey(const Key('chat-action-copy')), findsWidgets);
+    expect(find.byKey(const Key('chat-action-share')), findsWidgets);
+    expect(find.byKey(const Key('chat-action-up')), findsWidgets);
+    expect(find.byKey(const Key('chat-action-down')), findsWidgets);
     expect(find.textContaining('已处理'), findsWidgets);
     expect(find.textContaining('Agent 参与'), findsOneWidget);
     expect(find.byKey(const Key('chat-tool-diff-edit-1')), findsOneWidget);
     expect(find.textContaining('已更改文件'), findsOneWidget);
     expect(find.textContaining('个文件'), findsWidgets);
     expect(find.textContaining('+5 个文件'), findsOneWidget);
-    expect(find.textContaining('tok/s'), findsOneWidget);
+    expect(find.byKey(const Key('chat-tps-m-asst')), findsOneWidget);
     expect(find.textContaining('需要权限'), findsNothing);
     expect(find.byKey(const Key('tab-projects')), findsNothing);
     expect(find.byKey(const Key('projects-plus-menu')), findsNothing);
     expect(find.text('项目'), findsNothing);
     await tester.ensureVisible(find.byKey(const Key('chat-tool-diff-edit-1')));
+    expect(find.byKey(const Key('chat-scroll-to-bottom')), findsOneWidget);
     await tester.pump();
     await _writePng(tester, screenshotKey, '07-chat.png');
 
@@ -319,12 +327,12 @@ MemoryOpenChamberTransport _seededTransport() {
       'pinnedSessionIds': ['sess-pinned'],
       'directories': [
         {
-          'directory': '/workspace/openchamber',
+          'directory': '/workspace/Code/github/openchamber',
           'sessions': [
             {
               'id': 'sess-pinned',
               'title': '发布说明',
-              'directory': '/workspace/openchamber',
+              'directory': '/workspace/Code/github/openchamber',
               'parentID': null,
               'project': {'name': 'openchamber'},
               'time': {'updated': now - 60000, 'pinned': '2026-09-01T00:00:00.000Z'},
@@ -334,7 +342,7 @@ MemoryOpenChamberTransport _seededTransport() {
             {
               'id': 'sess-busy',
               'title': '修复输入法',
-              'directory': '/workspace/openchamber',
+              'directory': '/workspace/Code/github/openchamber',
               'parentID': null,
               'project': {'name': 'openchamber'},
               'time': {'updated': now - 33 * 60000},
@@ -343,7 +351,7 @@ MemoryOpenChamberTransport _seededTransport() {
             {
               'id': 'sess-catalog',
               'title': '新会话',
-              'directory': '/workspace/openchamber',
+              'directory': '/workspace/Code/github/openchamber',
               'parentID': null,
               'project': {'name': 'openchamber'},
               'time': {'updated': now - 2 * 3600000},
@@ -352,7 +360,7 @@ MemoryOpenChamberTransport _seededTransport() {
             {
               'id': 'sess-diff',
               'title': '写入类型无法点开查看 diff',
-              'directory': '/workspace/openchamber',
+              'directory': '/workspace/Code/github/openchamber',
               'parentID': null,
               'project': {'name': 'openchamber'},
               'time': {'updated': now - 5 * 3600000},
@@ -361,7 +369,7 @@ MemoryOpenChamberTransport _seededTransport() {
             {
               'id': 'sess-extra',
               'title': '写入工具 diff 点开看不到的路径',
-              'directory': '/workspace/openchamber',
+              'directory': '/workspace/Code/github/openchamber',
               'parentID': null,
               'project': {'name': 'openchamber'},
               'time': {'updated': now - 8 * 3600000},
@@ -370,7 +378,7 @@ MemoryOpenChamberTransport _seededTransport() {
             {
               'id': 'sess-wt-1',
               'title': 'OpenCode 升级',
-              'directory': '/workspace/openchamber',
+              'directory': '/workspace/Code/github/openchamber',
               'parentID': null,
               'project': {'name': 'openchamber'},
               'time': {'updated': now - 12 * 3600000},
@@ -379,7 +387,7 @@ MemoryOpenChamberTransport _seededTransport() {
             {
               'id': 'sess-wt-2',
               'title': 'Composer IME',
-              'directory': '/workspace/openchamber',
+              'directory': '/workspace/Code/github/openchamber',
               'parentID': null,
               'project': {'name': 'openchamber'},
               'time': {'updated': now - 20 * 3600000},
@@ -390,6 +398,18 @@ MemoryOpenChamberTransport _seededTransport() {
       ],
     },
     transcript: [
+      {
+        'info': {'id': 'm-old-user', 'role': 'user'},
+        'parts': [
+          {'type': 'text', 'text': '先对齐路径匹配，再补 ToolPart 和 DiffView 的回归。'},
+        ],
+      },
+      {
+        'info': {'id': 'm-old-asst', 'role': 'assistant', 'model': {'name': 'Grok 4.6'}, 'agent': 'Orchestrator'},
+        'parts': [
+          {'type': 'text', 'text': '目录前缀已经对齐。接下来会把文件变更卡和速度指标补到这条回复下面。'},
+        ],
+      },
       {
         'info': {'id': 'm-user', 'role': 'user'},
         'parts': [
@@ -539,7 +559,7 @@ MemoryOpenChamberTransport _seededTransport() {
         'enabled': true,
         'name': '首页助理',
         'defaultPrompt': '一段持续的长对话，处理首页和通知。',
-        'workspacePath': '/workspace/openchamber',
+        'workspacePath': '/workspace/Code/github/openchamber',
         'providerID': 'anthropic',
         'modelID': 'claude-sonnet-4',
         'mode': 'continuous',
@@ -551,7 +571,7 @@ MemoryOpenChamberTransport _seededTransport() {
         'enabled': true,
         'name': '代码审查',
         'defaultPrompt': '审查 diff 与测试，不携带无关历史。',
-        'workspacePath': '/workspace/openchamber',
+        'workspacePath': '/workspace/Code/github/openchamber',
         'providerID': 'openai',
         'modelID': 'gpt-5',
         'mode': 'stateless',

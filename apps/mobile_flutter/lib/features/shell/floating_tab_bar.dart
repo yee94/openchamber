@@ -93,15 +93,16 @@ class _TabSlot extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
             decoration: BoxDecoration(
-              color: selected ? primary.withValues(alpha: 0.16) : Colors.transparent,
-              borderRadius: BorderRadius.circular(18),
+              color: selected ? primary.withValues(alpha: 0.18) : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
             ),
             child: OcGlyph(
               glyph,
-              size: 22,
+              size: 21,
               color: selected ? primary : OcTokens.mutedLight,
+              strokeWidth: selected ? 2.0 : 1.7,
             ),
           ),
           const SizedBox(height: 2),
@@ -110,8 +111,8 @@ class _TabSlot extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 10,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              fontSize: 11,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               color: selected ? primary : OcTokens.mutedLight,
             ),
           ),

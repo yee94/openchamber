@@ -26,6 +26,15 @@ enum OcGlyphKind {
   clock,
   mic,
   qr,
+  copy,
+  share,
+  thumbUp,
+  thumbDown,
+  speaker,
+  people,
+  bolt,
+  hourglass,
+  layers,
 }
 
 class OcGlyph extends StatelessWidget {
@@ -213,6 +222,101 @@ class _OcGlyphPainter extends CustomPainter {
             Radius.circular(w * 0.06),
           ),
           fill,
+        );
+      case OcGlyphKind.copy:
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.28, h * 0.28, w * 0.50, h * 0.54), Radius.circular(w * 0.08)),
+          stroke,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.18, h * 0.16, w * 0.50, h * 0.54), Radius.circular(w * 0.08)),
+          stroke,
+        );
+      case OcGlyphKind.share:
+        canvas.drawLine(Offset(w * 0.50, h * 0.16), Offset(w * 0.50, h * 0.58), stroke);
+        canvas.drawLine(Offset(w * 0.50, h * 0.16), Offset(w * 0.34, h * 0.32), stroke);
+        canvas.drawLine(Offset(w * 0.50, h * 0.16), Offset(w * 0.66, h * 0.32), stroke);
+        canvas.drawArc(Rect.fromLTWH(w * 0.18, h * 0.40, w * 0.64, h * 0.46), 0.15, 2.84, false, stroke);
+      case OcGlyphKind.thumbUp:
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.18, h * 0.42, w * 0.18, h * 0.40), Radius.circular(w * 0.04)),
+          stroke,
+        );
+        final up = Path()
+          ..moveTo(w * 0.36, h * 0.78)
+          ..lineTo(w * 0.78, h * 0.78)
+          ..lineTo(w * 0.74, h * 0.46)
+          ..lineTo(w * 0.56, h * 0.46)
+          ..lineTo(w * 0.58, h * 0.22)
+          ..lineTo(w * 0.42, h * 0.42)
+          ..lineTo(w * 0.36, h * 0.42)
+          ..close();
+        canvas.drawPath(up, stroke);
+      case OcGlyphKind.thumbDown:
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.18, h * 0.18, w * 0.18, h * 0.40), Radius.circular(w * 0.04)),
+          stroke,
+        );
+        final down = Path()
+          ..moveTo(w * 0.36, h * 0.22)
+          ..lineTo(w * 0.78, h * 0.22)
+          ..lineTo(w * 0.74, h * 0.54)
+          ..lineTo(w * 0.56, h * 0.54)
+          ..lineTo(w * 0.58, h * 0.78)
+          ..lineTo(w * 0.42, h * 0.58)
+          ..lineTo(w * 0.36, h * 0.58)
+          ..close();
+        canvas.drawPath(down, stroke);
+      case OcGlyphKind.speaker:
+        final cone = Path()
+          ..moveTo(w * 0.22, h * 0.40)
+          ..lineTo(w * 0.40, h * 0.40)
+          ..lineTo(w * 0.58, h * 0.24)
+          ..lineTo(w * 0.58, h * 0.76)
+          ..lineTo(w * 0.40, h * 0.60)
+          ..lineTo(w * 0.22, h * 0.60)
+          ..close();
+        canvas.drawPath(cone, stroke);
+        canvas.drawArc(Rect.fromLTWH(w * 0.52, h * 0.30, w * 0.30, h * 0.40), -0.7, 1.4, false, stroke);
+      case OcGlyphKind.people:
+        canvas.drawCircle(Offset(w * 0.36, h * 0.32), w * 0.14, stroke);
+        canvas.drawArc(Rect.fromLTWH(w * 0.12, h * 0.50, w * 0.48, h * 0.40), 3.3, 2.8, false, stroke);
+        canvas.drawCircle(Offset(w * 0.68, h * 0.34), w * 0.12, stroke);
+        canvas.drawArc(Rect.fromLTWH(w * 0.48, h * 0.52, w * 0.40, h * 0.34), 3.4, 2.6, false, stroke);
+      case OcGlyphKind.bolt:
+        final bolt = Path()
+          ..moveTo(w * 0.58, h * 0.12)
+          ..lineTo(w * 0.30, h * 0.52)
+          ..lineTo(w * 0.50, h * 0.52)
+          ..lineTo(w * 0.42, h * 0.88)
+          ..lineTo(w * 0.72, h * 0.44)
+          ..lineTo(w * 0.52, h * 0.44)
+          ..close();
+        canvas.drawPath(bolt, fill);
+      case OcGlyphKind.hourglass:
+        canvas.drawLine(Offset(w * 0.28, h * 0.18), Offset(w * 0.72, h * 0.18), stroke);
+        canvas.drawLine(Offset(w * 0.28, h * 0.82), Offset(w * 0.72, h * 0.82), stroke);
+        final glass = Path()
+          ..moveTo(w * 0.30, h * 0.20)
+          ..lineTo(w * 0.70, h * 0.20)
+          ..lineTo(w * 0.50, h * 0.50)
+          ..lineTo(w * 0.70, h * 0.80)
+          ..lineTo(w * 0.30, h * 0.80)
+          ..lineTo(w * 0.50, h * 0.50)
+          ..close();
+        canvas.drawPath(glass, stroke);
+      case OcGlyphKind.layers:
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.22, h * 0.22, w * 0.56, h * 0.22), Radius.circular(w * 0.06)),
+          stroke,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.22, h * 0.40, w * 0.56, h * 0.22), Radius.circular(w * 0.06)),
+          stroke,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.22, h * 0.58, w * 0.56, h * 0.22), Radius.circular(w * 0.06)),
+          stroke,
         );
     }
   }

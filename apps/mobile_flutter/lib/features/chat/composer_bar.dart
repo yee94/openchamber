@@ -127,21 +127,29 @@ class ComposerBar extends StatelessWidget {
               ),
             ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: Material(
-              color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.96),
-              elevation: 8,
-              shadowColor: Colors.black.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(OcChrome.pillRadius),
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(OcChrome.pillRadius),
+                border: Border.all(color: OcChrome.separator),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+                padding: const EdgeInsets.fromLTRB(8, 6, 6, 6),
                 child: Row(
                   children: [
                     IconButton(
                       key: const Key('composer-attach'),
                       tooltip: t(context, 'chat.composer.attach'),
                       onPressed: onAttach,
-                      icon: const OcGlyph(OcGlyphKind.plus, size: 22),
+                      icon: const OcGlyph(OcGlyphKind.plus, size: 20, strokeWidth: 2.1),
                     ),
                     Expanded(child: field),
                     if (onDictate != null)
@@ -158,13 +166,13 @@ class ComposerBar extends StatelessWidget {
                         key: const Key('composer-send'),
                         customBorder: const CircleBorder(),
                         onTap: busy ? onStop : onSend,
-                        child: SizedBox(
-                          width: 34,
-                          height: 34,
+                        child: const SizedBox(
+                          width: 36,
+                          height: 36,
                           child: Center(
                             child: OcGlyph(
                               OcGlyphKind.sendSquare,
-                              size: 16,
+                              size: 14,
                               color: Colors.white,
                             ),
                           ),

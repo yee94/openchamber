@@ -59,6 +59,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _live.selectSession(widget.session.id);
+    _scroll.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       SecondaryChrome.chatOpened();
@@ -91,6 +92,7 @@ class _ChatScreenState extends State<ChatScreen> {
     SecondaryChrome.chatClosed();
     widget.appController?.removeListener(_onApp);
     _poll?.cancel();
+    _scroll.removeListener(_onScroll);
     _composer.dispose();
     _scroll.dispose();
     super.dispose();
@@ -142,9 +144,19 @@ class _ChatScreenState extends State<ChatScreen> {
     if (mounted) setState(() => _busy = busy);
   }
 
+  bool _atLiveEdge = true;
+
+  void _onScroll() {
+    final atEdge = !_scroll.hasClients || _scroll.offset <= 24;
+    if (atEdge == _atLiveEdge) return;
+    _atLiveEdge = atEdge;
+    if (mounted) setState(() {});
+  }
+
   void _jumpToLatest() {
     if (!_scroll.hasClients) return;
     _scroll.jumpTo(ReverseChatController.latestReverseIndex.toDouble());
+    _onScroll();
   }
 
   Future<void> _attach() async {
@@ -331,7 +343,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
     final inset = MediaQuery.viewInsetsOf(context);
-    final atLiveEdge = !_scroll.hasClients || _scroll.offset <= 24;
+    final atLiveEdge = _atLiveEdge;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       resizeToAvoidBottomInset: !ios,
@@ -421,7 +433,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 busy: _busy,
                 attachments: _attachments,
                 dictationLabel: _dictationLabel,
-                showScrollToBottom: !atLiveEdge,
+                showScrollToBottom: !atLiveEdge || _timeline.length > 2,
                 onScrollToBottom: _jumpToLatest,
                 onSend: _send,
                 onStop: _stop,

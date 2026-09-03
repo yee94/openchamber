@@ -198,15 +198,12 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                 height: 28,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: enabled ? const Color(0xFF34C759) : OcChrome.secondary,
-                    width: 1.6,
-                  ),
+                  color: enabled ? OcChrome.success : OcChrome.pauseAccent,
                 ),
                 child: OcGlyph(
                   enabled ? OcGlyphKind.check : OcGlyphKind.pause,
                   size: 14,
-                  color: enabled ? const Color(0xFF34C759) : OcChrome.secondary,
+                  color: Colors.white,
                 ),
               ),
               const SizedBox(width: 12),
@@ -216,7 +213,11 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   children: [
                     Text(
                       task.name.isEmpty ? task.id : task.name,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: enabled ? Theme.of(context).colorScheme.onSurface : OcChrome.secondary,
+                      ),
                     ),
                     const SizedBox(height: 3),
                     Text(

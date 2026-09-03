@@ -49,7 +49,6 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         final groups = groupSessionsByProject(controller.sessions.where((row) {
           return sessionMatchesQuery(row, _query);
         }).toList());
-        final inProgress = controller.sessions.where((row) => row.kind == HomeSessionKind.inProgress).toList();
 
         return Scaffold(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -60,8 +59,6 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
               child: ListView(
                 padding: EdgeInsets.fromLTRB(0, 0, 0, 24 + widget.bottomOccupancy),
                 children: [
-                  if (inProgress.isNotEmpty)
-                    StatusAttentionStrip(label: inProgress.first.title),
                   LargeTitleHeader(
                     title: t(context, 'tabs.projects'),
                     trailing: Row(
@@ -271,10 +268,10 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).scaffoldBackgroundColor,
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.10),
                       shape: BoxShape.circle,
                     ),
-                    child: OcGlyph(glyph, size: 16, color: OcChrome.secondary),
+                    child: OcGlyph(glyph, size: 16, color: Theme.of(context).colorScheme.primary),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -312,7 +309,10 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
               ),
             ),
           ),
-          if (expanded) ..._sessionSlice(context, id, sessions, assignSessionKeys),
+          if (expanded) ...[
+            const Divider(height: 1, thickness: 0.5, color: OcChrome.separator),
+            ..._sessionSlice(context, id, sessions, assignSessionKeys),
+          ],
         ],
       ),
     );
@@ -327,13 +327,15 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     final showAll = _expandedMore.contains(groupId) || sessions.length <= _visibleSlice;
     final visible = showAll ? sessions : sessions.take(_visibleSlice).toList();
     return [
-      for (final row in visible)
+      for (var i = 0; i < visible.length; i += 1) ...[
+        if (i > 0) const Divider(height: 1, thickness: 0.5, indent: 18, endIndent: 12, color: OcChrome.separator),
         _sessionRow(
           context,
-          row,
-          key: assignSessionKeys ? Key('home-session-${row.id}') : null,
+          visible[i],
+          key: assignSessionKeys ? Key('home-session-${visible[i].id}') : null,
           unreadKey: assignSessionKeys,
         ),
+      ],
       if (!showAll)
         InkWell(
           onTap: () => setState(() => _expandedMore.add(groupId)),
