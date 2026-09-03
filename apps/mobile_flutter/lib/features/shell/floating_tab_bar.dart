@@ -156,13 +156,12 @@ class _TabSlot extends StatelessWidget {
               width: double.infinity,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
-                // Authored interactive-selection mix on dock glass.
-                // Sigma 0 — a second frost plate hid the list.
+                // Mix-only on already-frosted dock glass. A nested
+                // OcFrosted / solid plate hid the list (Yee).
                 child: t <= 0
                     ? column
-                    : OcFrosted(
-                        fill: wash,
-                        sigma: OcOptical.dockWashBlur,
+                    : ColoredBox(
+                        color: wash,
                         child: column,
                       ),
               ),

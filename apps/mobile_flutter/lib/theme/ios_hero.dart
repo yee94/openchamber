@@ -137,8 +137,8 @@ class OcOptical {
   static const double addButton = 40;
   static const double headerDisc = 40;
   /// Official hit is 40 (`mobileIcon`). Painted plate is 36. Search is
-  /// page-bleed + contact-only (no inset, no umbra, no disc frost).
-  /// No primary + glow.
+  /// page-bleed with no contact/inset/umbra (not a raised coin).
+  /// `+` stays primary. No disc frost, no primary + glow.
   static const double headerDiscVisual = 36;
   static const double headerGlyph = 20;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
@@ -184,8 +184,8 @@ class OcOptical {
   /// slim filled-medium 23px stays delicate — not bricks, not hairlines.
   static const double dockGlyphStroke = 2;
   static const double dockGlyphStrokeVisual = 1.55;
-  /// Slim filled-medium: folder well, calendar grid, hollow gear.
-  /// Not 90271 bricks and not stroke-only outlines.
+  /// Official filled-medium 23px sprites: folder / sparkles / calendar
+  /// grid / holed gear. Not hairline outlines and not brick mass.
   static const bool dockGlyphFillBodies = true;
   static const bool dockSelectedFullSlot = true;
   /// Official selected class is `bg-interactive-selection/55`. The

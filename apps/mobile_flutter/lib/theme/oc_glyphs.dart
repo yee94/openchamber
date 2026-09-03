@@ -59,8 +59,8 @@ class OcGlyph extends StatelessWidget {
   final double size;
   final Color? color;
   final double? strokeWidth;
-  /// Dock [filled] is official medium: folder-open + sparkles stay stroke
-  /// silhouettes; calendar is a grid; gear is a slim holed cog.
+  /// Dock [filled] is official filled-medium 23px sprites: folder /
+  /// sparkles / calendar-grid bodies, slim holed gear.
   final bool filled;
 
   @override
@@ -97,24 +97,6 @@ class _OcGlyphPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final official = officialSpriteFor(kind.name);
-    // Official dock `Icon weight="medium"` is stroke 2. Folder-open and
-    // sparkles are open silhouettes — filling them is a blob or a
-    // postage-stamp well. Stroke both at the same medium weight.
-    if ((kind == OcGlyphKind.folder ||
-            kind == OcGlyphKind.sparkles ||
-            kind == OcGlyphKind.calendar) &&
-        filled &&
-        official != null) {
-      paintOfficialSprite(
-        canvas: canvas,
-        size: size,
-        sprite: official,
-        color: color,
-        strokeWidth: strokeWidth,
-        filled: false,
-      );
-      return;
-    }
     if (official != null) {
       paintOfficialSprite(
         canvas: canvas,
@@ -470,17 +452,16 @@ class _OcGlyphPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
     final c = Offset(w * 0.5, h * 0.5);
-    // Slim vs official medium stroke mass (wake-0706). Keep a holed
-    // 8-tooth cog — not settings-3 flower lobes and not a filled disc.
-    final rim = w * 0.24;
-    final hole = w * 0.15;
+    // Slim filled-medium 8-tooth cog. Not settings-3 flower lobes.
+    final rim = w * 0.22;
+    final hole = w * 0.14;
     final tooth = RRect.fromRectAndRadius(
       Rect.fromCenter(
-        center: Offset(0, -(rim + w * 0.014)),
-        width: w * 0.085,
-        height: w * 0.06,
+        center: Offset(0, -(rim + w * 0.012)),
+        width: w * 0.075,
+        height: w * 0.055,
       ),
-      Radius.circular(w * 0.016),
+      Radius.circular(w * 0.014),
     );
     final stroke = Paint()
       ..color = paint.color

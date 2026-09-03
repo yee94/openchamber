@@ -120,23 +120,30 @@ void main() {
     );
   });
 
-  testWidgets('projects search chip is contact-only, no inset sheen', (tester) async {
+  testWidgets('projects search chip has no raised elevation plate', (tester) async {
     await pumpConnected(tester);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('projects-search-toggle')),
+        matching: find.byType(OcGlassChip),
+      ),
+      findsOneWidget,
+    );
     final discs = tester.widgetList<DecoratedBox>(
       find.descendant(
         of: find.byKey(const Key('projects-search-toggle')),
         matching: find.byType(DecoratedBox),
       ),
     );
-    final chip = discs.firstWhere((box) {
-      final decoration = box.decoration;
-      return decoration is BoxDecoration && decoration.shape == BoxShape.circle;
-    });
-    final decoration = chip.decoration as BoxDecoration;
-    expect(decoration.boxShadow, OcElevation.chipFor(OcTokens.light));
     expect(
-      decoration.boxShadow!.every((s) => s.blurStyle != BlurStyle.inner),
-      isTrue,
+      discs.any((box) {
+        final decoration = box.decoration;
+        return decoration is BoxDecoration &&
+            decoration.shape == BoxShape.circle &&
+            decoration.boxShadow != null &&
+            decoration.boxShadow!.isNotEmpty;
+      }),
+      isFalse,
     );
   });
 
