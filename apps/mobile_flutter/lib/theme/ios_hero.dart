@@ -44,7 +44,7 @@ class OcOptical {
 
   static const double dockLabel = 10;
   static const double dockLabelTracking = 0.55;
-  static const double dockLabelGap = 2;
+  static const double dockLabelGap = 4;
   static const double dockCapsuleHeight = 68;
   static const double dockCapsuleRadius = 34;
   static const double dockInnerInset = 5;
