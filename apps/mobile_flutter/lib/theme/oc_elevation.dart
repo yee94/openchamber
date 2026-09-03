@@ -80,9 +80,9 @@ class OcElevation {
     ];
   }
 
-  /// Search / + discs — official `--oc-mobile-glass-shadow` (near pair
-  /// + 8/20/-6 umbra). Primary `+` keeps the umbra. Glass chips use
-  /// [chip] so the 8px drop does not paint a second offset circle.
+  /// Official `--oc-mobile-glass-shadow` near pair + 8/20/-6 umbra.
+  /// Header discs do not use this — the 8px drop paints a second circle.
+  /// Primary `+` and glass chips use [chip] (contact only).
   static List<BoxShadow> control(BuildContext context) => controlFor(OcTokens.of(context));
 
   static List<BoxShadow> controlFor(OcTokens tokens) {

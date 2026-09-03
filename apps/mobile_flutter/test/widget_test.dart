@@ -100,6 +100,26 @@ void main() {
     expect(find.byKey(const Key('home-session-sess-busy')), findsNothing);
   });
 
+  testWidgets('projects plus disc is contact-only, not control umbra', (tester) async {
+    await pumpConnected(tester);
+    final discs = tester.widgetList<DecoratedBox>(
+      find.descendant(
+        of: find.byKey(const Key('projects-plus-menu')),
+        matching: find.byType(DecoratedBox),
+      ),
+    );
+    final plus = discs.firstWhere((box) {
+      final decoration = box.decoration;
+      return decoration is BoxDecoration && decoration.shape == BoxShape.circle;
+    });
+    final decoration = plus.decoration as BoxDecoration;
+    expect(decoration.boxShadow, OcElevation.chipFor(OcTokens.light));
+    expect(
+      decoration.boxShadow!.every((s) => s.blurRadius < 8 && s.offset == Offset.zero),
+      isTrue,
+    );
+  });
+
   testWidgets('settings home lists every mobile slug and search filters', (tester) async {
     await pumpConnected(tester);
     await tester.tap(find.byKey(const Key('tab-settings')));
