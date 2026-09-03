@@ -12,37 +12,38 @@ class OcOptical {
   static const double largeTitleTracking = 1.6;
   static const double largeTitleHeight = 1.28;
 
-  /// Nested session / 「更多」 rows — denser than the open-tracking pass.
-  /// Large titles stay open (Yee); list chrome matches README packing.
-  static const double rowTitle = 14;
-  static const double rowTitleTracking = 0.28;
-  static const double rowTitleHeight = 1.28;
-  static const double sessionRowPadV = 7;
-  static const double moreLinkPadV = 5;
-  static const double groupHeaderPadV = 11;
-  static const double groupHeaderPadVCompact = 9;
-  static const double groupTitleMetaGap = 5;
+  /// Yee: type was too tight. Open CJK/Latin tracking + leading.
+  /// Do not densify these back toward a packed README photo.
+  /// Glyph sizes stay small; colors stay on [OcTokens].
+  static const double rowTitle = 15;
+  static const double rowTitleTracking = 0.75;
+  static const double rowTitleHeight = 1.52;
+  static const double sessionRowPadV = 12;
+  static const double moreLinkPadV = 8;
+  static const double groupHeaderPadV = 13;
+  static const double groupHeaderPadVCompact = 11;
+  static const double groupTitleMetaGap = 7;
 
   static const double entityTitle = 16;
-  static const double entityTitleTracking = 0.45;
-  static const double entityTitleHeight = 1.32;
+  static const double entityTitleTracking = 0.7;
+  static const double entityTitleHeight = 1.42;
 
   static const double meta = 13;
-  static const double metaTracking = 0.35;
-  static const double metaHeight = 1.45;
+  static const double metaTracking = 0.55;
+  static const double metaHeight = 1.68;
 
-  static const double scheduleCardPadV = 12;
-  static const double scheduleTitleMetaGap = 8;
+  static const double scheduleCardPadV = 14;
+  static const double scheduleTitleMetaGap = 9;
 
   static const double chatTitle = 15;
-  static const double chatTitleTracking = 0.2;
-  static const double chatTitleHeight = 1.22;
+  static const double chatTitleTracking = 0.4;
+  static const double chatTitleHeight = 1.32;
   static const double chatHeaderButton = 24;
-  static const double chatBodyHeight = 1.55;
-  static const double chatBodyTracking = 0.35;
+  static const double chatBodyHeight = 1.6;
+  static const double chatBodyTracking = 0.42;
 
   static const double dockLabel = 10;
-  static const double dockLabelTracking = 0.4;
+  static const double dockLabelTracking = 0.55;
   static const double dockLabelGap = 2;
   static const double dockCapsuleHeight = 56;
   static const double dockCapsuleRadius = 28;
@@ -74,7 +75,7 @@ class OcOptical {
   static const double fileTypeW = 12;
   static const double fileTypeH = 9;
   static const double fileTypeMark = 5;
-  static const double fileRowPadV = 2;
+  static const double fileRowPadV = 3;
 
   static const double composerPlus = 11;
   static const double sendRing = 18;

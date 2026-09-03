@@ -10,19 +10,19 @@ Real `apps/mobile_flutter` widgets, captured with `WidgetTester` + `RenderRepain
 
 No PIN / Face ID. No `iosNativeUi`. Chat is a pushed page.
 
-Recapture after the README density pass: nested session / file rows pack tighter, glyphs shrink again, card/dock/composer shadows soften, dock capsule is 56 logical. Large titles stay open. Catalog orange/sand stays — these PNGs are **not** a README photo recolor.
+Recapture after restoring Yee-open type (tracking + line-height) on top of the small-glyph / soft-shadow chrome. Catalog orange/sand stays — these PNGs are **not** a README photo recolor.
 
 | File | Screen |
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |
-| `02-projects.png` | Light: catalog sand/orange. Dense nested session rows + 「更多」, small search/`+`/dock glyphs, soft card/dock lift. Nested worktrees. |
+| `02-projects.png` | Light: catalog sand/orange. Open session/meta tracking, small search/`+`/dock glyphs, soft card/dock lift. Nested worktrees. |
 | `02-projects-dark.png` | Same Projects surface after Appearance → Dark (catalog `OcTokens`, not a photo recolor). |
 | `03-assistant.png` | Contact cards (name / mode / summary). No 「启用助理」 toggle. |
-| `04-scheduled.png` | Light: catalog tokens. Compact cards, open title↔meta gap, filter capsule track, primary `+` 28. Dock 计划 only. |
+| `04-scheduled.png` | Light: catalog tokens. Open title/meta leading, filter capsule track, primary `+` 28. Dock 计划 only. |
 | `04-scheduled-dark.png` | Same Scheduled surface after Appearance → Dark. |
 | `05-settings.png` | Large title, pill search, inset groups. |
 | `06-settings-appearance.png` | Light: language + theme. Latin labels must render. No `iosNativeUi`. |
 | `06-settings-appearance-dark.png` | Appearance after tapping Dark — tokens switch live. |
-| `07-chat.png` | Isolated pushed Chat (light): no subtitle. Slim header title. Dense file rows. Small header/file/composer glyphs. Ring send. Not UIKit glass. |
+| `07-chat.png` | Isolated pushed Chat (light): no subtitle. Slim header. Open body leading. Small header/file/composer glyphs. Ring send. Not UIKit glass. |
 | `07-chat-dark.png` | Same isolated Chat with `ThemeMode.dark`. |
 | `08-permission.png` | Permission card only. |

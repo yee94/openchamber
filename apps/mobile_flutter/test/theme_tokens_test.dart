@@ -58,9 +58,11 @@ void main() {
     expect(OcOptical.largeTitle, 32);
     expect(OcOptical.largeTitleTracking, greaterThan(0.8));
     expect(OcOptical.largeTitleHeight, greaterThan(1.15));
-    expect(OcOptical.rowTitleHeight, lessThan(1.4));
-    expect(OcOptical.sessionRowPadV, lessThan(10));
-    expect(OcOptical.metaHeight, greaterThanOrEqualTo(1.45));
+    expect(OcOptical.rowTitleTracking, greaterThan(0.5));
+    expect(OcOptical.rowTitleHeight, greaterThan(1.4));
+    expect(OcOptical.sessionRowPadV, greaterThanOrEqualTo(12));
+    expect(OcOptical.metaHeight, greaterThanOrEqualTo(1.6));
+    expect(OcOptical.chatBodyHeight, greaterThan(1.5));
     expect(OcOptical.searchButton, 26);
     expect(OcOptical.addButton, 28);
     expect(OcOptical.addButton, greaterThan(OcOptical.searchButton));
