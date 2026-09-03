@@ -19,13 +19,13 @@ class OcElevation {
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
     if (tokens.isDark) return const [];
     // Official CSS is 0.04 / 0.05 / 0.10. Opaque cream over-reads that as a
-    // separated umbra — keep far wash under 0.05 with more blur and negative
+    // separated umbra — keep far wash under 0.04 with more blur and negative
     // spread so lift stays present but thinner. One shared path for cards,
-    // dock, and composer.
+    // dock, and composer. Do not flatten to a 2-stop or offset-0 ring.
     return const [
-      BoxShadow(color: Color(0x05000000), blurRadius: 3),
-      BoxShadow(color: Color(0x07000000), blurRadius: 14),
-      BoxShadow(color: Color(0x0C000000), blurRadius: 22, spreadRadius: -11, offset: Offset(0, 6)),
+      BoxShadow(color: Color(0x04000000), blurRadius: 4),
+      BoxShadow(color: Color(0x06000000), blurRadius: 16),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 26, spreadRadius: -13, offset: Offset(0, 7)),
     ];
   }
 
@@ -46,9 +46,9 @@ class OcElevation {
     if (tokens.isDark) return const [];
     // Search / + discs still need a visible plate, but must not out-lift cards.
     return const [
-      BoxShadow(color: Color(0x06000000), blurRadius: 2),
-      BoxShadow(color: Color(0x08000000), blurRadius: 8),
-      BoxShadow(color: Color(0x0E000000), blurRadius: 12, spreadRadius: -6, offset: Offset(0, 4)),
+      BoxShadow(color: Color(0x05000000), blurRadius: 3),
+      BoxShadow(color: Color(0x07000000), blurRadius: 10),
+      BoxShadow(color: Color(0x0C000000), blurRadius: 14, spreadRadius: -7, offset: Offset(0, 4)),
     ];
   }
 
