@@ -105,7 +105,7 @@ class MobileSessionRow extends StatelessWidget {
                     ),
                     if (formatRelativeTime(row.updated) != null)
                       Padding(
-                        padding: const EdgeInsets.only(left: 6),
+                        padding: const EdgeInsets.only(left: OcOptical.sessionTimeGap),
                         child: Text(
                           formatRelativeTime(row.updated)!,
                           style: TextStyle(
@@ -122,8 +122,8 @@ class MobileSessionRow extends StatelessWidget {
               ),
             ),
             SizedBox(
-              width: 36,
-              height: 36,
+              width: OcOptical.sessionMoreHit,
+              height: OcOptical.sessionMoreHit,
               child: Center(
                 child: OcGlyph(
                   OcGlyphKind.ellipsis,
@@ -133,7 +133,7 @@ class MobileSessionRow extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: OcOptical.sessionMoreEdge),
           ],
         ),
       ),

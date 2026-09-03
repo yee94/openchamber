@@ -200,32 +200,39 @@ class ComposerBar extends StatelessWidget {
                           haptic: HapticStrength.medium,
                           highlight: false,
                           onPressed: busy ? onStop : onSend,
-                          child: Container(
+                          child: SizedBox(
                             width: OcOptical.sendRing,
                             height: OcOptical.sendRing,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: context.oc.foreground,
-                            ),
-                            child: busy
-                                ? Container(
-                                    width: OcOptical.sendStop,
-                                    height: OcOptical.sendStop,
-                                    decoration: BoxDecoration(
-                                      color: context.oc.background,
-                                      borderRadius: BorderRadius.circular(OcOptical.sendStop * 0.2),
-                                    ),
-                                  )
-                                : Transform.rotate(
-                                    angle: 3.141592653589793,
-                                    child: OcGlyph(
-                                      OcGlyphKind.chevronDown,
-                                      size: 16,
-                                      strokeWidth: OcOptical.composerPlusStroke,
-                                      color: context.oc.background,
-                                    ),
+                            child: Center(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: context.oc.foreground,
+                                  boxShadow: OcElevation.control(context),
+                                ),
+                                child: SizedBox(
+                                  width: OcOptical.sendRingDisc,
+                                  height: OcOptical.sendRingDisc,
+                                  child: Center(
+                                    child: busy
+                                        ? Container(
+                                            width: OcOptical.sendStop,
+                                            height: OcOptical.sendStop,
+                                            decoration: BoxDecoration(
+                                              color: context.oc.background,
+                                              borderRadius: BorderRadius.circular(OcOptical.sendStop * 0.2),
+                                            ),
+                                          )
+                                        : OcGlyph(
+                                            OcGlyphKind.arrowUp,
+                                            size: OcOptical.sendArrow,
+                                            strokeWidth: OcOptical.dockGlyphStroke,
+                                            color: context.oc.background,
+                                          ),
                                   ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ],

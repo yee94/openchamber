@@ -65,6 +65,7 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
     'ellipsis' => const OcOfficialSprite(
         circles: [(12, 12, 1), (19, 12, 1), (5, 12, 1)],
       ),
+    'arrowUp' => const OcOfficialSprite(paths: ['m5 12 7-7 7 7', 'M12 19V5']),
     'chevronDown' => const OcOfficialSprite(paths: ['m6 9 6 6 6-6']),
     'chevronRight' => const OcOfficialSprite(paths: ['m9 6 6 6-6 6']),
     'chevronBack' => const OcOfficialSprite(paths: ['m15 18-6-6 6-6']),

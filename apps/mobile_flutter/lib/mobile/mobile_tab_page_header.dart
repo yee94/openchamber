@@ -71,6 +71,21 @@ class MobileTabPageHeader extends StatelessWidget {
             top: 0,
             left: 0,
             right: 0,
+            height: headerH,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: 0.55 + (0.25 * t),
+                child: OcFrosted(
+                  fill: tokens.glassFill.withValues(alpha: tokens.isDark ? 0.42 : 0.34),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
             height: fadeH,
             child: OcHeaderFade(safeTop: safeTop, opacity: t),
           ),

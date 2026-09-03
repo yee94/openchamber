@@ -121,7 +121,9 @@ void main() {
     expect(OcOptical.searchButton, 40);
     expect(OcOptical.addButton, 40);
     expect(OcOptical.headerDisc, OcOptical.searchButton);
-    expect(OcOptical.headerGlyph, 20);
+    expect(OcOptical.headerDiscVisual, 36);
+    expect(OcOptical.headerDiscVisual, lessThan(OcOptical.headerDisc));
+    expect(OcOptical.headerGlyph, 18);
     expect(OcOptical.headerGlyphStroke, 1.5);
     expect(OcOptical.collapsingActionSize, 40);
     expect(OcOptical.collapsingTitleCompactSize, 20);
@@ -171,7 +173,15 @@ void main() {
     expect(OcOptical.footerGlyphStroke, 2);
     expect(OcOptical.footerMeta, 11);
     expect(OcOptical.sendRing, 32);
-    expect(OcOptical.sendStop, 12);
+    expect(OcOptical.sendRingDisc, 24);
+    expect(OcOptical.sendRingDisc, lessThan(OcOptical.sendRing));
+    expect(OcOptical.sendStop, 9);
+    expect(OcOptical.sendArrow, 13);
+    expect(OcOptical.headerRestPeek, 20);
+    expect(OcOptical.sessionMoreHit, 36);
+    expect(OcOptical.sessionMoreEdge, 8);
+    expect(OcOptical.sessionTimeGap, 8);
+    expect(OcOptical.dockSelectedPillPadH, 12);
     expect(OcOptical.scrollFab, 36);
     expect(OcOptical.glassBlur, 20);
     expect(OcOptical.dockCapsuleHeight, OcTokens.dockHeight);

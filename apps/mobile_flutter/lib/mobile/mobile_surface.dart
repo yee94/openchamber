@@ -145,7 +145,14 @@ class _MobileTabPageScaffoldState extends State<MobileTabPageScaffold> {
           children: [
             MobileTabPageHeader.layoutSlot(safeTop: safeTop),
             MobileTabPageHeader.expandShiftSpacer,
-            ...widget.children,
+            Transform.translate(
+              offset: const Offset(0, -OcOptical.headerRestPeek),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: widget.children,
+              ),
+            ),
+            const SizedBox(height: OcOptical.headerRestPeek),
           ],
         ),
       ),

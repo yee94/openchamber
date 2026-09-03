@@ -28,6 +28,28 @@ class OcElevation {
     ];
   }
 
+  /// Official `inset 0 1px 0 var(--oc-mobile-float-highlight)`.
+  static List<BoxShadow> highlight(BuildContext context) => highlightFor(OcTokens.of(context));
+
+  static List<BoxShadow> highlightFor(OcTokens tokens) {
+    if (tokens.isDark) {
+      return [
+        BoxShadow(
+          color: Colors.white.withValues(alpha: 0.18),
+          offset: const Offset(0, 1),
+          blurStyle: BlurStyle.inner,
+        ),
+      ];
+    }
+    return [
+      BoxShadow(
+        color: tokens.floatHighlight,
+        offset: const Offset(0, 1),
+        blurStyle: BlurStyle.inner,
+      ),
+    ];
+  }
+
   /// Chat file-change card — same float-shadow family as project cards.
   static List<BoxShadow> grouped(BuildContext context) => groupedFor(OcTokens.of(context));
 

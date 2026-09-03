@@ -53,7 +53,10 @@ class FloatingCapsuleTabBar extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: radius,
               border: Border.all(color: tokens.mobileBorder, width: 0.5),
-              boxShadow: OcElevation.dock(context),
+              boxShadow: [
+                ...OcElevation.dock(context),
+                ...OcElevation.highlight(context),
+              ],
             ),
             child: ClipRRect(
               borderRadius: radius,
@@ -121,35 +124,44 @@ class _TabSlot extends StatelessWidget {
           selected: selected,
           builder: (context, t) {
             return SizedBox.expand(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Color.lerp(Colors.transparent, tokens.selectedTabWash, t),
-                  borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    OcGlyph(
-                      glyph,
-                      size: OcOptical.dockGlyph,
-                      color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
-                      strokeWidth: OcOptical.dockGlyphStroke,
-                      filled: true,
+              child: Align(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Color.lerp(Colors.transparent, tokens.selectedTabWash, t),
+                    borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: OcOptical.dockSelectedPillPadH,
+                      vertical: OcOptical.dockSelectedPillPadV,
                     ),
-                    const SizedBox(height: OcOptical.dockLabelGap),
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: OcOptical.dockLabel,
-                        letterSpacing: OcOptical.dockLabelTracking,
-                        height: OcOptical.dockLabelHeight,
-                        fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w500,
-                        color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        OcGlyph(
+                          glyph,
+                          size: OcOptical.dockGlyph,
+                          color: Color.lerp(tokens.foreground.withValues(alpha: 0.72), tokens.primary, t),
+                          strokeWidth: OcOptical.dockGlyphStroke,
+                          filled: true,
+                        ),
+                        const SizedBox(height: OcOptical.dockLabelGap),
+                        Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: OcOptical.dockLabel,
+                            letterSpacing: OcOptical.dockLabelTracking,
+                            height: OcOptical.dockLabelHeight,
+                            fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w500,
+                            color: Color.lerp(tokens.foreground.withValues(alpha: 0.72), tokens.primary, t),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             );

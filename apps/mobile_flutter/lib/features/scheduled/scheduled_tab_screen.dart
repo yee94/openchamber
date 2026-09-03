@@ -243,15 +243,28 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   ],
                 ),
               ),
-              IconButton(
-                key: Key('scheduled-run-now-${task.id}'),
-                tooltip: t(context, 'scheduled.runNow'),
-                onPressed: () => widget.controller.runScheduledTaskNow(
-                  projectId: task.projectId,
-                  taskId: task.id,
+              SizedBox(
+                width: OcOptical.sessionMoreHit,
+                height: OcOptical.sessionMoreHit,
+                child: Pressable(
+                  key: Key('scheduled-run-now-${task.id}'),
+                  haptic: HapticStrength.light,
+                  highlight: false,
+                  onPressed: () => widget.controller.runScheduledTaskNow(
+                    projectId: task.projectId,
+                    taskId: task.id,
+                  ),
+                  child: Center(
+                    child: OcGlyph(
+                      OcGlyphKind.ellipsis,
+                      size: OcOptical.sessionMore,
+                      strokeWidth: OcOptical.listGlyphStroke,
+                      color: context.oc.mutedForeground,
+                    ),
+                  ),
                 ),
-                icon: OcGlyph(OcGlyphKind.ellipsis, size: OcOptical.overflow, color: context.oc.foreground),
               ),
+              const SizedBox(width: OcOptical.sessionMoreEdge),
             ],
           ),
         ),

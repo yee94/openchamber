@@ -110,8 +110,8 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                           boxShadow: OcElevation.control(context),
                         ),
                         child: SizedBox(
-                          width: OcOptical.headerDisc,
-                          height: OcOptical.headerDisc,
+                          width: OcOptical.headerDiscVisual,
+                          height: OcOptical.headerDiscVisual,
                           child: Center(
                             child: OcGlyph(
                               OcGlyphKind.plus,

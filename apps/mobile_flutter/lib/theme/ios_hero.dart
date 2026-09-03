@@ -114,13 +114,15 @@ class OcOptical {
   static const double dockBottomPad = 20;
   static const double dockMaxWidth = 416;
 
-  /// Official `Button` `mobileIcon` is the disc (40). Search is `mobileGlass`
-  /// (light plate + outside shadow), `+` is primary round. Glyph is `size-5`.
-  /// Hit area is the disc; visual glyph is [headerGlyph].
+  /// Official `Button` `mobileIcon` is the 40 hit. Search is `mobileGlass`,
+  /// `+` is primary. WidgetTester glass reads heavier than live blur, so the
+  /// painted disc/glyph sit one step inside the hit (`size-9` / `size-4.5`)
+  /// while the tap target stays 40.
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  static const double headerGlyph = 20;
+  static const double headerDiscVisual = 36;
+  static const double headerGlyph = 18;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
@@ -140,17 +142,24 @@ class OcOptical {
   static const double titleCollapseScaleReduce = 0.375;
   static const double titleCollapseScaleEnd = 0.625;
   static const double pageScrollBottomExtra = 40;
+  /// At-rest list peek under the transparent collapsing header. Official
+  /// overlay is sticky + transparent; WidgetTester must show catalog under
+  /// the plate or the header reads as a solid cream banner.
+  static const double headerRestPeek = 20;
 
   /// `.oc-mobile-root-page-title` letter-spacing: −0.04em + 0.02em × collapse.
   static double rootTitleTracking(double collapse) =>
       largeTitle * (-0.04 + 0.02 * collapse.clamp(0.0, 1.0));
 
-  /// Official dock `Icon` is `size-[23px]` medium. Selected chrome is the
-  /// full tab slot (icon + label), matching `.oc-mobile-tab-button`.
+  /// Official dock `Icon` is `size-[23px]` medium. Selected chrome is a
+  /// compact stadium around the icon+label stack — not a circular icon wash
+  /// and not a full-slot gray disc.
   static const double dockGlyph = 23;
   /// Official dock `Icon weight="medium"` (`ICON_STROKE_WIDTH_MEDIUM` = 2).
   static const double dockGlyphStroke = 2;
   static const bool dockSelectedFullSlot = true;
+  static const double dockSelectedPillPadH = 12;
+  static const double dockSelectedPillPadV = 5;
   static const double dockIconWashAlpha = 0.55;
   static const double dockIconGlowAlpha = 0.0;
   static const double dockIconGlowBlur = 0;
@@ -166,6 +175,11 @@ class OcOptical {
   static const double worktreeGlyph = 14;
   /// Session / worktree `more-2` `size-3.5`. Project action is `size-4`.
   static const double sessionMore = 14;
+  /// Official visible more is `min-w-9` + `mr-1`. Open the trailing air a
+  /// hair past that so time + ellipsis do not crowd the card edge.
+  static const double sessionMoreHit = 36;
+  static const double sessionMoreEdge = 8;
+  static const double sessionTimeGap = 8;
 
   static const double sessionBullet = 5;
   static const double overflow = 16;
@@ -189,9 +203,13 @@ class OcOptical {
   /// Official composer attach `Icon name="attachment-2" className="size-5"`.
   static const double composerPlus = 20;
   static const double composerPlusStroke = 1.5;
+  /// Official send/stop: `size-8` hit, `size-6` filled circle (the ring).
   static const double sendRing = 32;
+  static const double sendRingDisc = 24;
   static const double sendRingStroke = 0;
-  static const double sendStop = 12;
+  /// Official stop square is 38% of the disc with 20% radius.
+  static const double sendStop = 9;
+  static const double sendArrow = 13;
   static const double scrollFab = 36;
   static const double scrollChevron = 16;
   static const double scrollChevronStroke = 2.4;

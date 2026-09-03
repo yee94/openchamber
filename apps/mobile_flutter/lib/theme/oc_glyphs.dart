@@ -19,6 +19,7 @@ enum OcGlyphKind {
   chevronDown,
   chevronRight,
   chevronBack,
+  arrowUp,
   ellipsis,
   code,
   branch,
@@ -96,7 +97,14 @@ class _OcGlyphPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final official = officialSpriteFor(kind.name);
-    if (official != null) {
+    // Dock roles use the filled-role painters below when [filled] — official
+    // stroke paths filled as-is only thicken the outline ribbon.
+    final filledRole = filled &&
+        (kind == OcGlyphKind.folder ||
+            kind == OcGlyphKind.sparkles ||
+            kind == OcGlyphKind.calendar ||
+            kind == OcGlyphKind.gear);
+    if (official != null && !filledRole) {
       paintOfficialSprite(
         canvas: canvas,
         size: size,
@@ -212,6 +220,10 @@ class _OcGlyphPainter extends CustomPainter {
           ),
           fill,
         );
+      case OcGlyphKind.arrowUp:
+        canvas.drawLine(Offset(w * 0.22, h * 0.50), Offset(w * 0.50, h * 0.22), stroke);
+        canvas.drawLine(Offset(w * 0.50, h * 0.22), Offset(w * 0.78, h * 0.50), stroke);
+        canvas.drawLine(Offset(w * 0.50, h * 0.22), Offset(w * 0.50, h * 0.78), stroke);
       case OcGlyphKind.chevronDown:
         canvas.drawLine(Offset(w * 0.22, h * 0.38), Offset(w * 0.50, h * 0.64), stroke);
         canvas.drawLine(Offset(w * 0.50, h * 0.64), Offset(w * 0.78, h * 0.38), stroke);

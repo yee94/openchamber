@@ -395,13 +395,18 @@ class _ChatScreenState extends State<ChatScreen> {
                     haptic: HapticStrength.light,
                     highlight: false,
                     onPressed: () {},
-                    child: OcGlassChip(
-                      size: OcOptical.headerDisc,
-                      child: OcGlyph(
-                        OcGlyphKind.ellipsis,
-                        size: OcOptical.headerGlyph,
-                        strokeWidth: OcOptical.dockGlyphStroke,
-                        color: context.oc.foreground,
+                    child: SizedBox(
+                      width: OcOptical.headerDisc,
+                      height: OcOptical.headerDisc,
+                      child: Center(
+                        child: OcGlassChip(
+                          child: OcGlyph(
+                            OcGlyphKind.ellipsis,
+                            size: OcOptical.headerGlyph,
+                            strokeWidth: OcOptical.headerGlyphStroke,
+                            color: context.oc.foreground,
+                          ),
+                        ),
                       ),
                     ),
                   ),

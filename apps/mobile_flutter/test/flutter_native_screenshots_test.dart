@@ -88,6 +88,10 @@ void main() {
     expect(find.textContaining('更多'), findsWidgets);
     expect(find.byKey(const Key('home-project-openchamber')), findsOneWidget);
     expect(find.byKey(const Key('home-project-stack-openchamber')), findsOneWidget);
+    final restHeader = tester.getRect(find.byType(MobileTabPageHeader));
+    final restCard = tester.getRect(find.byKey(const Key('home-project-openchamber')));
+    expect(restCard.top, lessThan(restHeader.bottom));
+    expect(restCard.top, greaterThan(restHeader.bottom - OcOptical.headerRestPeek - 1));
     expect(find.byKey(const Key('home-worktree-openchamber::/workspace/Code/github/openchamber-wt/feat-opencode2up')), findsOneWidget);
     expect(find.textContaining('feat/opencode2up'), findsNothing);
     expect(find.textContaining('feat-opencode2up'), findsOneWidget);
@@ -268,6 +272,7 @@ void main() {
     expect(find.text('点击输入'), findsOneWidget);
     expect(find.byKey(const Key('composer-attach')), findsOneWidget);
     expect(find.byKey(const Key('composer-send')), findsOneWidget);
+    expect(tester.getSize(find.byKey(const Key('composer-send'))), const Size(OcOptical.sendRing, OcOptical.sendRing));
     expect(find.byKey(const Key('composer-dictate')), findsNothing);
     expect(find.text('Grok 4.6'), findsWidgets);
     expect(find.byKey(const Key('chat-role-badge')), findsWidgets);

@@ -97,7 +97,7 @@ class OcGlassChip extends StatelessWidget {
   const OcGlassChip({
     super.key,
     required this.child,
-    this.size = OcOptical.headerDisc,
+    this.size = OcOptical.headerDiscVisual,
   });
 
   final Widget child;
@@ -112,13 +112,48 @@ class OcGlassChip extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(color: context.oc.mobileBorder, width: 0.5),
-          boxShadow: OcElevation.control(context),
+          boxShadow: [
+            ...OcElevation.control(context),
+            ...OcElevation.highlight(context),
+          ],
         ),
         child: ClipOval(
           child: OcFrosted(
             fill: context.oc.glassFill,
             child: Center(child: child),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact glass stadium for agent / model chips — not a solid muted slab.
+class OcGlassPill extends StatelessWidget {
+  const OcGlassPill({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    this.radius = 20,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: context.oc.mobileBorder, width: 0.5),
+        boxShadow: OcElevation.highlight(context),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: OcFrosted(
+          fill: context.oc.glassFill,
+          child: Padding(padding: padding, child: child),
         ),
       ),
     );
@@ -205,7 +240,7 @@ class CircularChromeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.oc;
     final hit = size ?? (filled ? OcOptical.addButton : OcOptical.searchButton);
-    final disc = hit < OcOptical.headerDisc ? hit : OcOptical.headerDisc;
+    final disc = OcOptical.headerDiscVisual;
     final glyphWidget = OcGlyph(
       glyph,
       size: OcOptical.headerGlyph,
@@ -263,7 +298,10 @@ class GroupedInsetCard extends StatelessWidget {
       margin: margin ?? const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 12),
       decoration: BoxDecoration(
         borderRadius: radius,
-        boxShadow: OcElevation.card(context, tight: tight),
+        boxShadow: [
+          ...OcElevation.card(context, tight: tight),
+          ...OcElevation.highlight(context),
+        ],
       ),
       child: ClipRRect(
         borderRadius: radius,
@@ -633,14 +671,19 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
     final disc = OcOptical.headerDisc;
 
     Widget actionDisc({required Widget child, Key? key, VoidCallback? onPressed}) {
-      final chip = OcGlassChip(size: disc, child: child);
-      if (onPressed == null) return chip;
+      final chip = OcGlassChip(size: OcOptical.headerDiscVisual, child: child);
+      final hit = SizedBox(
+        width: disc,
+        height: disc,
+        child: Center(child: chip),
+      );
+      if (onPressed == null) return hit;
       return Pressable(
         key: key,
         haptic: HapticStrength.light,
         highlight: false,
         onPressed: onPressed,
-        child: chip,
+        child: hit,
       );
     }
 
@@ -674,7 +717,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                           child: OcGlyph(
                             OcGlyphKind.chevronBack,
                             size: OcOptical.headerGlyph,
-                            strokeWidth: OcOptical.dockGlyphStroke,
+                            strokeWidth: OcOptical.headerGlyphStroke,
                             color: tokens.foreground,
                           ),
                         ),
@@ -723,15 +766,21 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (busy)
-                          OcGlassChip(
-                            size: disc,
-                            child: SizedBox(
-                              key: const Key('chat-busy'),
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.2,
-                                color: tokens.mutedForeground,
+                          SizedBox(
+                            width: disc,
+                            height: disc,
+                            child: Center(
+                              child: OcGlassChip(
+                                size: OcOptical.headerDiscVisual,
+                                child: SizedBox(
+                                  key: const Key('chat-busy'),
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: tokens.mutedForeground,
+                                  ),
+                                ),
                               ),
                             ),
                           ),

@@ -199,29 +199,33 @@ class _AssistantHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              OcGlyph(OcGlyphKind.sparkles, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  name,
-                  style: TextStyle(
-                    fontSize: OcOptical.rowTitle,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: OcOptical.rowTitleTracking,
-                    height: OcOptical.rowTitleHeight,
-                    color: context.oc.foreground,
-                  ),
+              OcGlassPill(
+                padding: const EdgeInsets.fromLTRB(6, 3, 8, 3),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    OcGlyph(OcGlyphKind.sparkles, size: OcOptical.footerGlyph, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
+                    const SizedBox(width: 4),
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: OcOptical.rowTitle,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: OcOptical.rowTitleTracking,
+                        height: OcOptical.rowTitleHeight,
+                        color: context.oc.foreground,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               if (role != null && role.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Container(
+                const SizedBox(width: 6),
+                OcGlassPill(
                   key: const Key('chat-role-badge'),
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: context.oc.muted,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  padding: const EdgeInsets.fromLTRB(6, 3, 8, 3),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -261,13 +265,10 @@ class _AgentCountChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return OcGlassPill(
       key: const Key('chat-agent-count'),
       padding: const EdgeInsets.fromLTRB(6, 2, 4, 2),
-      decoration: BoxDecoration(
-        color: context.oc.muted.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(8),
-      ),
+      radius: 8,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -297,9 +298,13 @@ class _FileChangeCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: context.oc.muted.withValues(alpha: 0.20),
+        color: context.oc.floatSurface,
         borderRadius: BorderRadius.circular(OcTokens.radius),
-        border: Border.all(color: context.oc.foreground.withValues(alpha: 0.15)),
+        border: Border.all(color: context.oc.mobileBorder, width: 0.5),
+        boxShadow: [
+          ...OcElevation.grouped(context),
+          ...OcElevation.highlight(context),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
