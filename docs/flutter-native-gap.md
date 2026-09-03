@@ -451,7 +451,7 @@ Motion only. Sibling chrome owns color / type / radii / shadows. Chat stays a pu
 
 | Interaction | iOS | Android / WidgetTester |
 |---|---|---|
-| Card / row / circular + / search / dock-tab press | Flutter `Pressable` scale **0.975** (finger-down 80ms official engage cubic, release 260ms official overshoot cubic). Highlight = `--oc-mobile-press-fill` (foreground 7%). Cancel on drag-out. | Same timing and scale. No glass clone. |
+| Card / row / circular + / search / dock-tab press | Flutter `Pressable` scale **0.975** (finger-down **immediate**, release 260ms official overshoot cubic). Highlight = `--oc-mobile-press-fill` (foreground 7%). Cancel on drag-out. | Same timing and scale. No glass clone. |
 | iOS composer Send / + / mic | **UIKit** `UIView.animate` spring 0.975 + reused `UIImpactFeedbackGenerator` | Flutter `Pressable` on the solid pill |
 | Haptics | **Always-on UIKit**: one prepared generator per style (`OpenChamberHapticFeedback`). Light = tab + row. Medium = send / + attach / swipe-commit. Never `HapticFeedback.*` on iOS. | `performHapticFeedback` CLOCK_TICK / KEYBOARD_TAP / LONG_PRESS |
 | Interactive back | **`UIScreenEdgePanGestureRecognizer`** on the Flutter view, left edge only, `CADisplayLink` progress. Flutter `IosNativePageRoute.popGestureEnabled = false`. | System predictive back (`PredictiveBackPageTransitionsBuilder`). Already started. |

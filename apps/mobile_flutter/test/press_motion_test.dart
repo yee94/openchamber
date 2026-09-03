@@ -96,6 +96,49 @@ void main() {
     expect(taps, 0);
   });
 
+  testWidgets('Pressable sizes to its child, not the parent', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 400,
+            height: 200,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Pressable(
+                key: Key('press-target'),
+                child: SizedBox(width: 80, height: 40, child: Text('Chip')),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byKey(const Key('press-target'))), const Size(80, 40));
+  });
+
+  testWidgets('Pressable keeps a full-width Expanded row', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 320,
+            child: Pressable(
+              key: const Key('press-row'),
+              child: const Row(
+                children: [
+                  Expanded(child: Text('Title')),
+                  Text('meta'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byKey(const Key('press-row'))).width, 320);
+  });
+
   testWidgets('tap still commits onPressed after press scale', (tester) async {
     var taps = 0;
     await tester.pumpWidget(

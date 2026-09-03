@@ -137,18 +137,17 @@ class _PressableState extends State<Pressable> with SingleTickerProviderStateMix
           final fill = widget.highlight && highlightT > 0 && color != null
               ? OcMotion.pressFill(color).withValues(alpha: OcMotion.pressFillAlpha * highlightT)
               : null;
-          return Align(
-            child: Transform.scale(
-              key: const ValueKey<String>('oc-press-transform'),
-              scale: scale,
-              filterQuality: FilterQuality.low,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: fill,
-                  borderRadius: widget.borderRadius,
-                ),
-                child: child,
+          // Size to the child — do not wrap in Align (that expands chips / circular buttons).
+          return Transform.scale(
+            key: const ValueKey<String>('oc-press-transform'),
+            scale: scale,
+            filterQuality: FilterQuality.low,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: fill,
+                borderRadius: widget.borderRadius,
               ),
+              child: child,
             ),
           );
         },

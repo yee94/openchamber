@@ -388,15 +388,8 @@ private final class PressMotionTarget: NSObject {
   static let shared = PressMotionTarget()
 
   @objc func down(_ sender: UIButton) {
-    UIView.animate(
-      withDuration: 0.08,
-      delay: 0,
-      usingSpringWithDamping: 0.88,
-      initialSpringVelocity: 0.5,
-      options: [.allowUserInteraction, .beginFromCurrentState]
-    ) {
-      sender.transform = CGAffineTransform(scaleX: OpenChamberPressMotion.scale, y: OpenChamberPressMotion.scale)
-    }
+    sender.layer.removeAllAnimations()
+    sender.transform = CGAffineTransform(scaleX: OpenChamberPressMotion.scale, y: OpenChamberPressMotion.scale)
   }
 
   @objc func up(_ sender: UIButton) {
