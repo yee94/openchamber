@@ -74,7 +74,8 @@ object NativePlugins {
         }
         MethodChannel(messenger, "openchamber/widget_snapshot").setMethodCallHandler { call, result ->
             if (call.method == "setBadge" || call.method == "write") {
-                // Android launchers have no official app-icon badge API without a posted notification.
+                // Official push relay has no FCM send path (APNs aps.badge only).
+                // Do not invent ShortcutBadger or a fake notification count.
                 result.success(null)
             } else {
                 result.notImplemented()

@@ -72,7 +72,7 @@ Native contracts / shell
 | Appearance `iosNativeUi` | **not present** | Do not rebuild. Native is always on. |
 | Plan mode / project notes / Todo | **not present** | Removed in 1.19.2. Do not rebuild. |
 | Capgo OTA | **not ported** | WebView web-bundle hot update only. Flutter ships IPA/APK. |
-| Flutter CI | landed | `.github/workflows/flutter-mobile-ci.yml` automatic on this track. **#13** `332ad6f82` and **#14** `77baf9b6f` both fully green (analyze + Android APK + iOS simulator). **#15** `10f97ff86` iOS simulator **failed** (`OpenChamberFlutterPlugins.swift:598` missing `await` on MainActor `mime`). **#16** `37074feea` fully green: https://github.com/yee94/openchambery/actions/runs/33715865698. **#17** `1f32bed56` fully green: https://github.com/yee94/openchambery/actions/runs/33716649360. **#18** `74aec2072` fully green (analyze + Android debug APK + iOS simulator): https://github.com/yee94/openchambery/actions/runs/33717269010. Linux analyze-test alone is never treated as green. |
+| Flutter CI | landed | `.github/workflows/flutter-mobile-ci.yml` automatic on this track. **#13** `332ad6f82` and **#14** `77baf9b6f` both fully green (analyze + Android APK + iOS simulator). **#15** `10f97ff86` iOS simulator **failed** (`OpenChamberFlutterPlugins.swift:598` missing `await` on MainActor `mime`). **#16** `37074feea` fully green: https://github.com/yee94/openchambery/actions/runs/33715865698. **#17** `1f32bed56` fully green: https://github.com/yee94/openchambery/actions/runs/33716649360. **#18** `74aec2072` fully green: https://github.com/yee94/openchambery/actions/runs/33717269010. **#19** `17d1822bc` cancelled by the next push. **#20** `d740f4164` fully green (analyze + Android debug APK + iOS simulator): https://github.com/yee94/openchambery/actions/runs/33718295396. Linux analyze-test alone is never treated as green. |
 | Signed release workflow | landed | `.github/workflows/flutter-mobile-release.yml` — existing secret names only |
 
 ## Settings slug checklist (`MOBILE_SETTINGS_PAGE_SLUGS`)
@@ -327,13 +327,11 @@ Read on main (do not invent): skill grouping is `isSkillGroupTool` + `SkillToolG
 
 ## Remaining gaps
 
-1. Event-pipeline WebSocket (`/api/global/event/ws`) — Flutter still uses official SSE. Not required for dictation/TTS.
-2. Experimental session-list fallback when index returns 501
-3. Live hosted-provider / MCP OAuth in a real system browser — memory transport + widget path only from this Linux VM
-4. Capgo / plan / notes / Todo / Chat dock tab — will not port
-5. A relay-paired **phone** talking to a real hosted relay, and live microphone PCM on a real device, were **not** exercised from this Linux VM. Dart client ↔ Dart host memory-wire proves redeem + session-index + tunneled dictation frames. Live `wss://` + real host private key is still a device/network check.
-6. Android launcher badge — no official API without posting a notification. iOS badge is local `attentionCount`.
-7. Pierre `@pierre/diffs` SVG hunk chrome and `beautiful-mermaid` SVG / pan-zoom — not ported; no new packages.
+1. Device-only checks (do not invent another slice): live hosted-provider / MCP OAuth in a real system browser; a relay-paired **phone** on a live `wss://` host; live microphone PCM on a real device. Memory-wire proves redeem, session-index, tunneled dictation, and tunneled event-ws.
+2. Android launcher badge — official Push Relay (`packages/relay-server/src/push/schema.js`) rejects `platform === 'android'` and only builds APNs `aps.badge`. There is no FCM send path to hang `NotificationCompat.setNumber` on. Do not invent ShortcutBadger. iOS badge is local `attentionCount` + `aps.badge`.
+3. Capgo / plan / notes / Todo / Chat dock tab / `iosNativeUi` — will not port.
+4. Pierre `@pierre/diffs` / `beautiful-mermaid` SVG — will not add packages.
+5. Experimental session-list fallback when index returns 501 — not a 1.19 mobile happy path.
 
 ## Tenth-slice status
 
@@ -344,5 +342,15 @@ Read on main (do not invent): composer STT is `/api/dictation/ws` + `audio/pcm;r
 | Composer dictation PCM + WS | landed | `dictation-client.ts`, `use-dictation-audio-source.ts` | Production `OfficialDictation` opens `/api/dictation/ws`, waits `ready`, `start`/`chunk`/`finish`. Native iOS/Android capture emits ~1s 16 kHz PCM16LE base64. No on-device STT. |
 | Tunneled WebSockets + `oc_url_token` | landed (dictation) | `tunnel-client.ts` `openWebSocket`, `runtime-auth.ts` | `WsOpen`/`WsOpened`/`WsText`/`WsClose`. Mint `POST /auth/url-token` before connect. Needed because dictation is a WebSocket. |
 | Message TTS | landed | `MessageBody.tsx`, `useServerTTS.ts` | Assistant Read aloud → `POST /api/tts/speak` `{text, voice, speed, summarize:false}` then native playback. |
-| Event `/api/global/event/ws` | **gap** | `event-pipeline.ts` | SSE remains the live event path. Not required for dictation/TTS. |
+| Event `/api/global/event/ws` | landed | `event-pipeline.ts` | Slice 11. Prefer WS, SSE fallback. |
+| Capgo / plan / notes / Todo / Chat dock / iosNativeUi | **will not port** | — | Unchanged. |
+
+## Eleventh-slice status
+
+Read on main (do not invent): `event-pipeline.ts` prefers `/api/global/event/ws` (`ready` / `event` / `error` / `backpressure`, `lastEventId` + `oc_url_token`) and falls back to SSE. Android badge is APNs `aps.badge` / iOS only on the official push relay.
+
+| Surface | Status | Main source | Notes |
+|---|---|---|---|
+| Event pipeline WS + SSE fallback | landed | `event-pipeline.ts` | Relay uses tunneled WS. Memory tests stay on SSE (no fake LAN socket). Mint failure → SSE for 60s, same as main. |
+| Android launcher badge | **gap (honest)** | `APNS.md`, `relay-server/src/push/schema.js` | No official FCM send. Do not invent a badge API. |
 | Capgo / plan / notes / Todo / Chat dock / iosNativeUi | **will not port** | — | Unchanged. |

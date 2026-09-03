@@ -175,12 +175,30 @@ class MemoryRelayHost {
     lastWsQuery = payload is Map ? payload['query']?.toString() : null;
     _wsPaths[frame.streamId] = path;
     _sendFrame(encodeTunnelFrame(TunnelFrameType.wsOpened, frame.streamId, encodeJsonPayload({})));
-    if (path == OpenChamberPaths.dictationWs) {
+    if (path == OpenChamberPaths.dictationWs || path == OpenChamberPaths.globalEventWs) {
       _sendFrame(
         encodeTunnelFrame(
           TunnelFrameType.wsText,
           frame.streamId,
           Uint8List.fromList(utf8.encode(jsonEncode({'type': 'ready'}))),
+        ),
+      );
+    }
+    if (path == OpenChamberPaths.globalEventWs) {
+      _sendFrame(
+        encodeTunnelFrame(
+          TunnelFrameType.wsText,
+          frame.streamId,
+          Uint8List.fromList(
+            utf8.encode(
+              jsonEncode({
+                'type': 'event',
+                'eventId': '7',
+                'directory': '/workspace',
+                'payload': {'type': 'session.status'},
+              }),
+            ),
+          ),
         ),
       );
     }

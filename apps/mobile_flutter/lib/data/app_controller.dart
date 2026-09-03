@@ -15,6 +15,7 @@ import '../native/qr_scanner.dart';
 import '../native/share_targeting.dart';
 import '../native/tts_playback.dart';
 import 'dictation.dart';
+import 'event_pipeline.dart';
 import 'oauth.dart';
 import 'assistant_scheduled.dart';
 import 'chat_timeline.dart';
@@ -24,6 +25,7 @@ import 'openchamber_api.dart';
 import 'openchamber_http.dart';
 import 'pairing_payload.dart';
 import 'prompt_attachment.dart';
+import 'relay/codec.dart';
 import 'relay/tunnel_client.dart';
 import 'secure_store.dart';
 import 'session_index.dart';
@@ -112,10 +114,14 @@ class AppController extends ChangeNotifier {
   Timer? _statusPoll;
   Timer? _liveActivityTimer;
   Timer? _visibilityHeartbeat;
-  StreamSubscription<SseEvent>? _eventSub;
+  StreamSubscription<dynamic>? _eventSub;
   Timer? _eventReconnect;
   String? _lastEventId;
   int _eventFailures = 0;
+  DateTime? _wsFallbackUntil;
+  String liveEventTransport = 'none';
+  WebSocket? _eventSocket;
+  TunnelWebSocket? _eventTunnel;
   bool liveEventsConnected = false;
   int transcriptEpoch = 0;
   SessionIndexSnapshot? lastIndex;
@@ -863,6 +869,7 @@ class AppController extends ChangeNotifier {
     _eventSub?.cancel();
     _eventReconnect?.cancel();
     liveEventsConnected = false;
+    liveEventTransport = 'none';
     unawaited(_listenEvents());
   }
 
@@ -871,31 +878,136 @@ class AppController extends ChangeNotifier {
     _eventSub = null;
     _eventReconnect?.cancel();
     _eventReconnect = null;
+    unawaited(_eventSocket?.close());
+    _eventSocket = null;
+    unawaited(_eventTunnel?.close());
+    _eventTunnel = null;
     liveEventsConnected = false;
+    liveEventTransport = 'none';
+  }
+
+  bool get _preferEventWs {
+    if (_api.transport is MemoryOpenChamberTransport) return false;
+    final until = _wsFallbackUntil;
+    return until == null || !DateTime.now().isBefore(until);
   }
 
   Future<void> _listenEvents() async {
     final base = activeBase;
     if (base == null) return;
     _eventSub?.cancel();
+    unawaited(_eventSocket?.close());
+    _eventSocket = null;
+    unawaited(_eventTunnel?.close());
+    _eventTunnel = null;
     try {
-      liveEventsConnected = true;
-      _eventFailures = 0;
-      _statusPoll?.cancel();
-      notifyListeners();
-      _eventSub = parseSse(
-        _api.openGlobalEventStream(base: base, bearer: activeBearer ?? '', lastEventId: _lastEventId),
-      ).listen(
-        (event) {
-          if (event.id != null && event.id!.isNotEmpty) _lastEventId = event.id;
-          _handleLiveEvent(event);
+      if (_preferEventWs && await _listenEventWs(base)) return;
+      await _listenEventSse(base);
+    } catch (_) {
+      _onEventStreamLost();
+    }
+  }
+
+  Future<bool> _listenEventWs(Uri base) async {
+    String? token;
+    try {
+      token = await _api.mintUrlToken(base: base, bearer: activeBearer);
+    } on OpenChamberHttpException {
+      _wsFallbackUntil = DateTime.now().add(eventWsFallbackWindow);
+      return false;
+    }
+    if (token == null || token.isEmpty) {
+      _wsFallbackUntil = DateTime.now().add(eventWsFallbackWindow);
+      return false;
+    }
+    final ready = Completer<void>();
+    final transport = _api.transport;
+    if (transport is RelayTunnelTransport) {
+      final socket = await transport
+          .openWebSocket(
+            path: OpenChamberPaths.globalEventWs,
+            query: encodeTunnelQuery({
+              'oc_url_token': token,
+              if (_lastEventId != null && _lastEventId!.isNotEmpty) 'lastEventId': _lastEventId!,
+            }),
+          )
+          .timeout(eventWsReadyTimeoutRelay);
+      _eventTunnel = socket;
+      _eventSub = socket.messages.listen(
+        (text) => _onEventWsText(text, ready),
+        onError: (_) => _onEventStreamLost(),
+        onDone: _onEventStreamLost,
+      );
+    } else {
+      final uri = globalEventWebSocketUri(base, urlToken: token, lastEventId: _lastEventId);
+      final socket = await WebSocket.connect(uri.toString()).timeout(eventWsReadyTimeoutLan);
+      _eventSocket = socket;
+      _eventSub = socket.listen(
+        (data) {
+          if (data is String) _onEventWsText(data, ready);
         },
         onError: (_) => _onEventStreamLost(),
         onDone: _onEventStreamLost,
       );
-    } catch (_) {
-      _onEventStreamLost();
     }
+    try {
+      await ready.future.timeout(
+        transport is RelayTunnelTransport ? eventWsReadyTimeoutRelay : eventWsReadyTimeoutLan,
+      );
+    } catch (_) {
+      _wsFallbackUntil = DateTime.now().add(eventWsFallbackWindow);
+      await _eventSocket?.close();
+      _eventSocket = null;
+      await _eventTunnel?.close();
+      _eventTunnel = null;
+      await _eventSub?.cancel();
+      _eventSub = null;
+      return false;
+    }
+    liveEventsConnected = true;
+    liveEventTransport = 'ws';
+    _eventFailures = 0;
+    _statusPoll?.cancel();
+    notifyListeners();
+    return true;
+  }
+
+  void _onEventWsText(String raw, Completer<void> ready) {
+    final frame = parseEventWsFrame(raw);
+    switch (frame.kind) {
+      case EventWsFrameKind.ready:
+        if (!ready.isCompleted) ready.complete();
+      case EventWsFrameKind.event:
+        if (frame.eventId != null && frame.eventId!.isNotEmpty) _lastEventId = frame.eventId;
+        _handleLiveEvent(sseEventFromWsFrame(frame));
+      case EventWsFrameKind.backpressure:
+        break;
+      case EventWsFrameKind.error:
+      case EventWsFrameKind.invalid:
+        if (!ready.isCompleted) {
+          ready.completeError(StateError(frame.message ?? 'event-ws-invalid'));
+        } else {
+          _onEventStreamLost();
+        }
+    }
+  }
+
+  Future<void> _listenEventSse(Uri base) async {
+    liveEventsConnected = true;
+    liveEventTransport = 'sse';
+    _eventFailures = 0;
+    _statusPoll?.cancel();
+    notifyListeners();
+    _eventSub = parseSse(
+      _api.openGlobalEventStream(base: base, bearer: activeBearer ?? '', lastEventId: _lastEventId),
+    ).listen(
+      (event) {
+        if (event.id != null && event.id!.isNotEmpty) _lastEventId = event.id;
+        _handleLiveEvent(event);
+      },
+      onError: (_) => _onEventStreamLost(),
+      onDone: _onEventStreamLost,
+    );
   }
 
   void _onEventStreamLost() {

@@ -20,6 +20,7 @@ abstract final class OpenChamberPaths {
   static const sessionStatus = '/api/session/status';
   static const sessionCreate = '/api/session';
   static const globalEvent = '/api/global/event';
+  static const globalEventWs = '/api/global/event/ws';
   static const pushApnsToken = '/api/push/apns-token';
   static const pushVisibility = '/api/push/visibility';
   static const configSettings = '/api/config/settings';

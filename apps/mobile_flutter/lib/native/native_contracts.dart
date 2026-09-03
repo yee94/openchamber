@@ -102,6 +102,6 @@ const List<NativeContract> flutterNativeContracts = [
   NativeContract(
     id: 'app-icon-badge',
     status: 'landed',
-    summary: 'iOS applicationIconBadgeNumber from session-index attentionCount when writing the widget snapshot. Android has no official badge API without a posted notification.',
+    summary: 'iOS applicationIconBadgeNumber from session-index attentionCount when writing the widget snapshot. Android stays unset: official Push Relay has no FCM send / aps.badge analogue.',
   ),
 ];
