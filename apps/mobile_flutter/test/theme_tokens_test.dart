@@ -34,9 +34,9 @@ void main() {
     expect(OcTokens.light.glassFill.g, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassFill.b, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassFill, isNot(OcTokens.light.surfaceElevated));
-    expect(OcTokens.light.glassChipFill, OcTokens.light.glassFill);
-    expect(OcTokens.light.glassChipFill.a, closeTo(0.68, 0.01));
-    expect(OcTokens.dark.glassChipFill.a, closeTo(0.66, 0.01));
+    expect(OcTokens.light.glassChipFill.a, closeTo(0.12, 0.01));
+    expect(OcTokens.light.glassChipFill.a, lessThan(OcTokens.light.glassFill.a));
+    expect(OcTokens.light.glassChipFill.a, greaterThan(0.08));
     expect(OcTokens.light.glassChipFill.r, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassHighlight.a, closeTo(0.60, 0.01));
     expect(OcTokens.dark.glassHighlight.a, closeTo(0.18, 0.01));
@@ -106,7 +106,7 @@ void main() {
     expect(OcOptical.sessionRowVisualHeight, 40);
     expect(OcOptical.sessionRowVisualHeight, lessThan(OcOptical.sessionRowHeight));
     expect(OcOptical.sessionRowVisualHeight, greaterThanOrEqualTo(36));
-    expect(OcOptical.sessionRowPadV, 5);
+    expect(OcOptical.sessionRowPadV, 4.5);
     expect(OcOptical.metaHeight, 1.25);
     expect(OcOptical.entityTitleHeight, 1.25);
     expect(OcOptical.groupTitleMetaGap, 4);
@@ -114,7 +114,7 @@ void main() {
     expect(OcOptical.projectTriggerGap, 7);
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
-    expect(OcOptical.sessionTitleSubtitleGap, 2);
+    expect(OcOptical.sessionTitleSubtitleGap, 3);
     expect(OcOptical.sessionLineLeading, closeTo(0.399, 0.001));
     expect(OcOptical.sessionLineLeading, greaterThan(0.35));
     expect(OcOptical.sessionLineLeading, lessThan(0.40));
@@ -261,9 +261,9 @@ void main() {
     expect(OcElevation.controlFor(OcTokens.light).last.blurRadius, 20);
     expect(OcElevation.controlFor(OcTokens.light).last.offset.dy, 8);
     expect(OcElevation.controlFor(OcTokens.light).last.spreadRadius, -6);
-    expect(OcElevation.chipFor(OcTokens.light), hasLength(2));
-    expect(OcElevation.chipFor(OcTokens.light).every((s) => s.offset == Offset.zero), isTrue);
-    expect(OcElevation.chipFor(OcTokens.light).last.blurRadius, 12);
+    expect(OcElevation.chipFor(OcTokens.light), hasLength(1));
+    expect(OcElevation.chipFor(OcTokens.light).single.blurRadius, 2);
+    expect(OcElevation.chipFor(OcTokens.light).single.offset, Offset.zero);
     expect(OcElevation.chipFor(OcTokens.dark), isEmpty);
     expect(
       (OcElevation.controlFor(OcTokens.light).last.color.a * 255).round(),
