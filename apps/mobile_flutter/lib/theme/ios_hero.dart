@@ -16,7 +16,7 @@ class OcOptical {
   /// `--oc-mobile-session-row-height` (2.875rem = 46). CJK keeps a little
   /// positive tracking; pad is official 5px and min-height fills the slot.
   static const double rowTitle = 12;
-  static const double rowTitleTracking = 0.2;
+  static const double rowTitleTracking = 0.22;
   static const double rowTitleHeight = 1.333;
   static const double sessionRowHeight = 46;
   static const double sessionRowPadV = 5;
@@ -65,10 +65,10 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  static const double headerGlyph = 18;
-  static const double headerGlyphStroke = 0.85;
+  static const double headerGlyph = 16;
+  static const double headerGlyphStroke = 0.72;
   /// In-card / dock / footer strokes stay thinner than header.
-  static const double listGlyphStroke = 0.70;
+  static const double listGlyphStroke = 0.58;
 
   /// `--oc-mobile-collapsing-action-size` / expand-shift / collapse distance.
   static const double collapsingActionSize = 40;
@@ -80,28 +80,28 @@ class OcOptical {
   /// Official dock icon is `size-[23px]` medium. Stroke glyphs stay smaller
   /// and lighter so they do not read heavier than the sprite. Selected
   /// chrome is an icon-only wash — never a full-slot slab.
-  static const double dockGlyph = 15;
-  static const double dockGlyphStroke = 0.72;
-  static const double dockIconPillWidth = 30;
-  static const double dockIconPillHeight = 22;
-  static const double dockIconPillRadius = 11;
-  static const double dockIconWashAlpha = 0.06;
-  static const double dockIconGlowAlpha = 0.035;
-  static const double dockIconGlowBlur = 8;
+  static const double dockGlyph = 13;
+  static const double dockGlyphStroke = 0.58;
+  static const double dockIconPillWidth = 28;
+  static const double dockIconPillHeight = 20;
+  static const double dockIconPillRadius = 10;
+  static const double dockIconWashAlpha = 0.055;
+  static const double dockIconGlowAlpha = 0.03;
+  static const double dockIconGlowBlur = 7;
 
   /// `.oc-mobile-project-shell` icon 2.375rem; in-card glyph stays thinner
   /// than the official 18px filled sprite.
   static const double leadingCircle = 38;
   static const double leadingCircleCompact = 28;
-  static const double leadingGlyph = 13;
-  static const double leadingGlyphCompact = 10;
+  static const double leadingGlyph = 11;
+  static const double leadingGlyphCompact = 9;
 
   static const double sessionBullet = 5;
-  static const double overflow = 11;
-  static const double chevron = 11;
+  static const double overflow = 10;
+  static const double chevron = 10;
 
   static const double scheduleStatus = 38;
-  static const double scheduleStatusGlyph = 13;
+  static const double scheduleStatusGlyph = 11;
 
   static const double fileTypeW = 11;
   static const double fileTypeH = 7;
@@ -109,13 +109,13 @@ class OcOptical {
   static const double fileRowPadV = 6;
 
   static const double composerRadius = 24;
-  static const double composerPlus = 12;
+  static const double composerPlus = 11;
   static const double sendRing = 28;
-  static const double sendRingStroke = 0.90;
+  static const double sendRingStroke = 0.80;
   static const double sendStop = 8;
   static const double scrollFab = 26;
   static const double scrollChevron = 9;
 
-  static const double toolbarGlyph = 11;
-  static const double footerGlyph = 11;
+  static const double toolbarGlyph = 10;
+  static const double footerGlyph = 10;
 }

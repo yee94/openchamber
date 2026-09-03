@@ -18,13 +18,13 @@ class OcElevation {
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
     if (tokens.isDark) return const [];
-    // Official CSS is 0.04 / 0.05 / 0.10. Opaque cream cards paint that as a
-    // heavier umbra than glass, so far wash sits under 0.08 with more
-    // negative spread. Not flat, not a hard drop.
+    // Official CSS is 0.04 / 0.05 / 0.10. Opaque cream still over-reads that
+    // as a separated umbra — keep far wash under 0.07 with more negative
+    // spread. Not flat, not a hard drop.
     return const [
-      BoxShadow(color: Color(0x08000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0A000000), blurRadius: 12),
-      BoxShadow(color: Color(0x14000000), blurRadius: 22, spreadRadius: -8, offset: Offset(0, 8)),
+      BoxShadow(color: Color(0x06000000), blurRadius: 2),
+      BoxShadow(color: Color(0x08000000), blurRadius: 11),
+      BoxShadow(color: Color(0x10000000), blurRadius: 20, spreadRadius: -9, offset: Offset(0, 7)),
     ];
   }
 
@@ -43,12 +43,11 @@ class OcElevation {
 
   static List<BoxShadow> controlFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
-    // Search / + discs still need a visible plate. Softer than glass-shadow
-    // 0.12 so they do not out-lift the cards.
+    // Search / + discs still need a visible plate, but must not out-lift cards.
     return const [
-      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0C000000), blurRadius: 10),
-      BoxShadow(color: Color(0x16000000), blurRadius: 16, spreadRadius: -6, offset: Offset(0, 6)),
+      BoxShadow(color: Color(0x08000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 8),
+      BoxShadow(color: Color(0x12000000), blurRadius: 14, spreadRadius: -6, offset: Offset(0, 5)),
     ];
   }
 
