@@ -157,8 +157,8 @@ class _OcGlyphPainter extends CustomPainter {
       case OcGlyphKind.sparkles:
         // Remix `sparkling`: one 4-point star + small plus + small circle.
         if (filled) {
-          _fourPointStar(canvas, Offset(w * 0.46, h * 0.46), w * 0.40, fill);
-          canvas.drawCircle(Offset(w * 0.18, h * 0.84), w * 0.085, fill);
+          _fourPointStar(canvas, Offset(w * 0.46, h * 0.46), w * 0.36, fill);
+          canvas.drawCircle(Offset(w * 0.18, h * 0.84), w * 0.07, fill);
           canvas.drawLine(Offset(w * 0.82, h * 0.08), Offset(w * 0.82, h * 0.30), stroke..strokeWidth = strokeWidth * 1.15);
           canvas.drawLine(Offset(w * 0.71, h * 0.19), Offset(w * 0.93, h * 0.19), stroke);
         } else {
@@ -460,20 +460,20 @@ class _OcGlyphPainter extends CustomPainter {
       ..color = color
       ..style = PaintingStyle.fill;
     final back = Path()
-      ..moveTo(w * 0.12, h * 0.24)
-      ..lineTo(w * 0.12, h * 0.70)
-      ..lineTo(w * 0.40, h * 0.70)
-      ..lineTo(w * 0.40, h * 0.40)
-      ..lineTo(w * 0.72, h * 0.40)
-      ..lineTo(w * 0.72, h * 0.34)
-      ..lineTo(w * 0.48, h * 0.34)
-      ..lineTo(w * 0.40, h * 0.24)
+      ..moveTo(w * 0.14, h * 0.26)
+      ..lineTo(w * 0.14, h * 0.66)
+      ..lineTo(w * 0.40, h * 0.66)
+      ..lineTo(w * 0.40, h * 0.42)
+      ..lineTo(w * 0.70, h * 0.42)
+      ..lineTo(w * 0.70, h * 0.36)
+      ..lineTo(w * 0.48, h * 0.36)
+      ..lineTo(w * 0.40, h * 0.26)
       ..close();
     final flap = Path()
-      ..moveTo(w * 0.18, h * 0.56)
-      ..lineTo(w * 0.90, h * 0.56)
-      ..lineTo(w * 0.80, h * 0.84)
-      ..lineTo(w * 0.12, h * 0.84)
+      ..moveTo(w * 0.22, h * 0.58)
+      ..lineTo(w * 0.86, h * 0.58)
+      ..lineTo(w * 0.78, h * 0.80)
+      ..lineTo(w * 0.16, h * 0.80)
       ..close();
     canvas.drawPath(back, fill);
     canvas.drawPath(flap, fill);
@@ -495,12 +495,12 @@ class _OcGlyphPainter extends CustomPainter {
       ..color = paint.color
       ..style = PaintingStyle.fill;
     final tooth = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(0, -w * 0.34), width: w * 0.18, height: w * 0.14),
-      Radius.circular(w * 0.035),
+      Rect.fromCenter(center: Offset(0, -w * 0.33), width: w * 0.14, height: w * 0.11),
+      Radius.circular(w * 0.03),
     );
     if (filled) {
       canvas.saveLayer(Rect.fromLTWH(0, 0, w, h), Paint());
-      canvas.drawCircle(c, w * 0.28, fill);
+      canvas.drawCircle(c, w * 0.26, fill);
       for (var i = 0; i < 6; i += 1) {
         canvas.save();
         canvas.translate(c.dx, c.dy);
@@ -510,7 +510,7 @@ class _OcGlyphPainter extends CustomPainter {
       }
       canvas.drawCircle(
         c,
-        w * 0.10,
+        w * 0.13,
         Paint()
           ..blendMode = BlendMode.dstOut
           ..style = PaintingStyle.fill,

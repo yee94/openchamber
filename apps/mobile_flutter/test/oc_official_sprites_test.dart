@@ -44,11 +44,13 @@ void main() {
     expect(officialSpriteFor('gear'), isNull);
   });
 
-  test('filled dock sprites paint more body mass than stroke-only', () async {
+  test('filled dock calendar is a delicate grid, not a solid slab', () async {
     final calendar = officialSpriteFor('calendar')!;
-    final stroked = await _opaqueCount(calendar, filled: false);
     final mass = await _opaqueCount(calendar, filled: true);
-    expect(mass, greaterThan(stroked));
+    // 23×23 = 529. A filled 18×18 plate is ~400+. Header + frame + dots
+    // must stay well under that so medium weight does not read heavy.
+    expect(mass, lessThan(380));
+    expect(mass, greaterThan(160));
   });
 }
 

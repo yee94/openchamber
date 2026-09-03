@@ -114,13 +114,9 @@ class OcGlassChip extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: context.oc.glassChipFill,
-          // Official `.oc-mobile-floating-action` is milky glass +
-          // `--oc-mobile-glass-shadow`. WidgetTester blur on a 36 disc
-          // is a coin — readable wash + quiet inset + contact halo.
-          boxShadow: [
-            ...OcElevation.control(context),
-            ...OcElevation.glassHighlight(context),
-          ],
+          // Quiet inset wash only. Outer contact/halo + 0.82 plate
+          // read as coins on the 36 disc. No blur / umbra / + glow.
+          boxShadow: OcElevation.glassHighlight(context),
         ),
         child: Center(child: child),
       ),
@@ -252,9 +248,6 @@ class CircularChromeButton extends StatelessWidget {
             decoration: BoxDecoration(
               color: ink ? tokens.foreground : tokens.primary,
               shape: BoxShape.circle,
-              // Same contact + tiny halo as search. Official + also
-              // carries a primary 10/22 glow — that is the coin. Skip it.
-              boxShadow: OcElevation.control(context),
             ),
             child: SizedBox(
               width: disc,
