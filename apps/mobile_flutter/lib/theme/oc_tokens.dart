@@ -153,10 +153,10 @@ class OcTokens extends ThemeExtension<OcTokens> {
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: isDark ? 0.32 : 0.48);
 
-  /// Official `--oc-mobile-glass-highlight` is white / 0.60. Quiet
-  /// inset on the chip — 0.60 reads as a coin rim in WidgetTester.
+  /// Official `--oc-mobile-glass-highlight` is white / 0.60
+  /// (dark 0.18). Inset sheen on the elevated plate.
   Color get glassHighlight => const Color(0xFFFFFFFF)
-      .withValues(alpha: isDark ? 0.08 : 0.12);
+      .withValues(alpha: isDark ? 0.18 : 0.60);
 
   /// Official dock plate is `--oc-mobile-float-background` (elevated 45%)
   /// plus glass blur — same token as [floatSurface], not glass-fill 0.68.

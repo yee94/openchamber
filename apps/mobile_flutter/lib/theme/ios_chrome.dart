@@ -113,9 +113,11 @@ class OcGlassChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          // Quieter glass chip: fill 0.48 + official near-pair only.
-          // No BackdropFilter (disc blur), no 8px umbra, no + glow.
-          color: context.oc.glassChipFill,
+          // Finish 2eeb40b: official reduced-transparency `mobileGlass`
+          // is surface-elevated + full glass-shadow. WidgetTester 0.68
+          // frost composites to page cream. No disc BackdropFilter, no
+          // primary + glow.
+          color: context.oc.surfaceElevated,
           boxShadow: [
             ...OcElevation.control(context),
             ...OcElevation.glassHighlight(context),
