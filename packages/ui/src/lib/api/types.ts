@@ -799,6 +799,18 @@ export interface ApnsTokenPayload {
   token: string;
   /** 'ios' (APNs) or 'android' (FCM) — lets the relay route the token to the right service. */
   platform?: string;
+  /** App UI locale (e.g. 'zh-CN') so native push titles match the user's language. */
+  locale?: string;
+}
+
+export interface LiveActivityTokenPayload {
+  activityId: string;
+  sessionId: string;
+  token: string;
+}
+
+export interface LiveActivityTokenUnregisterPayload {
+  token: string;
 }
 
 export interface PushAPI {
@@ -809,6 +821,9 @@ export interface PushAPI {
   /** Register a native iOS APNs device token (Capacitor mobile app only). */
   registerApnsToken(payload: ApnsTokenPayload): Promise<{ ok: true } | null>;
   unregisterApnsToken(payload: ApnsTokenPayload): Promise<{ ok: true } | null>;
+  /** Register an iOS Live Activity push token (Capacitor iOS only; other runtimes no-op). */
+  registerLiveActivityToken(payload: LiveActivityTokenPayload): Promise<{ ok: true } | null>;
+  unregisterLiveActivityToken(payload: LiveActivityTokenUnregisterPayload): Promise<{ ok: true } | null>;
 }
 
 /** Capacitor mobile app only; optional elsewhere. Capgo-style self-hosted OTA. */

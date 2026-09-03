@@ -63,7 +63,10 @@ describe('ScheduledTasksDialog queries', () => {
     expect(content).toContain('getNextPageParam: (lastPage) => lastPage.complete ? undefined : lastPage.nextCursor ?? undefined');
     expect(content).toContain('await runsQuery.fetchNextPage()');
     expect(content).toContain('new Set<string>()');
-    expect(content).toContain('invalidateQueries({ queryKey: globalScheduledTaskRunsQueryKey, exact: true })');
+    expect(content).toContain('invalidateQueries({ queryKey: globalScheduledTaskRunsQueryKey })');
+    expect(content).toContain('historyTaskFilter?.projectId ?? \'\'');
+    expect(content).toContain('historyTaskFilter?.taskId ?? \'\'');
+    expect(content).toContain('projectId: historyTaskFilter.projectId, taskId: historyTaskFilter.taskId');
   });
 
   test('renders history with compact duration beside status and icon-value meta', async () => {
@@ -80,17 +83,22 @@ describe('ScheduledTasksDialog queries', () => {
     expect(content).not.toContain("t('sessions.scheduledTasks.history.meta.duration')");
     expect(content).toContain("name=\"time\"");
     expect(content).toContain("run.trigger === 'manual' ? 'play' : 'calendar-schedule'");
-    // Shared PC/mobile rows: full-width body; mobile omits open-session button.
+    // Shared PC/mobile rows: full-width body; desktop keeps a visible label inside the row control.
     expect(content).toContain('const runBody = (');
     expect(content).toContain("isMobilePanel ? 'gap-2.5' : 'gap-3'");
     expect(content).toContain("t('sessions.scheduledTasks.history.openSession')");
-    expect(content).toContain("!isMobilePanel && canOpenSession ? (");
+    expect(content).toContain('<span className="shrink-0 self-center typography-ui-label font-medium text-foreground">');
+    const runBody = content.slice(content.indexOf('const runBody = ('), content.indexOf('if (isMobilePanel)', content.indexOf('const runBody = (')));
+    expect(runBody).not.toContain('<Button');
     expect(content).not.toContain("isMobilePanel && 'flex-nowrap gap-2'");
     expect(content).toContain('whitespace-nowrap tabular-nums');
     expect(content).toContain("month: 'numeric'");
-    // Text-only ghost button on desktop (keeps hover); no external-link glyph.
+    // The desktop button owns the full list-row hover and keyboard target.
     expect(content).not.toContain('<Icon name="external-link" className="size-4" />');
     expect(content).toContain("divide-y divide-border/50 overflow-hidden rounded-xl border border-border/60");
+    expect(content).toContain('<article key={run.id} className="w-full min-w-0">');
+    expect(content).toContain('className="w-full min-w-0 px-4 py-3 text-left outline-none transition-colors hover:bg-interactive-hover');
+    expect(content).toContain('onClick={() => handleOpenRunSession(run)}');
     // Run error detail: inline icon + text (wraps at the trailing edge, not stacked).
     expect(content).toContain('{run.error ? (');
     expect(content).toContain('mt-1.5 min-w-0 break-words typography-micro text-[var(--surface-muted-foreground)] [overflow-wrap:anywhere]');
@@ -103,17 +111,18 @@ describe('ScheduledTasksDialog queries', () => {
 
   test('opens linked run sessions through openSessionWithFeedback (visible errors when incomplete)', async () => {
     const content = await readFile(join(dirname(fileURLToPath(import.meta.url)), 'ScheduledTasksDialog.tsx'), 'utf8');
-    const handler = content.slice(content.indexOf('const handleOpenRunSession'), content.indexOf('const handleRetryRuns'));
+    const handler = content.slice(content.indexOf('const handleOpenSession'), content.indexOf('const handleRetryRuns'));
     // Unified open path: requires sessionId+directory; phone shell via option.
-    expect(handler).toContain('openSessionWithFeedback(run.sessionId, run.directory');
+    expect(handler).toContain('openSessionWithFeedback(sessionId, directory');
     expect(handler).toContain('phoneShell: Boolean(isMobilePanel && !isIPadApp())');
     expect(handler).not.toContain('isCapacitorApp()');
     // Incomplete identities still go through feedback (toast), not silent return-only.
-    expect(handler).not.toContain('if (!run.sessionId || !run.directory) return;');
+    expect(handler).not.toContain('if (!sessionId || !directory) return;');
     expect(content).toContain('const canOpenSession = Boolean(run.sessionId && run.directory)');
     expect(content).toContain("t('sessions.scheduledTasks.history.openSession')");
-    // Desktop: trailing ghost button. Mobile: whole-card press surface + trigger.
-    expect(content).toContain("!isMobilePanel && canOpenSession ? (");
+    // Desktop and mobile both use full-row native buttons for linked runs.
+    expect(content).toContain('if (canOpenSession) {');
+    expect(content).toContain('hover:bg-interactive-hover');
     expect(content).toContain('data-mobile-press-surface="soft"');
     expect(content).toContain('data-mobile-press-surface-trigger');
     expect(content).toContain('oc-mobile-scheduled-task-row');
@@ -129,6 +138,40 @@ describe('ScheduledTasksDialog queries', () => {
     expect(content).toContain("t('sessions.scheduledTasks.dialog.actions.resume')");
     expect(content).toContain('{renderMenuItems(DropdownMenuItem)}');
     expect(content).toContain('{renderMenuItems(ContextMenuItem)}');
+  });
+
+  test('opens a task-filtered history view from task rows, menus, and the editor', async () => {
+    const directory = dirname(fileURLToPath(import.meta.url));
+    const [workspaceContent, editorContent] = await Promise.all([
+      readFile(join(directory, 'ScheduledTasksDialog.tsx'), 'utf8'),
+      readFile(join(directory, 'ScheduledTaskEditorDialog.tsx'), 'utf8'),
+    ]);
+    const historyHandler = workspaceContent.slice(
+      workspaceContent.indexOf('const handleOpenTaskHistory'),
+      workspaceContent.indexOf('const handleRetryRuns'),
+    );
+    const taskMenuItems = workspaceContent.slice(
+      workspaceContent.indexOf('const renderMenuItems = (Item: React.ElementType)'),
+      workspaceContent.indexOf('return (', workspaceContent.indexOf('const renderMenuItems = (Item: React.ElementType)')),
+    );
+
+    expect(historyHandler).toContain('setHistoryTaskFilter({ projectId: entry.projectId, taskId: entry.task.id })');
+    expect(historyHandler).toContain("setWorkspaceView('history')");
+    expect(historyHandler).toContain("syncScheduledPath('history', null)");
+    expect(historyHandler).not.toContain('openSessionWithFeedback');
+    expect(taskMenuItems).toContain('handleOpenTaskHistory(entry)');
+    expect(taskMenuItems).toContain("t('sessions.scheduledTasks.workspace.views.history')");
+    expect(workspaceContent).toContain('onOpenTaskHistory={handleEditorOpenTaskHistory}');
+    expect(workspaceContent).toContain("t('sessions.scheduledTasks.history.filter.aria'");
+    expect(workspaceContent).toContain("t('sessions.scheduledTasks.history.filter.clearAria')");
+    expect(workspaceContent).toContain('{renderMenuItems(DropdownMenuItem)}');
+    expect(workspaceContent).toContain('{renderMenuItems(ContextMenuItem)}');
+
+    expect(editorContent).toContain('onOpenTaskHistory?: (task: ScheduledTask) => void');
+    expect(editorContent).toContain('const canOpenTaskHistory = Boolean(task && onOpenTaskHistory)');
+    expect(editorContent).toContain('onSelect={() => onOpenTaskHistory?.(task)}');
+    expect(editorContent).toContain("t('sessions.scheduledTasks.workspace.views.history')");
+    expect(editorContent).toContain('trailing={editorOverflowMenu}');
   });
 
   test('keeps the selected task editor open when deleting a different composite task identity', async () => {
@@ -175,7 +218,7 @@ describe('ScheduledTasksDialog queries', () => {
     expect(workspaceContent).toContain("? 'flex-none overflow-visible pt-[var(--oc-mobile-page-gap)]'");
     expect(workspaceContent).not.toContain("overscroll-none pb-[max(1rem,env(safe-area-inset-bottom))] pt-5");
     // History mobile-tab: tablist has no mb-3 so only page-gap separates tab→list.
-    expect(workspaceContent).toContain("(workspaceView === 'tasks' || !isMobileTab) && 'mb-3'");
+    expect(workspaceContent).toContain("(workspaceView === 'tasks' || historyTaskFilter || !isMobileTab) && 'mb-3'");
     expect(editorContent).toContain('overflow-y-auto overflow-x-hidden px-[var(--oc-mobile-page-inline-inset)] pb-[calc(var(--oc-mobile-dock-height)+2.5rem');
     expect(editorContent).not.toContain('<div className="px-3 pb-5 pt-4">');
   });
@@ -247,7 +290,7 @@ describe('ScheduledTasksDialog queries', () => {
     expect(phoneShellContent).toContain('tabBarCovered={scheduledEditorActive}');
     expect(tabRootContent).toContain('showTabBar?: boolean;');
     expect(tabRootContent).toContain('data-mobile-navigation-dock-underlay="true"');
-    expect(tabRootContent).toContain('inert={topSecondaryPage || tabBarCovered ? true : undefined}');
+    expect(tabRootContent).toContain('inert={topSecondaryPage || tabBarCovered || nativeTabBarAdopted ? true : undefined}');
     expect(tabRootContent).toContain('<MobileTabBar activeTab={selectedTab}');
     expect(tabRootContent).not.toContain(') : showTabBar ? (');
     expect(tabRootContent).toContain('data-mobile-navigation-underlay="true"');
@@ -358,6 +401,8 @@ describe('ScheduledTasksDialog queries', () => {
     expect(rootHeaderContent).toContain("addEventListener('scroll', scheduleCollapseProgress, { passive: true })");
     expect(rootHeaderContent).toContain("matchMedia('(prefers-reduced-motion: reduce)')");
     expect(mobileStyles).toContain('.oc-mobile-collapsing-header::after');
+    expect(mobileStyles).toContain('--oc-mobile-header-fade');
+    expect(mobileStyles).toContain('var(--surface-background) 85%');
     expect(mobileStyles).toContain('opacity: var(--oc-mobile-title-collapse)');
     // Bounce-free: layout box is constant; collapse only drives transform/opacity.
     // Compact end is 1.25rem (scale 0.625), not detail-nav 0.9375rem — balances 40px actions.

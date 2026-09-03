@@ -49,7 +49,9 @@ import { StatusRowContainer } from './StatusRowContainer';
 import ScrollToBottomButton from './components/ScrollToBottomButton';
 import { PromptNavigatorRail } from './components/PromptNavigatorRail';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
+import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 import { useChatAutoFollow, type AnimationHandlers, type ContentChangeReason } from '@/hooks/useChatAutoFollow';
+import { useHistoryUpwardIntent } from '@/hooks/lib/chatUpwardIntent';
 import { useMobileComposerSwap } from './useMobileComposerSwap';
 import { useChatTimelineController } from './hooks/useChatTimelineController';
 import { createAssistantSessionDivider, mergeHostedCurrentSessionHistory, stitchHostedSessionHistory } from './hostedSessionHistory';
@@ -57,6 +59,7 @@ import type { ChatMessageEntry } from './lib/turns/types';
 import {
     CHAT_TAIL_SPACER_DESKTOP_HEIGHT,
     CHAT_TAIL_SPACER_MOBILE_HEIGHT,
+    CHAT_TAIL_SPACER_MOBILE_WITH_FOOT_INSET_HEIGHT,
 } from './lib/scroll/chatTailSpacer';
 import { TimelineDialog } from './TimelineDialog';
 import { useChatTurnNavigation } from './hooks/useChatTurnNavigation';
@@ -117,7 +120,6 @@ import {
     reportTranscriptStall,
 } from './transcriptStallWatchdog';
 
-import { usePlanDetection } from '@/hooks/usePlanDetection';
 import { useRecoverPendingQuestions } from '@/hooks/useRecoverPendingQuestions';
 import { useI18n } from '@/lib/i18n';
 import { BusyDots } from './message/parts/BusyDots';
@@ -180,6 +182,29 @@ const CHAT_SCROLL_STYLE = {
     overscrollBehavior: 'contain',
     overscrollBehaviorY: 'contain',
 } as const;
+// The list owns its scroll element, so `data-scrollbar` / `data-scroll-shadow`
+// cannot be declared in JSX on that path. Several consumers reach the chat
+// scroller through `closest('[data-scrollbar="chat"]')`, and the chat scrollbar
+// skin is keyed on it too. Stable identity: it feeds a ref callback.
+const LEGEND_SCROLL_DATASET = { scrollbar: 'chat', scrollShadow: 'true', orientation: 'vertical' } as const;
+
+const DesktopComposerEdgeFade: React.FC = () => (
+    <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-full z-0 h-11 bg-gradient-to-t from-[var(--surface-background)] to-transparent"
+    />
+);
+// Mobile head/foot clearance for the floating navigation header and composer.
+// The old path takes this from CSS padding on the scroll container's content
+// div. The list derives its content size analytically — measured header/footer
+// plus padding read from *style objects*, never from classes — so CSS padding
+// there would be invisible to its scroll math (`isAtEnd`, end maintenance).
+// Measured spacers in the header/footer slots keep that math honest.
+// The list subtracts the measured header (safe area + nav) and this
+// footer from send-park usable height so the reserved hole is the
+// middle window, not a leftover of the full immersive scroller.
+const MOBILE_TIMELINE_HEAD_SPACER_HEIGHT = 'calc(max(0.625rem, var(--oc-safe-area-top, 0px)) + var(--oc-mobile-detail-navigation-height) + 1.25rem)';
+const MOBILE_TIMELINE_FOOT_SPACER_HEIGHT = CHAT_TAIL_SPACER_MOBILE_WITH_FOOT_INSET_HEIGHT;
 const CHAT_NAVIGATION_IGNORED_TARGET_SELECTOR = [
     'a[href]',
     'button',
@@ -277,6 +302,10 @@ type ChatViewportProps = {
     handleMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
     handleHistoryScroll: () => void;
+    handleHistoryUpwardIntent: () => void;
+    onTimelineIsAtEndChange: (isAtEnd: boolean, showScrollButton?: boolean) => void;
+    timelineFollowSuspended: boolean;
+    timelineHistoryAnchorToken: number;
     scrollToBottom: () => void;
     sessionQuestions: QuestionRequest[];
     sessionPermissions: PermissionRequest[];
@@ -311,6 +340,10 @@ const ChatViewport = React.memo(({
     handleMessageContentChange,
     getAnimationHandlers,
     handleHistoryScroll,
+    handleHistoryUpwardIntent,
+    onTimelineIsAtEndChange,
+    timelineFollowSuspended,
+    timelineHistoryAnchorToken,
     scrollToBottom,
     sessionQuestions,
     sessionPermissions,
@@ -326,6 +359,7 @@ const ChatViewport = React.memo(({
     onLoadEarlierPrompts,
 }: ChatViewportProps) => {
     const { t } = useI18n();
+    const legendTimelineEnabled = useFeatureFlagsStore((state) => state.legendTimelineEnabled);
     // Spinner/disabled is mutation-owned only (isLoadingOlder); background
     // prefetch/SWR loading never drives the button.
     const loadOlderBusy = resolveMobileLoadOlderBusy({ isLoadingOlder });
@@ -426,6 +460,133 @@ const ChatViewport = React.memo(({
         scrollRef.current?.focus({ preventScroll: true });
     });
 
+    // Auto-follow is off on the legend path, and it used to be what listened for
+    // explicit upward gestures. Without this, reaching the top would stop firing
+    // scroll events and earlier history could never be requested again.
+    useHistoryUpwardIntent({
+        scrollRef,
+        enabled: legendTimelineEnabled,
+        onUpwardIntent: handleHistoryUpwardIntent,
+    });
+
+    if (legendTimelineEnabled) {
+        return (
+            <div
+                className={cn(
+                    'relative min-h-0',
+                    isDesktopExpandedInput
+                        ? 'absolute inset-0 opacity-0 pointer-events-none'
+                        : 'flex-1'
+                )}
+                aria-hidden={isDesktopExpandedInput}
+            >
+                <div className="absolute inset-0">
+                    <MessageList
+                        ref={messageListRef}
+                        sessionKey={currentSessionId}
+                        virtualizerKey={virtualizerKey}
+                        disableStaging={pendingRevealWork}
+                        messages={renderedMessages}
+                        sessionIsWorking={sessionIsWorking}
+                        activeStreamingMessageId={streamingMessageId}
+                        activeStreamingPhase={activeStreamingPhase}
+                        retryOverlay={retryOverlay}
+                        onMessageContentChange={handleMessageContentChange}
+                        getAnimationHandlers={getAnimationHandlers}
+                        isLoadingOlder={isLoadingOlder}
+                        scrollToBottom={scrollToBottom}
+                        scrollRef={scrollRef}
+                        directory={directory}
+                        timelineScrollClassName="absolute inset-0 z-0 chat-scroll overlay-scrollbar-target"
+                        timelineScrollStyle={CHAT_SCROLL_STYLE}
+                        timelineScrollDataset={LEGEND_SCROLL_DATASET}
+                        timelineOnScroll={handleHistoryScroll}
+                        timelineFollowEnabled={!pendingRevealWork && !timelineFollowSuspended}
+                        timelineHistoryAnchorToken={timelineHistoryAnchorToken}
+                        timelineOnIsAtEndChange={onTimelineIsAtEndChange}
+                        headerSlot={(
+                            <>
+                                {isMobile && (
+                                    <div
+                                        className="flex-shrink-0"
+                                        style={{ height: MOBILE_TIMELINE_HEAD_SPACER_HEIGHT }}
+                                        aria-hidden="true"
+                                    />
+                                )}
+                                {showLoadOlderButton && (
+                                    <div className="flex justify-center pt-3 pb-1">
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={onLoadOlder}
+                                            disabled={loadOlderBusy}
+                                            aria-busy={loadOlderBusy}
+                                        >
+                                            {loadOlderBusy && (
+                                                <Icon name="loader-4" className="size-4 animate-spin" />
+                                            )}
+                                            {t('chat.history.loadOlder')}
+                                        </Button>
+                                    </div>
+                                )}
+                                {showDesktopLoadOlderStatus && (
+                                    <div
+                                        className="absolute inset-x-0 top-0 z-20 flex justify-center pointer-events-none"
+                                        role="status"
+                                        aria-live="polite"
+                                    >
+                                        <div className="flex items-center justify-center gap-1.5 pt-3 pb-1">
+                                            <Icon
+                                                name="loader-4"
+                                                className="size-3.5 animate-spin text-[var(--surface-mutedForeground)]"
+                                                aria-hidden="true"
+                                            />
+                                            <span className="typography-meta text-[var(--surface-mutedForeground)]">
+                                                {t('chat.history.loadingMore')}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                        footerSlot={(
+                            <>
+                                {(sessionQuestions.length > 0 || sessionPermissions.length > 0) && (
+                                    <div>
+                                        {sessionQuestions.map((question) => (
+                                            <QuestionCard key={question.id} question={question} />
+                                        ))}
+                                        {sessionPermissions.map((permission) => (
+                                            <PermissionCard key={permission.id} permission={permission} />
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div
+                                    className="flex-shrink-0"
+                                    style={{ height: isMobile ? MOBILE_TIMELINE_FOOT_SPACER_HEIGHT : CHAT_TAIL_SPACER_DESKTOP_HEIGHT }}
+                                    aria-hidden="true"
+                                />
+                            </>
+                        )}
+                    />
+                    <OverlayScrollbar containerRef={scrollRef} suppressVisibility={isProgrammaticFollowActive} userIntentOnly observeMutations={false} />
+                    {showPromptNavigator && promptTurnIds.length >= 2 ? (
+                        <PromptNavigatorRail
+                            turnIds={promptTurnIds}
+                            previewsByTurnId={promptPreviewsByTurnId}
+                            activeTurnId={railActiveTurnId}
+                            onSelectTurn={onSelectTurn}
+                            canLoadEarlier={canLoadEarlierPrompts}
+                            isLoadingOlder={isLoadingOlderPrompts}
+                            onLoadEarlier={onLoadEarlierPrompts}
+                        />
+                    ) : null}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div
             className={cn(
@@ -454,7 +615,7 @@ const ChatViewport = React.memo(({
                     data-scroll-shadow="true"
                     data-scrollbar="chat"
                 >
-                    <div className={cn('relative z-0 min-h-full', isMobile && 'chat-scroll-foot-inset')}>
+                    <div className={cn('oc-chat-scroll-content relative z-0 min-h-full', isMobile && 'chat-scroll-foot-inset')}>
                         {showLoadOlderButton && (
                             <div className="flex justify-center pt-3 pb-1">
                                 <Button
@@ -565,6 +726,10 @@ const ChatViewport = React.memo(({
         && prev.handleMessageContentChange === next.handleMessageContentChange
         && prev.getAnimationHandlers === next.getAnimationHandlers
         && prev.handleHistoryScroll === next.handleHistoryScroll
+        && prev.handleHistoryUpwardIntent === next.handleHistoryUpwardIntent
+        && prev.onTimelineIsAtEndChange === next.onTimelineIsAtEndChange
+        && prev.timelineFollowSuspended === next.timelineFollowSuspended
+        && prev.timelineHistoryAnchorToken === next.timelineHistoryAnchorToken
         && prev.scrollToBottom === next.scrollToBottom
         && prev.sessionQuestions === next.sessionQuestions
         && prev.sessionPermissions === next.sessionPermissions
@@ -903,9 +1068,6 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
         }
     });
 
-    // Plan detection - watches messages for plan creation and signals store
-    usePlanDetection(currentSessionId ?? '', sessionMessages);
-
     // Session status from sync system
     const resolvedSessionStatus = useSessionStatus(currentSessionId ?? '', effectiveSessionDirectory);
     const sessionStatusObservedAt = useSessionStatusObservedAt(currentSessionId ?? '', effectiveSessionDirectory);
@@ -1208,6 +1370,48 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
         historyUpwardIntentRef.current();
     });
 
+    const legendTimelineEnabled = useFeatureFlagsStore((state) => state.legendTimelineEnabled);
+
+    // The legend list owns the scroll position, so its at-end state — not
+    // auto-follow's pin — is what load-older must read on that path. The
+    // scroll-to-bottom control uses a wider travel latch so a 1px leave of
+    // the at-end band does not flash it. Auto-follow is disabled there, and
+    // a disabled auto-follow reports a permanent `following` pin, which
+    // would silently block every scroll-triggered load of earlier history.
+    const [legendIsAtEnd, setLegendIsAtEnd] = React.useState(true);
+    const [legendShowScrollButton, setLegendShowScrollButton] = React.useState(false);
+    // Sticky "the user scrolled away" — what the previous engine called
+    // `released`. The list's own guard is a bare proximity test: it stops
+    // maintaining the end only while the viewport sits more than a tenth of a
+    // screen away, so a small upward nudge during streaming gets pulled back,
+    // and follow can silently resume without the user ever scrolling down.
+    // Gestures set this; only arriving at the true end or an explicit jump
+    // clears it.
+    const [legendFollowReleased, setLegendFollowReleased] = React.useState(false);
+    // Bumped when a load of earlier history is requested. The timeline reads
+    // the bump to capture the read position and stand end maintenance down
+    // before the rows arrive; monotonic, so it survives session swaps.
+    const [timelineHistoryAnchorToken, setTimelineHistoryAnchorToken] = React.useState(0);
+    const armTimelineHistoryAnchor = useEvent(() => {
+        setTimelineHistoryAnchorToken((token) => token + 1);
+    });
+    const handleTimelineIsAtEndChange = useEvent((atEnd: boolean, showScrollButton?: boolean) => {
+        setLegendIsAtEnd(atEnd);
+        if (atEnd) {
+            setLegendFollowReleased(false);
+        }
+        if (showScrollButton !== undefined) {
+            setLegendShowScrollButton(showScrollButton);
+        }
+    });
+    // A fresh session opens at the live edge, so a release carried over from the
+    // previous one would leave the new transcript unfollowed.
+    React.useEffect(() => {
+        setLegendIsAtEnd(true);
+        setLegendShowScrollButton(false);
+        setLegendFollowReleased(false);
+    }, [currentSessionId]);
+
     const {
         scrollRef,
         notifyContentChange: handleMessageContentChange,
@@ -1222,7 +1426,10 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
         isFollowingProgrammatically,
         showScrollButton,
     } = useChatAutoFollow({
-        enabled: active,
+        // The legend timeline owns its scroll position. Leaving auto-follow on
+        // would put two writers on one container: its pin/force-bottom writes
+        // and the list's end maintenance would each correct the other.
+        enabled: active && !legendTimelineEnabled,
         currentSessionId,
         viewportKey: sessionViewKey,
         sessionMessageCount,
@@ -1240,7 +1447,11 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
         readDistanceFromEnd: () => messageListRef.current?.getDistanceFromEnd() ?? null,
     });
     const composerSwapScopeRef = React.useRef<HTMLDivElement>(null);
-    useMobileComposerSwap({ enabled: isMobile, scrollRef, scopeRef: composerSwapScopeRef });
+    useMobileComposerSwap({
+        enabled: isMobile,
+        scrollRef,
+        scopeRef: composerSwapScopeRef,
+    });
 
     const historyPrefixCacheRef = React.useRef<ChatMessageEntry[]>([]);
     const historyPrefix = React.useMemo(() => {
@@ -1376,14 +1587,34 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
         releaseAutoFollow,
         beginHistoryViewportPreservation,
         endHistoryViewportPreservation,
-        isPinned,
-        showScrollButton,
+        isPinned: legendTimelineEnabled ? legendIsAtEnd : isPinned,
+        showScrollButton: legendTimelineEnabled ? legendShowScrollButton : showScrollButton,
         // Only the active desktop transcript auto-fills short first paint;
         // expanded-input and mobile keep explicit load paths only.
         autoFillEnabled: active && !isDesktopExpandedInput,
+        onWillLoadEarlier: armTimelineHistoryAnchor,
     });
     const resumeToLatestInstant = useEvent(() => {
+        setLegendFollowReleased(false);
+        // Auto-follow is disabled on the legend path, so goToBottom is a
+        // no-op there. The list handle talks to LegendList.scrollToEnd.
+        messageListRef.current?.scrollToBottom();
         goToBottom('instant');
+    });
+    // Send always re-engages follow so a just-sent turn can park near the top
+    // even if the user was reading history. The list then owns the park via
+    // `anchoredEndSpace`; auto-follow's on-send pin is a no-op on this path.
+    const scrollViewportOnSend = useEvent(() => {
+        setLegendFollowReleased(false);
+        scrollToBottomOnSend();
+    });
+    // An explicit upward gesture releases follow on top of its history
+    // pagination duty, so the list stops chasing the end while the user reads.
+    // Gesture-only by construction: the hook ignores nested scrollables that
+    // can still consume the scroll, and overlay-scrollbar drags.
+    const handleTimelineUpwardIntent = useEvent(() => {
+        setLegendFollowReleased(true);
+        timelineController.handleHistoryUpwardIntent();
     });
     // Mobile loads older history via an explicit top button instead of a
     // scroll-position trigger (see handleHistoryScroll in the controller).
@@ -1406,6 +1637,14 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
     const isLoadOlderBusy = timelineController.isLoadingOlder;
     const timelineLoadEarlier = timelineController.loadEarlier;
     const handleLoadOlderClick = useEvent(() => {
+        // Loading older history is an explicit move into the past, so follow
+        // is released unconditionally. This used to be conditional on being
+        // away from the live edge, on the grounds that an end correction is a
+        // no-op when already there — but that trusted the at-end signal, and
+        // a signal reading stale-true (as it did across a session swap) skips
+        // the release silently and lets the prepend throw the reader to the
+        // newest message. Arriving back at the true end re-arms follow.
+        setLegendFollowReleased(true);
         void timelineLoadEarlier({ userInitiated: true });
     });
 
@@ -1427,7 +1666,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
         activeTurnId: timelineController.activeTurnId,
         scrollToTurn: timelineController.scrollToTurn,
         scrollToMessage: timelineController.scrollToMessage,
-        resumeToBottom: timelineController.resumeToBottomInstant,
+        resumeToBottom: resumeToLatestInstant,
     });
     // Expanded scroll-to-bottom stays a foot sibling (original bottom-full mb-2).
     // Compact scroll-to-bottom is mounted on the pill inside ChatInput.
@@ -1438,7 +1677,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
             : (
                 <ChatInput
                     surface={composerSurface}
-                    scrollToBottom={scrollToBottomOnSend}
+                    scrollToBottom={scrollViewportOnSend}
                     showScrollToBottom={isMobile && timelineController.showScrollToBottom}
                     onScrollToBottom={navigation.resumeToLatest}
                     submissionBlocked={promptAvailability.blockSubmission}
@@ -1956,6 +2195,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
 							: 'bg-background'
 					)}
 				>
+                    {!isMobile && !isDesktopExpandedInput ? <DesktopComposerEdgeFade /> : null}
                     {promptSurface}
 				</div>
             </div>
@@ -2027,6 +2267,10 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
                 handleMessageContentChange={handleMessageContentChange}
                 getAnimationHandlers={getAnimationHandlers}
                 handleHistoryScroll={timelineController.handleHistoryScroll}
+                handleHistoryUpwardIntent={handleTimelineUpwardIntent}
+                onTimelineIsAtEndChange={handleTimelineIsAtEndChange}
+                timelineFollowSuspended={legendFollowReleased}
+                timelineHistoryAnchorToken={timelineHistoryAnchorToken}
                 scrollToBottom={resumeToLatestInstant}
                 sessionQuestions={sessionQuestions}
                 sessionPermissions={sessionPermissions}
@@ -2051,6 +2295,7 @@ const ChatContainerContent: React.FC<ChatContainerContentProps> = ({
                         : 'bg-background'
                 )}
             >
+                {!isMobile && !isDesktopExpandedInput ? <DesktopComposerEdgeFade /> : null}
                 {!isDesktopExpandedInput && renderedViewportMessages.length > 0 && (
                     isMobile ? (
                         <ScrollToBottomButton

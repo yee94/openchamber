@@ -313,6 +313,7 @@ export function ScheduledTasksWorkspace({
   const [mutatingTaskIdentity, setMutatingTaskIdentity] = React.useState<string | null>(null);
   const [contextMenuTaskIdentity, setContextMenuTaskIdentity] = React.useState<string | null>(null);
   const [dropdownMenuTaskIdentity, setDropdownMenuTaskIdentity] = React.useState<string | null>(null);
+  const [historyTaskFilter, setHistoryTaskFilter] = React.useState<TaskIdentity | null>(null);
   const mobileNavigationSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const mobileNavigationUnderlayRef = React.useRef<HTMLDivElement | null>(null);
   // `mobile-tab` shares the mobile layout but is hosted as a root tab page:
@@ -371,10 +372,16 @@ export function ScheduledTasksWorkspace({
   );
   const selectedTask = selectedTaskEntry?.task ?? null;
   const runsQuery = useInfiniteQuery({
-    queryKey: globalScheduledTaskRunsQueryKey,
+    queryKey: [...globalScheduledTaskRunsQueryKey, historyTaskFilter?.projectId ?? '', historyTaskFilter?.taskId ?? ''],
     enabled: open && workspaceView === 'history',
     initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam, signal }) => fetchScheduledTaskRuns({ before: pageParam, limit: 20 }, signal),
+    queryFn: ({ pageParam, signal }) => fetchScheduledTaskRuns({
+      before: pageParam,
+      limit: 20,
+      ...(historyTaskFilter
+        ? { projectId: historyTaskFilter.projectId, taskId: historyTaskFilter.taskId }
+        : {}),
+    }, signal),
     getNextPageParam: (lastPage) => lastPage.complete ? undefined : lastPage.nextCursor ?? undefined,
     refetchOnMount: 'always',
   });
@@ -391,6 +398,17 @@ export function ScheduledTasksWorkspace({
     return result;
   }, [runsQuery.data]);
   const hasRunningRuns = React.useMemo(() => runs.some((run) => run.status === 'running'), [runs]);
+  const historyFilterLabel = React.useMemo(() => {
+    if (!historyTaskFilter) return null;
+    const entry = tasks.find(({ projectId, task }) => (
+      projectId === historyTaskFilter.projectId && task.id === historyTaskFilter.taskId
+    ));
+    if (entry?.task.name) return entry.task.name;
+    const runName = runs.find((run) => (
+      run.projectId === historyTaskFilter.projectId && run.taskId === historyTaskFilter.taskId
+    ))?.taskName;
+    return runName || historyTaskFilter.taskId;
+  }, [historyTaskFilter, runs, tasks]);
   // Wall-clock tick so running history rows advance elapsed duration without
   // waiting for the next scheduled-task-ran event.
   const [historyNowMs, setHistoryNowMs] = React.useState(() => Date.now());
@@ -421,7 +439,7 @@ export function ScheduledTasksWorkspace({
       }
       timeoutID = setTimeout(() => {
         void queryClient.invalidateQueries({ queryKey: globalScheduledTasksQueryKey, exact: true });
-        void queryClient.invalidateQueries({ queryKey: globalScheduledTaskRunsQueryKey, exact: true });
+        void queryClient.invalidateQueries({ queryKey: globalScheduledTaskRunsQueryKey });
       }, 400);
     });
     return () => {
@@ -455,7 +473,7 @@ export function ScheduledTasksWorkspace({
     mutationFn: ({ projectID, taskID }: { projectID: string; taskID: string }) => runScheduledTaskNow(projectID, taskID),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: globalScheduledTasksQueryKey, exact: true });
-      void queryClient.invalidateQueries({ queryKey: globalScheduledTaskRunsQueryKey, exact: true });
+      void queryClient.invalidateQueries({ queryKey: globalScheduledTaskRunsQueryKey });
     },
   });
   const toggleTaskMutation = useMutation({
@@ -541,20 +559,47 @@ export function ScheduledTasksWorkspace({
     setSelectedTaskIdentity(null);
     setEditorMode('closed');
     setDraftDirty(false);
+    setHistoryTaskFilter(null);
     setWorkspaceView(nextView);
     syncScheduledPath(nextView, null);
   });
 
-  const handleOpenRunSession = useEvent((run: ScheduledTaskRun) => {
+  const handleOpenSession = useEvent((sessionId: string | null | undefined, directory: string | null | undefined) => {
     // Missing session id or workspace path: toast "unable to load conversation …"
     // — never open under the wrong current project cwd.
-    if (presentation === 'mobile-panel' && run.sessionId && run.directory) {
+    if (presentation === 'mobile-panel' && sessionId && directory) {
       onOpenChange?.(false);
     }
-    openSessionWithFeedback(run.sessionId, run.directory, {
+    openSessionWithFeedback(sessionId, directory, {
       phoneShell: Boolean(isMobilePanel && !isIPadApp()),
       switchToChat: true,
     });
+  });
+
+  const handleOpenRunSession = useEvent((run: ScheduledTaskRun) => {
+    handleOpenSession(run.sessionId, run.directory);
+  });
+
+  const handleOpenTaskHistory = useEvent((entry: GlobalScheduledTask) => {
+    if (editorMode !== 'closed' && !confirmDraftChange()) {
+      return;
+    }
+    setSelectedTaskIdentity(null);
+    setEditorMode('closed');
+    setDraftDirty(false);
+    setHistoryTaskFilter({ projectId: entry.projectId, taskId: entry.task.id });
+    setWorkspaceView('history');
+    syncScheduledPath('history', null);
+  });
+
+  const handleClearHistoryTaskFilter = useEvent(() => {
+    setHistoryTaskFilter(null);
+  });
+
+  const handleEditorOpenTaskHistory = useEvent(() => {
+    if (selectedTaskEntry) {
+      handleOpenTaskHistory(selectedTaskEntry);
+    }
   });
 
   const handleRetryRuns = useEvent(async () => {
@@ -787,6 +832,13 @@ export function ScheduledTasksWorkspace({
                   <Icon name="play" className="size-4" />
                   {t('sessions.scheduledTasks.dialog.actions.runNow')}
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="min-h-11"
+                  onSelect={() => handleOpenTaskHistory(selectedTaskEntry)}
+                >
+                  <Icon name="history" className="size-4" />
+                  {t('sessions.scheduledTasks.workspace.views.history')}
+                </DropdownMenuItem>
                 <DropdownMenuItem className="min-h-11" onSelect={() => void handleToggleTask(selectedTaskEntry, !selectedTaskEntry.task.enabled)}>
                   <Icon name={selectedTaskEntry.task.enabled ? 'pause' : 'play'} className="size-4" />
                   {selectedTaskEntry.task.enabled
@@ -832,7 +884,7 @@ export function ScheduledTasksWorkspace({
               // (pad/gap/item height) with the filter row below.
               // Tasks: denser tab→filter. History mobile-tab: no mb here so
               // content owns a single --oc-mobile-page-gap (same as Tasks filter→list).
-              (workspaceView === 'tasks' || !isMobileTab) && 'mb-3',
+              (workspaceView === 'tasks' || historyTaskFilter || !isMobileTab) && 'mb-3',
               isMobileTab
                 ? 'oc-mobile-floating-surface oc-mobile-segmented-track'
                 : 'grid grid-cols-2 gap-1 rounded-xl bg-[var(--surface-muted)] p-1',
@@ -848,7 +900,6 @@ export function ScheduledTasksWorkspace({
                 size="sm"
                 role="tab"
                 aria-selected={workspaceView === view}
-                data-mobile-press-feedback={isMobileTab ? 'none' : undefined}
                 className={cn(
                   isMobileTab
                     ? 'oc-mobile-segmented-item'
@@ -879,6 +930,30 @@ export function ScheduledTasksWorkspace({
               </Button>
             ))}
           </div>
+          {workspaceView === 'history' && historyFilterLabel ? (
+            <div
+              className={cn(
+                'flex min-w-0 items-center',
+                isMobileTab ? 'mt-[var(--oc-mobile-page-gap)]' : 'mt-3',
+              )}
+              role="status"
+              aria-label={t('sessions.scheduledTasks.history.filter.aria', { name: historyFilterLabel })}
+            >
+              <span className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-border/60 bg-[var(--surface-elevated)] py-1 pl-3 pr-1">
+                <span className="min-w-0 truncate typography-meta text-foreground">{historyFilterLabel}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={cn('shrink-0 rounded-full', isMobilePanel ? 'size-8' : 'size-7')}
+                  onClick={handleClearHistoryTaskFilter}
+                  aria-label={t('sessions.scheduledTasks.history.filter.clearAria')}
+                >
+                  <Icon name="close" className="size-3.5" />
+                </Button>
+              </span>
+            </div>
+          ) : null}
           {workspaceView === 'tasks' ? (
           <>
           <div className={cn(
@@ -902,13 +977,12 @@ export function ScheduledTasksWorkspace({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  data-mobile-press-feedback={isMobileTab ? 'none' : undefined}
                   className={cn(
                     isMobileTab
                       ? 'oc-mobile-segmented-item'
                       // Avoid overflow-hidden (mobile.css → overflow-y:auto). Soft
                       // selected-pill shadow must not be clipped on desktop either.
-                      : 'relative border-0 bg-transparent text-muted-foreground shadow-none transition-[color,background-color,transform] duration-150 ease-out motion-reduce:transition-none active:scale-[0.97]',
+                      : 'relative border-0 bg-transparent text-muted-foreground shadow-none transition-[color,background-color] duration-150 ease-out motion-reduce:transition-none',
                     !isMobileTab && (isMobilePanel ? 'h-11 min-h-11 min-w-0 flex-1 rounded-xl px-2' : '!h-9 !min-h-9 rounded-xl px-3'),
                     !isMobileTab && (filter === value
                       ? 'text-foreground hover:bg-transparent hover:text-foreground'
@@ -936,8 +1010,8 @@ export function ScheduledTasksWorkspace({
             {isMobileTab ? (
               <Button
                 variant="ghost"
-                data-mobile-press-feedback="none"
-                className="oc-mobile-segmented-action shrink-0 bg-foreground text-background transition-[background-color,transform,box-shadow] duration-150 ease-out hover:bg-foreground/90 hover:text-background hover:shadow-sm active:scale-[0.97] motion-reduce:transition-none"
+                data-mobile-press-feedback="compact"
+                className="oc-mobile-segmented-action shrink-0 bg-foreground text-background transition-[background-color,box-shadow] duration-150 ease-out hover:bg-foreground/90 hover:text-background hover:shadow-sm active:bg-interactive-active motion-reduce:transition-none"
                 onClick={handleCreate}
                 disabled={!createProjectID}
                 aria-label={t('sessions.scheduledTasks.dialog.actions.create')}
@@ -948,8 +1022,9 @@ export function ScheduledTasksWorkspace({
               <div className="flex min-w-0 items-center gap-2">
                 <Button
                   variant="ghost"
+                  data-mobile-press-feedback={isMobilePanel ? 'compact' : undefined}
                   className={cn(
-                    'shrink-0 rounded-full bg-foreground text-background transition-[background-color,transform,box-shadow] duration-150 ease-out hover:bg-foreground/90 hover:text-background hover:shadow-sm active:scale-[0.97] motion-reduce:transition-none',
+                    'shrink-0 rounded-full bg-foreground text-background transition-[background-color,box-shadow] duration-150 ease-out hover:bg-foreground/90 hover:text-background hover:shadow-sm active:bg-interactive-active motion-reduce:transition-none',
                     isMobilePanel ? 'size-11 min-h-11 px-0 min-[400px]:w-auto min-[400px]:px-3.5' : '!h-9 !min-h-9 px-3.5',
                   )}
                   onClick={handleCreate}
@@ -1167,14 +1242,9 @@ export function ScheduledTasksWorkspace({
                               </span>
                             </div>
                             {!isMobilePanel && canOpenSession ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 shrink-0 self-center text-foreground"
-                                onClick={() => handleOpenRunSession(run)}
-                              >
+                              <span className="shrink-0 self-center typography-ui-label font-medium text-foreground">
                                 {t('sessions.scheduledTasks.history.openSession')}
-                              </Button>
+                              </span>
                             ) : null}
                           </div>
                           {run.error ? (
@@ -1219,7 +1289,6 @@ export function ScheduledTasksWorkspace({
                             <button
                               type="button"
                               data-mobile-press-surface-trigger
-                              data-mobile-press-feedback="none"
                               className={cn(
                                 'oc-mobile-scheduled-task-row w-full p-3 text-left outline-none',
                                 'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--interactive-focus-ring)]',
@@ -1242,11 +1311,23 @@ export function ScheduledTasksWorkspace({
                       );
                     }
 
+                    if (canOpenSession) {
+                      return (
+                        <article key={run.id} className="w-full min-w-0">
+                          <button
+                            type="button"
+                            className="w-full min-w-0 px-4 py-3 text-left outline-none transition-colors hover:bg-interactive-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--interactive-focus-ring)] motion-reduce:transition-none"
+                            aria-label={t('sessions.scheduledTasks.history.openSession')}
+                            onClick={() => handleOpenRunSession(run)}
+                          >
+                            {runBody}
+                          </button>
+                        </article>
+                      );
+                    }
+
                     return (
-                      <article
-                        key={run.id}
-                        className="w-full min-w-0 px-4 py-3"
-                      >
+                      <article key={run.id} className="w-full min-w-0 px-4 py-3">
                         {runBody}
                       </article>
                     );
@@ -1342,6 +1423,16 @@ export function ScheduledTasksWorkspace({
                       className={cn(isMobilePanel && 'min-h-11')}
                       onClick={(event: React.MouseEvent) => {
                         event.stopPropagation();
+                        handleOpenTaskHistory(entry);
+                      }}
+                    >
+                      <Icon name="history" className="size-4" />
+                      {t('sessions.scheduledTasks.workspace.views.history')}
+                    </Item>
+                    <Item
+                      className={cn(isMobilePanel && 'min-h-11')}
+                      onClick={(event: React.MouseEvent) => {
+                        event.stopPropagation();
                         void handleToggleTask(entry, !task.enabled);
                       }}
                       disabled={isBusy}
@@ -1399,12 +1490,11 @@ export function ScheduledTasksWorkspace({
                             setContextMenuTaskIdentity(identityKey);
                           } : undefined}
                           data-mobile-press-surface-trigger={isMobileTab ? true : undefined}
-                          data-mobile-press-feedback={isMobileTab ? 'none' : undefined}
                           className={cn(
                             'flex min-h-11 min-w-0 flex-1 items-center rounded-xl border py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] motion-reduce:transition-none',
                             isMobileTab
                               ? 'oc-mobile-project-trigger oc-mobile-scheduled-task-row border-0 bg-transparent transition-opacity duration-150'
-                              : 'transition-[background-color,border-color,box-shadow,transform,opacity] duration-150 ease-out active:scale-[0.995]',
+                              : 'transition-[background-color,border-color,box-shadow,opacity] duration-150 ease-out active:bg-interactive-active',
                             isMobilePanel && !isMobileTab ? 'gap-2.5 px-3' : !isMobileTab ? 'gap-3 px-4' : undefined,
                             !isMobileTab && (selected
                               ? 'border-border/50 bg-[var(--surface-elevated)] shadow-sm dark:shadow-none'
@@ -1460,6 +1550,22 @@ export function ScheduledTasksWorkspace({
                       </span>
                     </span>
                     </ContextMenuTrigger>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        'shrink-0 self-center rounded-lg text-muted-foreground',
+                        isMobilePanel ? 'size-11 rounded-full' : 'size-9',
+                      )}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleOpenTaskHistory(entry);
+                      }}
+                      aria-label={t('sessions.scheduledTasks.workspace.views.history')}
+                    >
+                      <Icon name="history" className="size-4" />
+                    </Button>
                     <DropdownMenu
                       open={dropdownMenuTaskIdentity === identityKey}
                       onOpenChange={(open) => {
@@ -1475,7 +1581,7 @@ export function ScheduledTasksWorkspace({
                           variant="ghost"
                           size="icon"
                           className={cn(
-                            'shrink-0 self-center text-muted-foreground transition-[opacity,transform,background-color] duration-150 ease-out active:scale-95 data-[popup-open]:bg-interactive-hover motion-reduce:transition-none',
+                            'shrink-0 self-center text-muted-foreground transition-[opacity,transform,background-color] duration-150 ease-out data-[popup-open]:bg-interactive-hover motion-reduce:transition-none',
                             isMobileTab
                               ? 'oc-mobile-project-action oc-mobile-scheduled-task-action rounded-full'
                               : 'rounded-lg',
@@ -1536,6 +1642,7 @@ export function ScheduledTasksWorkspace({
                 onSave={handleSaveTask}
                 onDirtyChange={setDraftDirty}
                 onRun={async () => { if (selectedTaskEntry) await handleRunTask(selectedTaskEntry); }}
+                onOpenTaskHistory={handleEditorOpenTaskHistory}
                 onDelete={async () => { if (selectedTaskEntry) await handleDeleteTask(selectedTaskEntry); }}
                 onToggleEnabled={async (_task, enabled) => { if (selectedTaskEntry) await handleToggleTask(selectedTaskEntry, enabled); }}
                 actionBusy={Boolean(mutatingTaskIdentity)}
@@ -1564,6 +1671,7 @@ export function ScheduledTasksWorkspace({
             onSave={handleSaveTask}
             onDirtyChange={setDraftDirty}
             onRun={async () => { if (selectedTaskEntry) await handleRunTask(selectedTaskEntry); }}
+            onOpenTaskHistory={handleEditorOpenTaskHistory}
             onDelete={async () => { if (selectedTaskEntry) await handleDeleteTask(selectedTaskEntry); }}
             onToggleEnabled={async (_task, enabled) => { if (selectedTaskEntry) await handleToggleTask(selectedTaskEntry, enabled); }}
             actionBusy={Boolean(mutatingTaskIdentity)}

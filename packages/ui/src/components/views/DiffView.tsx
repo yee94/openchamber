@@ -169,7 +169,7 @@ const toAbsolutePath = (directory: string, filePath: string): string => {
 };
 
 const normalizePath = (value?: string | null): string =>
-    (value || '').replace(/\\/g, '/').replace(/\/+$/, '');
+  (value || '').replace(/\\/g, '/').replace(/\/+$/, '');
 
 const getFirstChangedModifiedLine = (original: string, modified: string): number => {
     const originalLines = original.split('\n');
@@ -1833,7 +1833,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                                     wrapLines={diffWrapLines}
                                     isSelected={false}
                                     isExpanded={expandedFiles.has(file.path)}
-                                    isMounted={mountedStackedFiles.has(file.path) || file.path === pinnedStackedTarget}
+                                    isMounted={mountedStackedFiles.has(file.path) || file.path === pinnedStackedTarget || (singleFileView && visibleDiffFiles.length === 1)}
                                     onSelect={handleSelectFile}
                                     onExpandedChange={handleStackedEntryExpandedChange}
                                     registerSectionRef={registerSectionRef}

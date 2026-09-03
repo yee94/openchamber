@@ -170,7 +170,7 @@ function SelectTrigger({
 
   React.useEffect(() => {
     portalContext?.setTriggerAriaLabel(triggerAriaLabel);
-  }, [portalContext, triggerAriaLabel]);
+  }, [portalContext?.setTriggerAriaLabel, triggerAriaLabel]);
 
   const syncPortalContainer = React.useCallback((target: EventTarget | null) => {
     if (!portalContext) {

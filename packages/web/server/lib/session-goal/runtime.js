@@ -111,8 +111,8 @@ const buildAuditSystemPrompt = () => [
 
 // Hard guard against language hallucination (account-side personalization
 // can leak a different language despite the instruction): if the note uses
-// a script absent from the objective and the agent's reply, drop the note
-// but keep the verdict.
+// a script absent from the objective
+// and the agent's reply, drop the note but keep the verdict.
 const SCRIPT_RANGES = [
   /[Ѐ-ӿ]/, // Cyrillic
   /[぀-ヿ一-鿿가-힯]/, // CJK

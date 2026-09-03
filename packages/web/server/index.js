@@ -89,7 +89,7 @@ import { applyRuntimeCorsHeaders } from './lib/request-cors.js';
 import { createClientPairingRuntime } from './lib/client-auth/pairing.js';
 import { createPreviewProxyRuntime } from './lib/preview/proxy-runtime.js';
 import { attachRealtimeProxy } from './lib/realtime-proxy.js';
-import { createRelayService, isRelayHostRuntime } from './lib/relay/service.js';
+import { createRelayService, isRelayHostRuntime, resolveEffectiveRelayUrl } from './lib/relay/service.js';
 import { createRelayHostLock } from './lib/relay/host-lock.js';
 import { createProxyMiddleware, responseInterceptor } from 'http-proxy-middleware';
 import webPush from 'web-push';
@@ -201,10 +201,6 @@ const shouldSkipApiCompression = () => {
 };
 
 const OPENCHAMBER_VERBOSE_REQUEST_LOGS = isEnvFlagEnabled(process.env.OPENCHAMBER_VERBOSE_REQUEST_LOGS);
-
-const PLAN_MODE_EXPERIMENT_ENABLED =
-  isEnvFlagEnabled(process.env.OPENCODE_EXPERIMENTAL_PLAN_MODE)
-  || isEnvFlagEnabled(process.env.OPENCODE_EXPERIMENTAL);
 
 const fsPromises = fs.promises;
 
@@ -361,11 +357,18 @@ const apnsRuntime = createApnsRuntime({
   readSettingsFromDiskMigrated,
   writeSettingsToDisk,
   readSettingsStrict: readSettingsFromDiskStrict,
+  resolveEffectiveRelayUrl: async () => {
+    const settings = await readSettingsFromDiskMigrated();
+    return resolveEffectiveRelayUrl({ settings });
+  },
 });
 
 const addOrUpdateApnsToken = (...args) => apnsRuntime.addOrUpdateApnsToken(...args);
 const removeApnsToken = (...args) => apnsRuntime.removeApnsToken(...args);
 const sendApnsToAllUiSessions = (...args) => apnsRuntime.sendApnsToAllUiSessions(...args);
+const addOrUpdateLiveActivityToken = (...args) => apnsRuntime.addOrUpdateLiveActivityToken(...args);
+const removeLiveActivityToken = (...args) => apnsRuntime.removeLiveActivityToken(...args);
+const sendLiveActivityEnd = (...args) => apnsRuntime.sendLiveActivityEnd(...args);
 
 const TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW = 128;
 const TERMINAL_INPUT_WS_REBIND_WINDOW_MS = 60 * 1000;
@@ -660,6 +663,7 @@ const notificationTriggerRuntime = createNotificationTriggerRuntime({
   broadcastUiNotification,
   sendPushToAllUiSessions,
   sendApnsToAllUiSessions,
+  sendLiveActivityEnd,
   isAnyInteractiveClientVisible,
   buildOpenCodeUrl,
   getOpenCodeAuthHeaders,
@@ -1302,6 +1306,9 @@ async function main(options = {}) {
     messageQueueRuntime.observeSessionEvent?.(event);
     if (payload.type === 'session.status' || payload.type === 'session.idle' || payload.type === 'session.error') void messageQueueRuntime.wake();
   });
+  const unsubscribeScheduledTaskEvents = globalMessageStreamHub.subscribeEvent((event) => {
+    scheduledTasksRuntime.observeSessionEvent?.(event);
+  });
 
   console.log(`Starting OpenChamber on port ${port === 0 ? 'auto' : port}`);
 
@@ -1393,7 +1400,6 @@ async function main(options = {}) {
         nodeBinaryResolved: resolvedNodeBinary || null,
         bunBinaryResolved: resolvedBunBinary || null,
         desktopNotifyEnabled: ENV_DESKTOP_NOTIFY,
-        planModeExperimentalEnabled: PLAN_MODE_EXPERIMENT_ENABLED,
         apiOnly,
       };
     },
@@ -1445,6 +1451,9 @@ async function main(options = {}) {
     removePushSubscription,
     addOrUpdateApnsToken,
     removeApnsToken,
+    addOrUpdateLiveActivityToken,
+    removeLiveActivityToken,
+    sendLiveActivityEnd,
     updateUiVisibility,
     clearPendingPushBadge: () => clearPendingPushBadge(),
     isUiVisible,
@@ -1503,6 +1512,9 @@ async function main(options = {}) {
         remoteClientAuthRuntime.hasActiveRelayClients().catch(() => false),
       ]);
       return pendingRelay || deviceRelay;
+    },
+    onRelayUrlChanged: async () => {
+      await apnsRuntime.reRegisterAllTokens();
     },
   });
   relayServiceInstance = relayService;
@@ -1668,6 +1680,7 @@ async function main(options = {}) {
       try {
         unsubscribeSessionIndexEvents();
         unsubscribeMessageQueueEvents();
+        unsubscribeScheduledTaskEvents();
         sessionIndexSyncRuntime?.stop();
         sessionIndexService?.close();
       } catch {
