@@ -55,8 +55,7 @@ class OcElevation {
 
   static List<BoxShadow> groupedFor(OcTokens tokens) => cardFor(tokens);
 
-  /// Dock capsule — official `--oc-mobile-glass-shadow` (control-scale),
-  /// not the softer card `--oc-mobile-float-shadow`.
+  /// Dock capsule — glass-shadow contact + halo only (no 8px umbra).
   static List<BoxShadow> dock(BuildContext context) => dockFor(OcTokens.of(context));
 
   /// Dock sits in the page, not a floating Material stadium. Keep the
