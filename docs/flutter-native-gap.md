@@ -169,7 +169,7 @@ Capacitor pipelines on `main` are unchanged (`mobile-ci.yml`, `mobile-release.ym
 
 | Workflow | Trigger | What |
 |---|---|---|
-| `.github/workflows/flutter-mobile-ci.yml` | **push to `work/flutter-native` only** + `workflow_dispatch` | Parallel `analyze-test` / `android-debug` / `ios-simulator`. Flutter **3.32.8** pinned. No `pull_request`. iOS job is a real `flutter build ios --simulator --no-codesign` and asserts `Runner.app`. **#9** pbxproj `};`. **#10** `UIApplication.open` async. **#11 (`4da614617`):** analyze+Android **success**; iOS compiled 76s then `UIGlassEffect` not in macos-15 SDK — composer now uses `NSClassFromString` only (same Capacitor fallback). **Do not claim Actions green until a later run finishes.** |
+| `.github/workflows/flutter-mobile-ci.yml` | **push to `work/flutter-native` only** + `workflow_dispatch` | Parallel `analyze-test` / `android-debug` / `ios-simulator`. Flutter **3.32.8** pinned. No `pull_request`. iOS job is a real `flutter build ios --simulator --no-codesign` and asserts `Runner.app`. **#9** pbxproj `};`. **#10** `UIApplication.open` async. **#11** `UIGlassEffect` SDK lookup. **#12 (`53a905157`):** analyze+Android **success**; iOS compiled 194.8s then VisionKit `DataScannerViewController` MainActor isolation — QR present + coordinator are `@MainActor`. **Do not claim Actions green until a later run finishes.** |
 | `.github/workflows/flutter-mobile-release.yml` | `workflow_dispatch` only | Decode **existing** Android keystore + iOS p12 / four profiles; signed Android APK/AAB; iOS archive/export + TestFlight gated by `build_ios` (default **false**) |
 
 Secret names reused (do not invent new ones; do not print values):

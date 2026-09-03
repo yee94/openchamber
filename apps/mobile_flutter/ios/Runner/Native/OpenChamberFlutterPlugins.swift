@@ -97,12 +97,13 @@ final class OpenChamberQrPlugin: NSObject {
         result(FlutterMethodNotImplemented)
         return
       }
-      DispatchQueue.main.async {
+      Task { @MainActor in
         presentScanner(result: result)
       }
     }
   }
 
+  @MainActor
   private static func presentScanner(result: @escaping FlutterResult) {
     guard let root = UIApplication.shared.connectedScenes
       .compactMap({ $0 as? UIWindowScene })
@@ -124,7 +125,9 @@ final class OpenChamberQrPlugin: NSObject {
       scanner.delegate = coordinator
       objc_setAssociatedObject(scanner, "coordinator", coordinator, .OBJC_ASSOCIATION_RETAIN)
       root.present(scanner, animated: true) {
-        try? scanner.startScanning()
+        Task { @MainActor in
+          try? scanner.startScanning()
+        }
       }
       return
     }
@@ -133,6 +136,7 @@ final class OpenChamberQrPlugin: NSObject {
 }
 
 @available(iOS 16.0, *)
+@MainActor
 final class OpenChamberDataScanCoordinator: NSObject, DataScannerViewControllerDelegate {
   private let scanner: DataScannerViewController
   private let result: FlutterResult
@@ -397,7 +401,7 @@ final class OpenChamberPushPlugin: NSObject {
         return
       }
       pending = result
-      DispatchQueue.main.async {
+      Task { @MainActor in
         UIApplication.shared.registerForRemoteNotifications()
       }
     }
