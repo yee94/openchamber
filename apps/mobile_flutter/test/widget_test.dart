@@ -59,7 +59,10 @@ void main() {
     expect(dockGlyphs.length, 4);
     for (final glyph in dockGlyphs) {
       expect(glyph.size, OcOptical.dockGlyphVisual);
-      expect(glyph.strokeWidth, OcOptical.dockGlyphStrokeVisual);
+      final stroke = glyph.kind == OcGlyphKind.folder || glyph.kind == OcGlyphKind.sparkles
+          ? OcOptical.dockStrokeGlyphStrokeVisual
+          : OcOptical.dockGlyphStrokeVisual;
+      expect(glyph.strokeWidth, stroke);
       expect(glyph.filled, OcOptical.dockGlyphFillBodies);
     }
     expect(capsule.width, lessThan(tester.view.physicalSize.width / tester.view.devicePixelRatio));
@@ -120,7 +123,7 @@ void main() {
     );
   });
 
-  testWidgets('projects search chip has no painted disc rim', (tester) async {
+  testWidgets('projects search chip is contact-only, no inset sheen', (tester) async {
     await pumpConnected(tester);
     final discs = tester.widgetList<DecoratedBox>(
       find.descendant(
@@ -128,15 +131,16 @@ void main() {
         matching: find.byType(DecoratedBox),
       ),
     );
-    final circular = discs.where((box) {
+    final chip = discs.firstWhere((box) {
       final decoration = box.decoration;
       return decoration is BoxDecoration && decoration.shape == BoxShape.circle;
     });
-    expect(circular, isEmpty);
-    expect(find.descendant(
-      of: find.byKey(const Key('projects-search-toggle')),
-      matching: find.byType(OcGlassChip),
-    ), findsOneWidget);
+    final decoration = chip.decoration as BoxDecoration;
+    expect(decoration.boxShadow, OcElevation.chipFor(OcTokens.light));
+    expect(
+      decoration.boxShadow!.every((s) => s.blurStyle != BlurStyle.inner && s.offset == Offset.zero),
+      isTrue,
+    );
   });
 
   testWidgets('settings home lists every mobile slug and search filters', (tester) async {

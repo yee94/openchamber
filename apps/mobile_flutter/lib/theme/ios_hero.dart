@@ -184,12 +184,15 @@ class OcOptical {
   /// slim filled-medium 23px stays delicate — not bricks, not hairlines.
   static const double dockGlyphStroke = 2;
   static const double dockGlyphStrokeVisual = 1.55;
+  /// Folder / sparkles stay official medium stroke but paint lighter
+  /// than calendar/gear so the 23px outline is not a brick (wake-0741).
+  static const double dockStrokeGlyphStrokeVisual = 1.32;
   /// Official filled-medium 23px sprites: folder / sparkles / calendar
   /// grid / holed gear. Not hairline outlines and not brick mass.
   static const bool dockGlyphFillBodies = true;
   static const bool dockSelectedFullSlot = true;
-  /// Official selected class is `bg-interactive-selection/55`.
-  /// [OcTokens.selectedTabWash] multiplies authored alpha by this.
+  /// Official selected class is `bg-interactive-selection/55`. The
+  /// authored token already carries that alpha — see [OcTokens.selectedTabWash].
   static const double dockIconWashAlpha = 0.55;
   /// Official selected tab is `bg-interactive-selection/55` on already-
   /// frosted dock glass — no second BackdropFilter. Nested sigma painted
@@ -198,7 +201,7 @@ class OcOptical {
   /// Official `--oc-mobile-glass-blur` on the 36 `mobileGlass` disc.
   static const double chipBlur = 20;
   /// WidgetTester cream + [chipBlur] paints a solid disc. 0 = page bleed
-  /// through a clear chip. No contact rim — that read as a painted disc.
+  /// through a clear chip. Contact rim only — chip presence, not a plate.
   static const double chipBleedBlur = 0;
   /// Official `.oc-mobile-floating-surface` `blur(22px) saturate(1.35)`.
   /// Distinct from control-scale [chipBlur] / [glassSaturate].

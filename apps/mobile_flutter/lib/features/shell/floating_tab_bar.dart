@@ -131,7 +131,9 @@ class _TabSlot extends StatelessWidget {
                   glyph,
                   size: OcOptical.dockGlyphVisual,
                   color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
-                  strokeWidth: OcOptical.dockGlyphStrokeVisual,
+                  strokeWidth: glyph == OcGlyphKind.folder || glyph == OcGlyphKind.sparkles
+                      ? OcOptical.dockStrokeGlyphStrokeVisual
+                      : OcOptical.dockGlyphStrokeVisual,
                   // Slim filled-medium 23px. Calendar grid + hollow
                   // gear. Not brick mass, not hairlines.
                   filled: OcOptical.dockGlyphFillBodies,

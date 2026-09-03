@@ -42,12 +42,9 @@ void main() {
     expect(OcTokens.dark.glassHighlight.a, closeTo(0.18, 0.01));
     expect(OcTokens.light.glassHighlight.a, lessThan(OcTokens.light.floatHighlight.a));
     expect(OcTokens.light.dockPlate.a, lessThan(OcTokens.light.glassFill.a));
-    expect(
-      OcTokens.light.selectedTabWash.a,
-      closeTo(OcTokens.light.interactiveSelection.a * OcOptical.dockIconWashAlpha, 0.005),
-    );
-    expect(OcTokens.light.selectedTabWash.a, lessThan(OcTokens.light.interactiveSelection.a));
-    expect(OcTokens.light.selectedTabWash.a, greaterThan(0.03));
+    expect(OcTokens.light.selectedTabWash, OcTokens.light.interactiveSelection);
+    expect(OcTokens.light.selectedTabWash.a, closeTo(0.086, 0.005));
+    expect(OcTokens.dark.selectedTabWash, OcTokens.dark.interactiveSelection);
     expect(OcOptical.dockIconWashAlpha, closeTo(0.55, 0.01));
     expect(
       (OcTokens.light.selectedTabWash.r - OcTokens.light.primary.r).abs(),
@@ -180,6 +177,9 @@ void main() {
     expect(OcOptical.dockGlyphStrokeVisual, lessThan(OcOptical.dockGlyphStroke));
     expect(OcOptical.dockGlyphStrokeVisual, closeTo(1.55, 0.01));
     expect(OcOptical.dockGlyphStrokeVisual, greaterThan(1.4));
+    expect(OcOptical.dockStrokeGlyphStrokeVisual, closeTo(1.32, 0.01));
+    expect(OcOptical.dockStrokeGlyphStrokeVisual, lessThan(OcOptical.dockGlyphStrokeVisual));
+    expect(OcOptical.dockStrokeGlyphStrokeVisual, greaterThan(1.15));
     expect(OcOptical.dockGlyphFillBodies, isTrue);
     expect(OcOptical.dockWashBlur, 0);
     expect(OcOptical.dockWashBlur, lessThan(OcOptical.glassBlur));
