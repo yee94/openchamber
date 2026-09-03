@@ -134,9 +134,8 @@ class OcOptical {
   static const double addButton = 40;
   static const double headerDisc = 40;
   /// Official hit is 40 (`mobileIcon`). Painted plate is 36. Search is
-  /// official `glassFill` (0.68 white) + official glass-shadow umbra so
-  /// the disc sits on the page, not a painted-on cream circle. No
-  /// primary + glow.
+  /// official reduced-transparency `mobileGlass` (surface-elevated +
+  /// glass-shadow umbra) so the disc sits on the page. No primary + glow.
   static const double headerDiscVisual = 36;
   static const double headerGlyph = 20;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.

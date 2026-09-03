@@ -113,24 +113,18 @@ class OcGlassChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          // Official `mobileGlass`: white glass-fill 0.68 + official
-          // glass-shadow (including 8/20/-6 umbra) + inset highlight.
-          // WidgetTester BackdropFilter on a 36 disc samples page cream
-          // and cancels the white plate — paint the official fill
-          // without a second frost. Header already frosts behind it.
-          // No primary 10/22 glow.
+          // Official reduced-transparency `mobileGlass`:
+          // `background: var(--surface-elevated)` + glass-shadow.
+          // WidgetTester has no saturate/live blur — 0.68 white frost
+          // composites to page cream. Elevated card + official umbra
+          // is the white/glass coin against the page. No + glow.
+          color: context.oc.surfaceElevated,
           boxShadow: [
             ...OcElevation.control(context),
             ...OcElevation.glassHighlight(context),
           ],
         ),
-        child: ClipOval(
-          child: OcFrosted(
-            fill: context.oc.glassFill,
-            sigma: 0,
-            child: Center(child: child),
-          ),
-        ),
+        child: Center(child: child),
       ),
     );
   }
