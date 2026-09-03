@@ -367,6 +367,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
           context,
           row,
           key: assignSessionKeys && !skipKeyedKinds.contains(row.kind) ? Key('home-session-${row.id}') : null,
+          unreadKey: assignSessionKeys && !skipKeyedKinds.contains(row.kind),
         ),
       if (!showAll)
         InkWell(
@@ -385,7 +386,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     ];
   }
 
-  Widget _sessionRow(BuildContext context, HomeSessionRow row, {Key? key}) {
+  Widget _sessionRow(BuildContext context, HomeSessionRow row, {Key? key, bool unreadKey = false}) {
     return InkWell(
       key: key ?? Key('home-session-${row.id}-nested'),
       onTap: () {
@@ -403,7 +404,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                 color: row.unread ? Theme.of(context).colorScheme.primary : OcChrome.secondary.withValues(alpha: 0.45),
                 shape: BoxShape.circle,
               ),
-              child: row.unread ? const SizedBox(key: Key('unread-dot')) : null,
+              child: row.unread && unreadKey ? const SizedBox(key: Key('unread-dot')) : null,
             ),
             const SizedBox(width: 10),
             Expanded(

@@ -108,7 +108,7 @@ Native contracts / shell
 | Four Xcode targets in `Runner.xcodeproj` | landed | Runner `com.yee94.openchamber`; Widget `…OpenChamberWidget` (17.0); NSE `…OpenChamberNotificationService`; Share `…OpenChamberShareExtension`. App Group `group.com.yee94.openchamber`. Embed App Extensions `dstSubfolderSpec = 13`. No `DEVELOPMENT_TEAM` baked in. |
 | Release YAML four-profile signing | landed | `flutter-mobile-release.yml` pbxproj replacements + ExportOptions map all four bundle IDs / existing profile secrets |
 | iOS composer UIKit platform view | landed | `UIGlassEffect` on iOS 26; system blur on older iOS. Attachments, `/` `@` stub that pan-scrolls, IME, Send/Stop. Warm overlay on Projects; hide immediately on leave. Occupancy = collapsed 56pt only |
-| iOS 26 glass tab bar | landed | Chrome-only `UITabBarController`. Older iOS: system translucent `UITabBar`. Chat remains pushed. Widget tests stay on Material `NavigationBar` |
+| iOS 26 glass tab bar | landed | Chrome-only `UITabBarController`. Older iOS: system translucent `UITabBar`. Chat remains pushed. Widget tests / Android use the Flutter floating capsule (`tab-projects` … `tab-settings`), not Material `NavigationBar` |
 | Live Activity local MVP | landed (iOS 17+) | One Activity, 5s demo timer, `pushType: nil`, no rebuild after dismiss. Android channel is a no-op |
 | SecureStore | landed | Production `PlatformSecureStore`: iOS Keychain + Android Keystore AES-GCM. Tests still inject `MemorySecureStore`. Never logs values |
 | QR + deep link | landed (thin redeem) | iOS VisionKit `DataScanner` (Apple on-device ML; not a Google ML Kit CocoaPod). Android Google Code Scanner then CameraX + ML Kit. Parses v2 `p=` and persists `relayUrl` / pairing secret. **Does not** call a made-up redeem HTTP API |
@@ -125,7 +125,7 @@ Native contracts / shell
 | iOS composer | landed | `OpenChamberComposer` | UIKit platform view, always on |
 | Android composer | landed | IME viewInsets | Material + solid inset surface. ImeSync analogue still later |
 | iOS liquid-glass dock | landed | `OpenChamberTabBar` | iOS 26 `UIGlassEffect`; older: system translucent bar |
-| Android dock | landed (Material 3) | Web `MobileTabBar` | Keep solid/translucent Material `NavigationBar` |
+| Android dock | landed (capsule) | Web `MobileTabBar` | Flutter floating capsule, same four roots. Not liquid glass |
 | Live Activity / Dynamic Island | landed | `OpenChamberLiveActivity` | Driven from `GET /api/session/status` busy/retry; start after 5s; `pushType` nil; no rebuild after dismiss |
 | Share-in | landed | Share extension + `ShareReceiverActivity` | Exact instance+assistant. Catalog published from saved instances |
 | Push | landed (host register) | APNs + FCM → `openchamber-push-relay` | Mobile `POST /api/push/apns-token` + `POST /api/push/visibility`. Host binds relay. iOS requests APNs token. Android copies Capacitor `google-services.json` (`com.yee94.openchamber` / `openchamber-8bf7e`) and reads the FCM token via the native Firebase SDK — still **null** if Firebase is unavailable (not invented). Presence skip is **host-side** (`isAnyInteractiveClientVisible`) |
@@ -144,8 +144,8 @@ Native contracts / shell
 
 | iOS-native effect | Android product path |
 |---|---|
-| iOS 26 liquid-glass dock | Material 3 `NavigationBar` (solid / translucent) |
-| UIKit liquid-glass composer | Material composer + IME viewInsets / later ImeSync analogue |
+| iOS 26 liquid-glass dock | Flutter floating capsule (same four roots). Not `UIGlassEffect` |
+| UIKit liquid-glass composer | Solid floating pill + IME viewInsets. Not a fake glass clone |
 | Live Activity / Dynamic Island | Not applicable |
 | WidgetKit / Control Center / NSE | FCM + Android widgets later; not a glass clone |
 | UIImpactFeedbackGenerator | `performHapticFeedback` (light / medium / heavy) |

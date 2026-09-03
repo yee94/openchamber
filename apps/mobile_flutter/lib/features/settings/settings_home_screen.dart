@@ -33,9 +33,11 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         bottom: false,
-        child: ListView(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: 32),
-          children: [
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
             LargeTitleHeader(title: t(context, 'settings.home.title')),
             Padding(
               padding: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 16),
@@ -103,6 +105,7 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
                 );
               }),
           ],
+          ),
         ),
       ),
     );
