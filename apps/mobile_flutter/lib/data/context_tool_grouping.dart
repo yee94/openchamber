@@ -71,7 +71,9 @@ bool isToolPartActive(ChatPart part) {
 }
 
 bool isContextExploreSuccessorPart(ChatPart part) {
-  if (part.kind == ChatPartKind.text || part.kind == ChatPartKind.mermaid) {
+  if (part.kind == ChatPartKind.text ||
+      part.kind == ChatPartKind.mermaid ||
+      part.kind == ChatPartKind.reasoning) {
     return true;
   }
   if (part.kind == ChatPartKind.permission) return false;

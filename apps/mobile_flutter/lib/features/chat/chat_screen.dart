@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import '../../data/app_controller.dart';
 import '../../data/chat_timeline.dart';
 import '../../data/dictation.dart';
-import '../../data/context_tool_grouping.dart';
 import '../../data/home_session.dart';
 import '../../data/message_id.dart';
 import '../../data/openchamber_http.dart';
@@ -19,11 +18,11 @@ import '../../native/media_channel.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
 import '../shell/secondary_chrome.dart';
+import 'chat_transcript_row.dart';
 import 'composer_bar.dart';
 import 'composer_occupancy.dart';
 import 'ios_composer_host.dart';
 import 'reverse_chat_list.dart';
-import 'tool_cards.dart';
 
 /// Pushed secondary page — never a dock tab.
 /// 1.19.3-beta.5: re-entry jumps to the latest message (reverse index 0).
@@ -41,15 +40,17 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   late final ReverseChatController _timeline = widget.timeline ?? ReverseChatController();
+  late final bool _ownsTimeline = widget.timeline == null;
   final TextEditingController _composer = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final List<AttachmentDraft> _attachments = [];
   final _haptics = NativeHaptics();
   late final MediaChannel _media = widget.media ?? MediaChannel();
-  bool _busy = false;
-  String? _errorKey;
+  final ValueNotifier<bool> _busy = ValueNotifier(false);
+  final ValueNotifier<bool> _atLiveEdge = ValueNotifier(true);
+  final ValueNotifier<String?> _errorKey = ValueNotifier<String?>(null);
+  final ValueNotifier<String?> _speakingMessageId = ValueNotifier<String?>(null);
   String? _dictationLabel;
-  String? _speakingMessageId;
   Timer? _poll;
 
   DictationSession get _dictation => widget.appController?.dictation ?? UnavailableDictation();
@@ -81,7 +82,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (controller.liveEventsConnected) {
       _poll?.cancel();
       _poll = null;
-    } else if (_busy && _poll == null) {
+    } else if (_busy.value && _poll == null) {
       _pollTranscript();
     }
   }
@@ -96,6 +97,11 @@ class _ChatScreenState extends State<ChatScreen> {
     _scroll.removeListener(_onScroll);
     _composer.dispose();
     _scroll.dispose();
+    _busy.dispose();
+    _atLiveEdge.dispose();
+    _errorKey.dispose();
+    _speakingMessageId.dispose();
+    if (_ownsTimeline) _timeline.dispose();
     super.dispose();
   }
 
@@ -105,7 +111,9 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final messages = await controller.loadTranscript(widget.session);
       if (!mounted) return;
-      setState(() => _timeline.replaceAll(messages));
+      // Diff-apply. Do not setState the page — slots update the live row.
+      // Do not jumpTo: scrolled-up readers must not be yanked to the live edge.
+      _timeline.applyMessages(messages);
       _syncBusyFromController();
     } on OpenChamberHttpException {
       // Keep the last transcript; failure is not empty success.
@@ -115,24 +123,20 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _load() async {
     final controller = widget.appController;
     if (controller == null) {
-      setState(() => _errorKey = 'chat.error.loadFailed');
+      _errorKey.value = 'chat.error.loadFailed';
       return;
     }
     try {
       final messages = await controller.loadTranscript(widget.session);
       if (!mounted) return;
-      setState(() {
-        _timeline.prependOlder(messages);
-        _errorKey = null;
-      });
+      _timeline.applyMessages(messages);
+      _errorKey.value = null;
       WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToLatest());
       await controller.refreshSessionStatus(directory: widget.session.directory);
       _syncBusyFromController();
     } on OpenChamberHttpException {
       if (!mounted) return;
-      setState(() {
-        _errorKey = 'chat.error.loadFailed';
-      });
+      _errorKey.value = 'chat.error.loadFailed';
     }
   }
 
@@ -142,16 +146,13 @@ class _ChatScreenState extends State<ChatScreen> {
     if (busy) {
       _live.markWorkStarted();
     }
-    if (mounted) setState(() => _busy = busy);
+    if (_busy.value != busy) _busy.value = busy;
   }
-
-  bool _atLiveEdge = true;
 
   void _onScroll() {
     final atEdge = !_scroll.hasClients || _scroll.offset <= 24;
-    if (atEdge == _atLiveEdge) return;
-    _atLiveEdge = atEdge;
-    if (mounted) setState(() {});
+    if (atEdge == _atLiveEdge.value) return;
+    _atLiveEdge.value = atEdge;
   }
 
   void _jumpToLatest() {
@@ -170,7 +171,7 @@ class _ChatScreenState extends State<ChatScreen> {
           next = await _media.transcodeHeic(next);
         }
         if (next.bytes.length > maxPromptAttachmentBytes) {
-          if (mounted) setState(() => _errorKey = 'chat.error.attachmentTooLarge');
+          if (mounted) _errorKey.value = 'chat.error.attachmentTooLarge';
           continue;
         }
         await _media.publishVirtualAsset(next);
@@ -179,10 +180,10 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted || ready.isEmpty) return;
       setState(() {
         _attachments.addAll(ready);
-        _errorKey = null;
       });
+      _errorKey.value = null;
     } on PromptAttachmentUploadError {
-      if (mounted) setState(() => _errorKey = 'chat.error.attachFailed');
+      if (mounted) _errorKey.value = 'chat.error.attachFailed';
     }
   }
 
@@ -192,17 +193,17 @@ class _ChatScreenState extends State<ChatScreen> {
     final controller = widget.appController;
     final messageId = ascendingId('msg');
     final pending = List<AttachmentDraft>.from(_attachments);
-    setState(() {
-      _timeline.appendNewer(ChatMessage(id: messageId, body: body.isEmpty ? pending.map((item) => item.name).join(', ') : body, isUser: true));
-      _composer.clear();
-      _attachments.clear();
-      _busy = true;
-      _errorKey = null;
-    });
+    _timeline.appendNewer(
+      ChatMessage(id: messageId, body: body.isEmpty ? pending.map((item) => item.name).join(', ') : body, isUser: true),
+    );
+    _composer.clear();
+    setState(() => _attachments.clear());
+    _busy.value = true;
+    _errorKey.value = null;
     _jumpToLatest();
     if (controller == null) {
-      _errorKey = 'chat.error.sendFailed';
-      setState(() => _busy = false);
+      _errorKey.value = 'chat.error.sendFailed';
+      _busy.value = false;
       return;
     }
     try {
@@ -220,17 +221,15 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     } on PromptAttachmentUploadError {
       setState(() {
-        _busy = false;
         _attachments
           ..clear()
           ..addAll(pending);
-        _errorKey = 'chat.error.attachFailed';
       });
+      _busy.value = false;
+      _errorKey.value = 'chat.error.attachFailed';
     } on OpenChamberHttpException {
-      setState(() {
-        _busy = false;
-        _errorKey = 'chat.error.sendFailed';
-      });
+      _busy.value = false;
+      _errorKey.value = 'chat.error.sendFailed';
     }
   }
 
@@ -247,24 +246,14 @@ class _ChatScreenState extends State<ChatScreen> {
       try {
         final messages = await controller.loadTranscript(widget.session);
         if (!mounted) return;
-        setState(() {
-          _timeline.replaceAll(messages);
-        });
+        _timeline.applyMessages(messages);
         await controller.refreshSessionStatus(directory: widget.session.directory);
         _syncBusyFromController();
-        if (!_busy || ticks >= 30) timer.cancel();
+        if (!_busy.value || ticks >= 30) timer.cancel();
       } on OpenChamberHttpException {
         timer.cancel();
       }
     });
-  }
-
-  bool _isNewestAssistant(int reverseIndex) {
-    if (_timeline.length == 0) return false;
-    for (var i = 0; i < reverseIndex; i += 1) {
-      if (!_timeline.newestAtReverseIndex(i).isUser) return false;
-    }
-    return !_timeline.newestAtReverseIndex(reverseIndex).isUser;
   }
 
   Future<void> _replyPermission(String requestId, String reply) async {
@@ -274,16 +263,16 @@ class _ChatScreenState extends State<ChatScreen> {
       await controller.replyToPermission(session: widget.session, requestId: requestId, reply: reply);
       await _reloadFromLive();
     } on OpenChamberHttpException {
-      if (mounted) setState(() => _errorKey = 'chat.error.permissionFailed');
+      if (mounted) _errorKey.value = 'chat.error.permissionFailed';
     }
   }
 
   Future<void> _speak(ChatMessage message) async {
     final controller = widget.appController;
     if (controller == null) return;
-    if (_speakingMessageId == message.id) {
+    if (_speakingMessageId.value == message.id) {
       await controller.stopSpeaking();
-      if (mounted) setState(() => _speakingMessageId = null);
+      if (mounted) _speakingMessageId.value = null;
       return;
     }
     final text = message.parts
@@ -292,13 +281,13 @@ class _ChatScreenState extends State<ChatScreen> {
         .where((item) => item.isNotEmpty)
         .join('\n');
     final spoken = text.isNotEmpty ? text : message.body;
-    setState(() => _speakingMessageId = message.id);
+    _speakingMessageId.value = message.id;
     try {
       await controller.speakMessage(spoken);
     } on OpenChamberHttpException {
-      if (mounted) setState(() => _errorKey = 'chat.error.ttsFailed');
+      if (mounted) _errorKey.value = 'chat.error.ttsFailed';
     } finally {
-      if (mounted) setState(() => _speakingMessageId = null);
+      if (mounted) _speakingMessageId.value = null;
     }
   }
 
@@ -332,11 +321,10 @@ class _ChatScreenState extends State<ChatScreen> {
       try {
         await controller.abortPrompt(widget.session);
       } on OpenChamberHttpException {
-        // Stop still clears local busy; server abort failure is surfaced.
-        setState(() => _errorKey = 'chat.error.stopFailed');
+        _errorKey.value = 'chat.error.stopFailed';
       }
     }
-    if (mounted) setState(() => _busy = false);
+    if (mounted) _busy.value = false;
   }
 
   @override
@@ -344,15 +332,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
     final inset = MediaQuery.viewInsetsOf(context);
     final view = MediaQuery.viewPaddingOf(context);
-    final atLiveEdge = _atLiveEdge;
     final navH = PushedNavBar.overlayHeight(context);
-    final showScrollToBottom = !atLiveEdge || _timeline.length >= 2;
-    final composerReserve = composerListReserve(
-      ios: ios,
-      viewBottom: view.bottom,
-      insetBottom: inset.bottom,
-      showScrollToBottom: showScrollToBottom,
-    );
     return Scaffold(
       extendBody: true,
       extendBodyBehindAppBar: true,
@@ -360,96 +340,73 @@ class _ChatScreenState extends State<ChatScreen> {
       backgroundColor: context.oc.pageBackground,
       body: Stack(
         children: [
-          ReverseChatList(
-            controller: _timeline,
-            scrollController: _scroll,
-            padding: EdgeInsets.fromLTRB(12, navH, 12, composerReserve + 12),
-              itemBuilder: (context, message, reverseIndex) {
-                final isLastAssistant = !message.isUser && _isNewestAssistant(reverseIndex);
-                if (message.isUser) {
-                  return Align(
-                    alignment: Alignment.centerRight,
-                    child: ConstrainedBox(
-                      key: Key('chat-message-${message.id}'),
-                      constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width - 36),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 6),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                            decoration: BoxDecoration(
-                              color: Color.lerp(context.oc.card, context.oc.primary, 0.10),
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            child: DefaultTextStyle.merge(
-                              style: TextStyle(
-                                fontSize: OcTokens.textMarkdown,
-                                height: OcOptical.chatBodyHeight,
-                                letterSpacing: OcOptical.chatBodyTracking,
-                                fontWeight: FontWeight.w400,
-                                color: context.oc.foreground,
-                              ),
-                              child: ChatTranscriptBody(
-                                message: message,
-                                isLastAssistant: isLastAssistant,
-                                isTurnLive: _busy && isLastAssistant && messageHasRunningTool(message),
-                                isSpeaking: _speakingMessageId == message.id,
-                              ),
-                            ),
-                          ),
-                          UserTurnToolbar(message: message),
-                        ],
-                      ),
-                    ),
+          ListenableBuilder(
+            listenable: _timeline,
+            builder: (context, _) {
+              final composerReserve = composerListReserve(
+                ios: ios,
+                viewBottom: view.bottom,
+                insetBottom: inset.bottom,
+                showScrollToBottom: _timeline.length >= 2,
+              );
+              return ReverseChatList(
+                controller: _timeline,
+                scrollController: _scroll,
+                padding: EdgeInsets.fromLTRB(12, navH, 12, composerReserve + 12),
+                itemBuilder: (context, message, reverseIndex) {
+                  return ChatTranscriptRow(
+                    controller: _timeline,
+                    messageId: message.id,
+                    reverseIndex: reverseIndex,
+                    busy: _busy,
+                    speakingId: _speakingMessageId,
+                    onSpeak: widget.appController == null ? null : _speak,
+                    onPermission: widget.appController == null ? null : _replyPermission,
                   );
-                }
-                return Padding(
-                  key: Key('chat-message-${message.id}'),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: ChatTranscriptBody(
-                    message: message,
-                    isLastAssistant: isLastAssistant,
-                    isTurnLive: _busy && isLastAssistant && messageHasRunningTool(message),
-                    isSpeaking: _speakingMessageId == message.id,
-                    onSpeak: widget.appController == null ? null : () => _speak(message),
-                    onPermission: widget.appController == null
-                        ? null
-                        : (requestId, reply) => _replyPermission(requestId, reply),
-                  ),
-                );
-              },
-            ),
-          if (_errorKey != null)
-            Positioned(
-              top: navH,
-              left: 8,
-              right: 8,
-              child: Text(t(context, _errorKey!), style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ),
+                },
+              );
+            },
+          ),
+          ValueListenableBuilder<String?>(
+            valueListenable: _errorKey,
+            builder: (context, errorKey, _) {
+              if (errorKey == null) return const SizedBox.shrink();
+              return Positioned(
+                top: navH,
+                left: 8,
+                right: 8,
+                child: Text(t(context, errorKey), style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              );
+            },
+          ),
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            child: PushedNavBar(
-              title: widget.session.title,
-              subtitle: widget.session.subtitle,
-              leadingKey: const Key('chat-back'),
-              busy: _busy,
-              trailing: Pressable(
-                haptic: HapticStrength.light,
-                highlight: false,
-                onPressed: () {},
-                child: OcGlassChip(
-                  size: OcOptical.headerDisc,
-                  child: OcGlyph(
-                    OcGlyphKind.ellipsis,
-                    size: OcOptical.headerGlyph,
-                    strokeWidth: OcOptical.dockGlyphStroke,
-                    color: context.oc.foreground,
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _busy,
+              builder: (context, busy, _) {
+                return PushedNavBar(
+                  title: widget.session.title,
+                  subtitle: widget.session.subtitle,
+                  leadingKey: const Key('chat-back'),
+                  busy: busy,
+                  trailing: Pressable(
+                    haptic: HapticStrength.light,
+                    highlight: false,
+                    onPressed: () {},
+                    child: OcGlassChip(
+                      size: OcOptical.headerDisc,
+                      child: OcGlyph(
+                        OcGlyphKind.ellipsis,
+                        size: OcOptical.headerGlyph,
+                        strokeWidth: OcOptical.dockGlyphStroke,
+                        color: context.oc.foreground,
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
           Positioned(
@@ -459,32 +416,42 @@ class _ChatScreenState extends State<ChatScreen> {
             child: ios
                 ? SizedBox(
                     height: collapsedComposerOccupancy + MediaQuery.paddingOf(context).bottom,
-                    child: IosComposerHost(
-                      visible: true,
-                      warm: false,
-                      text: _composer.text,
-                      canSend: _composer.text.trim().isNotEmpty || _attachments.isNotEmpty,
-                      canAbort: _busy,
-                      attachments: _attachments.map((item) => item.name).toList(),
-                      onSend: _send,
-                      onStop: _stop,
-                      onAttach: _attach,
-                      onDictate: _dictate,
-                      onText: (value) => setState(() => _composer.text = value),
+                    child: ValueListenableBuilder<bool>(
+                      valueListenable: _busy,
+                      builder: (context, busy, _) {
+                        return IosComposerHost(
+                          visible: true,
+                          warm: false,
+                          text: _composer.text,
+                          canSend: _composer.text.trim().isNotEmpty || _attachments.isNotEmpty,
+                          canAbort: busy,
+                          attachments: _attachments.map((item) => item.name).toList(),
+                          onSend: _send,
+                          onStop: _stop,
+                          onAttach: _attach,
+                          onDictate: _dictate,
+                          onText: (value) => _composer.text = value,
+                        );
+                      },
                     ),
                   )
-                : ComposerBar(
-                    controller: _composer,
-                    busy: _busy,
-                    attachments: _attachments,
-                    dictationLabel: _dictationLabel,
-                    showScrollToBottom: showScrollToBottom,
-                    onScrollToBottom: _jumpToLatest,
-                    onSend: _send,
-                    onStop: _stop,
-                    onAttach: _attach,
-                    onDictate: widget.appController?.dictation is UnavailableDictation ? null : _dictate,
-                    onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
+                : ListenableBuilder(
+                    listenable: Listenable.merge([_busy, _atLiveEdge]),
+                    builder: (context, _) {
+                      return ComposerBar(
+                        controller: _composer,
+                        busy: _busy.value,
+                        attachments: _attachments,
+                        dictationLabel: _dictationLabel,
+                        showScrollToBottom: !_atLiveEdge.value || _timeline.length >= 2,
+                        onScrollToBottom: _jumpToLatest,
+                        onSend: _send,
+                        onStop: _stop,
+                        onAttach: _attach,
+                        onDictate: widget.appController?.dictation is UnavailableDictation ? null : _dictate,
+                        onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
+                      );
+                    },
                   ),
           ),
         ],

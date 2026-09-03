@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openchamber/features/chat/inline_markdown_text.dart';
 import 'package:openchamber/theme/app_theme.dart';
 
 void main() {
-  testWidgets('InlineMarkdownText renders backtick spans as monospace chips', (tester) async {
+  testWidgets('InlineMarkdownText renders backtick spans through MarkdownBody', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: materialTheme(Brightness.light),
@@ -16,10 +17,8 @@ void main() {
       ),
     );
 
-    expect(find.text('ToolPart'), findsOneWidget);
-    final chip = tester.widget<Text>(find.text('ToolPart'));
-    expect(chip.style?.fontFamily, 'monospace');
-    expect(chip.style?.backgroundColor, isNotNull);
-    expect(find.textContaining('已跑:'), findsOneWidget);
+    expect(find.byType(MarkdownBody), findsOneWidget);
+    expect(find.textContaining('ToolPart'), findsWidgets);
+    expect(find.textContaining('已跑:'), findsWidgets);
   });
 }

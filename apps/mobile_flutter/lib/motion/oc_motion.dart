@@ -48,6 +48,24 @@ abstract final class OcMotion {
     damping: 45.7099552,
   );
 
+  /// Official `ReasoningPart.tsx` `EXPANDED_CONTENT_TRANSITION` — `{ duration: 0.2, ease: 'easeOut' }`.
+  static const Duration reasoningExpand = Duration(milliseconds: 200);
+
+  /// CSS / Motion `easeOut` ≡ `cubic-bezier(0, 0, 0.58, 1)` ≡ [Curves.easeOut].
+  static const Curve reasoningExpandEase = Curves.easeOut;
+
+  /// Official expanded-body fade/translate: `opacity/transform 180ms ease-out`.
+  static const Duration reasoningContentFade = Duration(milliseconds: 180);
+
+  /// Official `EXPANDED_CONTENT_UNMOUNT_DELAY_MS` — dispose Markdown after collapse.
+  static const Duration reasoningUnmountDelay = Duration(milliseconds: 200);
+
+  /// Official settled-trace `max-h-80` (20rem = 320 logical px) on `ScrollableOverlay`.
+  static const double reasoningExpandedMaxHeight = 320;
+
+  /// Official collapsed-body `translateY(-4px)` before the 180ms ease-out slide in.
+  static const double reasoningContentSlidePx = 4;
+
   static Color pressFill(Color foreground) => foreground.withValues(alpha: pressFillAlpha);
 
   static bool shouldCommitBack({required double progress, required double velocityX}) {

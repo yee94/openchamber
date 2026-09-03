@@ -17,6 +17,12 @@ dependencies:
   # (packages/ui/src/lib/relay/crypto.ts). Required to speak the existing
   # tunnel; not a new protocol.
   pointycastle: ^3.9.1
+  # Official successor to discontinued flutter_markdown. 1.0.7 is the newest
+  # release that resolves on Flutter 3.32.8 / Dart 3.8.1 (1.0.12 needs a newer
+  # SDK). MarkdownBody shrink-wraps inside the reverse list — unlike
+  # markdown_widget's scrollable MarkdownWidget or gpt_markdown's heavier
+  # LaTeX/chat chrome we do not need.
+  flutter_markdown_plus: ^1.0.7
 
 dev_dependencies:
   flutter_test:

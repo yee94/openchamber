@@ -9,7 +9,8 @@ import '../../motion/pressable.dart';
 import '../../native/haptics.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
-import 'inline_markdown_text.dart';
+import 'chat_markdown_body.dart';
+import 'reasoning_block.dart';
 
 class ChatTranscriptBody extends StatelessWidget {
   const ChatTranscriptBody({
@@ -72,18 +73,35 @@ class ChatTranscriptBody extends StatelessWidget {
         .where((part) => part.kind == ChatPartKind.text && (part.body ?? '').trim().isNotEmpty)
         .toList();
     var textIndex = 0;
+    var paintedText = false;
     for (final part in message.parts) {
-      if (part.kind == ChatPartKind.text && (part.body ?? '').trim().isNotEmpty) {
+      if (part.kind == ChatPartKind.reasoning) {
+        out.add(Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: ReasoningTraceBlock(
+            part: part,
+            isLive: isTurnLive && part.status != 'completed',
+          ),
+        ));
+      } else if (part.kind == ChatPartKind.text && (part.body ?? '').trim().isNotEmpty) {
         final generated = parseGeneratedJsonResult(part.body!.trim());
         if (generated != null) {
           out.add(Padding(
             padding: const EdgeInsets.only(top: 8),
             child: _GeneratedResultCard(result: generated, partId: part.id),
           ));
+          paintedText = true;
         } else if (message.isUser && textParts.length > 1 && textIndex == 0) {
           // Mention is transcript data, not chrome. README toolbar is clock + actions only.
         } else {
-          out.add(InlineMarkdownText(text: part.body!.trim()));
+          out.add(
+            ChatMarkdownBody(
+              cacheKey: '${message.id}-${part.id}',
+              text: part.body!.trim(),
+              isLive: isTurnLive && isLastAssistant,
+            ),
+          );
+          paintedText = true;
         }
         textIndex += 1;
       } else if (part.kind == ChatPartKind.mermaid) {
@@ -115,6 +133,34 @@ class ChatTranscriptBody extends StatelessWidget {
           child: ToolPartCard(part: diffs.single),
         ));
       }
+    }
+    if (!paintedText && message.body.trim().isNotEmpty) {
+      out.add(
+        ChatMarkdownBody(
+          cacheKey: '${message.id}-body',
+          text: message.body.trim(),
+          isLive: isTurnLive && isLastAssistant,
+        ),
+      );
+    }
+    if (message.errorKind == 'aborted') {
+      out.add(Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(
+          t(context, 'chat.messageBody.aborted'),
+          key: Key('chat-aborted-${message.id}'),
+          style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: OcTokens.textMeta),
+        ),
+      ));
+    } else if (message.errorKind == 'error') {
+      out.add(Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(
+          message.errorText ?? t(context, 'chat.error.loadFailed'),
+          key: Key('chat-error-${message.id}'),
+          style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: OcTokens.textMeta),
+        ),
+      ));
     }
     if (!message.isUser) {
       out.add(_TurnFooter(
@@ -1111,6 +1157,7 @@ class ToolPartCard extends StatelessWidget {
       case ChatPartKind.mermaid:
         return _MermaidCard(part: part);
       case ChatPartKind.text:
+      case ChatPartKind.reasoning:
         return const SizedBox.shrink();
     }
   }

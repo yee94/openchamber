@@ -41,6 +41,7 @@ List<ChatMessage> parseTurnPageMessages(Object? payload, {List<PermissionRequest
       parts: record['parts'],
     ));
     if (body.isEmpty && parts.isEmpty && role.isEmpty) continue;
+    final error = resolveAssistantError(info['error'], info['finish']?.toString());
     final model = info['model'];
     String? modelName;
     if (model is Map) {
@@ -77,6 +78,8 @@ List<ChatMessage> parseTurnPageMessages(Object? payload, {List<PermissionRequest
       processedLabel: processed,
       completedClock: clock,
       agentCount: agentCount,
+      errorKind: error?.kind,
+      errorText: error?.text,
     ));
   }
   if (permissions.isEmpty || messages.isEmpty) return messages;
@@ -102,6 +105,11 @@ List<ChatPart> parseChatParts(Object? parts, {required String messageId}) {
     index += 1;
     if (type == 'text') {
       out.addAll(splitTextAndMermaid(part['text']?.toString() ?? '', id: id));
+      continue;
+    }
+    if (type == 'reasoning' || type == 'thinking' || type == 'redacted_reasoning') {
+      final reasoning = parseReasoningPart(part, id: id);
+      if (reasoning != null) out.add(reasoning);
       continue;
     }
     if (type == 'file') {
@@ -463,4 +471,68 @@ List<String> _stringList(Object? value) {
 Map<String, Object?> _metadataMap(Object? value) {
   if (value is! Map) return const {};
   return Map<String, Object?>.from(value);
+}
+
+class AssistantErrorInfo {
+  const AssistantErrorInfo({required this.kind, this.text});
+
+  /// `aborted` or `error` — matches official `resolveAssistantErrorPresentation`.
+  final String kind;
+  final String? text;
+}
+
+/// Official `packages/ui/src/components/chat/message/assistantErrorPresentation.ts`.
+AssistantErrorInfo? resolveAssistantError(Object? error, String? finish) {
+  if (error is Map) {
+    final name = error['name']?.toString() ?? '';
+    final data = error['data'] is Map ? error['data'] as Map : const {};
+    final message = error['message']?.toString() ?? data['message']?.toString();
+    final detail = (message != null && message.isNotEmpty) ? message : (name.isEmpty ? null : name);
+    if (name == 'MessageAbortedError' || (detail ?? '').trim().toLowerCase() == 'aborted') {
+      return const AssistantErrorInfo(kind: 'aborted');
+    }
+    if (detail != null && detail.isNotEmpty) {
+      return AssistantErrorInfo(kind: 'error', text: detail);
+    }
+  } else if (error != null) {
+    final raw = error.toString().trim();
+    if (raw.isEmpty) {
+      // fall through to finish
+    } else if (raw.toLowerCase() == 'aborted') {
+      return const AssistantErrorInfo(kind: 'aborted');
+    } else {
+      return AssistantErrorInfo(kind: 'error', text: raw);
+    }
+  }
+  final normalized = (finish ?? '').toLowerCase();
+  if (normalized == 'aborted' || normalized == 'canceled' || normalized == 'cancelled') {
+    return const AssistantErrorInfo(kind: 'aborted');
+  }
+  if (normalized == 'error' || normalized == 'fail' || normalized == 'failed') {
+    return const AssistantErrorInfo(kind: 'error');
+  }
+  return null;
+}
+
+/// Official OpenCode part `type: 'reasoning'` (also `thinking` / redacted).
+ChatPart? parseReasoningPart(Map<String, Object?> part, {required String id}) {
+  final type = part['type']?.toString() ?? '';
+  final text = part['text']?.toString() ?? part['content']?.toString() ?? '';
+  if (text.trim().isEmpty && type != 'redacted_reasoning') return null;
+  final time = part['time'] is Map ? Map<String, Object?>.from(part['time'] as Map) : const <String, Object?>{};
+  final ended = time['end'] != null;
+  final metadata = part['metadata'] is Map ? Map<String, Object?>.from(part['metadata'] as Map) : const <String, Object?>{};
+  final variant = metadata['variant']?.toString() == 'justification' ? 'justification' : 'thinking';
+  return ChatPart(
+    id: id,
+    kind: ChatPartKind.reasoning,
+    title: variant,
+    body: type == 'redacted_reasoning' && text.trim().isEmpty ? '' : text,
+    status: ended ? 'completed' : 'streaming',
+    metadata: {
+      if (time['start'] != null) 'timeStart': time['start'],
+      if (time['end'] != null) 'timeEnd': time['end'],
+      if (type == 'redacted_reasoning') 'redacted': true,
+    },
+  );
 }
