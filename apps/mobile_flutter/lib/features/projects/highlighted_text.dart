@@ -11,8 +11,9 @@ class HighlightedText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final needle = query.trim();
+    final paint = _cssInk(style);
     if (needle.isEmpty) {
-      return Text(text, style: style, strutStyle: _cssLineBox(style));
+      return Text(text, style: paint, strutStyle: _cssLineBox(style));
     }
     final lower = text.toLowerCase();
     final match = needle.toLowerCase();
@@ -34,10 +35,20 @@ class HighlightedText extends StatelessWidget {
       start = index + needle.length;
     }
     return Text.rich(
-      TextSpan(style: style, children: spans),
+      TextSpan(style: paint, children: spans),
       strutStyle: _cssLineBox(style),
     );
   }
+}
+
+/// CSS `font-size` ink. Line-height lives on the strut, not a Flutter
+/// `height` multiplier — that inflated CJK metrics and packed the 40px row.
+TextStyle? _cssInk(TextStyle? style) {
+  if (style == null) return null;
+  return style.copyWith(
+    height: 1.0,
+    leadingDistribution: TextLeadingDistribution.even,
+  );
 }
 
 /// Official CSS `line-height` boxes (title 16, subtitle/time 12).
@@ -48,5 +59,6 @@ StrutStyle? _cssLineBox(TextStyle? style) {
     height: style.height,
     leading: 0,
     forceStrutHeight: true,
+    leadingDistribution: TextLeadingDistribution.even,
   );
 }

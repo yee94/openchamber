@@ -20,11 +20,12 @@ class OcElevation {
     if (tokens.isDark) return const [];
     // Official `--oc-mobile-float-shadow`:
     // 0 0 2px / 0.04, 0 0 12px / 0.05, 0 10px 24px -6px / 0.10.
-    // Diffuse contact + halo + soft drop — not Material elevation.
+    // Cream WidgetTester over-reads the 0.10 far wash — keep the same
+    // three-stop family, quieter than official so cards stay soft contact.
     return const [
-      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0D000000), blurRadius: 12),
-      BoxShadow(color: Color(0x14000000), blurRadius: 24, spreadRadius: -6, offset: Offset(0, 10)),
+      BoxShadow(color: Color(0x08000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 12),
+      BoxShadow(color: Color(0x0E000000), blurRadius: 20, spreadRadius: -6, offset: Offset(0, 8)),
     ];
   }
 
@@ -63,8 +64,8 @@ class OcElevation {
   static List<BoxShadow> dockFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0D000000), blurRadius: 12),
+      BoxShadow(color: Color(0x08000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 12),
     ];
   }
 

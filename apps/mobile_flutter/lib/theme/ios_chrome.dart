@@ -44,12 +44,14 @@ class OcFrosted extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final plate = ColoredBox(
+      color: fill ?? context.oc.glassFill,
+      child: child,
+    );
+    if (sigma <= 0) return plate;
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-      child: ColoredBox(
-        color: fill ?? context.oc.glassFill,
-        child: child,
-      ),
+      child: plate,
     );
   }
 }
@@ -111,17 +113,13 @@ class OcGlassChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
+          color: context.oc.glassChipFill,
           // Official `.oc-mobile-floating-action` is borderless glass.
-          // Drop shadows read as Material coins in WidgetTester — hairline
-          // highlight only.
+          // WidgetTester blur on a small disc reads as a coin — wash +
+          // inset highlight only. Not a `UIGlassEffect` clone.
           boxShadow: OcElevation.highlight(context),
         ),
-        child: ClipOval(
-          child: OcFrosted(
-            fill: context.oc.glassChipFill,
-            child: Center(child: child),
-          ),
-        ),
+        child: Center(child: child),
       ),
     );
   }
