@@ -10,6 +10,8 @@ Real `apps/mobile_flutter` widgets, captured with `WidgetTester` + `RenderRepain
 
 No PIN / Face ID. No `iosNativeUi`. Chat is a pushed page.
 
+Recapture after `OcOptical` second pass (`776af952e` + this commit): open title tracking, airy meta/chat leading, smaller dock/search/`+`/leading glyphs. Catalog orange/sand stays — these PNGs are **not** a README photo recolor.
+
 | File | Screen |
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |
