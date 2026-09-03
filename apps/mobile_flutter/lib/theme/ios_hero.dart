@@ -171,9 +171,10 @@ class OcOptical {
   static const double dockGlyphVisual = 23;
   /// Official dock `Icon weight="medium"` (`ICON_STROKE_WIDTH_MEDIUM` = 2).
   static const double dockGlyphStroke = 2;
-  /// Flutter round-cap bloom at dpr 3; paint just under official 2 so the
-  /// 23px sprite stays medium, not a filled blob.
-  static const double dockGlyphStrokeVisual = 1.75;
+  /// Paint the official medium 2. Under-painting (1.75) reads as a hairline
+  /// outline; filling open paths blobs the grid / holed gear. Accent dots
+  /// still fill; body paths stay stroke-only at this weight.
+  static const double dockGlyphStrokeVisual = 2;
   static const bool dockSelectedFullSlot = true;
   static const double dockIconWashAlpha = 0.55;
   static const double dockIconGlowAlpha = 0.0;

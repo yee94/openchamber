@@ -59,8 +59,9 @@ class OcGlyph extends StatelessWidget {
   final double size;
   final Color? color;
   final double? strokeWidth;
-  /// Official Remix `weight="medium"` is stroke 2 / `fill="none"`.
-  /// Do not fill open calendar-schedule paths — that paints a primary square.
+  /// Official dock `Icon weight="medium"` is stroke 2 / `fill="none"`.
+  /// [filled] inks accent dots only — do not fill the calendar grid,
+  /// folder-open, or holed gear.
   final bool filled;
 
   @override
@@ -455,7 +456,7 @@ class _OcGlyphPainter extends CustomPainter {
     final stroke = Paint()
       ..color = paint.color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = paint.strokeWidth > 0 ? paint.strokeWidth : 1.75
+      ..strokeWidth = paint.strokeWidth > 0 ? paint.strokeWidth : 2
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
     canvas.drawCircle(c, w * 0.26, stroke);

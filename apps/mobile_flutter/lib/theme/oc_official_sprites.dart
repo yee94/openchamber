@@ -104,8 +104,8 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
 
 /// Paint a 24×24 official sprite into [size]. [strokeWidth] is the viewBox
 /// stroke (1.5 regular / 2 medium), matching `Icon.tsx` (`fill="none"`).
-/// Paths and rects stay stroke-only so calendar-schedule never becomes a
-/// filled square. [filled] only inks small accent dots (r ≤ 2.6).
+/// Paths and rects stay stroke-only so the calendar grid / folder never
+/// become a filled square. [filled] only inks small accent dots (r ≤ 2.6).
 void paintOfficialSprite({
   required Canvas canvas,
   required Size size,
