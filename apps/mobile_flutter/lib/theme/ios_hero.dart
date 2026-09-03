@@ -46,9 +46,9 @@ class OcOptical {
   /// glyphs do not fill the 16/12 boxes. Total box stays official —
   /// [ocCssLineBox] must not floor `height` at 1.0 or leading grows the
   /// row instead of opening air inside it. Official gap-0.5 stays 2;
-  /// more air is this leading, not an invented gap. 0.54 is a hair
-  /// opener than 0.52 inside the same official 16/12 boxes (wake-0750).
-  static const double sessionLineLeading = 0.54;
+  /// more air is this leading, not an invented gap. 0.52 is a hair
+  /// opener than 0.48 inside the same 16/12 boxes.
+  static const double sessionLineLeading = 0.52;
   /// `.oc-mobile-session-status` 0.75rem; `.oc-mobile-session-row-main` gap 0.5rem.
   static const double sessionStatus = 12;
   static const double sessionRowMainGap = 8;
