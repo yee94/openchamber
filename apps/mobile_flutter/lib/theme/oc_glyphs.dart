@@ -485,21 +485,20 @@ class _OcGlyphPainter extends CustomPainter {
   }
 
   void _gear(Canvas canvas, Size size, Paint paint, bool filled) {
-    // Official filled-medium gear (Lucide `settings` family): 8
-    // rectangular teeth + a clear hub. Not settings-3 flower lobes and
-    // not a 6-ray sun on a tiny disc.
+    // Official filled-medium gear: six spaced rectangular cogs + a
+    // clear hub. Not settings-3 flower lobes and not a packed sunburst.
     final w = size.width;
     final h = size.height;
     final c = Offset(w * 0.5, h * 0.5);
-    final rim = w * 0.28;
-    final hole = w * 0.13;
+    final rim = w * 0.30;
+    final hole = w * 0.17;
     final tooth = RRect.fromRectAndRadius(
       Rect.fromCenter(
-        center: Offset(0, -(rim + w * 0.036)),
-        width: w * 0.16,
-        height: w * 0.13,
+        center: Offset(0, -(rim + w * 0.02)),
+        width: w * 0.22,
+        height: w * 0.09,
       ),
-      Radius.circular(w * 0.025),
+      Radius.circular(w * 0.02),
     );
     final stroke = Paint()
       ..color = paint.color
@@ -512,10 +511,11 @@ class _OcGlyphPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     void teeth(Paint p) {
-      for (var i = 0; i < 8; i += 1) {
+      // Six cogs with air between them — eight packed teeth read as a sun.
+      for (var i = 0; i < 6; i += 1) {
         canvas.save();
         canvas.translate(c.dx, c.dy);
-        canvas.rotate(i * math.pi / 4);
+        canvas.rotate(i * math.pi / 3);
         canvas.drawRRect(tooth, p);
         canvas.restore();
       }

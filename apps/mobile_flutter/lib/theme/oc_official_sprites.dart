@@ -51,7 +51,7 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
           (16, 18, 0.8),
         ],
       ),
-    // `gear` is painted by OcGlyph `_gear` (8 teeth + hollow hub).
+    // `gear` is painted by OcGlyph `_gear` (6 spaced cogs + hollow hub).
     // Official `settings-3` lobes bloom into a flower at 23px medium.
     'code' => const OcOfficialSprite(
         paths: ['m18 16 4-4-4-4', 'm6 8-4 4 4 4', 'm14.5 4-5 16'],

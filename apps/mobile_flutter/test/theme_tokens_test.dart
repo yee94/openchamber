@@ -260,8 +260,9 @@ void main() {
     expect(OcElevation.controlFor(OcTokens.light).last.blurRadius, 20);
     expect(OcElevation.controlFor(OcTokens.light).last.offset.dy, 8);
     expect(OcElevation.controlFor(OcTokens.light).last.spreadRadius, -6);
-    expect(OcElevation.chipFor(OcTokens.light), hasLength(2));
-    expect(OcElevation.chipFor(OcTokens.light).every((s) => s.offset == Offset.zero), isTrue);
+    expect(OcElevation.chipFor(OcTokens.light), hasLength(1));
+    expect(OcElevation.chipFor(OcTokens.light).single.blurRadius, 2);
+    expect(OcElevation.chipFor(OcTokens.light).single.offset, Offset.zero);
     expect(OcElevation.chipFor(OcTokens.dark), isEmpty);
     expect(
       (OcElevation.controlFor(OcTokens.light).last.color.a * 255).round(),
