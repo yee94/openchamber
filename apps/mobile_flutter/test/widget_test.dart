@@ -58,7 +58,7 @@ void main() {
     );
     expect(dockGlyphs.length, 4);
     for (final glyph in dockGlyphs) {
-      expect(glyph.size, OcOptical.dockGlyph);
+      expect(glyph.size, OcOptical.dockGlyphVisual);
       expect(glyph.strokeWidth, OcOptical.dockGlyphStroke);
       expect(glyph.filled, isFalse);
     }

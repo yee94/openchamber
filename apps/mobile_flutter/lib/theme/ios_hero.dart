@@ -119,8 +119,11 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  static const double headerDiscVisual = 40;
-  static const double headerGlyph = 20;
+  /// Official hit is `size-10` (40). WidgetTester's opaque plate reads larger
+  /// than live glass, so the painted disc/glyph sit one step inside (`size-9`
+  /// / `size-4.5`) while the tap target stays 40.
+  static const double headerDiscVisual = 36;
+  static const double headerGlyph = 18;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
@@ -153,6 +156,9 @@ class OcOptical {
   /// full tab slot (58 tall, radius 29) with `bg-interactive-selection/55`.
   /// Glyph stays visible — wash never replaces it with a primary square.
   static const double dockGlyph = 23;
+  /// Flutter round-cap strokes bloom at dpr 3; paint one step inside the
+  /// official 23px box so medium weight does not read as a blob.
+  static const double dockGlyphVisual = 21;
   /// Official dock `Icon weight="medium"` (`ICON_STROKE_WIDTH_MEDIUM` = 2).
   static const double dockGlyphStroke = 2;
   static const bool dockSelectedFullSlot = true;
@@ -176,7 +182,8 @@ class OcOptical {
   static const double sessionMoreHit = 36;
   /// Official visible more is `min-w-9` + `mr-1` (4).
   static const double sessionMoreEdge = 4;
-  static const double sessionTimeGap = 8;
+  /// Official time cluster `gap-1.5` (6).
+  static const double sessionTimeGap = 6;
 
   static const double sessionBullet = 5;
   static const double overflow = 16;
@@ -187,7 +194,8 @@ class OcOptical {
   /// Official scheduled status uses the project-shell glass disc, with a
   /// quieter `size-4` glyph so the row does not out-weigh the segment track.
   static const double scheduleStatus = leadingCircle;
-  static const double scheduleStatusGlyph = 16;
+  /// Official non-tab scheduled glyph is `size-3.5`; shell disc stays 38.
+  static const double scheduleStatusGlyph = 14;
 
   /// Official `FileTypeIcon` mobile size `h-3 w-3` (12px).
   static const double fileTypeSize = 12;

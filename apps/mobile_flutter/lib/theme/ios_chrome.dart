@@ -252,7 +252,13 @@ class CircularChromeButton extends StatelessWidget {
             decoration: BoxDecoration(
               color: ink ? tokens.foreground : tokens.primary,
               shape: BoxShape.circle,
-              boxShadow: OcElevation.control(context),
+              boxShadow: [
+                BoxShadow(
+                  color: (ink ? tokens.foreground : tokens.primary).withValues(alpha: 0.22),
+                  blurRadius: 22,
+                  offset: const Offset(0, 10),
+                ),
+              ],
             ),
             child: SizedBox(
               width: disc,

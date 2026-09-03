@@ -107,7 +107,13 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                         decoration: BoxDecoration(
                           color: context.oc.primary,
                           shape: BoxShape.circle,
-                          boxShadow: OcElevation.control(context),
+                          boxShadow: [
+                            BoxShadow(
+                              color: context.oc.primary.withValues(alpha: 0.22),
+                              blurRadius: 22,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
                         ),
                         child: SizedBox(
                           width: OcOptical.headerDiscVisual,

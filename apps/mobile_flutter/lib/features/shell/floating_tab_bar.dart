@@ -135,7 +135,7 @@ class _TabSlot extends StatelessWidget {
                   children: [
                     OcGlyph(
                       glyph,
-                      size: OcOptical.dockGlyph,
+                      size: OcOptical.dockGlyphVisual,
                       color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
                       strokeWidth: OcOptical.dockGlyphStroke,
                       // Official `Icon` is `fill="none"` + medium stroke 2.

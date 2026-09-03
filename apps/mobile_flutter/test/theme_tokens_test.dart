@@ -122,8 +122,9 @@ void main() {
     expect(OcOptical.searchButton, 40);
     expect(OcOptical.addButton, 40);
     expect(OcOptical.headerDisc, OcOptical.searchButton);
-    expect(OcOptical.headerDiscVisual, OcOptical.headerDisc);
-    expect(OcOptical.headerGlyph, 20);
+    expect(OcOptical.headerDiscVisual, 36);
+    expect(OcOptical.headerDiscVisual, lessThan(OcOptical.headerDisc));
+    expect(OcOptical.headerGlyph, 18);
     expect(OcOptical.headerGlyphStroke, 1.5);
     expect(OcOptical.collapsingActionSize, 40);
     expect(OcOptical.collapsingTitleCompactSize, 20);
@@ -138,6 +139,8 @@ void main() {
     expect(OcOptical.rootTitleTracking(0), closeTo(-1.28, 0.01));
     expect(OcOptical.rootTitleTracking(1), closeTo(-0.64, 0.01));
     expect(OcOptical.dockGlyph, 23);
+    expect(OcOptical.dockGlyphVisual, 21);
+    expect(OcOptical.dockGlyphVisual, lessThan(OcOptical.dockGlyph));
     expect(OcOptical.dockTabHeight, 58);
     expect(OcOptical.dockTabRadius, 29);
     expect(OcOptical.dockLabel, 12);
@@ -157,7 +160,7 @@ void main() {
     expect(OcOptical.chevron, 14);
     expect(OcOptical.footerGlyph, 14);
     expect(OcOptical.scheduleStatus, OcOptical.leadingCircle);
-    expect(OcOptical.scheduleStatusGlyph, 16);
+    expect(OcOptical.scheduleStatusGlyph, 14);
     expect(OcOptical.overflow, 16);
     expect(OcOptical.chatChip, 40);
     expect(OcOptical.chatChip, OcOptical.headerDisc);
@@ -180,7 +183,7 @@ void main() {
     expect(OcOptical.headerRestPeek, 20);
     expect(OcOptical.sessionMoreHit, 36);
     expect(OcOptical.sessionMoreEdge, 4);
-    expect(OcOptical.sessionTimeGap, 8);
+    expect(OcOptical.sessionTimeGap, 6);
     expect(OcOptical.dockSelectedFullSlot, isTrue);
     expect(OcOptical.scrollFab, 36);
     expect(OcOptical.glassBlur, 20);

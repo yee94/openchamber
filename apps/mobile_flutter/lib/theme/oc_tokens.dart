@@ -151,7 +151,7 @@ class OcTokens extends ThemeExtension<OcTokens> {
   /// WidgetTester has no blur, so drop alpha so cream peeks through
   /// instead of a 40px solid plate.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.36 : 0.38);
+      .withValues(alpha: isDark ? 0.30 : 0.32);
 
   /// Official dock plate is `--oc-mobile-float-background` (elevated 45%)
   /// plus glass blur — not `--oc-mobile-glass-fill` (0.68). Without blur,
