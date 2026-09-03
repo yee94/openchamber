@@ -73,7 +73,7 @@ void main() {
     await _pumpFrames(tester);
 
     expect(find.byKey(const Key('unread-dot')), findsOneWidget);
-    expect(find.textContaining('openchamber-yee'), findsWidgets);
+    expect(find.textContaining('openchamber'), findsWidgets);
     expect(find.textContaining('个会话'), findsWidgets);
     expect(find.textContaining('更多'), findsWidgets);
     expect(find.textContaining('feat/opencode2up'), findsWidgets);
@@ -282,14 +282,14 @@ MemoryOpenChamberTransport _seededTransport() {
       'pinnedSessionIds': ['sess-pinned'],
       'directories': [
         {
-          'directory': '/Users/yee/Code/github/openchamber-yee',
+          'directory': '/workspace/openchamber',
           'sessions': [
             {
               'id': 'sess-pinned',
               'title': '发布说明',
-              'directory': '/Users/yee/Code/github/openchamber-yee',
+              'directory': '/workspace/openchamber',
               'parentID': null,
-              'project': {'name': 'openchamber-yee'},
+              'project': {'name': 'openchamber'},
               'time': {'updated': now - 60000, 'pinned': '2026-09-01T00:00:00.000Z'},
               'branch': 'main',
               'unread': true,
@@ -297,54 +297,54 @@ MemoryOpenChamberTransport _seededTransport() {
             {
               'id': 'sess-busy',
               'title': '修复输入法',
-              'directory': '/Users/yee/Code/github/openchamber-yee',
+              'directory': '/workspace/openchamber',
               'parentID': null,
-              'project': {'name': 'openchamber-yee'},
+              'project': {'name': 'openchamber'},
               'time': {'updated': now - 33 * 60000},
               'branch': 'main',
             },
             {
               'id': 'sess-catalog',
               'title': '新会话',
-              'directory': '/Users/yee/Code/github/openchamber-yee',
+              'directory': '/workspace/openchamber',
               'parentID': null,
-              'project': {'name': 'openchamber-yee'},
+              'project': {'name': 'openchamber'},
               'time': {'updated': now - 2 * 3600000},
               'branch': 'main',
             },
             {
               'id': 'sess-diff',
               'title': '写入类型无法点开查看 diff',
-              'directory': '/Users/yee/Code/github/openchamber-yee',
+              'directory': '/workspace/openchamber',
               'parentID': null,
-              'project': {'name': 'openchamber-yee'},
+              'project': {'name': 'openchamber'},
               'time': {'updated': now - 5 * 3600000},
               'branch': 'main',
             },
             {
               'id': 'sess-extra',
               'title': '工具 diff 点开看不到的路径',
-              'directory': '/Users/yee/Code/github/openchamber-yee',
+              'directory': '/workspace/openchamber',
               'parentID': null,
-              'project': {'name': 'openchamber-yee'},
+              'project': {'name': 'openchamber'},
               'time': {'updated': now - 8 * 3600000},
               'branch': 'main',
             },
             {
               'id': 'sess-wt-1',
               'title': 'OpenCode 升级',
-              'directory': '/Users/yee/Code/github/openchamber-yee',
+              'directory': '/workspace/openchamber',
               'parentID': null,
-              'project': {'name': 'openchamber-yee'},
+              'project': {'name': 'openchamber'},
               'time': {'updated': now - 12 * 3600000},
               'branch': 'feat/opencode2up',
             },
             {
               'id': 'sess-wt-2',
               'title': 'Composer IME',
-              'directory': '/Users/yee/Code/github/openchamber-yee',
+              'directory': '/workspace/openchamber',
               'parentID': null,
-              'project': {'name': 'openchamber-yee'},
+              'project': {'name': 'openchamber'},
               'time': {'updated': now - 20 * 3600000},
               'branch': 'feat/opencode2up',
             },
@@ -421,7 +421,7 @@ MemoryOpenChamberTransport _seededTransport() {
         'enabled': true,
         'name': '首页助理',
         'defaultPrompt': '一段持续的长对话，处理首页和通知。',
-        'workspacePath': '/Users/yee/Code/github/openchamber-yee',
+        'workspacePath': '/workspace/openchamber',
         'providerID': 'anthropic',
         'modelID': 'claude-sonnet-4',
         'mode': 'continuous',
@@ -433,7 +433,7 @@ MemoryOpenChamberTransport _seededTransport() {
         'enabled': true,
         'name': '代码审查',
         'defaultPrompt': '审查 diff 与测试，不携带无关历史。',
-        'workspacePath': '/Users/yee/Code/github/openchamber-yee',
+        'workspacePath': '/workspace/openchamber',
         'providerID': 'openai',
         'modelID': 'gpt-5',
         'mode': 'stateless',
