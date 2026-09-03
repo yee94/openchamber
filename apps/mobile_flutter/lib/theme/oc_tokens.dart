@@ -170,11 +170,11 @@ class OcTokens extends ThemeExtension<OcTokens> {
       foreground.withValues(alpha: isDark ? 0.122 : 0.086);
 
   /// Official selected-tab fill is `bg-interactive-selection/55`.
-  /// Mix the authored token at [OcOptical.dockIconWashAlpha] so the
-  /// 58×r29 cell is a through-wash, not a second cream plate (wake-0722).
-  /// Do not use RGB@0.55 or a nested frost.
-  Color get selectedTabWash =>
-      interactiveSelection.withValues(alpha: interactiveSelection.a * OcOptical.dockIconWashAlpha);
+  /// Authored `#16121016` already *is* that mix. Double-dipping
+  /// 0.086×0.55 vanishes on WidgetTester cream. Paint the authored
+  /// token, mix-only — no RGB@0.55, no nested frost (wake-0729).
+  /// Soft cream pill on WidgetTester is an accepted residual.
+  Color get selectedTabWash => interactiveSelection;
 
   /// `--oc-mobile-header-fade` = surface-background 85%.
   Color get headerFade => background.withValues(alpha: 0.85);
