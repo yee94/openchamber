@@ -159,7 +159,7 @@ class GroupedInsetCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? margin;
   final EdgeInsetsGeometry? padding;
-  /// Schedule cards use a slightly tighter float than project shells.
+  /// Kept for call-site compat. Elevation is one shared float-shadow family.
   final bool tight;
 
   @override

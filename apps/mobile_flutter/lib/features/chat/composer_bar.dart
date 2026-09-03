@@ -145,7 +145,6 @@ class ComposerBar extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(OcOptical.composerRadius),
-                border: Border.all(color: context.oc.mobileBorder),
                 boxShadow: OcElevation.composer(context),
               ),
               child: Padding(

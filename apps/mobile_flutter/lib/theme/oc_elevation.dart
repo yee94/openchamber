@@ -18,17 +18,12 @@ class OcElevation {
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
     if (tokens.isDark) return const [];
-    if (tight) {
-      return const [
-        BoxShadow(color: Color(0x07000000), blurRadius: 4),
-        BoxShadow(color: Color(0x09000000), blurRadius: 14),
-        BoxShadow(color: Color(0x0A000000), blurRadius: 22, spreadRadius: -8, offset: Offset(0, 4)),
-      ];
-    }
+    // One `--oc-mobile-float-shadow` family. `tight` is kept for callers but
+    // no longer changes elevation — uneven card/dock lift was the defect.
     return const [
-      BoxShadow(color: Color(0x07000000), blurRadius: 5),
-      BoxShadow(color: Color(0x09000000), blurRadius: 16),
-      BoxShadow(color: Color(0x0B000000), blurRadius: 28, spreadRadius: -8, offset: Offset(0, 6)),
+      BoxShadow(color: Color(0x08000000), blurRadius: 4),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 14),
+      BoxShadow(color: Color(0x0C000000), blurRadius: 24, spreadRadius: -6, offset: Offset(0, 8)),
     ];
   }
 

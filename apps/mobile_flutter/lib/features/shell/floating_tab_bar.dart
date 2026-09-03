@@ -127,6 +127,14 @@ class _TabSlot extends StatelessWidget {
                       t,
                     ),
                     borderRadius: BorderRadius.circular(OcOptical.dockIconPillRadius),
+                    boxShadow: t <= 0
+                        ? const []
+                        : [
+                            BoxShadow(
+                              color: tokens.primary.withValues(alpha: OcOptical.dockIconGlowAlpha * t),
+                              blurRadius: OcOptical.dockIconGlowBlur,
+                            ),
+                          ],
                   ),
                   child: SizedBox(
                     width: OcOptical.dockIconPillWidth,
