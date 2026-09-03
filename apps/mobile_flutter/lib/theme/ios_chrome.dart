@@ -741,8 +741,9 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                             color: tokens.foreground,
                           ),
                         ),
-                        if (subtitle != null)
+                        if (subtitle != null && subtitle!.trim().isNotEmpty)
                           Text(
+                            key: const Key('chat-header-subtitle'),
                             subtitle!,
                             textAlign: TextAlign.center,
                             maxLines: 1,

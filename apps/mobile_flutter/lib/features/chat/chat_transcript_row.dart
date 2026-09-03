@@ -52,11 +52,6 @@ class ChatTranscriptRow extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: Color.lerp(context.oc.card, context.oc.primary, 0.10),
                           borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: context.oc.mobileBorder, width: 0.5),
-                          boxShadow: [
-                            ...OcElevation.card(context),
-                            ...OcElevation.highlight(context),
-                          ],
                         ),
                         child: ChatTranscriptBody(
                           message: message,

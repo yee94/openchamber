@@ -298,13 +298,9 @@ class _FileChangeCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: context.oc.floatSurface,
+        color: context.oc.muted.withValues(alpha: 0.20),
         borderRadius: BorderRadius.circular(OcTokens.radius),
-        border: Border.all(color: context.oc.mobileBorder, width: 0.5),
-        boxShadow: [
-          ...OcElevation.grouped(context),
-          ...OcElevation.highlight(context),
-        ],
+        border: Border.all(color: context.oc.foreground.withValues(alpha: 0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -277,7 +277,8 @@ void main() {
     expect(find.text('Grok 4.6'), findsWidgets);
     expect(find.byKey(const Key('chat-role-badge')), findsWidgets);
     expect(find.text('Orchestrator'), findsWidgets);
-    expect(find.byKey(const Key('chat-header-subtitle')), findsNothing);
+    expect(find.byKey(const Key('chat-header-subtitle')), findsOneWidget);
+    expect(find.textContaining('openchamber · main'), findsWidgets);
     expect(find.byKey(const Key('chat-agent-count')), findsOneWidget);
     expect(find.byKey(const Key('chat-action-copy')), findsWidgets);
     expect(find.byKey(const Key('chat-action-share')), findsWidgets);
