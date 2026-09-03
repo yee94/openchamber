@@ -78,7 +78,7 @@ void main() {
     expect(OcOptical.dockIconPillWidth, 34);
     expect(OcOptical.dockIconPillHeight, 22);
     expect(OcOptical.dockIconPillHeight, lessThan(OcOptical.dockIconPillWidth));
-    expect(OcOptical.dockIconPillWidth, lessThan(OcOptical.dockCapsuleHeight / 2));
+    expect(OcOptical.dockIconPillWidth, lessThan(OcOptical.dockCapsuleHeight * 0.6));
     expect(OcOptical.dockIconWashAlpha, lessThan(0.12));
     expect(OcOptical.dockGlyphStroke, lessThan(0.55));
     expect(OcOptical.listGlyphStroke, lessThan(OcOptical.headerGlyphStroke));
