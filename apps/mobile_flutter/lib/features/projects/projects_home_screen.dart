@@ -208,41 +208,41 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
   Widget _projectSurface(BuildContext context, ProjectHomeGroup group) {
     final expanded = !_collapsed.contains(group.id);
     final mains = _mainSessions(group);
-    return MobileFloatingSurface(
-      key: Key('home-project-${group.id}'),
-      child: Column(
-        key: Key('home-project-stack-${group.id}'),
-        children: [
-          MobileProjectCard(
-            name: group.name,
-            count: group.sessionCount,
-            activity: formatRelativeTime(group.latestUpdated),
-            pathHint: group.pathHint,
-            expanded: expanded,
-            highlightQuery: _query,
-            onToggle: () => setState(() {
-              if (_collapsed.contains(group.id)) {
-                _collapsed.remove(group.id);
-              } else {
-                _collapsed.add(group.id);
-              }
-            }),
-          ),
-          if (expanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 2, 12, 14),
-              child: Column(
-                children: [
-                  if (mains.isNotEmpty) _insetGroup(children: _sessionSlice(context, group.id, mains, true)),
-                  for (var i = 0; i < group.worktrees.length; i += 1) ...[
-                    if (mains.isNotEmpty || i > 0) const SizedBox(height: 10),
-                    _worktreeGroup(context, group.id, group.worktrees[i]),
-                  ],
-                ],
+    // Official main sessions stay under the project header. Linked worktrees
+    // are independent floating cards so page cream shows between surfaces.
+    return Column(
+      key: Key('home-project-stack-${group.id}'),
+      children: [
+        MobileFloatingSurface(
+          key: Key('home-project-${group.id}'),
+          child: Column(
+            children: [
+              MobileProjectCard(
+                name: group.name,
+                count: group.sessionCount,
+                activity: formatRelativeTime(group.latestUpdated),
+                pathHint: group.pathHint,
+                expanded: expanded,
+                highlightQuery: _query,
+                onToggle: () => setState(() {
+                  if (_collapsed.contains(group.id)) {
+                    _collapsed.remove(group.id);
+                  } else {
+                    _collapsed.add(group.id);
+                  }
+                }),
               ),
-            ),
-        ],
-      ),
+              if (expanded && mains.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 2, 12, 14),
+                  child: _insetGroup(children: _sessionSlice(context, group.id, mains, true)),
+                ),
+            ],
+          ),
+        ),
+        if (expanded)
+          for (final tree in group.worktrees) _worktreeCard(context, group.id, tree),
+      ],
     );
   }
 
@@ -250,86 +250,100 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     return MobileLabeledSurfaceGroup(label: label, children: children);
   }
 
-  Widget _worktreeGroup(BuildContext context, String projectId, WorktreeHomeGroup tree) {
+  Widget _worktreeCard(BuildContext context, String projectId, WorktreeHomeGroup tree) {
     final id = '$projectId::${tree.path}';
     final expanded = _isWorktreeExpanded(id);
-    return _insetGroup(
-      label: Pressable(
-        key: Key('home-worktree-$id'),
-        haptic: HapticStrength.light,
-        onPressed: () => setState(() {
-          final next = !_isWorktreeExpanded(id);
-          _worktreeToggled.add(id);
-          if (next) {
-            _expandedWorktrees.add(id);
-          } else {
-            _expandedWorktrees.remove(id);
-          }
-        }),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: OcOptical.worktreeIconBox,
-                height: OcOptical.worktreeIconBox,
-                child: Center(
-                  child: OcGlyph(
-                    OcGlyphKind.branch,
-                    size: OcOptical.worktreeGlyph,
-                    strokeWidth: OcOptical.listGlyphStroke,
-                    color: context.oc.mutedForeground,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  tree.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: OcOptical.projectTitle,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: OcOptical.projectTitleTracking,
-                    height: OcOptical.projectTitleHeight,
-                    color: context.oc.foreground,
-                  ),
-                ),
-              ),
-              Text(
-                tree.sessionCount == 1
-                    ? t(context, 'projects.sessionsCount.one')
-                    : t(context, 'projects.sessionsCount', {'count': '${tree.sessionCount}'}),
-                style: TextStyle(
-                  fontSize: OcOptical.meta,
+    return MobileFloatingSurface(
+      key: Key('home-worktree-surface-$id'),
+      child: Column(
+        children: [
+          _worktreeLabel(context, id, tree, expanded),
+          if (expanded) ..._sessionSlice(context, id, tree.sessions, true),
+        ],
+      ),
+    );
+  }
+
+  Widget _worktreeLabel(
+    BuildContext context,
+    String id,
+    WorktreeHomeGroup tree,
+    bool expanded,
+  ) {
+    return Pressable(
+      key: Key('home-worktree-$id'),
+      haptic: HapticStrength.light,
+      onPressed: () => setState(() {
+        final next = !_isWorktreeExpanded(id);
+        _worktreeToggled.add(id);
+        if (next) {
+          _expandedWorktrees.add(id);
+        } else {
+          _expandedWorktrees.remove(id);
+        }
+      }),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+        child: Row(
+          children: [
+            SizedBox(
+              width: OcOptical.worktreeIconBox,
+              height: OcOptical.worktreeIconBox,
+              child: Center(
+                child: OcGlyph(
+                  OcGlyphKind.branch,
+                  size: OcOptical.worktreeGlyph,
+                  strokeWidth: OcOptical.listGlyphStroke,
                   color: context.oc.mutedForeground,
                 ),
               ),
-              const SizedBox(width: 6),
-              OcGlyph(
-                expanded ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
-                size: OcOptical.chevron,
-                strokeWidth: OcOptical.listGlyphStroke,
-                color: context.oc.mutedForeground,
-              ),
-              SizedBox(
-                width: 36,
-                height: 36,
-                child: Center(
-                  child: OcGlyph(
-                    OcGlyphKind.ellipsis,
-                    size: OcOptical.sessionMore,
-                    strokeWidth: OcOptical.listGlyphStroke,
-                    color: context.oc.mutedForeground,
-                  ),
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text(
+                tree.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: OcOptical.projectTitle,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: OcOptical.projectTitleTracking,
+                  height: OcOptical.projectTitleHeight,
+                  color: context.oc.foreground,
                 ),
               ),
-            ],
-          ),
+            ),
+            Text(
+              tree.sessionCount == 1
+                  ? t(context, 'projects.sessionsCount.one')
+                  : t(context, 'projects.sessionsCount', {'count': '${tree.sessionCount}'}),
+              style: TextStyle(
+                fontSize: OcOptical.meta,
+                color: context.oc.mutedForeground,
+              ),
+            ),
+            const SizedBox(width: 6),
+            OcGlyph(
+              expanded ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
+              size: OcOptical.chevron,
+              strokeWidth: OcOptical.listGlyphStroke,
+              color: context.oc.mutedForeground,
+            ),
+            SizedBox(
+              width: 36,
+              height: 36,
+              child: Center(
+                child: OcGlyph(
+                  OcGlyphKind.ellipsis,
+                  size: OcOptical.sessionMore,
+                  strokeWidth: OcOptical.listGlyphStroke,
+                  color: context.oc.mutedForeground,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
-      children: expanded ? _sessionSlice(context, id, tree.sessions, true) : const [],
     );
   }
 

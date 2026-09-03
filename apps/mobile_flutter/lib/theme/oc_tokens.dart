@@ -144,8 +144,9 @@ class OcTokens extends ThemeExtension<OcTokens> {
   Color get glassFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
-  /// Soft white plate for circular `mobileGlass` chips.
-  Color get glassChipFill => (isDark ? card : const Color(0xFFFFFFFF)).withValues(alpha: isDark ? 0.66 : 0.82);
+  /// Circular `mobileGlass` chips use the same `--oc-mobile-glass-fill` as
+  /// the dock — not an opaque white disc.
+  Color get glassChipFill => glassFill;
 
   /// Legacy alias. Floating chrome uses [glassFill] + blur instead.
   Color get dockFill => glassFill;
@@ -156,8 +157,10 @@ class OcTokens extends ThemeExtension<OcTokens> {
       foreground.withValues(alpha: isDark ? 0.122 : 0.086);
 
   /// Official selected-tab fill: `bg-interactive-selection/55`.
-  Color get selectedTabWash =>
-      interactiveSelection.withValues(alpha: interactiveSelection.a * 0.55);
+  /// The theme token is already an 8-digit wash (`#16121016`). Applying
+  /// `/55` again makes the pill vanish so a primary glyph reads as a hot
+  /// oval — keep the token alpha so the stadium is a soft gray wash.
+  Color get selectedTabWash => interactiveSelection;
 
   /// `--oc-mobile-header-fade` = surface-background 85%.
   Color get headerFade => background.withValues(alpha: 0.85);

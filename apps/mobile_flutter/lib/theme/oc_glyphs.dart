@@ -57,8 +57,9 @@ class OcGlyph extends StatelessWidget {
   final double size;
   final Color? color;
   final double? strokeWidth;
-  /// Official Remix `weight="medium"` / fill sprites (dock folder-open,
-  /// sparkling, calendar-schedule, settings-3). Stroke stays for chrome.
+  /// Official Remix `weight="medium"` plus a conservative fill so dock
+  /// folder-open / sparkling / calendar-schedule / settings-3 read solid
+  /// without becoming a hot oval. Stroke stays for chrome.
   final bool filled;
 
   @override

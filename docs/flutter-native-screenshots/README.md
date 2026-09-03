@@ -7,7 +7,7 @@ Real `apps/mobile_flutter` widgets, captured with `WidgetTester` + `RenderRepain
 - Regenerator: `apps/mobile_flutter/test/flutter_native_screenshots_test.dart`
 - Fonts: `test/review_fonts.dart` loads Roboto + DroidSansFallback so Latin digits and Chinese copy render. **Chrome icons are painted `OcGlyph` paths** — do not accept empty-square CupertinoIcons tofu.
 - WidgetTester runs as Android. Header / dock / composer use `BackdropFilter` + official `--oc-mobile-glass-fill` (0.68). That is **not** a `UIGlassEffect` clone. Real iOS still keeps live glass on UIKit overlays. Mid-scroll proof: `02-projects-scrolled.png`. This Linux VM cannot run an iOS Simulator. Goldens reserve `viewPadding.top = 47` for the status area; they do **not** paint a fake UIKit status bar.
-- Projects golden expands linked worktree groups after connect so one project surface shows main sessions + worktree insets (official model still starts worktrees collapsed).
+- Projects golden expands linked worktree groups after connect so the main workspace stays under the project card and each linked worktree is its own floating card (official model still starts worktrees collapsed). Cream shows between those surfaces.
 
 No PIN / Face ID. No `iosNativeUi`. Chat is a pushed page.
 
@@ -18,11 +18,11 @@ Recapture after restoring Yee-open type (tracking + line-height) on top of the s
 | File | Screen |
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |
-| `02-projects.png` | Light: catalog sand/orange. Overlay collapsing header. One project surface with main rows + linked worktree insets. Selected dock folder is filled. |
-| `02-projects-scrolled.png` | Same Projects list jumped just past the official 48px collapse. Title is compact; the project surface stays continuously visible under the translucent header (not an emptied mid-scroll). |
+| `02-projects.png` | Light: catalog sand/orange. Overlay collapsing header. Project card + separate floating worktree cards. Dock uses medium filled official sprites; selected pill is a soft selection wash. |
+| `02-projects-scrolled.png` | Same Projects list jumped just past the official 48px collapse. Title is compact; cards stay visible under the translucent header (not an emptied mid-scroll). |
 | `02-projects-dark.png` | Same Projects surface after Appearance → Dark (catalog `OcTokens`, not a photo recolor). |
 | `03-assistant.png` | Contact cards (name / mode / summary). No 「启用助理」 toggle. |
-| `04-scheduled.png` | Light: catalog tokens. Thin-ring schedule status. Soft float cards. Dock 计划 filled calendar grid. |
+| `04-scheduled.png` | Light: catalog tokens. Quiet schedule status discs. Soft float cards. Dock 计划 uses the official calendar-clock sprite. |
 | `04-scheduled-dark.png` | Same Scheduled surface after Appearance → Dark. |
 | `05-settings.png` | Large title, pill search, inset groups. |
 | `06-settings-appearance.png` | Light: language + theme. Latin labels must render. No `iosNativeUi`. |

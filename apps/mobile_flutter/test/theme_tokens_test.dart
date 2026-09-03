@@ -27,6 +27,12 @@ void main() {
     expect(OcTokens.dark.pageBackground, isNot(OcTokens.light.pageBackground));
     expect(OcTokens.light.floatSurface.a, lessThan(1));
     expect(OcTokens.dark.floatSurface, OcTokens.dark.card);
+    expect(OcTokens.light.glassChipFill, OcTokens.light.glassFill);
+    expect(OcTokens.light.selectedTabWash.a, closeTo(0.086, 0.01));
+    expect(
+      (OcTokens.light.selectedTabWash.r - OcTokens.light.primary.r).abs(),
+      greaterThan(0.15),
+    );
   });
 
   test('mobile geometry rides official rem tokens', () {
@@ -134,7 +140,7 @@ void main() {
     expect(OcOptical.chevron, 14);
     expect(OcOptical.footerGlyph, 14);
     expect(OcOptical.scheduleStatus, OcOptical.leadingCircle);
-    expect(OcOptical.scheduleStatusGlyph, OcOptical.leadingGlyph);
+    expect(OcOptical.scheduleStatusGlyph, 16);
     expect(OcOptical.overflow, 16);
     expect(OcOptical.chatChip, 40);
     expect(OcOptical.chatChip, OcOptical.headerDisc);
@@ -162,12 +168,12 @@ void main() {
 
   test('OcElevation is layered in light and empty in dark', () {
     expect(OcElevation.cardFor(OcTokens.light), hasLength(3));
-    expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, greaterThanOrEqualTo(1));
-    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, lessThanOrEqualTo(16));
-    expect(OcElevation.cardFor(OcTokens.light).last.offset.dy, lessThanOrEqualTo(3));
+    expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, greaterThanOrEqualTo(2));
+    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, lessThanOrEqualTo(24));
+    expect(OcElevation.cardFor(OcTokens.light).last.offset.dy, lessThanOrEqualTo(10));
     expect(
       (OcElevation.cardFor(OcTokens.light).last.color.a * 255).round(),
-      lessThan(0x0C),
+      lessThanOrEqualTo(0x1A),
     );
     expect(
       OcElevation.cardFor(OcTokens.light, tight: true),

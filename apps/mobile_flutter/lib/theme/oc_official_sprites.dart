@@ -37,14 +37,17 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
         ],
         circles: [(4, 20, 2)],
       ),
+    // Official dock / scheduled-view role is Remix `calendar-schedule`
+    // (calendar + clock), not the plain grid `calendar`.
     'calendar' => const OcOfficialSprite(
         paths: [
-          'M8 2v4',
+          'M16 14v2.2l1.6 1',
           'M16 2v4',
-          'M3 10h18',
+          'M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5',
+          'M3 10h5',
+          'M8 2v4',
         ],
-        circles: [],
-        rects: [(3, 4, 18, 18, 2)],
+        circles: [(16, 16, 6)],
       ),
     'gear' => const OcOfficialSprite(
         paths: [
@@ -95,8 +98,9 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
 
 /// Paint a 24×24 official sprite into [size]. [strokeWidth] is the viewBox
 /// stroke (1.5 regular / 2 medium), matching `Icon.tsx`.
-/// [filled] uses fill+stroke so selected dock roles read as solid glyphs
-/// (folder / sparkle / calendar) while settings stay a ring.
+/// [filled] paints fill then the official medium stroke so dock roles read
+/// as Remix medium sprites, not thin outlines or solid orange blobs.
+/// Rects stay stroke-only so a calendar body never becomes a filled square.
 void paintOfficialSprite({
   required Canvas canvas,
   required Size size,
@@ -118,17 +122,21 @@ void paintOfficialSprite({
     ..color = color
     ..style = PaintingStyle.fill;
   for (final d in sprite.paths) {
-    canvas.drawPath(parseSvgPath(d), filled ? fill : stroke);
+    final path = parseSvgPath(d);
+    if (filled) canvas.drawPath(path, fill);
+    canvas.drawPath(path, stroke);
   }
   for (final rect in sprite.rects) {
     final rrect = RRect.fromRectAndRadius(
       Rect.fromLTWH(rect.$1, rect.$2, rect.$3, rect.$4),
       Radius.circular(rect.$5),
     );
-    canvas.drawRRect(rrect, filled ? fill : stroke);
+    canvas.drawRRect(rrect, stroke);
   }
   for (final circle in sprite.circles) {
-    canvas.drawCircle(Offset(circle.$1, circle.$2), circle.$3, filled ? fill : stroke);
+    final center = Offset(circle.$1, circle.$2);
+    if (filled) canvas.drawCircle(center, circle.$3, fill);
+    canvas.drawCircle(center, circle.$3, stroke);
   }
   canvas.restore();
 }

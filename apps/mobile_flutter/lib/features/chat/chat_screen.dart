@@ -445,6 +445,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: OcGlyph(
                     OcGlyphKind.ellipsis,
                     size: OcOptical.headerGlyph,
+                    strokeWidth: OcOptical.dockGlyphStroke,
                     color: context.oc.foreground,
                   ),
                 ),

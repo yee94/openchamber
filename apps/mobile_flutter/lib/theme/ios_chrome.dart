@@ -111,11 +111,12 @@ class OcGlassChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
+          border: Border.all(color: context.oc.mobileBorder, width: 0.5),
           boxShadow: OcElevation.control(context),
         ),
         child: ClipOval(
           child: OcFrosted(
-            fill: context.oc.glassChipFill,
+            fill: context.oc.glassFill,
             child: Center(child: child),
           ),
         ),
@@ -414,7 +415,7 @@ class SegmentedPill extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, OcTokens.pageGap),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(trackRadius),
-        boxShadow: OcElevation.card(context),
+        boxShadow: OcElevation.control(context),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(trackRadius),
@@ -444,7 +445,7 @@ class SegmentedPill extends StatelessWidget {
                                 boxShadow: t > 0.01
                                     ? [
                                         BoxShadow(
-                                          color: tokens.foreground.withValues(alpha: 0.08 * t),
+                                          color: tokens.foreground.withValues(alpha: 0.04 * t),
                                           blurRadius: 2,
                                           offset: const Offset(0, 1),
                                         ),
@@ -458,7 +459,7 @@ class SegmentedPill extends StatelessWidget {
                                     OcGlyph(
                                       icons![i],
                                       size: 16,
-                                      strokeWidth: OcOptical.headerGlyphStroke,
+                                      strokeWidth: OcOptical.listGlyphStroke,
                                       color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
                                     ),
                                     const SizedBox(width: 6),
@@ -518,7 +519,7 @@ class FilterChipBar extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(OcTokens.surfaceRadius),
-                boxShadow: OcElevation.card(context),
+                boxShadow: OcElevation.control(context),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(OcTokens.surfaceRadius),
@@ -548,7 +549,7 @@ class FilterChipBar extends StatelessWidget {
                                         boxShadow: t > 0.01
                                             ? [
                                                 BoxShadow(
-                                                  color: tokens.foreground.withValues(alpha: 0.08 * t),
+                                                  color: tokens.foreground.withValues(alpha: 0.04 * t),
                                                   blurRadius: 2,
                                                   offset: const Offset(0, 1),
                                                 ),
@@ -673,7 +674,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                           child: OcGlyph(
                             OcGlyphKind.chevronBack,
                             size: OcOptical.headerGlyph,
-                            strokeWidth: OcOptical.headerGlyphStroke,
+                            strokeWidth: OcOptical.dockGlyphStroke,
                             color: tokens.foreground,
                           ),
                         ),

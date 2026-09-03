@@ -18,14 +18,13 @@ class OcElevation {
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
     if (tokens.isDark) return const [];
-    // Official CSS is 0.04 / 0.05 / 0.10 with a 10px drop. On opaque cream
-    // that far stop reads as a heavy umbra — keep 0-offset contact + halo,
-    // and a short tucked far wash (more negative spread, low alpha, small
-    // offset) so lift is soft contact, not a drop. Same path cards/dock/composer.
+    // Official `--oc-mobile-float-shadow`:
+    // 0 0 2px / 0.04, 0 0 12px / 0.05, 0 10px 24px -6px / 0.10.
+    // Diffuse contact + halo + soft drop — not Material elevation.
     return const [
-      BoxShadow(color: Color(0x05000000), blurRadius: 1),
-      BoxShadow(color: Color(0x06000000), blurRadius: 6),
-      BoxShadow(color: Color(0x07000000), blurRadius: 10, spreadRadius: -8, offset: Offset(0, 1)),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 12),
+      BoxShadow(color: Color(0x1A000000), blurRadius: 24, spreadRadius: -6, offset: Offset(0, 10)),
     ];
   }
 
@@ -44,11 +43,11 @@ class OcElevation {
 
   static List<BoxShadow> controlFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
-    // Search / + discs still need a visible plate, but must not out-lift cards.
+    // Official `--oc-mobile-glass-shadow` without the inset highlight.
     return const [
-      BoxShadow(color: Color(0x06000000), blurRadius: 2),
-      BoxShadow(color: Color(0x08000000), blurRadius: 6),
-      BoxShadow(color: Color(0x09000000), blurRadius: 8, spreadRadius: -6, offset: Offset(0, 1)),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0F000000), blurRadius: 12),
+      BoxShadow(color: Color(0x1F000000), blurRadius: 20, spreadRadius: -6, offset: Offset(0, 8)),
     ];
   }
 

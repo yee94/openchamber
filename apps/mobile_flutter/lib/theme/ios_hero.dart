@@ -138,9 +138,10 @@ class OcOptical {
   /// Official `Button` `mobileIcon` = `size-10` (40). Same disc as header actions.
   static const double chatChip = 40;
 
-  /// Official scheduled status is the project-shell glass disc, not a 28 ring.
+  /// Official scheduled status uses the project-shell glass disc, with a
+  /// quieter `size-4` glyph so the row does not out-weigh the segment track.
   static const double scheduleStatus = leadingCircle;
-  static const double scheduleStatusGlyph = leadingGlyph;
+  static const double scheduleStatusGlyph = 16;
 
   /// Official `FileTypeIcon` mobile size `h-3 w-3` (12px).
   static const double fileTypeSize = 12;

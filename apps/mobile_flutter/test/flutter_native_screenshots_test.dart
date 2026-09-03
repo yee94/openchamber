@@ -88,6 +88,7 @@ void main() {
     expect(find.textContaining('更多'), findsWidgets);
     expect(find.byKey(const Key('home-project-openchamber')), findsOneWidget);
     expect(find.byKey(const Key('home-project-stack-openchamber')), findsOneWidget);
+    expect(find.byKey(const Key('home-worktree-surface-openchamber::/workspace/Code/github/openchamber-wt/feat-opencode2up')), findsOneWidget);
     expect(find.textContaining('feat/opencode2up'), findsNothing);
     expect(find.textContaining('feat-opencode2up'), findsOneWidget);
     expect(find.textContaining('feat-remove-ctx'), findsOneWidget);
