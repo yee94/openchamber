@@ -59,8 +59,8 @@ class OcGlyph extends StatelessWidget {
   final double size;
   final Color? color;
   final double? strokeWidth;
-  /// Dock [filled] is official filled-medium 23px sprites: folder /
-  /// sparkles / calendar-grid bodies, slim holed gear.
+  /// Dock [filled] is official filled-medium: folder / sparkles stay
+  /// official medium stroke; calendar is the grid; gear is a holed cog.
   final bool filled;
 
   @override
@@ -97,6 +97,22 @@ class _OcGlyphPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final official = officialSpriteFor(kind.name);
+    // Official filled-medium: folder-open / sparkles stay stroke
+    // silhouettes (filling them is a well/blob). Calendar uses the
+    // official grid (frame + header + dots).
+    if ((kind == OcGlyphKind.folder || kind == OcGlyphKind.sparkles) &&
+        filled &&
+        official != null) {
+      paintOfficialSprite(
+        canvas: canvas,
+        size: size,
+        sprite: official,
+        color: color,
+        strokeWidth: strokeWidth,
+        filled: false,
+      );
+      return;
+    }
     if (official != null) {
       paintOfficialSprite(
         canvas: canvas,
