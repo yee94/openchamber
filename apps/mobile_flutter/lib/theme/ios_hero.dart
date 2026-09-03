@@ -45,7 +45,7 @@ class OcOptical {
   static const double sessionTitleSubtitleGap = 2;
   /// Fraction of the CSS line-height moved into strut `leading` so CJK
   /// glyphs do not fill the 16/12 boxes. Total box stays official.
-  static const double sessionLineLeading = 0.34;
+  static const double sessionLineLeading = 0.345;
   /// `.oc-mobile-session-status` 0.75rem; `.oc-mobile-session-row-main` gap 0.5rem.
   static const double sessionStatus = 12;
   static const double sessionRowMainGap = 8;
@@ -134,8 +134,8 @@ class OcOptical {
   static const double addButton = 40;
   static const double headerDisc = 40;
   /// Official hit is 40 (`mobileIcon`). Painted plate is 36. Search is
-  /// surface-elevated + glass-shadow near-pair so the disc lifts off
-  /// cream. No disc blur, no 8px umbra, no primary + glow.
+  /// surface-elevated + official glass-shadow (near-pair + umbra). No
+  /// disc BackdropFilter, no primary + glow.
   static const double headerDiscVisual = 36;
   static const double headerGlyph = 20;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
@@ -177,12 +177,13 @@ class OcOptical {
   /// 23px sprite, not a 21px stand-in.
   static const double dockGlyphVisual = 23;
   /// Official dock `Icon weight="medium"` (`ICON_STROKE_WIDTH_MEDIUM` = 2).
-  /// Mass comes from compact filled bodies, not a stroke nudge past 2.
+  /// Flutter round-cap bloom at dpr 3; paint 1.75 so 23px stays delicate
+  /// medium — not filled blobs, not hairlines.
   static const double dockGlyphStroke = 2;
-  static const double dockGlyphStrokeVisual = 2;
-  /// Filled-medium folder/star/gear (compact, not heavy blocks). Calendar
-  /// is grid + thin header. Gear stays holed. Not hairlines.
-  static const bool dockGlyphFillBodies = true;
+  static const double dockGlyphStrokeVisual = 1.75;
+  /// Official tab icons are stroke medium. Calendar stays the grid
+  /// sprite; gear stays holed. Not calendar-clock.
+  static const bool dockGlyphFillBodies = false;
   static const bool dockSelectedFullSlot = true;
   static const double dockIconWashAlpha = 0.55;
   static const double dockIconGlowAlpha = 0.0;

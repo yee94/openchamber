@@ -133,8 +133,8 @@ class _TabSlot extends StatelessWidget {
                   size: OcOptical.dockGlyphVisual,
                   color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
                   strokeWidth: OcOptical.dockGlyphStrokeVisual,
-                  // Compact filled-medium. Calendar grid + thin header;
-                  // holed gear. Not hairlines, not heavy blocks.
+                  // Official 23px stroke-medium. Calendar grid + holed
+                  // gear. Not filled blobs, not hairlines.
                   filled: OcOptical.dockGlyphFillBodies,
                 ),
                 const SizedBox(height: OcOptical.dockLabelGap),
@@ -155,14 +155,16 @@ class _TabSlot extends StatelessWidget {
             return SizedBox(
               height: OcOptical.dockTabHeight,
               width: double.infinity,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: wash,
-                  borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
-                ),
-                // 55% mix on the already-frosted dock. A second OcFrosted
-                // here is a solid cream capsule.
-                child: column,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
+                // Official 55% selection frost over the cell. Fill is
+                // the mix only — no extra cream/orange paint slab.
+                child: t <= 0
+                    ? column
+                    : OcFrosted(
+                        fill: wash,
+                        child: column,
+                      ),
               ),
             );
           },
