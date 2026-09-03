@@ -147,11 +147,11 @@ class OcTokens extends ThemeExtension<OcTokens> {
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
   /// Circular `mobileGlass` chips. Official fill is 0.68 + live blur.
-  /// 0.82 is a coin on cream frost; 0.34 is a wash that vanishes.
-  /// 0.48 + [OcElevation.control] near-pair is a readable elevated chip.
-  /// 40 hit / 36 visual. No disc blur / 8px umbra / + glow.
+  /// Pair with [OcFrosted] on the 36 disc — opaque 0.48–0.82 paint is a
+  /// cream/white coin. 0.58 under official 0.68 keeps a white glass
+  /// plate that frost can still read through. 40 hit / 36 visual.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.28 : 0.48);
+      .withValues(alpha: isDark ? 0.42 : 0.58);
 
   /// Official `--oc-mobile-glass-highlight` is white / 0.60. Quiet
   /// inset — lighter than a coin rim.

@@ -155,13 +155,14 @@ class _TabSlot extends StatelessWidget {
             return SizedBox(
               height: OcOptical.dockTabHeight,
               width: double.infinity,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
-                // 55% mix over WidgetTester frost — not a flat cream slab
-                // and not a Flutter UIKit glass clone.
-                child: t > 0
-                    ? OcFrosted(fill: wash, child: column)
-                    : column,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: wash,
+                  borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
+                ),
+                // 55% mix as a translucent tint on the already-frosted
+                // dock. A second OcFrosted here composites to a cream slab.
+                child: column,
               ),
             );
           },

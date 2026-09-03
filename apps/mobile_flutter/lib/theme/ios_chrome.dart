@@ -113,15 +113,19 @@ class OcGlassChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: context.oc.glassChipFill,
-          // Official glass near-pair + quiet inset. No disc blur,
-          // no 8px umbra, no + glow.
+          // Shadows live outside the clip. Fill is WidgetTester frost,
+          // not cream paint and not a 0.82 coin. No 8px umbra / + glow.
           boxShadow: [
             ...OcElevation.control(context),
             ...OcElevation.glassHighlight(context),
           ],
         ),
-        child: Center(child: child),
+        child: ClipOval(
+          child: OcFrosted(
+            fill: context.oc.glassChipFill,
+            child: Center(child: child),
+          ),
+        ),
       ),
     );
   }

@@ -157,8 +157,8 @@ class _OcGlyphPainter extends CustomPainter {
       case OcGlyphKind.sparkles:
         // Remix `sparkling`: one 4-point star + small plus + small circle.
         if (filled) {
-          _fourPointStar(canvas, Offset(w * 0.46, h * 0.46), w * 0.34, stroke);
-          canvas.drawCircle(Offset(w * 0.18, h * 0.84), w * 0.06, fill);
+          _fourPointStar(canvas, Offset(w * 0.46, h * 0.46), w * 0.36, fill);
+          canvas.drawCircle(Offset(w * 0.18, h * 0.84), w * 0.07, fill);
           canvas.drawLine(Offset(w * 0.82, h * 0.08), Offset(w * 0.82, h * 0.30), stroke);
           canvas.drawLine(Offset(w * 0.71, h * 0.19), Offset(w * 0.93, h * 0.19), stroke);
         } else {
@@ -459,12 +459,6 @@ class _OcGlyphPainter extends CustomPainter {
     final fill = Paint()
       ..color = color
       ..style = PaintingStyle.fill;
-    final outline = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
     final back = Path()
       ..moveTo(w * 0.14, h * 0.26)
       ..lineTo(w * 0.14, h * 0.66)
@@ -481,9 +475,8 @@ class _OcGlyphPainter extends CustomPainter {
       ..lineTo(w * 0.78, h * 0.80)
       ..lineTo(w * 0.16, h * 0.80)
       ..close();
-    canvas.drawPath(back, outline);
-    canvas.drawPath(flap, outline);
-    canvas.drawPath(flap, fill..color = color.withValues(alpha: color.a * 0.35));
+    canvas.drawPath(back, fill);
+    canvas.drawPath(flap, fill);
   }
 
   void _gear(Canvas canvas, Size size, Paint paint, bool filled) {
@@ -503,17 +496,26 @@ class _OcGlyphPainter extends CustomPainter {
       Radius.circular(w * 0.03),
     );
     if (filled) {
-      // Delicate medium: stroked annulus + teeth, hollow hub. A filled
-      // donut reads as a heavy blob at 23px.
-      canvas.drawCircle(c, w * 0.26, stroke);
-      canvas.drawCircle(c, w * 0.13, stroke);
+      final fill = Paint()
+        ..color = paint.color
+        ..style = PaintingStyle.fill;
+      canvas.saveLayer(Rect.fromLTWH(0, 0, w, h), Paint());
+      canvas.drawCircle(c, w * 0.27, fill);
       for (var i = 0; i < 6; i += 1) {
         canvas.save();
         canvas.translate(c.dx, c.dy);
         canvas.rotate(i * math.pi / 3);
-        canvas.drawRRect(tooth, stroke);
+        canvas.drawRRect(tooth, fill);
         canvas.restore();
       }
+      canvas.drawCircle(
+        c,
+        w * 0.12,
+        Paint()
+          ..blendMode = BlendMode.dstOut
+          ..style = PaintingStyle.fill,
+      );
+      canvas.restore();
       return;
     }
     canvas.drawCircle(c, w * 0.26, stroke);
