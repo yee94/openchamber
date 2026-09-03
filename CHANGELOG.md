@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.18.7-beta.3] - 2026-09-03
+
+把当前 `main`（至 `relay/v1.19.3-beta.12`）合入 1.18 TanStack 线。**聊天列表默认仍是 TanStack Virtual**（`@tanstack/react-virtual` 3.14.10 / `@tanstack/virtual-core` 3.17.8 + `calculateRange` clamp patch）。Main 的 LegendList / TimelineList 仅显式 opt-in（`localStorage.oc:legend-timeline=1`），不是默认引擎。本版本从该分支打 `v*` tag，不合入 `main`。
+
+### 聊天
+
+- **TanStack 仍是运行时默认列表：** 合并 main 后 `legendTimelineEnabled` 默认为 false；未设置或 `0` 走 TanStack，只有 `1` 才启用 LegendList。
+- **保留 1.18 单所有者物理：** 历史与流式回合共用一个 virtualizer；`useChatAutoFollow` 在 TanStack 路径不写 `scrollTop`。
+
+### 产品（来自当前 main）
+
+- 合入 1.19 线已发布的产品改动（composer 按最近一次执行恢复模型、手机按压/圆角、定时任务、Relay push、iOS Live Activity / native composer 源码等）。列表默认不切换到 LegendList。
+
 ## [1.18.7-beta.2] - 2026-08-31
 
 从 1.19.0-beta.1..beta.36 回移植**与时间线引擎 / iOS 原生壳无关**的产品修复到 1.18 TanStack 线。**不含 LegendList / TimelineList，不含 iPhone 原生 composer / Live Activity / liquid-glass dock。** 聊天列表仍是 1.18.7-beta.1 的单所有者 TanStack Virtual。
