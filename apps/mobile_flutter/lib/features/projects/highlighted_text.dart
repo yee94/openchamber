@@ -60,9 +60,11 @@ StrutStyle? ocCssLineBox(TextStyle? style) {
   if (style?.fontSize == null || style?.height == null) return null;
   final box = style!.height!;
   const lead = OcOptical.sessionLineLeading;
+  // Keep height + leading == the CSS box. Flooring at 1.0 ate the
+  // subtitle's air and grew the 12px strut past official.
   return StrutStyle(
     fontSize: style.fontSize,
-    height: (box - lead).clamp(1.0, box),
+    height: (box - lead).clamp(0.5, box),
     leading: lead,
     forceStrutHeight: true,
     leadingDistribution: TextLeadingDistribution.even,

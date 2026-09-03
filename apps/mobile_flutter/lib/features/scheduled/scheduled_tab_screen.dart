@@ -124,7 +124,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                 trailing: CircularChromeButton(
                   key: const Key('scheduled-add'),
                   glyph: OcGlyphKind.plus,
-                  ink: true,
+                  // Official scheduled add is mobileGlass, not an ink disc.
                   size: OcTokens.formControlHeight,
                   tooltip: t(context, 'scheduled.add'),
                   onPressed: () {},

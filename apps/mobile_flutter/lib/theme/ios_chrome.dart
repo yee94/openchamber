@@ -114,8 +114,10 @@ class OcGlassChip extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           // Official `mobileGlass`: surface-elevated + glass-shadow
-          // (near-pair + umbra). No disc BackdropFilter (samples cream).
-          // No primary + glow. 40 hit / 36 visual.
+          // (near-pair + umbra). Umbra is what WidgetTester shows as
+          // lift — near-pair alone reads as a cream plate. No disc
+          // BackdropFilter (samples cream). No primary + glow.
+          // 40 hit / 36 visual.
           color: context.oc.surfaceElevated,
           boxShadow: [
             ...OcElevation.control(context),

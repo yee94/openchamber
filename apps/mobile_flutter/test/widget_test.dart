@@ -84,6 +84,9 @@ void main() {
     expect(find.byKey(const Key('dock-selected-scheduled')), findsOneWidget);
     expect(find.byKey(const Key('dock-selected-projects')), findsNothing);
     expect(find.byKey(const Key('tab-projects')), findsOneWidget);
+    final add = tester.widget<CircularChromeButton>(find.byKey(const Key('scheduled-add')));
+    expect(add.ink, isFalse);
+    expect(add.filled, isFalse);
   });
 
   testWidgets('session search matches titles and hides non-matches', (tester) async {

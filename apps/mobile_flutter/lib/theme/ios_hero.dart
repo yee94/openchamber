@@ -44,8 +44,10 @@ class OcOptical {
   /// CJK face is Regular-only, so paint Regular / Medium — do not faux-bold.
   static const double sessionTitleSubtitleGap = 2;
   /// Fraction of the CSS line-height moved into strut `leading` so CJK
-  /// glyphs do not fill the 16/12 boxes. Total box stays official.
-  static const double sessionLineLeading = 0.345;
+  /// glyphs do not fill the 16/12 boxes. Total box stays official —
+  /// [ocCssLineBox] must not floor `height` at 1.0 or leading grows the
+  /// row instead of opening air inside it.
+  static const double sessionLineLeading = 0.36;
   /// `.oc-mobile-session-status` 0.75rem; `.oc-mobile-session-row-main` gap 0.5rem.
   static const double sessionStatus = 12;
   static const double sessionRowMainGap = 8;
@@ -177,13 +179,13 @@ class OcOptical {
   /// 23px sprite, not a 21px stand-in.
   static const double dockGlyphVisual = 23;
   /// Official dock `Icon weight="medium"` (`ICON_STROKE_WIDTH_MEDIUM` = 2).
-  /// Flutter round-cap bloom at dpr 3; paint 1.75 so 23px stays delicate
-  /// medium — not filled blobs, not hairlines.
+  /// Flutter round-cap bloom at dpr 3; paint 1.75 on stroke frames so
+  /// filled-medium 23px stays delicate — not compact bricks, not hairlines.
   static const double dockGlyphStroke = 2;
   static const double dockGlyphStrokeVisual = 1.75;
-  /// Official tab icons are stroke medium. Calendar stays the grid
-  /// sprite; gear stays holed. Not calendar-clock.
-  static const bool dockGlyphFillBodies = false;
+  /// Filled-medium dock bodies (slim folder well, holed gear, calendar
+  /// grid). Not stroke-only outlines and not 90271 solid bricks.
+  static const bool dockGlyphFillBodies = true;
   static const bool dockSelectedFullSlot = true;
   static const double dockIconWashAlpha = 0.55;
   static const double dockIconGlowAlpha = 0.0;
