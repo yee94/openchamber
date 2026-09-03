@@ -192,9 +192,11 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     );
   }
 
-  bool _isWorktreeExpanded(String id, int count) {
+  bool _isWorktreeExpanded(String id, WorktreeHomeGroup tree) {
+    if (_query.trim().isNotEmpty) return true;
+    if (tree.sessions.any((row) => row.kind != HomeSessionKind.catalog)) return true;
     if (_worktreeToggled.contains(id)) return _expandedWorktrees.contains(id);
-    return count >= 3;
+    return tree.sessionCount >= 3;
   }
 
   /// Main-workspace rows only. Worktree sessions stay in their nested groups.
@@ -249,7 +251,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
 
   Widget _worktreeSection(BuildContext context, String projectId, WorktreeHomeGroup tree) {
     final id = '$projectId::${tree.name}';
-    final expanded = _isWorktreeExpanded(id, tree.sessionCount);
+    final expanded = _isWorktreeExpanded(id, tree);
     final activity = formatRelativeTime(
       tree.sessions.fold<num>(0, (latest, row) => row.updated > latest ? row.updated : latest),
     );
@@ -265,7 +267,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
           expanded: expanded,
           compact: true,
           onToggle: () => setState(() {
-            final next = !_isWorktreeExpanded(id, tree.sessionCount);
+            final next = !_isWorktreeExpanded(id, tree);
             _worktreeToggled.add(id);
             if (next) {
               _expandedWorktrees.add(id);
@@ -274,7 +276,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
             }
           }),
         ),
-        if (expanded) ..._sessionSlice(context, id, tree.sessions, false),
+        if (expanded) ..._sessionSlice(context, id, tree.sessions, true),
       ],
     );
   }
