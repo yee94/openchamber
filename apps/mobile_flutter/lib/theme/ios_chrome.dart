@@ -35,7 +35,7 @@ class LargeTitleHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final onSurface = Theme.of(context).colorScheme.onSurface;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 8, OcChrome.pageGutter, 8),
+      padding: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 4, OcChrome.pageGutter, 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -144,12 +144,19 @@ class GroupedInsetCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: margin ?? const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 10),
+      margin: margin ?? const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 8),
       padding: padding,
       decoration: BoxDecoration(
         color: context.oc.surfaceElevated,
         borderRadius: BorderRadius.circular(OcChrome.cardRadius),
         border: Border.all(color: context.oc.mobileBorder),
+        boxShadow: [
+          BoxShadow(
+            color: context.oc.surfaceForeground.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: child,
@@ -456,16 +463,25 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+        padding: const EdgeInsets.fromLTRB(8, 2, 8, 6),
         child: Row(
           children: [
-            CircularChromeButton(
-              key: leadingKey,
-              glyph: OcGlyphKind.chevronBack,
-              onPressed: () => Navigator.of(context).maybePop(),
-              tooltip: t(context, 'chat.back'),
+            Tooltip(
+              message: t(context, 'chat.back'),
+              child: InkWell(
+                key: leadingKey,
+                customBorder: const CircleBorder(),
+                onTap: () => Navigator.of(context).maybePop(),
+                child: SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: Center(
+                    child: OcGlyph(OcGlyphKind.chevronBack, size: 20, color: context.oc.foreground),
+                  ),
+                ),
+              ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
             Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -489,21 +505,18 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
             if (busy)
               const Padding(
                 key: Key('chat-busy'),
                 padding: EdgeInsets.only(right: 8),
                 child: SizedBox(
-                  width: OcChrome.headerButtonSize,
-                  height: OcChrome.headerButtonSize,
-                  child: Padding(
-                    padding: EdgeInsets.all(10),
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
-            if (trailing != null) trailing! else const SizedBox(width: OcChrome.headerButtonSize),
+            if (trailing != null) trailing! else const SizedBox(width: 32),
           ],
         ),
     );

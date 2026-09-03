@@ -32,6 +32,7 @@ enum OcGlyphKind {
   thumbDown,
   speaker,
   people,
+  robot,
   bolt,
   hourglass,
   layers,
@@ -339,6 +340,19 @@ class _OcGlyphPainter extends CustomPainter {
         canvas.drawArc(Rect.fromLTWH(w * 0.12, h * 0.30, w * 0.40, h * 0.40), 1.2, 4.0, false, stroke);
         canvas.drawArc(Rect.fromLTWH(w * 0.48, h * 0.30, w * 0.40, h * 0.40), 4.3, 4.0, false, stroke);
         canvas.drawLine(Offset(w * 0.38, h * 0.50), Offset(w * 0.62, h * 0.50), stroke);
+      case OcGlyphKind.robot:
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.18, h * 0.32, w * 0.64, h * 0.50),
+            Radius.circular(w * 0.10),
+          ),
+          stroke,
+        );
+        canvas.drawLine(Offset(w * 0.50, h * 0.14), Offset(w * 0.50, h * 0.32), stroke);
+        canvas.drawCircle(Offset(w * 0.50, h * 0.12), w * 0.05, fill);
+        canvas.drawCircle(Offset(w * 0.36, h * 0.52), w * 0.06, fill);
+        canvas.drawCircle(Offset(w * 0.64, h * 0.52), w * 0.06, fill);
+        canvas.drawLine(Offset(w * 0.36, h * 0.68), Offset(w * 0.64, h * 0.68), stroke);
     }
   }
 

@@ -563,8 +563,7 @@ MemoryOpenChamberTransport _seededTransport() {
             'state': {
               'status': 'completed',
               'input': {'path': 'DOCUMENTATION.md'},
-              'output':
-                  '--- a/DOCUMENTATION.md\n+++ b/DOCUMENTATION.md\n@@\n-old\n+new line 1\n+new line 2\n',
+              'output': _reviewPatch('DOCUMENTATION.md', added: 70, removed: 15),
             },
           },
           {
@@ -574,8 +573,7 @@ MemoryOpenChamberTransport _seededTransport() {
             'state': {
               'status': 'completed',
               'input': {'path': 'ToolPart.tsx'},
-              'output':
-                  '--- a/ToolPart.tsx\n+++ b/ToolPart.tsx\n@@\n-a\n-b\n+c\n+d\n+e\n',
+              'output': _reviewPatch('ToolPart.tsx', added: 42, removed: 18),
             },
           },
           {
@@ -585,8 +583,7 @@ MemoryOpenChamberTransport _seededTransport() {
             'state': {
               'status': 'completed',
               'input': {'path': 'toolDiffUtils.ts'},
-              'output':
-                  '--- a/toolDiffUtils.ts\n+++ b/toolDiffUtils.ts\n@@\n-x\n+y\n',
+              'output': _reviewPatch('toolDiffUtils.ts', added: 21, removed: 6),
             },
           },
           {
@@ -596,7 +593,7 @@ MemoryOpenChamberTransport _seededTransport() {
             'state': {
               'status': 'completed',
               'input': {'path': 'DiffView.tsx'},
-              'output': '--- a/DiffView.tsx\n+++ b/DiffView.tsx\n@@\n-old\n+new\n+line\n',
+              'output': _reviewPatch('DiffView.tsx', added: 33, removed: 9),
             },
           },
           {
@@ -606,7 +603,7 @@ MemoryOpenChamberTransport _seededTransport() {
             'state': {
               'status': 'completed',
               'input': {'path': 'chat_screen.dart'},
-              'output': '--- a/chat_screen.dart\n+++ b/chat_screen.dart\n@@\n-a\n+b\n',
+              'output': _reviewPatch('chat_screen.dart', added: 12, removed: 4),
             },
           },
           {
@@ -711,34 +708,45 @@ MemoryOpenChamberTransport _seededTransport() {
         enabled: true,
         kind: 'cron',
         time: '0 9 1 * *',
-        nextRunAt: now + const Duration(days: 12).inMilliseconds,
+        nextRunAt: now + const Duration(days: 29, hours: 17).inMilliseconds,
       ),
       _reviewTask(
         id: 'cron-4',
-        name: '周度笔记回顾',
+        name: '季度笔记回顾',
         enabled: true,
         kind: 'cron',
-        time: '0 9 * * 1',
-        nextRunAt: now + const Duration(days: 3).inMilliseconds,
+        time: '0 9 * * 0',
+        nextRunAt: now + const Duration(days: 4, hours: 17).inMilliseconds,
       ),
       _reviewTask(
         id: 'cron-2',
         name: 'Langfuse 前一日小程序 AI 场景分析',
         enabled: false,
         kind: 'daily',
-        time: '08:00',
+        time: '09:00',
       ),
       _reviewTask(
         id: 'cron-5',
         name: 'weekly-architecture-review',
         enabled: false,
         kind: 'weekly',
-        time: '09:00',
+        time: '周六 07:00',
       ),
     ],
     'failedProjectIds': <Object?>[],
   };
   return transport;
+}
+
+String _reviewPatch(String path, {required int added, required int removed}) {
+  final buffer = StringBuffer('--- a/$path\n+++ b/$path\n@@\n');
+  for (var i = 0; i < removed; i += 1) {
+    buffer.writeln('-old$i');
+  }
+  for (var i = 0; i < added; i += 1) {
+    buffer.writeln('+new$i');
+  }
+  return buffer.toString();
 }
 
 Map<String, Object?> _reviewTask({

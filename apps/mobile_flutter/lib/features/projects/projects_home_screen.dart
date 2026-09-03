@@ -275,12 +275,12 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
           InkWell(
             onTap: onToggle,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+              padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
               child: Row(
                 children: [
                   Container(
-                    width: 36,
-                    height: 36,
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
                       color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.10),
                       shape: BoxShape.circle,
@@ -292,7 +292,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        HighlightedText(name, query: _query, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                        HighlightedText(name, query: _query, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                         const SizedBox(height: 2),
                         Text(
                           [
@@ -314,10 +314,9 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                     size: 16,
                     color: context.oc.mutedForeground,
                   ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () {},
-                    icon: OcGlyph(OcGlyphKind.ellipsis, size: 16, color: context.oc.mutedForeground),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2, right: 6),
+                    child: OcGlyph(OcGlyphKind.ellipsis, size: 14, color: context.oc.mutedForeground),
                   ),
                 ],
               ),
@@ -354,7 +353,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         InkWell(
           onTap: () => setState(() => _expandedMore.add(groupId)),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 10, 16, 14),
+            padding: const EdgeInsets.fromLTRB(16, 8, 14, 10),
             child: Row(
               children: [
                 Text(t(context, 'projects.showMore'), style: TextStyle(fontSize: 15, color: context.oc.mutedForeground)),
@@ -375,7 +374,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         _openChat(context, row);
       },
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
+        padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
         child: Row(
           children: [
             Container(
@@ -392,7 +391,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
               child: HighlightedText(
                 row.title,
                 query: _query,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
               ),
             ),
             if (formatRelativeTime(row.updated) != null)
@@ -400,10 +399,9 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                 formatRelativeTime(row.updated)!,
                 style: TextStyle(fontSize: 13, color: context.oc.mutedForeground),
               ),
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              onPressed: () {},
-              icon: OcGlyph(OcGlyphKind.ellipsis, size: 16, color: context.oc.mutedForeground),
+            Padding(
+              padding: const EdgeInsets.only(left: 4, right: 4),
+              child: OcGlyph(OcGlyphKind.ellipsis, size: 14, color: context.oc.mutedForeground),
             ),
           ],
         ),

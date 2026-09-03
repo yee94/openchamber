@@ -352,9 +352,16 @@ class _ChatScreenState extends State<ChatScreen> {
         subtitle: widget.session.subtitle,
         leadingKey: const Key('chat-back'),
         busy: _busy,
-        trailing: CircularChromeButton(
-          glyph: OcGlyphKind.ellipsis,
-          onPressed: () {},
+        trailing: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () {},
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: Center(
+              child: OcGlyph(OcGlyphKind.ellipsis, size: 18, color: Theme.of(context).colorScheme.onSurface),
+            ),
+          ),
         ),
       ),
       body: Column(
@@ -380,12 +387,13 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
+                          UserTurnToolbar(message: message),
                           Container(
-                            margin: const EdgeInsets.only(top: 6),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            margin: const EdgeInsets.only(top: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.16),
-                              borderRadius: BorderRadius.circular(18),
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(16),
                             ),
                             child: ChatTranscriptBody(
                               message: message,
@@ -394,7 +402,6 @@ class _ChatScreenState extends State<ChatScreen> {
                               isSpeaking: _speakingMessageId == message.id,
                             ),
                           ),
-                          UserTurnToolbar(message: message),
                         ],
                       ),
                     ),
