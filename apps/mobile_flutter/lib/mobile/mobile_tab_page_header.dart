@@ -40,10 +40,14 @@ class MobileTabPageHeader extends StatelessWidget {
   static double layoutHeight(double safeAreaTop) => safeAreaTop + topPad + actionSize;
 
   /// In-flow clearance so overlay chrome does not cover the first card at rest.
+  /// A few pixels shorter than the painted header so the first card can peek
+  /// under the transparent title band (not a fade banner).
+  static const double restPeek = 6;
+
   static Widget layoutSlot({required double safeTop}) {
     return SizedBox(
       key: const Key('mobile-tab-page-header-slot'),
-      height: layoutHeight(safeTop),
+      height: layoutHeight(safeTop) - restPeek,
     );
   }
 
