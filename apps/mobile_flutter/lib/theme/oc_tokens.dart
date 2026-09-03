@@ -150,9 +150,9 @@ class OcTokens extends ThemeExtension<OcTokens> {
   /// Official glass-fill is white 0.68 + blur 20. WidgetTester blur of
   /// cream paints a plate; 0.68 without blur is a coin. Quiet white
   /// (no blur) + contact/inset is the glassChip language that still
-  /// reads. `+` stays primary.
+  /// reads without a 0.68 coin. `+` stays primary.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: 0.10);
+      .withValues(alpha: 0.06);
 
   /// Official `--oc-mobile-glass-highlight` is white / 0.60
   /// (dark 0.18). Inset sheen on the elevated plate.
