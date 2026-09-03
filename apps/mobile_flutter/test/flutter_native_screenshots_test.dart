@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openchamber/data/app_controller.dart';
@@ -16,7 +15,10 @@ import 'package:openchamber/features/connect/connect_screen.dart';
 import 'package:openchamber/features/shell/tab_scaffold.dart';
 import 'package:openchamber/features/splash/splash_screen.dart';
 import 'package:openchamber/l10n/app_strings.dart';
+import 'package:openchamber/data/dictation.dart';
 import 'package:openchamber/theme/app_theme.dart';
+import 'package:openchamber/theme/ios_chrome.dart';
+import 'review_fonts.dart';
 
 /// Dedicated capture of the real Flutter widgets for Yee's visual review.
 ///
@@ -30,7 +32,7 @@ void main() {
   const screenshotKey = ValueKey<String>('screenshot-root');
 
   setUpAll(() async {
-    await _loadCjkFont();
+    await loadReviewFonts();
   });
 
   testWidgets('write zh-CN Flutter widget screenshots for visual review', (tester) async {
@@ -45,6 +47,7 @@ void main() {
     final controller = AppController(
       store: MemorySecureStore({localeStorageKey: 'zh-CN'}),
       api: OpenChamberApi(transport: transport),
+      dictation: UnavailableDictation(),
     );
     await controller.bootstrap(skipDelay: true);
     expect(controller.locale.languageCode, 'zh');
@@ -70,8 +73,11 @@ void main() {
     await _pumpFrames(tester);
 
     expect(find.byKey(const Key('unread-dot')), findsOneWidget);
-    expect(find.textContaining('openchamber'), findsWidgets);
+    expect(find.textContaining('openchamber-yee'), findsWidgets);
     expect(find.textContaining('个会话'), findsWidgets);
+    expect(find.textContaining('更多'), findsWidgets);
+    expect(find.textContaining('feat/opencode2up'), findsWidgets);
+    expect(find.textContaining('置顶'), findsNothing);
     expect(find.byKey(const Key('tab-projects')), findsOneWidget);
     await tester.tap(find.byKey(const Key('projects-plus-menu')));
     await _pumpFrames(tester);
@@ -84,6 +90,8 @@ void main() {
     await _pumpUntil(tester, find.byKey(const Key('assistant-item-asst-1')));
     expect(find.byKey(const Key('assistant-item-asst-1')), findsOneWidget);
     expect(find.byKey(const Key('assistant-item-asst-2')), findsOneWidget);
+    expect(find.text('启用助理'), findsNothing);
+    expect(find.textContaining('连续模式'), findsWidgets);
     expect(find.byKey(const Key('tab-assistant')), findsOneWidget);
     await _writePng(tester, screenshotKey, '03-assistant.png');
 
@@ -91,8 +99,10 @@ void main() {
     await _pumpUntil(tester, find.byKey(const Key('scheduled-task-cron-1')));
     expect(find.byKey(const Key('scheduled-task-cron-1')), findsOneWidget);
     expect(find.textContaining('每天'), findsWidgets);
+    expect(find.textContaining('后'), findsWidgets);
     expect(find.text('任务'), findsWidgets);
     expect(find.text('历史记录'), findsWidgets);
+    expect(find.text('已暂停'), findsWidgets);
     await _writePng(tester, screenshotKey, '04-scheduled.png');
 
     await tester.tap(find.byKey(const Key('tab-settings')));
@@ -121,11 +131,16 @@ void main() {
     await _pumpUntil(tester, find.byKey(const Key('reverse-chat-list')));
     expect(find.byKey(const Key('reverse-chat-list')), findsOneWidget);
     expect(find.byKey(const Key('composer-field')), findsOneWidget);
-    await tester.enterText(find.byKey(const Key('composer-field')), '继续改 lib/theme/app_theme.dart');
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('chat-activity-m-asst')));
-    await _pumpFrames(tester);
+    expect(find.text('点击输入'), findsOneWidget);
+    expect(find.byKey(const Key('composer-attach')), findsOneWidget);
+    expect(find.byKey(const Key('composer-send')), findsOneWidget);
+    expect(find.byKey(const Key('composer-dictate')), findsNothing);
+    expect(find.text('Grok 4.6'), findsOneWidget);
+    expect(find.text('Orchestrator'), findsOneWidget);
     expect(find.byKey(const Key('chat-tool-diff-edit-1')), findsOneWidget);
+    expect(find.textContaining('已更改文件'), findsOneWidget);
+    expect(find.textContaining('tok/s'), findsOneWidget);
+    expect(find.textContaining('需要权限'), findsNothing);
     await tester.ensureVisible(find.byKey(const Key('chat-tool-diff-edit-1')));
     await tester.pump();
     await _writePng(tester, screenshotKey, '07-chat.png');
@@ -146,7 +161,7 @@ void main() {
             ],
             theme: _reviewTheme(),
             home: Scaffold(
-              appBar: AppBar(title: const Text('发布说明')),
+              appBar: const PushedNavBar(title: '发布说明'),
               body: ListView(
                 padding: const EdgeInsets.all(16),
                 children: const [
@@ -231,7 +246,7 @@ Future<void> _pumpShell(
 
 ThemeData _reviewTheme() {
   final base = materialTheme(Brightness.light);
-  const fallbacks = <String>['RobotoReal', 'DroidSansFallback'];
+  const fallbacks = <String>['ReviewCjk', 'RobotoReal', 'DroidSansFallback'];
   return ThemeData(
     useMaterial3: true,
     colorScheme: base.colorScheme,
@@ -239,9 +254,9 @@ ThemeData _reviewTheme() {
     appBarTheme: base.appBarTheme,
     navigationBarTheme: base.navigationBarTheme,
     pageTransitionsTheme: base.pageTransitionsTheme,
-    fontFamily: 'DroidSansFallback',
-    textTheme: base.textTheme.apply(fontFamily: 'DroidSansFallback', fontFamilyFallback: fallbacks),
-    primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'DroidSansFallback', fontFamilyFallback: fallbacks),
+    fontFamily: 'ReviewSans',
+    textTheme: base.textTheme.apply(fontFamily: 'ReviewSans', fontFamilyFallback: fallbacks),
+    primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'ReviewSans', fontFamilyFallback: fallbacks),
   );
 }
 
@@ -259,6 +274,7 @@ Future<void> _pumpUntil(WidgetTester tester, Finder finder, {int max = 40}) asyn
 }
 
 MemoryOpenChamberTransport _seededTransport() {
+  final now = DateTime.now().millisecondsSinceEpoch;
   final transport = MemoryOpenChamberTransport(
     sessionIndex: {
       'available': true,
@@ -266,35 +282,71 @@ MemoryOpenChamberTransport _seededTransport() {
       'pinnedSessionIds': ['sess-pinned'],
       'directories': [
         {
-          'directory': '/workspace/openchamber',
+          'directory': '/Users/yee/Code/github/openchamber-yee',
           'sessions': [
             {
               'id': 'sess-pinned',
               'title': '发布说明',
-              'directory': '/workspace/openchamber',
+              'directory': '/Users/yee/Code/github/openchamber-yee',
               'parentID': null,
-              'project': {'name': 'openchamber'},
-              'time': {'updated': 1756900740000, 'pinned': '2026-09-01T00:00:00.000Z'},
-              'branch': 'work/flutter-native',
+              'project': {'name': 'openchamber-yee'},
+              'time': {'updated': now - 60000, 'pinned': '2026-09-01T00:00:00.000Z'},
+              'branch': 'main',
               'unread': true,
             },
             {
               'id': 'sess-busy',
               'title': '修复输入法',
-              'directory': '/workspace/openchamber',
+              'directory': '/Users/yee/Code/github/openchamber-yee',
               'parentID': null,
-              'project': {'name': 'openchamber'},
-              'time': {'updated': 1756899000000},
-              'branch': 'feat/home',
+              'project': {'name': 'openchamber-yee'},
+              'time': {'updated': now - 33 * 60000},
+              'branch': 'main',
             },
             {
               'id': 'sess-catalog',
               'title': '新会话',
-              'directory': '/workspace/openchamber',
+              'directory': '/Users/yee/Code/github/openchamber-yee',
               'parentID': null,
-              'project': {'name': 'openchamber'},
-              'time': {'updated': 1756895400000},
+              'project': {'name': 'openchamber-yee'},
+              'time': {'updated': now - 2 * 3600000},
               'branch': 'main',
+            },
+            {
+              'id': 'sess-diff',
+              'title': '写入类型无法点开查看 diff',
+              'directory': '/Users/yee/Code/github/openchamber-yee',
+              'parentID': null,
+              'project': {'name': 'openchamber-yee'},
+              'time': {'updated': now - 5 * 3600000},
+              'branch': 'main',
+            },
+            {
+              'id': 'sess-extra',
+              'title': '工具 diff 点开看不到的路径',
+              'directory': '/Users/yee/Code/github/openchamber-yee',
+              'parentID': null,
+              'project': {'name': 'openchamber-yee'},
+              'time': {'updated': now - 8 * 3600000},
+              'branch': 'main',
+            },
+            {
+              'id': 'sess-wt-1',
+              'title': 'OpenCode 升级',
+              'directory': '/Users/yee/Code/github/openchamber-yee',
+              'parentID': null,
+              'project': {'name': 'openchamber-yee'},
+              'time': {'updated': now - 12 * 3600000},
+              'branch': 'feat/opencode2up',
+            },
+            {
+              'id': 'sess-wt-2',
+              'title': 'Composer IME',
+              'directory': '/Users/yee/Code/github/openchamber-yee',
+              'parentID': null,
+              'project': {'name': 'openchamber-yee'},
+              'time': {'updated': now - 20 * 3600000},
+              'branch': 'feat/opencode2up',
             },
           ],
         },
@@ -313,35 +365,52 @@ MemoryOpenChamberTransport _seededTransport() {
           'role': 'assistant',
           'model': {'name': 'Grok 4.6'},
           'agent': 'Orchestrator',
-          'time': {'created': 1756899000000, 'completed': 1756900740000},
+          'time': {'created': now - 29 * 60000, 'completed': now - 1000},
           'tokens': {'output': 44000},
         },
         'parts': [
-          {'type': 'text', 'text': '已改 primary，请确认这次 edit。'},
+          {
+            'type': 'text',
+            'text': '已跑: ToolPart / toolDiffUtils / DiffView 相关测试，58 过。',
+          },
           {
             'id': 'edit-1',
             'type': 'tool',
             'tool': 'edit',
             'state': {
               'status': 'completed',
-              'input': {'path': 'lib/theme/app_theme.dart'},
+              'input': {'path': 'DOCUMENTATION.md'},
               'output':
-                  '--- a/lib/theme/app_theme.dart\n+++ b/lib/theme/app_theme.dart\n@@\n-  static const Color primary = Color(0xFF2F6FED);\n+  static const Color primary = Color(0xFF1D4ED8);\n',
+                  '--- a/DOCUMENTATION.md\n+++ b/DOCUMENTATION.md\n@@\n-old\n+new line 1\n+new line 2\n',
+            },
+          },
+          {
+            'id': 'edit-2',
+            'type': 'tool',
+            'tool': 'edit',
+            'state': {
+              'status': 'completed',
+              'input': {'path': 'ToolPart.tsx'},
+              'output':
+                  '--- a/ToolPart.tsx\n+++ b/ToolPart.tsx\n@@\n-a\n-b\n+c\n+d\n+e\n',
+            },
+          },
+          {
+            'id': 'edit-3',
+            'type': 'tool',
+            'tool': 'edit',
+            'state': {
+              'status': 'completed',
+              'input': {'path': 'toolDiffUtils.ts'},
+              'output':
+                  '--- a/toolDiffUtils.ts\n+++ b/toolDiffUtils.ts\n@@\n-x\n+y\n',
             },
           },
         ],
       },
     ],
   );
-  transport.permissions = [
-    {
-      'id': 'perm-1',
-      'sessionID': 'sess-pinned',
-      'permission': 'bash',
-      'patterns': ['git status'],
-      'metadata': {'command': 'git status'},
-    },
-  ];
+  transport.permissions = const [];
   transport.assistants = {
     'revision': 1,
     'enabled': true,
@@ -351,10 +420,11 @@ MemoryOpenChamberTransport _seededTransport() {
         'revision': 1,
         'enabled': true,
         'name': '首页助理',
-        'workspacePath': '/workspace/openchamber',
+        'defaultPrompt': '一段持续的长对话，处理首页和通知。',
+        'workspacePath': '/Users/yee/Code/github/openchamber-yee',
         'providerID': 'anthropic',
         'modelID': 'claude-sonnet-4',
-        'mode': 'chat',
+        'mode': 'continuous',
         'sessionID': 'sess-catalog',
       },
       {
@@ -362,10 +432,11 @@ MemoryOpenChamberTransport _seededTransport() {
         'revision': 1,
         'enabled': true,
         'name': '代码审查',
-        'workspacePath': '/workspace/openchamber',
+        'defaultPrompt': '审查 diff 与测试，不携带无关历史。',
+        'workspacePath': '/Users/yee/Code/github/openchamber-yee',
         'providerID': 'openai',
         'modelID': 'gpt-5',
-        'mode': 'chat',
+        'mode': 'stateless',
         'sessionID': 'sess-busy',
       },
     ],
@@ -378,7 +449,7 @@ MemoryOpenChamberTransport _seededTransport() {
           'id': 'cron-1',
           'name': '夜间审查',
           'enabled': true,
-          'schedule': {'kind': 'daily', 'time': '02:00'},
+          'schedule': {'kind': 'daily', 'time': '23:30'},
           'execution': {
             'prompt': 'Review the diff',
             'providerID': 'anthropic',
@@ -389,7 +460,7 @@ MemoryOpenChamberTransport _seededTransport() {
             'updatedAt': 2,
             'lastStatus': 'success',
             'lastSessionId': 'sess-catalog',
-            'nextRunAt': 1756987200000,
+            'nextRunAt': now + const Duration(hours: 23, minutes: 31).inMilliseconds,
             'lastError': null,
           },
         },
@@ -399,7 +470,7 @@ MemoryOpenChamberTransport _seededTransport() {
         'task': {
           'id': 'cron-2',
           'name': '每周备份',
-          'enabled': true,
+          'enabled': false,
           'schedule': {'kind': 'weekly', 'time': '09:00'},
           'execution': {
             'prompt': 'Backup notes',
@@ -411,7 +482,7 @@ MemoryOpenChamberTransport _seededTransport() {
             'updatedAt': 3,
             'lastStatus': 'idle',
             'lastSessionId': null,
-            'nextRunAt': 1894060800000,
+            'nextRunAt': null,
             'lastError': null,
           },
         },
@@ -420,50 +491,6 @@ MemoryOpenChamberTransport _seededTransport() {
     'failedProjectIds': <Object?>[],
   };
   return transport;
-}
-
-Future<void> _loadCjkFont() async {
-  const cjkCandidates = <String>[
-    '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
-    '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
-    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
-    '/usr/share/fonts/noto-cjk/NotoSansCJKsc-Regular.otf',
-  ];
-  ByteData? cjk;
-  for (final path in cjkCandidates) {
-    final file = File(path);
-    if (!file.existsSync()) continue;
-    final bytes = file.readAsBytesSync();
-    if (bytes.isEmpty) continue;
-    cjk = ByteData.sublistView(Uint8List.fromList(bytes));
-    break;
-  }
-  if (cjk != null) {
-    try {
-      await (FontLoader('DroidSansFallback')..addFont(Future<ByteData>.value(cjk))).load();
-    } catch (_) {}
-  }
-  const robotoPath = '/home/ubuntu/development/flutter/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf';
-  final robotoFile = File(robotoPath);
-  if (robotoFile.existsSync()) {
-    final roboto = ByteData.sublistView(Uint8List.fromList(robotoFile.readAsBytesSync()));
-    try {
-      await (FontLoader('RobotoReal')..addFont(Future<ByteData>.value(roboto))).load();
-    } catch (_) {}
-  }
-  const iconCandidates = <String>[
-    '/home/ubuntu/development/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
-    '/home/ubuntu/development/flutter/bin/cache/dart-sdk/bin/resources/devtools/assets/fonts/MaterialIcons-Regular.otf',
-  ];
-  for (final path in iconCandidates) {
-    final file = File(path);
-    if (!file.existsSync()) continue;
-    final data = ByteData.sublistView(Uint8List.fromList(file.readAsBytesSync()));
-    try {
-      await (FontLoader('MaterialIcons')..addFont(Future<ByteData>.value(data))).load();
-    } catch (_) {}
-    break;
-  }
 }
 
 Future<void> _writePng(WidgetTester tester, Key screenshotKey, String name) async {

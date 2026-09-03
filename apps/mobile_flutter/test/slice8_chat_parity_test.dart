@@ -76,11 +76,9 @@ void main() {
       ],
     );
     await tester.pumpWidget(_wrap(ChatTranscriptBody(message: settled, isLastAssistant: true)));
-    expect(find.text('Processed'), findsOneWidget);
-    expect(find.byKey(const Key('chat-tool-diff-edit-1')), findsNothing);
-    await tester.tap(find.byKey(const Key('chat-activity-m-settled')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('chat-tool-diff-edit-1')), findsOneWidget);
+    expect(find.text('Done.'), findsOneWidget);
+    expect(find.byKey(const Key('chat-activity-m-settled')), findsNothing);
+    expect(find.byKey(const Key('chat-tool-diff-edit-1')), findsWidgets);
 
     final live = ChatMessage(
       id: 'm-live',

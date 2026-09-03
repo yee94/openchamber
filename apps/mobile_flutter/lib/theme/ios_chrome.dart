@@ -1,7 +1,7 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/app_strings.dart';
+import 'oc_glyphs.dart';
 
 /// Official mobile chrome shared by iOS (Cupertino + UIKit overlays) and
 /// Android (same IA, Material 3 surfaces, no fake liquid glass).
@@ -82,13 +82,13 @@ class LargeTitleHeader extends StatelessWidget {
 class CircularChromeButton extends StatelessWidget {
   const CircularChromeButton({
     super.key,
-    required this.icon,
+    required this.glyph,
     required this.onPressed,
     this.filled = false,
     this.tooltip,
   });
 
-  final IconData icon;
+  final OcGlyphKind glyph;
   final VoidCallback onPressed;
   final bool filled;
   final String? tooltip;
@@ -97,7 +97,7 @@ class CircularChromeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
     final child = Material(
-      color: filled ? primary : Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
+      color: filled ? primary : Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
       shape: const CircleBorder(),
       elevation: filled ? 2 : 0,
       shadowColor: filled ? primary.withValues(alpha: 0.28) : Colors.transparent,
@@ -107,7 +107,9 @@ class CircularChromeButton extends StatelessWidget {
         child: SizedBox(
           width: OcChrome.headerButtonSize,
           height: OcChrome.headerButtonSize,
-          child: Icon(icon, size: 20, color: filled ? Colors.white : Theme.of(context).colorScheme.onSurface),
+          child: Center(
+            child: OcGlyph(glyph, size: 18, color: filled ? Colors.white : Theme.of(context).colorScheme.onSurface),
+          ),
         ),
       ),
     );
@@ -224,7 +226,11 @@ class SearchPillField extends StatelessWidget {
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
           hintText: hint,
-          prefixIcon: const Icon(CupertinoIcons.search, size: 18),
+          prefixIcon: const Padding(
+            padding: EdgeInsets.only(left: 10, right: 4),
+            child: OcGlyph(OcGlyphKind.search, size: 16, color: OcChrome.secondary),
+          ),
+          prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 18),
           filled: true,
           fillColor: Theme.of(context).colorScheme.surface,
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -257,7 +263,7 @@ class SegmentedPill extends StatelessWidget {
   });
 
   final List<String> labels;
-  final List<IconData>? icons;
+  final List<OcGlyphKind>? icons;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
@@ -291,7 +297,7 @@ class SegmentedPill extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       if (icons != null) ...[
-                        Icon(
+                        OcGlyph(
                           icons![i],
                           size: 16,
                           color: selectedIndex == i
@@ -429,7 +435,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
           children: [
             CircularChromeButton(
               key: leadingKey,
-              icon: CupertinoIcons.chevron_back,
+              glyph: OcGlyphKind.chevronBack,
               onPressed: () => Navigator.of(context).maybePop(),
               tooltip: t(context, 'chat.back'),
             ),

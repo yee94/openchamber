@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -16,6 +15,7 @@ import '../../native/haptics.dart';
 import '../../native/live_activity_controller.dart';
 import '../../native/media_channel.dart';
 import '../../theme/ios_chrome.dart';
+import '../../theme/oc_glyphs.dart';
 import 'composer_bar.dart';
 import 'composer_occupancy.dart';
 import 'ios_composer_host.dart';
@@ -333,7 +333,7 @@ class _ChatScreenState extends State<ChatScreen> {
         leadingKey: const Key('chat-back'),
         busy: _busy,
         trailing: CircularChromeButton(
-          icon: CupertinoIcons.ellipsis,
+          glyph: OcGlyphKind.ellipsis,
           onPressed: () {},
         ),
       ),
@@ -419,7 +419,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 onSend: _send,
                 onStop: _stop,
                 onAttach: _attach,
-                onDictate: _dictate,
+                onDictate: widget.appController?.dictation is UnavailableDictation ? null : _dictate,
                 onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
               ),
             ),

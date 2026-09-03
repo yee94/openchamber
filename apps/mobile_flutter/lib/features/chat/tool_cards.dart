@@ -7,6 +7,7 @@ import '../../data/skill_tool_grouping.dart';
 import '../../l10n/app_strings.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/ios_chrome.dart';
+import '../../theme/oc_glyphs.dart';
 
 class ChatTranscriptBody extends StatelessWidget {
   const ChatTranscriptBody({
@@ -87,8 +88,14 @@ class ChatTranscriptBody extends StatelessWidget {
     if (diffs.isNotEmpty) {
       out.add(Padding(
         padding: const EdgeInsets.only(top: 8),
-        child: _FileChangeCard(parts: diffs),
+        child: _FileChangeCard(parts: diffs, keyRows: diffs.length > 1),
       ));
+      if (diffs.length == 1) {
+        out.add(Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: ToolPartCard(part: diffs.single),
+        ));
+      }
     }
     if (message.tokensPerSecond != null || message.processedLabel != null || message.completedClock != null) {
       out.add(_MetricsRow(message: message));
@@ -139,7 +146,7 @@ class _AssistantHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.explore_outlined, size: 18, color: OcChrome.secondary),
+              const OcGlyph(OcGlyphKind.sparkles, size: 18, color: OcChrome.secondary),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
@@ -182,9 +189,10 @@ class _AssistantHeader extends StatelessWidget {
 }
 
 class _FileChangeCard extends StatelessWidget {
-  const _FileChangeCard({required this.parts});
+  const _FileChangeCard({required this.parts, this.keyRows = true});
 
   final List<ChatPart> parts;
+  final bool keyRows;
 
   @override
   Widget build(BuildContext context) {
@@ -201,7 +209,7 @@ class _FileChangeCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.insert_drive_file_outlined, size: 16, color: OcChrome.secondary),
+              const OcGlyph(OcGlyphKind.file, size: 16, color: OcChrome.secondary),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -209,12 +217,13 @@ class _FileChangeCard extends StatelessWidget {
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ),
-              const Icon(Icons.chevron_right, size: 16, color: OcChrome.secondary),
+              const OcGlyph(OcGlyphKind.chevronRight, size: 16, color: OcChrome.secondary),
             ],
           ),
           const SizedBox(height: 8),
           for (final part in visible)
             Padding(
+              key: keyRows ? Key('chat-tool-diff-${part.id}') : null,
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
                 children: [
@@ -226,9 +235,21 @@ class _FileChangeCard extends StatelessWidget {
                       style: const TextStyle(fontSize: 13),
                     ),
                   ),
-                  Text(
-                    '+${part.added.length}/-${part.removed.length}',
-                    style: const TextStyle(fontSize: 12, color: OcChrome.secondary),
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '+${part.added.length}',
+                          style: const TextStyle(color: Color(0xFF34C759)),
+                        ),
+                        const TextSpan(text: '/'),
+                        TextSpan(
+                          text: '-${part.removed.length}',
+                          style: const TextStyle(color: Color(0xFFFF3B30)),
+                        ),
+                      ],
+                    ),
+                    style: const TextStyle(fontSize: 12),
                   ),
                 ],
               ),
@@ -281,8 +302,8 @@ bool _isImagePreviewPart(ChatPart part) =>
 
 bool _isActivityPart(ChatPart part) {
   if (_isImagePreviewPart(part)) return false;
-  return part.kind == ChatPartKind.diff ||
-      part.kind == ChatPartKind.fileOp ||
+  if (part.kind == ChatPartKind.diff || part.kind == ChatPartKind.permission) return false;
+  return part.kind == ChatPartKind.fileOp ||
       part.kind == ChatPartKind.task ||
       part.kind == ChatPartKind.tool;
 }

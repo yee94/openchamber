@@ -1,10 +1,10 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
 import '../../data/instance_store.dart';
 import '../../l10n/app_strings.dart';
 import '../../theme/ios_chrome.dart';
+import '../../theme/oc_glyphs.dart';
 
 /// Capacitor connection onboarding — not a local PIN / Face ID lock.
 class ConnectScreen extends StatefulWidget {
@@ -82,7 +82,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
                 onPressed: controller.scanAndConnect,
-                icon: const Icon(CupertinoIcons.qrcode_viewfinder),
+                icon: const OcGlyph(OcGlyphKind.qr, size: 20, color: Colors.white),
                 label: Text(t(context, 'connect.scanQr')),
               ),
             ),
@@ -206,7 +206,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
                 alignment: Alignment.centerLeft,
                 child: CircularChromeButton(
                   key: const Key('connect-cancel-password'),
-                  icon: CupertinoIcons.xmark,
+                  glyph: OcGlyphKind.xmark,
                   tooltip: t(context, 'connect.cancelPassword'),
                   onPressed: controller.cancelPassword,
                 ),
@@ -254,7 +254,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
       trailing: IconButton(
         tooltip: t(context, 'connect.delete'),
         onPressed: () => controller.deleteInstance(instance.id),
-        icon: const Icon(CupertinoIcons.delete),
+        icon: const OcGlyph(OcGlyphKind.xmark, size: 18, color: Color(0xFFFF3B30)),
       ),
     );
   }

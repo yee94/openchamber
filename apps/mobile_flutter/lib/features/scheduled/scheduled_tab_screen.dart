@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
@@ -6,6 +5,7 @@ import '../../data/assistant_scheduled.dart';
 import '../../data/relative_time.dart';
 import '../../l10n/app_strings.dart';
 import '../../theme/ios_chrome.dart';
+import '../../theme/oc_glyphs.dart';
 import '../chat/chat_screen.dart';
 
 class ScheduledTabScreen extends StatefulWidget {
@@ -108,7 +108,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
             LargeTitleHeader(title: t(context, 'tabs.scheduled')),
             SegmentedPill(
               labels: [t(context, 'scheduled.views.tasks'), t(context, 'scheduled.views.history')],
-              icons: const [CupertinoIcons.calendar, CupertinoIcons.clock],
+              icons: const [OcGlyphKind.calendar, OcGlyphKind.clock],
               selectedIndex: _view,
               onSelected: (index) => setState(() => _view = index),
             ),
@@ -123,7 +123,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                 onSelected: (index) => setState(() => _filter = index),
                 trailing: CircularChromeButton(
                   key: const Key('scheduled-add'),
-                  icon: CupertinoIcons.add,
+                  glyph: OcGlyphKind.plus,
                   filled: true,
                   tooltip: t(context, 'scheduled.add'),
                   onPressed: () {},
@@ -167,7 +167,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                           if (run.error != null && run.error!.isNotEmpty) run.error,
                         ].join(' · '),
                       ),
-                      trailing: const Icon(CupertinoIcons.ellipsis, color: OcChrome.secondary),
+                      trailing: const OcGlyph(OcGlyphKind.ellipsis, size: 16, color: OcChrome.secondary),
                       onTap: run.sessionId == null || run.sessionId!.isEmpty ? null : () => _openRun(run.id),
                     ),
                   ),
@@ -203,8 +203,8 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                     width: 1.6,
                   ),
                 ),
-                child: Icon(
-                  enabled ? CupertinoIcons.checkmark : CupertinoIcons.pause,
+                child: OcGlyph(
+                  enabled ? OcGlyphKind.check : OcGlyphKind.pause,
                   size: 14,
                   color: enabled ? const Color(0xFF34C759) : OcChrome.secondary,
                 ),
@@ -233,7 +233,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   projectId: task.projectId,
                   taskId: task.id,
                 ),
-                icon: const Icon(CupertinoIcons.ellipsis, color: OcChrome.secondary),
+                icon: const OcGlyph(OcGlyphKind.ellipsis, size: 16, color: OcChrome.secondary),
               ),
             ],
           ),

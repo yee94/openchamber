@@ -242,9 +242,6 @@ void main() {
     await tester.tap(find.text('New Session'));
     await tester.pumpAndSettle();
     expect(find.byType(ChatScreen), findsOneWidget);
-    expect(find.byKey(const Key('chat-activity-m-tools')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('chat-activity-m-tools')));
-    await tester.pumpAndSettle();
     expect(find.byKey(const Key('chat-tool-diff-edit-1')), findsOneWidget);
     expect(find.byKey(const Key('chat-tool-permission-perm-1')), findsOneWidget);
   });

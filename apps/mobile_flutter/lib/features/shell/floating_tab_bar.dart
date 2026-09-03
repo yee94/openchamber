@@ -1,10 +1,10 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_strings.dart';
 import '../../native/haptics.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/ios_chrome.dart';
+import '../../theme/oc_glyphs.dart';
 
 /// Flutter-painted homepage dock for Android and WidgetTester.
 /// Real iOS uses [IosTabBarHost] / UITabBarController — this is not a glass clone.
@@ -18,11 +18,11 @@ class FloatingCapsuleTabBar extends StatelessWidget {
   final String selectedId;
   final ValueChanged<String> onSelect;
 
-  static const _items = <({String id, IconData icon, String labelKey})>[
-    (id: 'projects', icon: CupertinoIcons.folder, labelKey: 'tabs.projects'),
-    (id: 'assistant', icon: CupertinoIcons.sparkles, labelKey: 'tabs.assistant'),
-    (id: 'scheduled', icon: CupertinoIcons.calendar, labelKey: 'tabs.scheduled'),
-    (id: 'settings', icon: CupertinoIcons.gear, labelKey: 'tabs.settings'),
+  static const _items = <({String id, OcGlyphKind glyph, String labelKey})>[
+    (id: 'projects', glyph: OcGlyphKind.folder, labelKey: 'tabs.projects'),
+    (id: 'assistant', glyph: OcGlyphKind.sparkles, labelKey: 'tabs.assistant'),
+    (id: 'scheduled', glyph: OcGlyphKind.calendar, labelKey: 'tabs.scheduled'),
+    (id: 'settings', glyph: OcGlyphKind.gear, labelKey: 'tabs.settings'),
   ];
 
   @override
@@ -48,7 +48,7 @@ class FloatingCapsuleTabBar extends StatelessWidget {
                   Expanded(
                     child: _TabSlot(
                       id: item.id,
-                      icon: item.icon,
+                      glyph: item.glyph,
                       label: t(context, item.labelKey),
                       selected: selectedId == item.id,
                       onTap: () {
@@ -69,14 +69,14 @@ class FloatingCapsuleTabBar extends StatelessWidget {
 class _TabSlot extends StatelessWidget {
   const _TabSlot({
     required this.id,
-    required this.icon,
+    required this.glyph,
     required this.label,
     required this.selected,
     required this.onTap,
   });
 
   final String id;
-  final IconData icon;
+  final OcGlyphKind glyph;
   final String label;
   final bool selected;
   final VoidCallback onTap;
@@ -98,8 +98,8 @@ class _TabSlot extends StatelessWidget {
               color: selected ? primary.withValues(alpha: 0.16) : Colors.transparent,
               borderRadius: BorderRadius.circular(18),
             ),
-            child: Icon(
-              icon,
+            child: OcGlyph(
+              glyph,
               size: 22,
               color: selected ? primary : OcTokens.mutedLight,
             ),

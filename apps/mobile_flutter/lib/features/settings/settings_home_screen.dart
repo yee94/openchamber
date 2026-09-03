@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
@@ -6,6 +5,7 @@ import '../../data/settings_catalog.dart';
 import '../../l10n/app_strings.dart';
 import '../../navigation/platform_route.dart';
 import '../../theme/ios_chrome.dart';
+import '../../theme/oc_glyphs.dart';
 import 'settings_pages.dart';
 import 'settings_primitives.dart';
 
@@ -46,13 +46,17 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
                 onChanged: (value) => setState(() => _query = value),
                 decoration: InputDecoration(
                   hintText: t(context, 'settings.search.placeholder'),
-                  prefixIcon: const Icon(CupertinoIcons.search, size: 18),
+                  prefixIcon: const Padding(
+                    padding: EdgeInsets.only(left: 10, right: 4),
+                    child: OcGlyph(OcGlyphKind.search, size: 16, color: OcChrome.secondary),
+                  ),
+                  prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 18),
                   suffixIcon: _query.isEmpty
                       ? null
                       : IconButton(
                           tooltip: t(context, 'settings.search.clear'),
                           onPressed: () => setState(() => _query = ''),
-                          icon: const Icon(CupertinoIcons.xmark_circle_fill, size: 18),
+                          icon: const OcGlyph(OcGlyphKind.xmark, size: 16, color: OcChrome.secondary),
                         ),
                   filled: true,
                   fillColor: Theme.of(context).colorScheme.surface,

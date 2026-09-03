@@ -363,13 +363,13 @@ Yee rejected the Material 3 WidgetTester shots (underline fields, full-width sea
 
 | Surface | README target | Flutter now | Remaining pixel gap |
 |---|---|---|---|
-| Projects | Large title, circular search + filled +, grouped project/worktree cards, 「N 个会话」, relative time, nested rows, 「更多」 | Landed (same IA). WidgetTester cannot paint iOS 26 liquid glass. | Live-activity status strip is a simple attention row (first in-progress title), not Dynamic Island chrome. Provider 「Code/github」 badge only when the path hint exists — session-index has no provider field. |
-| Chat | Pushed header, assistant model/role, file-change card, tok/s + duration + clock, floating glass pill, scroll-to-bottom disc | Landed on Android as a solid floating pill. iOS uses `UITextView` + `UIGlassEffect`/`UIBlurEffect` overlay. | WidgetTester cannot screenshot the real UIKit composer. Expanded-card Agent/model footer from Capacitor is not cloned in Flutter. |
-| Scheduled | Large title, 任务/历史记录, 全部/已启用/已暂停, status glyphs, human schedule · countdown | Landed | Create-task `+` is chrome-only (no new editor). Overflow `...` runs the existing run-now API (same as the old play control). |
-| Assistant | Contact cards, not a settings toggle page; dock highlight follows 助理 | Landed | Official guide hero images are not bundled. Enable toggle still exists when the snapshot is on (needed by tests / official enable API). |
-| Settings | Large title, pill search, inset groups. Appearance = language + theme | Landed | Detail pages still use a compact back + title, not a collapsing large title. |
+| Projects | Large title, circular search + filled +, project/worktree cards, 「N 个会话」, relative time, provider, nested sessions, 「更多」 | Landed. Chrome icons are painted `OcGlyph` paths (WidgetTester cannot load SF Symbols). Project card + collapsed worktree cards; no 「置顶 / 进行中」 card. | Live-activity strip is a simple attention row, not Dynamic Island. Provider 「Code/github」 only from path hint. |
+| Chat | Pushed header, model/role, file-change card, tok/s + duration + clock, collapsed glass pill (+ / placeholder / send) | Landed on Android as a solid floating pill. iOS uses `UITextView` + `UIGlassEffect`/`UIBlurEffect`. File-change card is the hero; permission is a separate page. | WidgetTester cannot screenshot the real UIKit composer or liquid glass. Expanded Agent/model footer from Capacitor is not cloned. Android pill may still show a mic when dictation is wired. |
+| Scheduled | Large title, 任务/历史记录, 全部/已启用/已暂停, check vs pause, 「每天 23:30 · 23h 31m 后」 | Landed with painted status glyphs | Create-task `+` is chrome-only. Overflow `...` still calls run-now. |
+| Assistant | Contact cards (avatar, name, mode, summary). Enable guide only when off | Landed. No 「启用助理」 toggle on the catalog. | Official guide hero images are not bundled. |
+| Settings | Large title, pill search, inset groups. Appearance = language + theme | Landed | Detail pages still use compact back + title. |
 | Connect | QR primary, inset grouped fields, no floating-label overlap | Landed | Manual section stays expanded by default so tests can fill URL/token. |
-| Tab dock | Four roots, selected glyph = theme primary | iOS: `UITabBarController` overlay. Android/tests: floating capsule with the same four ids and correct `selectedId`. | WidgetTester capsule is Material-elevation, not `UIGlassEffect`. |
+| Tab dock | Four roots, selected glyph = theme primary | iOS: `UITabBarController`. Android/tests: floating capsule with painted glyphs. | WidgetTester capsule is Material-elevation, not `UIGlassEffect`. This VM cannot run an iOS Simulator. |
 
 ### Native APIs (always on — grep `apps/mobile_flutter/ios`)
 

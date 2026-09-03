@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
@@ -60,6 +59,20 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
     }
   }
 
+  String _modeLabel(BuildContext context, AssistantRecord item) {
+    return item.mode == 'stateless'
+        ? t(context, 'assistant.mode.stateless')
+        : t(context, 'assistant.mode.continuous');
+  }
+
+  String _summary(BuildContext context, AssistantRecord item) {
+    final prompt = item.defaultPrompt?.trim() ?? '';
+    if (prompt.isNotEmpty) return prompt;
+    return item.mode == 'stateless'
+        ? t(context, 'assistant.hint.stateless')
+        : t(context, 'assistant.hint.continuous');
+  }
+
   @override
   Widget build(BuildContext context) {
     final resource = widget.controller.assistantSnapshot;
@@ -81,62 +94,14 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
                 padding: EdgeInsets.all(32),
                 child: Center(child: CircularProgressIndicator()),
               )
-            else if (snapshot == null || snapshot.assistants.isEmpty)
-              GroupedInsetCard(
-                child: ListTile(
-                  key: const Key('assistant-empty'),
-                  title: Text(t(context, 'assistant.empty.title')),
-                  subtitle: Text(t(context, 'assistant.empty.description')),
-                ),
-              )
-            else ...[
-              if (!snapshot.enabled)
-                GroupedInsetCard(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(t(context, 'assistant.guide.title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 6),
-                        Text(t(context, 'assistant.guide.description'), style: const TextStyle(color: OcChrome.secondary)),
-                        const SizedBox(height: 14),
-                        FilledButton(
-                          key: const Key('assistant-enabled'),
-                          onPressed: () async {
-                            try {
-                              await widget.controller.setAssistantsFeatureEnabled(true);
-                            } on OpenChamberHttpException {
-                              if (mounted) setState(() => _actionError = 'settings.error.saveFailed');
-                            }
-                          },
-                          child: Text(t(context, 'assistant.guide.enable')),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              else
-                SwitchListTile(
-                  key: const Key('assistant-enabled'),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
-                  title: Text(t(context, 'assistant.enabled')),
-                  value: snapshot.enabled,
-                  onChanged: (value) async {
-                    try {
-                      await widget.controller.setAssistantsFeatureEnabled(value);
-                    } on OpenChamberHttpException {
-                      if (mounted) setState(() => _actionError = 'settings.error.saveFailed');
-                    }
-                  },
-                ),
+            else if (snapshot != null && snapshot.enabled && snapshot.assistants.isNotEmpty)
               for (final item in snapshot.assistants)
                 GroupedInsetCard(
                   child: InkWell(
                     key: Key('assistant-item-${item.id}'),
                     onTap: () => _open(item.id),
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+                      padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
                       child: Row(
                         children: [
                           CircleAvatar(
@@ -155,30 +120,72 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(item.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                                if (item.modelLabel != null) ...[
-                                  const SizedBox(height: 3),
-                                  Text(item.modelLabel!, style: const TextStyle(fontSize: 13, color: OcChrome.secondary)),
-                                ],
-                                if (item.workspacePath != null && item.workspacePath!.isNotEmpty) ...[
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    item.workspacePath!,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 12, color: OcChrome.secondary),
-                                  ),
-                                ],
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        item.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _modeLabel(context, item),
+                                      style: const TextStyle(fontSize: 13, color: OcChrome.secondary),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _summary(context, item),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 13, color: OcChrome.secondary, height: 1.35),
+                                ),
                               ],
                             ),
                           ),
-                          const Icon(CupertinoIcons.ellipsis, color: OcChrome.secondary),
                         ],
                       ),
                     ),
                   ),
+                )
+            else if (snapshot != null && !snapshot.enabled)
+              GroupedInsetCard(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(t(context, 'assistant.guide.title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 6),
+                      Text(t(context, 'assistant.guide.description'), style: const TextStyle(color: OcChrome.secondary)),
+                      const SizedBox(height: 14),
+                      FilledButton(
+                        key: const Key('assistant-enabled'),
+                        onPressed: () async {
+                          try {
+                            await widget.controller.setAssistantsFeatureEnabled(true);
+                          } on OpenChamberHttpException {
+                            if (mounted) setState(() => _actionError = 'settings.error.saveFailed');
+                          }
+                        },
+                        child: Text(t(context, 'assistant.guide.enable')),
+                      ),
+                    ],
+                  ),
                 ),
-            ],
+              )
+            else
+              GroupedInsetCard(
+                child: ListTile(
+                  key: const Key('assistant-empty'),
+                  title: Text(t(context, 'assistant.empty.title')),
+                  subtitle: Text(t(context, 'assistant.empty.description')),
+                ),
+              ),
           ],
         ),
       ),

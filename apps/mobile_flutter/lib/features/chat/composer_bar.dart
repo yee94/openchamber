@@ -1,9 +1,9 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/prompt_attachment.dart';
 import '../../l10n/app_strings.dart';
 import '../../theme/ios_chrome.dart';
+import '../../theme/oc_glyphs.dart';
 import 'composer_occupancy.dart';
 
 /// Native composer chrome. Android is a floating pill with solid IME viewInsets.
@@ -120,7 +120,7 @@ class ComposerBar extends StatelessWidget {
                     child: const SizedBox(
                       width: 36,
                       height: 36,
-                      child: Icon(CupertinoIcons.chevron_down, size: 18),
+                      child: Center(child: OcGlyph(OcGlyphKind.chevronDown, size: 18)),
                     ),
                   ),
                 ),
@@ -141,7 +141,7 @@ class ComposerBar extends StatelessWidget {
                       key: const Key('composer-attach'),
                       tooltip: t(context, 'chat.composer.attach'),
                       onPressed: onAttach,
-                      icon: const Icon(CupertinoIcons.add, size: 22),
+                      icon: const OcGlyph(OcGlyphKind.plus, size: 22),
                     ),
                     Expanded(child: field),
                     if (onDictate != null)
@@ -149,7 +149,7 @@ class ComposerBar extends StatelessWidget {
                         key: const Key('composer-dictate'),
                         tooltip: t(context, 'chat.dictation.start'),
                         onPressed: onDictate,
-                        icon: const Icon(CupertinoIcons.mic, size: 20),
+                        icon: const OcGlyph(OcGlyphKind.mic, size: 18),
                       ),
                     Material(
                       color: Colors.black,
@@ -161,10 +161,12 @@ class ComposerBar extends StatelessWidget {
                         child: SizedBox(
                           width: 34,
                           height: 34,
-                          child: Icon(
-                            busy ? CupertinoIcons.stop_fill : CupertinoIcons.square_fill,
-                            size: busy ? 14 : 10,
-                            color: Colors.white,
+                          child: Center(
+                            child: OcGlyph(
+                              OcGlyphKind.sendSquare,
+                              size: 16,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),

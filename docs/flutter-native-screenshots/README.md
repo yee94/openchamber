@@ -1,22 +1,22 @@
 # Flutter native screenshots (Yee visual review)
 
-Real `apps/mobile_flutter` widgets, captured with `WidgetTester` + `RenderRepaintBoundary.toImage` (not GenerateImage, not mocks).
+Real `apps/mobile_flutter` widgets, captured with `WidgetTester` + `RenderRepaintBoundary.toImage`.
 
 - Device: **390×844** logical pixels, `devicePixelRatio` **3** (PNG 1170×2532)
-- Locale: **zh-CN** (`MemorySecureStore` `openchamber.locale=zh-CN`)
-- Data: `MemoryOpenChamberTransport` seed (sessions, assistants, scheduled, chat + diff + permission)
+- Locale: **zh-CN**
 - Regenerator: `apps/mobile_flutter/test/flutter_native_screenshots_test.dart`
-- Chrome: official IA (large titles, inset grouped cards, circular header actions, floating capsule dock, pill composer). WidgetTester runs as Android, so the dock is the Flutter capsule (same four roots). Real iOS uses `UITabBarController` + `UITextView` overlays.
+- Fonts: `test/review_fonts.dart` loads Roboto + DroidSansFallback so Latin digits and Chinese copy render. **Chrome icons are painted `OcGlyph` paths** — do not accept empty-square CupertinoIcons tofu.
+- WidgetTester runs as Android. It **cannot** paint `UIGlassEffect`. Real iOS uses `UITabBarController` + `UITextView` overlays. This Linux VM cannot run an iOS Simulator.
 
-No PIN / Face ID lock. No `iosNativeUi`. Chat is a **pushed** page, not a dock tab.
+No PIN / Face ID. No `iosNativeUi`. Chat is a pushed page.
 
 | File | Screen |
 |---|---|
-| `01-connect.png` | Connection onboarding: QR primary, inset grouped fields (no floating-label overlap), saved list. |
-| `02-projects.png` | Projects: large title 「项目」, circular search + filled +, grouped project cards with session count / relative time / nested rows. |
-| `03-assistant.png` | Assistant tab: contact cards, dock highlight on 助理. |
-| `04-scheduled.png` | Scheduled: 「计划」, 任务/历史记录 segments, 全部/已启用/已暂停 filters, status-glyph task cards. |
-| `05-settings.png` | Settings: large title, pill search, inset grouped slugs. |
-| `06-settings-appearance.png` | Appearance: language + theme. No `iosNativeUi`. |
-| `07-chat.png` | Pushed Chat: back / truncated title / busy, assistant chrome + file-change card, floating pill composer. |
-| `08-permission.png` | Permission card: 允许一次 / 始终同意 / 拒绝. |
+| `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |
+| `02-projects.png` | 「项目」, circular search + filled +, project card + collapsed worktree, 「N 个会话」, 「更多」. |
+| `03-assistant.png` | Contact cards (name / mode / summary). No 「启用助理」 toggle. |
+| `04-scheduled.png` | 「计划」, 任务/历史记录, filters, check vs pause, schedule · countdown. |
+| `05-settings.png` | Large title, pill search, inset groups. |
+| `06-settings-appearance.png` | Language + theme. Latin labels must render. No `iosNativeUi`. |
+| `07-chat.png` | Pushed chat: model/role, file-change card, tok/s, collapsed pill (+ / 点击输入 / send). Not a permission hero. |
+| `08-permission.png` | Permission card only. |

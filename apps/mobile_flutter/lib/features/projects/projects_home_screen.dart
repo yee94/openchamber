@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
@@ -11,6 +10,7 @@ import '../../l10n/app_strings.dart';
 import '../../navigation/platform_route.dart';
 import '../../native/haptics.dart';
 import '../../theme/ios_chrome.dart';
+import '../../theme/oc_glyphs.dart';
 import '../chat/chat_screen.dart';
 import 'highlighted_text.dart';
 import 'project_groups.dart';
@@ -32,9 +32,9 @@ class ProjectsHomeScreen extends StatefulWidget {
 class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
   String _query = '';
   bool _searchOpen = false;
-  bool _pinnedExpanded = true;
   final Set<String> _collapsed = {};
   final Set<String> _expandedMore = {};
+  final Set<String> _expandedWorktrees = {};
   final _haptics = NativeHaptics();
 
   AppController get controller => widget.controller;
@@ -46,8 +46,6 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
-        final rows = filterSessionsForSearch(controller.sessions, _query);
-        final attention = rows.where((row) => row.kind != HomeSessionKind.catalog).toList();
         final groups = groupSessionsByProject(controller.sessions.where((row) {
           return sessionMatchesQuery(row, _query);
         }).toList());
@@ -71,7 +69,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                       children: [
                         CircularChromeButton(
                           key: const Key('projects-search-toggle'),
-                          icon: _searchOpen ? CupertinoIcons.xmark : CupertinoIcons.search,
+                          glyph: _searchOpen ? OcGlyphKind.xmark : OcGlyphKind.search,
                           tooltip: t(context, 'projects.search.aria'),
                           onPressed: () {
                             _haptics.impact(HapticStrength.light);
@@ -119,7 +117,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                                 ),
                               ],
                             ),
-                            child: const Icon(CupertinoIcons.add, size: 20, color: Colors.white),
+                            child: const OcGlyph(OcGlyphKind.plus, size: 18, color: Colors.white),
                           ),
                         ),
                       ],
@@ -134,7 +132,11 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                         onChanged: (value) => setState(() => _query = value),
                         decoration: InputDecoration(
                           hintText: t(context, 'projects.search.placeholder'),
-                          prefixIcon: const Icon(CupertinoIcons.search, size: 18),
+                          prefixIcon: const Padding(
+                            padding: EdgeInsets.only(left: 10, right: 4),
+                            child: OcGlyph(OcGlyphKind.search, size: 16, color: OcChrome.secondary),
+                          ),
+                          prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 18),
                           filled: true,
                           fillColor: Theme.of(context).colorScheme.surface,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -168,33 +170,18 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                       child: Text(t(context, 'projects.loading')),
                     )
                   else ...[
-                    if (attention.isNotEmpty)
-                      _projectCard(
-                        context,
-                        id: '__pinned__',
-                        name: t(context, 'projects.section.pinned'),
-                        icon: CupertinoIcons.pin_fill,
-                        count: attention.length,
-                        activity: attention.isEmpty ? null : formatRelativeTime(attention.first.updated),
-                        pathHint: null,
-                        expanded: _pinnedExpanded,
-                        onToggle: () => setState(() => _pinnedExpanded = !_pinnedExpanded),
-                        sessions: attention,
-                        worktrees: const [],
-                        assignSessionKeys: true,
-                      ),
                     if (groups.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter, vertical: 24),
                         child: Text(t(context, 'projects.empty')),
                       )
                     else
-                      for (final group in groups)
+                      for (final group in groups) ...[
                         _projectCard(
                           context,
                           id: group.id,
                           name: group.name,
-                          icon: CupertinoIcons.chevron_left_slash_chevron_right,
+                          glyph: OcGlyphKind.code,
                           count: group.sessionCount,
                           activity: formatRelativeTime(group.latestUpdated),
                           pathHint: group.pathHint,
@@ -206,11 +193,33 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                               _collapsed.add(group.id);
                             }
                           }),
-                          sessions: group.sessions,
-                          worktrees: group.worktrees,
+                          sessions: _projectSessions(group),
                           assignSessionKeys: true,
-                          skipKeyedKinds: const {HomeSessionKind.pinned, HomeSessionKind.inProgress},
                         ),
+                        for (final tree in group.worktrees)
+                          _projectCard(
+                            context,
+                            id: '${group.id}::${tree.name}',
+                            name: tree.name,
+                            glyph: OcGlyphKind.branch,
+                            count: tree.sessionCount,
+                            activity: formatRelativeTime(
+                              tree.sessions.fold<num>(0, (latest, row) => row.updated > latest ? row.updated : latest),
+                            ),
+                            pathHint: null,
+                            expanded: _expandedWorktrees.contains('${group.id}::${tree.name}'),
+                            onToggle: () => setState(() {
+                              final key = '${group.id}::${tree.name}';
+                              if (_expandedWorktrees.contains(key)) {
+                                _expandedWorktrees.remove(key);
+                              } else {
+                                _expandedWorktrees.add(key);
+                              }
+                            }),
+                            sessions: tree.sessions,
+                            assignSessionKeys: false,
+                          ),
+                      ],
                   ],
                 ],
               ),
@@ -221,20 +230,33 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     );
   }
 
+  List<HomeSessionRow> _projectSessions(ProjectHomeGroup group) {
+    final seen = <String>{};
+    final out = <HomeSessionRow>[];
+    void add(HomeSessionRow row) {
+      if (seen.add(row.id)) out.add(row);
+    }
+    for (final row in [...group.sessions, ...group.worktrees.expand((tree) => tree.sessions)]) {
+      if (row.kind != HomeSessionKind.catalog) add(row);
+    }
+    for (final row in [...group.sessions, ...group.worktrees.expand((tree) => tree.sessions)]) {
+      add(row);
+    }
+    return out;
+  }
+
   Widget _projectCard(
     BuildContext context, {
     required String id,
     required String name,
-    required IconData icon,
+    required OcGlyphKind glyph,
     required int count,
     required String? activity,
     required String? pathHint,
     required bool expanded,
     required VoidCallback onToggle,
     required List<HomeSessionRow> sessions,
-    required List<WorktreeHomeGroup> worktrees,
     required bool assignSessionKeys,
-    Set<HomeSessionKind> skipKeyedKinds = const {},
   }) {
     return GroupedInsetCard(
       child: Column(
@@ -252,7 +274,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                       color: Theme.of(context).scaffoldBackgroundColor,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(icon, size: 16, color: OcChrome.secondary),
+                    child: OcGlyph(glyph, size: 16, color: OcChrome.secondary),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -276,79 +298,23 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                       ],
                     ),
                   ),
-                  Icon(
-                    expanded ? CupertinoIcons.chevron_down : CupertinoIcons.chevron_right,
+                  OcGlyph(
+                    expanded ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
                     size: 16,
                     color: OcChrome.secondary,
                   ),
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     onPressed: () {},
-                    icon: const Icon(CupertinoIcons.ellipsis, size: 16, color: OcChrome.secondary),
+                    icon: const OcGlyph(OcGlyphKind.ellipsis, size: 16, color: OcChrome.secondary),
                   ),
                 ],
               ),
             ),
           ),
-          if (expanded) ...[
-            ..._sessionSlice(context, id, sessions, assignSessionKeys, skipKeyedKinds),
-            for (final tree in worktrees) _worktreeBlock(context, id, tree, assignSessionKeys, skipKeyedKinds),
-          ],
+          if (expanded) ..._sessionSlice(context, id, sessions, assignSessionKeys),
         ],
       ),
-    );
-  }
-
-  Widget _worktreeBlock(
-    BuildContext context,
-    String projectId,
-    WorktreeHomeGroup tree,
-    bool assignSessionKeys,
-    Set<HomeSessionKind> skipKeyedKinds,
-  ) {
-    final key = '$projectId::${tree.name}';
-    final expanded = !_collapsed.contains(key);
-    return Column(
-      children: [
-        InkWell(
-          onTap: () => setState(() {
-            if (expanded) {
-              _collapsed.add(key);
-            } else {
-              _collapsed.remove(key);
-            }
-          }),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 8, 12, 8),
-            child: Row(
-              children: [
-                const Icon(CupertinoIcons.arrow_2_squarepath, size: 14, color: OcChrome.secondary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: HighlightedText(
-                    tree.name,
-                    query: _query,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                  ),
-                ),
-                Text(
-                  tree.sessionCount == 1
-                      ? t(context, 'projects.sessionsCount.one')
-                      : t(context, 'projects.sessionsCount', {'count': '${tree.sessionCount}'}),
-                  style: const TextStyle(fontSize: 13, color: OcChrome.secondary),
-                ),
-                const SizedBox(width: 6),
-                Icon(
-                  expanded ? CupertinoIcons.chevron_down : CupertinoIcons.chevron_right,
-                  size: 14,
-                  color: OcChrome.secondary,
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (expanded) ..._sessionSlice(context, key, tree.sessions, assignSessionKeys, skipKeyedKinds),
-      ],
     );
   }
 
@@ -357,7 +323,6 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     String groupId,
     List<HomeSessionRow> sessions,
     bool assignSessionKeys,
-    Set<HomeSessionKind> skipKeyedKinds,
   ) {
     final showAll = _expandedMore.contains(groupId) || sessions.length <= _visibleSlice;
     final visible = showAll ? sessions : sessions.take(_visibleSlice).toList();
@@ -366,8 +331,8 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         _sessionRow(
           context,
           row,
-          key: assignSessionKeys && !skipKeyedKinds.contains(row.kind) ? Key('home-session-${row.id}') : null,
-          unreadKey: assignSessionKeys && !skipKeyedKinds.contains(row.kind),
+          key: assignSessionKeys ? Key('home-session-${row.id}') : null,
+          unreadKey: assignSessionKeys,
         ),
       if (!showAll)
         InkWell(
@@ -378,7 +343,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
               children: [
                 Text(t(context, 'projects.showMore'), style: const TextStyle(fontSize: 15, color: OcChrome.secondary)),
                 const Spacer(),
-                const Icon(CupertinoIcons.chevron_right, size: 14, color: OcChrome.secondary),
+                const OcGlyph(OcGlyphKind.chevronRight, size: 14, color: OcChrome.secondary),
               ],
             ),
           ),
@@ -422,7 +387,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
             IconButton(
               visualDensity: VisualDensity.compact,
               onPressed: () {},
-              icon: const Icon(CupertinoIcons.ellipsis, size: 16, color: OcChrome.secondary),
+              icon: const OcGlyph(OcGlyphKind.ellipsis, size: 16, color: OcChrome.secondary),
             ),
           ],
         ),
