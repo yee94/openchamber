@@ -276,8 +276,8 @@ void main() {
       isTrue,
     );
     expect(
-      [...OcElevation.chipFor(OcTokens.light), ...OcElevation.glassHighlightFor(OcTokens.light)],
-      hasLength(2),
+      OcElevation.chipFor(OcTokens.light).every((s) => s.blurRadius < 8 && s.offset == Offset.zero),
+      isTrue,
     );
     expect(OcElevation.glassHighlightFor(OcTokens.light).single.blurStyle, BlurStyle.inner);
     expect(
