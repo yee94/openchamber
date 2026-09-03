@@ -114,9 +114,9 @@ class OcGlassChip extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           // Official `mobileGlass` family: white glass + glass-shadow.
-          // 0.68 [glassFill] lifts but reads as a coin in WidgetTester.
-          // Soften via [glassChipFill] — not surface-elevated cream.
-          // No disc BackdropFilter. No primary + glow. 40 hit / 36 visual.
+          // 0.68/0.58 still a WidgetTester coin. Soften via [glassChipFill]
+          // 0.46 — not surface-elevated cream. No disc BackdropFilter.
+          // No primary + glow. 40 hit / 36 visual.
           color: context.oc.glassChipFill,
           boxShadow: [
             ...OcElevation.control(context),
