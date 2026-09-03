@@ -99,14 +99,14 @@ class OcElevation {
     ];
   }
 
-  /// Glass chips — 2px near-pair contact only. Halo / umbra / inset
-  /// sheen stack a coin silhouette around the 36 disc.
+  /// Official glass-shadow contact: `0 0 2px rgb(0 0 0 / 0.05)`.
+  /// Halo + 8/20 umbra paint a coin around the 36 disc.
   static List<BoxShadow> chip(BuildContext context) => chipFor(OcTokens.of(context));
 
   static List<BoxShadow> chipFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x05000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 2),
     ];
   }
 
