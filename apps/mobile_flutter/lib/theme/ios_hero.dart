@@ -60,7 +60,7 @@ class OcOptical {
   static const double headerGlyph = 14;
   static const double headerGlyphStroke = 0.55;
   /// In-card / dock / footer glyphs — thinner than header strokes.
-  static const double listGlyphStroke = 0.55;
+  static const double listGlyphStroke = 0.48;
 
   /// `--oc-mobile-collapsing-action-size` / expand-shift / collapse distance.
   static const double collapsingActionSize = 40;
