@@ -47,7 +47,7 @@ class OcOptical {
   /// glyphs do not fill the 16/12 boxes. Total box stays official —
   /// [ocCssLineBox] must not floor `height` at 1.0 or leading grows the
   /// row instead of opening air inside it.
-  static const double sessionLineLeading = 0.36;
+  static const double sessionLineLeading = 0.38;
   /// `.oc-mobile-session-status` 0.75rem; `.oc-mobile-session-row-main` gap 0.5rem.
   static const double sessionStatus = 12;
   static const double sessionRowMainGap = 8;
@@ -179,15 +179,18 @@ class OcOptical {
   /// 23px sprite, not a 21px stand-in.
   static const double dockGlyphVisual = 23;
   /// Official dock `Icon weight="medium"` (`ICON_STROKE_WIDTH_MEDIUM` = 2).
-  /// Flutter round-cap bloom at dpr 3; 1.75 still read massy on the
-  /// 8a1b8285 goldens. Paint 1.55 — delicate medium, not hairline.
+  /// Flutter round-cap bloom at dpr 3; paint 1.55 on stroke frames so
+  /// slim filled-medium 23px stays delicate — not bricks, not hairlines.
   static const double dockGlyphStroke = 2;
   static const double dockGlyphStrokeVisual = 1.55;
-  /// Official tab icons are stroke medium. Filled bodies add mass.
-  /// Calendar stays the grid sprite; gear stays holed.
-  static const bool dockGlyphFillBodies = false;
+  /// Slim filled-medium: folder well, calendar grid, hollow gear.
+  /// Not 90271 bricks and not stroke-only outlines.
+  static const bool dockGlyphFillBodies = true;
   static const bool dockSelectedFullSlot = true;
   static const double dockIconWashAlpha = 0.55;
+  /// Cell frost only — nested 20px blur smears the cream dock into a
+  /// second opaque capsule. Official selected fill is the 55% mix.
+  static const double dockWashBlur = 8;
   static const double dockIconGlowAlpha = 0.0;
   static const double dockIconGlowBlur = 0;
 

@@ -113,7 +113,7 @@ void main() {
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.sessionLineLeading, closeTo(0.36, 0.001));
+    expect(OcOptical.sessionLineLeading, closeTo(0.38, 0.001));
     expect(OcOptical.sessionLineLeading, greaterThan(0.35));
     expect(OcOptical.sessionLineLeading, lessThan(0.40));
     for (final box in [OcOptical.rowTitleHeight, OcOptical.sessionSubtitleHeight]) {
@@ -177,7 +177,9 @@ void main() {
     expect(OcOptical.dockGlyphStrokeVisual, lessThan(OcOptical.dockGlyphStroke));
     expect(OcOptical.dockGlyphStrokeVisual, closeTo(1.55, 0.01));
     expect(OcOptical.dockGlyphStrokeVisual, greaterThan(1.4));
-    expect(OcOptical.dockGlyphFillBodies, isFalse);
+    expect(OcOptical.dockGlyphFillBodies, isTrue);
+    expect(OcOptical.dockWashBlur, 8);
+    expect(OcOptical.dockWashBlur, lessThan(OcOptical.glassBlur));
     expect(OcOptical.dockTabHeight, 58);
     expect(OcOptical.dockTabRadius, 29);
     expect(OcOptical.dockLabel, 12);

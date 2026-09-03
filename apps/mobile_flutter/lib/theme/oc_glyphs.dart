@@ -460,21 +460,21 @@ class _OcGlyphPainter extends CustomPainter {
       ..color = color
       ..style = PaintingStyle.fill;
     final tab = Path()
-      ..moveTo(w * 0.22, h * 0.32)
-      ..lineTo(w * 0.22, h * 0.42)
-      ..lineTo(w * 0.44, h * 0.42)
-      ..lineTo(w * 0.40, h * 0.32)
+      ..moveTo(w * 0.26, h * 0.34)
+      ..lineTo(w * 0.26, h * 0.43)
+      ..lineTo(w * 0.42, h * 0.43)
+      ..lineTo(w * 0.39, h * 0.34)
       ..close();
     final body = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.22, h * 0.40, w * 0.56, h * 0.30),
-      Radius.circular(w * 0.05),
+      Rect.fromLTWH(w * 0.26, h * 0.42, w * 0.48, h * 0.26),
+      Radius.circular(w * 0.045),
     );
     canvas.saveLayer(Rect.fromLTWH(0, 0, w, h), Paint());
     canvas.drawPath(tab, fill);
     canvas.drawRRect(body, fill);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(w * 0.30, h * 0.48, w * 0.40, h * 0.16),
+        Rect.fromLTWH(w * 0.33, h * 0.49, w * 0.34, h * 0.13),
         Radius.circular(w * 0.03),
       ),
       Paint()
@@ -497,15 +497,15 @@ class _OcGlyphPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
     final tooth = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(0, -w * 0.29), width: w * 0.09, height: w * 0.08),
-      Radius.circular(w * 0.025),
+      Rect.fromCenter(center: Offset(0, -w * 0.28), width: w * 0.075, height: w * 0.065),
+      Radius.circular(w * 0.02),
     );
     if (filled) {
       final fill = Paint()
         ..color = paint.color
         ..style = PaintingStyle.fill;
       canvas.saveLayer(Rect.fromLTWH(0, 0, w, h), Paint());
-      canvas.drawCircle(c, w * 0.22, fill);
+      canvas.drawCircle(c, w * 0.20, fill);
       for (var i = 0; i < 6; i += 1) {
         canvas.save();
         canvas.translate(c.dx, c.dy);
@@ -515,7 +515,7 @@ class _OcGlyphPainter extends CustomPainter {
       }
       canvas.drawCircle(
         c,
-        w * 0.155,
+        w * 0.15,
         Paint()
           ..blendMode = BlendMode.dstOut
           ..style = PaintingStyle.fill,

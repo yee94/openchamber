@@ -914,7 +914,7 @@ Future<void> _writePng(WidgetTester tester, Key screenshotKey, String name) asyn
     try {
       dir.createSync(recursive: true);
       File('${dir.path}/$name').writeAsBytesSync(png);
-    } on FileSystemException catch (error) {
+    } on FileSystemException {
       if (dir.path.startsWith('/opt/cursor/artifacts/')) {
         // Cloud artifact mount is best-effort; docs/ is the committed golden.
         continue;
