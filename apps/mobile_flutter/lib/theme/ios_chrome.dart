@@ -136,9 +136,12 @@ class OcGlassChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          // Quiet fill + frost so content bleeds through. Contact
-          // shadow only — no coin silhouette. 40 hit / 36 visual.
-          boxShadow: OcElevation.chip(context),
+          // Official `--oc-mobile-glass-shadow`: 2px contact + inset
+          // highlight. Skip the 8/20 umbra so the 36 disc is not a coin.
+          boxShadow: [
+            ...OcElevation.chip(context),
+            ...OcElevation.glassHighlight(context),
+          ],
         ),
         child: ClipOval(
           child: OcFrosted(

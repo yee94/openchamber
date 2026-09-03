@@ -266,6 +266,11 @@ void main() {
     expect(OcElevation.chipFor(OcTokens.light).single.offset, Offset.zero);
     expect(OcElevation.chipFor(OcTokens.dark), isEmpty);
     expect(
+      [...OcElevation.chipFor(OcTokens.light), ...OcElevation.glassHighlightFor(OcTokens.light)],
+      hasLength(2),
+    );
+    expect(OcElevation.glassHighlightFor(OcTokens.light).single.blurStyle, BlurStyle.inner);
+    expect(
       (OcElevation.controlFor(OcTokens.light).last.color.a * 255).round(),
       lessThanOrEqualTo(0x1F),
     );
