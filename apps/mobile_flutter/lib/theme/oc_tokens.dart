@@ -148,13 +148,19 @@ class OcTokens extends ThemeExtension<OcTokens> {
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
   /// Circular `mobileGlass` chips. Official fill is 0.68 + live blur;
-  /// WidgetTester has no blur, so drop alpha a step so cream peeks through
-  /// instead of a solid plate.
+  /// WidgetTester has no blur, so drop alpha so cream peeks through
+  /// instead of a 40px solid plate.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.48 : 0.50);
+      .withValues(alpha: isDark ? 0.36 : 0.38);
+
+  /// Official dock plate is `--oc-mobile-float-background` (elevated 45%)
+  /// plus glass blur — not `--oc-mobile-glass-fill` (0.68). Without blur,
+  /// sit between 45% and a readable frosted bar.
+  Color get dockPlate => (isDark ? const Color(0xFF26262C) : card)
+      .withValues(alpha: isDark ? 0.50 : 0.55);
 
   /// Legacy alias. Floating chrome uses [glassFill] + blur instead.
-  Color get dockFill => glassFill;
+  Color get dockFill => dockPlate;
 
   /// Official `--interactive-selection` is a muted foreground wash
   /// (`#16121016` light / `#f1ece81f` dark), not primary orange.
@@ -162,10 +168,10 @@ class OcTokens extends ThemeExtension<OcTokens> {
       foreground.withValues(alpha: isDark ? 0.122 : 0.086);
 
   /// Official selected-tab fill: `bg-interactive-selection/55`.
-  /// The theme token is already an 8-digit wash (`#16121016`). Applying
-  /// `/55` again makes the pill vanish so a primary glyph reads as a hot
-  /// oval — keep the token alpha so the stadium is a soft gray wash.
-  Color get selectedTabWash => interactiveSelection;
+  /// Tailwind `/55` mixes the already-alpha token with transparent, so the
+  /// stadium is a soft wash — not a gray disc and not a primary oval.
+  Color get selectedTabWash =>
+      interactiveSelection.withValues(alpha: interactiveSelection.a * 0.55);
 
   /// `--oc-mobile-header-fade` = surface-background 85%.
   Color get headerFade => background.withValues(alpha: 0.85);

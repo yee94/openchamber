@@ -174,7 +174,8 @@ class OcOptical {
   /// Official visible more is `min-w-9` + `mr-1`. Open the trailing air a
   /// hair past that so time + ellipsis do not crowd the card edge.
   static const double sessionMoreHit = 36;
-  static const double sessionMoreEdge = 8;
+  /// Official visible more is `min-w-9` + `mr-1` (4).
+  static const double sessionMoreEdge = 4;
   static const double sessionTimeGap = 8;
 
   static const double sessionBullet = 5;

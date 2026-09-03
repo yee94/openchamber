@@ -61,6 +61,7 @@ class FloatingCapsuleTabBar extends StatelessWidget {
             child: ClipRRect(
               borderRadius: radius,
               child: OcFrosted(
+                fill: tokens.dockPlate,
                 child: Material(
                   color: Colors.transparent,
                   child: SizedBox(

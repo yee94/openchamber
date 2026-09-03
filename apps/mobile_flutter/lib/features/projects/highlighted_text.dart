@@ -11,7 +11,16 @@ class HighlightedText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final needle = query.trim();
-    if (needle.isEmpty) return Text(text, style: style);
+    if (needle.isEmpty) {
+      return Text(
+        text,
+        style: style,
+        textHeightBehavior: const TextHeightBehavior(
+          applyHeightToFirstAscent: false,
+          applyHeightToLastDescent: false,
+        ),
+      );
+    }
     final lower = text.toLowerCase();
     final match = needle.toLowerCase();
     final spans = <TextSpan>[];
@@ -31,6 +40,12 @@ class HighlightedText extends StatelessWidget {
       );
       start = index + needle.length;
     }
-    return Text.rich(TextSpan(style: style, children: spans));
+    return Text.rich(
+      TextSpan(style: style, children: spans),
+      textHeightBehavior: const TextHeightBehavior(
+        applyHeightToFirstAscent: false,
+        applyHeightToLastDescent: false,
+      ),
+    );
   }
 }

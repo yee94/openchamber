@@ -28,7 +28,8 @@ void main() {
     expect(OcTokens.light.floatSurface.a, lessThan(1));
     expect(OcTokens.dark.floatSurface, OcTokens.dark.card);
     expect(OcTokens.light.glassChipFill.a, lessThan(OcTokens.light.glassFill.a));
-    expect(OcTokens.light.selectedTabWash.a, closeTo(0.086, 0.01));
+    expect(OcTokens.light.dockPlate.a, lessThan(OcTokens.light.glassFill.a));
+    expect(OcTokens.light.selectedTabWash.a, closeTo(0.086 * 0.55, 0.01));
     expect(
       (OcTokens.light.selectedTabWash.r - OcTokens.light.primary.r).abs(),
       greaterThan(0.15),
@@ -178,7 +179,7 @@ void main() {
     expect(OcOptical.sendArrow, 13);
     expect(OcOptical.headerRestPeek, 20);
     expect(OcOptical.sessionMoreHit, 36);
-    expect(OcOptical.sessionMoreEdge, 8);
+    expect(OcOptical.sessionMoreEdge, 4);
     expect(OcOptical.sessionTimeGap, 8);
     expect(OcOptical.dockSelectedFullSlot, isTrue);
     expect(OcOptical.scrollFab, 36);

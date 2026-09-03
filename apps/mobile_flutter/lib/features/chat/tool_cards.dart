@@ -199,49 +199,45 @@ class _AssistantHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              OcGlassPill(
-                padding: const EdgeInsets.fromLTRB(6, 3, 8, 3),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    OcGlyph(OcGlyphKind.sparkles, size: OcOptical.footerGlyph, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
-                    const SizedBox(width: 4),
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: OcOptical.rowTitle,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: OcOptical.rowTitleTracking,
-                        height: OcOptical.rowTitleHeight,
-                        color: context.oc.foreground,
-                      ),
-                    ),
-                  ],
+              OcGlyph(
+                OcGlyphKind.sparkles,
+                size: 16,
+                strokeWidth: OcOptical.listGlyphStroke,
+                color: context.oc.mutedForeground,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: OcTokens.textUiHeader,
+                    fontWeight: FontWeight.w600,
+                    height: 1.25,
+                    color: context.oc.foreground,
+                  ),
                 ),
               ),
               if (role != null && role.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                OcGlassPill(
+                const SizedBox(width: 8),
+                DecoratedBox(
                   key: const Key('chat-role-badge'),
-                  padding: const EdgeInsets.fromLTRB(6, 3, 8, 3),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      OcGlyph(OcGlyphKind.robot, size: OcOptical.footerGlyph, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
-                      const SizedBox(width: 3),
-                      Text(
-                        role,
-                        style: TextStyle(
-                          fontSize: 11,
-                          letterSpacing: 0.3,
-                          height: 1.3,
-                          fontWeight: FontWeight.w500,
-                          color: context.oc.mutedForeground,
-                        ),
+                  decoration: BoxDecoration(
+                    color: context.oc.muted.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    child: Text(
+                      role,
+                      style: TextStyle(
+                        fontSize: 10,
+                        height: 1.2,
+                        fontWeight: FontWeight.w400,
+                        color: context.oc.mutedForeground,
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ],
@@ -265,13 +261,10 @@ class _AgentCountChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return OcGlassPill(
+    return Row(
       key: const Key('chat-agent-count'),
-      padding: const EdgeInsets.fromLTRB(6, 2, 4, 2),
-      radius: 8,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      mainAxisSize: MainAxisSize.min,
+      children: [
           OcGlyph(OcGlyphKind.sparkles, size: 8, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
           const SizedBox(width: 3),
           Text(
@@ -279,8 +272,7 @@ class _AgentCountChip extends StatelessWidget {
             style: TextStyle(fontSize: 10, color: context.oc.foreground, fontWeight: FontWeight.w500, height: 1.1),
           ),
           OcGlyph(OcGlyphKind.chevronRight, size: 9, color: context.oc.mutedForeground),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -489,28 +481,11 @@ class _FileTypeMark extends StatelessWidget {
       tint = tokens.mutedForeground;
       mark = 'F';
     }
-    return SizedBox(
-      width: OcOptical.fileTypeSize,
-      height: OcOptical.fileTypeSize,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: tint,
-          borderRadius: BorderRadius.circular(3),
-        ),
-        child: Center(
-          child: Text(
-            mark,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: OcOptical.fileTypeMark,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFFFFFFFF),
-              height: 1,
-              letterSpacing: -0.2,
-            ),
-          ),
-        ),
-      ),
+    return OcGlyph(
+      OcGlyphKind.file,
+      size: OcOptical.fileTypeSize,
+      strokeWidth: OcOptical.listGlyphStroke,
+      color: tint,
     );
   }
 }

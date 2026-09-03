@@ -111,7 +111,7 @@ class OcGlassChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: context.oc.mobileBorder, width: 0.5),
+          // Official `.oc-mobile-floating-action` is borderless glass.
           boxShadow: [
             ...OcElevation.control(context),
             ...OcElevation.highlight(context),
@@ -479,12 +479,12 @@ class SegmentedPill extends StatelessWidget {
                             height: itemHeight,
                             child: DecoratedBox(
                               decoration: BoxDecoration(
-                                color: Color.lerp(Colors.transparent, tokens.interactiveSelection, t),
+                                color: Color.lerp(Colors.transparent, tokens.card, t),
                                 borderRadius: BorderRadius.circular(itemRadius),
                                 boxShadow: t > 0.01
                                     ? [
                                         BoxShadow(
-                                          color: tokens.foreground.withValues(alpha: 0.04 * t),
+                                          color: tokens.foreground.withValues(alpha: 0.08 * t),
                                           blurRadius: 2,
                                           offset: const Offset(0, 1),
                                         ),
@@ -584,12 +584,12 @@ class FilterChipBar extends StatelessWidget {
                                     height: 40,
                                     child: DecoratedBox(
                                       decoration: BoxDecoration(
-                                        color: Color.lerp(Colors.transparent, tokens.interactiveSelection, t),
+                                        color: Color.lerp(Colors.transparent, tokens.card, t),
                                         borderRadius: BorderRadius.circular(20),
                                         boxShadow: t > 0.01
                                             ? [
                                                 BoxShadow(
-                                                  color: tokens.foreground.withValues(alpha: 0.04 * t),
+                                                  color: tokens.foreground.withValues(alpha: 0.08 * t),
                                                   blurRadius: 2,
                                                   offset: const Offset(0, 1),
                                                 ),

@@ -202,7 +202,6 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: context.oc.glassChipFill,
-                  border: Border.all(color: context.oc.mobileBorder, width: 0.5),
                 ),
                 alignment: Alignment.center,
                 child: OcGlyph(
