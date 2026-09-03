@@ -126,12 +126,12 @@ void main() {
     expect(OcOptical.sessionMore, 14);
     expect(OcOptical.chevron, 14);
     expect(OcOptical.footerGlyph, 14);
-    expect(OcOptical.scheduleStatus, 44);
+    expect(OcOptical.scheduleStatus, 38);
     expect(OcOptical.overflow, 16);
     expect(OcOptical.chatChip, 40);
     expect(OcOptical.chatChip, OcOptical.headerDisc);
     expect(OcOptical.sessionBullet, 5);
-    expect(OcOptical.fileTypeW, 11);
+    expect(OcOptical.fileTypeSize, 12);
     expect(OcOptical.fileRowPadV, 4);
     expect(OcOptical.composerRadius, 24);
     expect(OcOptical.composerPlus, 20);

@@ -229,11 +229,15 @@ class _OcGlyphPainter extends CustomPainter {
         canvas.drawLine(Offset(w * 0.62, h * 0.22), Offset(w * 0.82, h * 0.50), stroke);
         canvas.drawLine(Offset(w * 0.82, h * 0.50), Offset(w * 0.62, h * 0.78), stroke);
       case OcGlyphKind.branch:
-        canvas.drawCircle(Offset(w * 0.32, h * 0.24), w * 0.09, stroke);
-        canvas.drawCircle(Offset(w * 0.32, h * 0.76), w * 0.09, stroke);
-        canvas.drawCircle(Offset(w * 0.72, h * 0.50), w * 0.09, stroke);
-        canvas.drawLine(Offset(w * 0.32, h * 0.34), Offset(w * 0.32, h * 0.66), stroke);
-        canvas.drawLine(Offset(w * 0.32, h * 0.42), Offset(w * 0.62, h * 0.50), stroke);
+        canvas.drawCircle(Offset(w * 0.75, h * 0.25), w * 0.108, stroke);
+        canvas.drawCircle(Offset(w * 0.25, h * 0.75), w * 0.108, stroke);
+        canvas.drawLine(Offset(w * 0.25, h * 0.64), Offset(w * 0.25, h * 0.125), stroke);
+        canvas.drawPath(
+          Path()
+            ..moveTo(w * 0.75, h * 0.36)
+            ..cubicTo(w * 0.75, h * 0.55, w * 0.55, h * 0.68, w * 0.25, h * 0.72),
+          stroke,
+        );
       case OcGlyphKind.file:
         final file = Path()
           ..moveTo(w * 0.30, h * 0.14)

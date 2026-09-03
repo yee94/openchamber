@@ -132,12 +132,12 @@ class OcOptical {
   /// Official `Button` `mobileIcon` = `size-10` (40). Same disc as header actions.
   static const double chatChip = 40;
 
-  static const double scheduleStatus = 44;
-  static const double scheduleStatusGlyph = 16;
+  static const double scheduleStatus = 38;
+  static const double scheduleStatusGlyph = 18;
 
-  static const double fileTypeW = 11;
-  static const double fileTypeH = 7;
-  static const double fileTypeMark = 3.5;
+  /// Official `FileTypeIcon` mobile size `h-3 w-3` (12px).
+  static const double fileTypeSize = 12;
+  static const double fileTypeMark = 7;
   static const double fileRowPadV = 4;
 
   static const double composerRadius = 24;

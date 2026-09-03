@@ -342,38 +342,42 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     final showAll = _expandedMore.contains(groupId) || sessions.length <= _visibleSlice;
     final visible = showAll ? sessions : sessions.take(_visibleSlice).toList();
     return [
-      for (var i = 0; i < visible.length; i += 1) ...[
-        if (i > 0) Divider(height: 1, thickness: 0.5, indent: 18, endIndent: 12, color: context.oc.mobileBorder),
+      for (var i = 0; i < visible.length; i += 1)
         MobileSessionRow(
           key: assignSessionKeys ? Key('home-session-${visible[i].id}') : Key('home-session-${visible[i].id}-nested'),
           row: visible[i],
           highlightQuery: _query,
           showUnreadKey: assignSessionKeys,
+          showBottomDivider: true,
           onSelect: () => _openChat(context, visible[i]),
         ),
-      ],
       if (!showAll)
-        Pressable(
-          haptic: HapticStrength.light,
-          onPressed: () => setState(() => _expandedMore.add(groupId)),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, OcOptical.moreLinkPadV, 14, OcOptical.moreLinkPadV),
-            child: Row(
-              children: [
-                Text(
-                  t(context, 'projects.showMore'),
-                  style: TextStyle(
-                    fontSize: OcTokens.textUiLabel,
-                    letterSpacing: OcOptical.metaTracking,
-                    height: OcOptical.rowTitleHeight,
-                    color: context.oc.mutedForeground,
-                  ),
+        Column(
+          children: [
+            Divider(height: 1, thickness: 1, color: context.oc.mobileBorder),
+            Pressable(
+              haptic: HapticStrength.light,
+              onPressed: () => setState(() => _expandedMore.add(groupId)),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, OcOptical.moreLinkPadV, 14, OcOptical.moreLinkPadV),
+                child: Row(
+                  children: [
+                    Text(
+                      t(context, 'projects.showMore'),
+                      style: TextStyle(
+                        fontSize: OcTokens.textUiLabel,
+                        letterSpacing: OcOptical.metaTracking,
+                        height: OcOptical.rowTitleHeight,
+                        color: context.oc.mutedForeground,
+                      ),
+                    ),
+                    const Spacer(),
+                    OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.chevron, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
+                  ],
                 ),
-                const Spacer(),
-                OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.chevron, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
     ];
   }

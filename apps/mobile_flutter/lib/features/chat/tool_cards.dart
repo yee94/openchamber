@@ -9,6 +9,7 @@ import '../../motion/pressable.dart';
 import '../../native/haptics.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
+import 'inline_markdown_text.dart';
 
 class ChatTranscriptBody extends StatelessWidget {
   const ChatTranscriptBody({
@@ -82,7 +83,7 @@ class ChatTranscriptBody extends StatelessWidget {
         } else if (message.isUser && textParts.length > 1 && textIndex == 0) {
           // Mention is transcript data, not chrome. README toolbar is clock + actions only.
         } else {
-          out.add(Text(part.body!.trim()));
+          out.add(InlineMarkdownText(text: part.body!.trim()));
         }
         textIndex += 1;
       } else if (part.kind == ChatPartKind.mermaid) {
@@ -262,9 +263,11 @@ class _FileChangeCard extends StatelessWidget {
             children: [
               OcGlyph(OcGlyphKind.file, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.listGlyphStroke, color: OcTokens.of(context).mutedForeground),
               const SizedBox(width: 6),
-              Expanded(
+              Flexible(
                 child: Text(
                   t(context, 'chat.filesChanged.title'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: OcOptical.meta,
                     fontWeight: FontWeight.w600,
@@ -273,6 +276,7 @@ class _FileChangeCard extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(width: 4),
               Text(
                 t(context, 'chat.filesChanged.count', {'count': '${parts.length}'}),
                 style: TextStyle(
@@ -283,7 +287,7 @@ class _FileChangeCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 2),
-              OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.chevron, color: OcTokens.of(context).mutedForeground),
+              OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.chevron, color: OcTokens.of(context).mutedForeground.withValues(alpha: 0.6)),
             ],
           ),
           const SizedBox(height: 8),
@@ -442,18 +446,27 @@ class _FileTypeMark extends StatelessWidget {
       tint = tokens.mutedForeground;
       mark = 'F';
     }
-    return Container(
-      width: OcOptical.fileTypeW,
-      height: OcOptical.fileTypeH,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: tint.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(2.5),
-      ),
-      child: Text(
-        mark,
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: OcOptical.fileTypeMark, fontWeight: FontWeight.w500, color: tint, height: 1, letterSpacing: 0.15),
+    return SizedBox(
+      width: OcOptical.fileTypeSize,
+      height: OcOptical.fileTypeSize,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: tint.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(2),
+        ),
+        child: Center(
+          child: Text(
+            mark,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: OcOptical.fileTypeMark,
+              fontWeight: FontWeight.w600,
+              color: tint,
+              height: 1,
+              letterSpacing: -0.2,
+            ),
+          ),
+        ),
       ),
     );
   }

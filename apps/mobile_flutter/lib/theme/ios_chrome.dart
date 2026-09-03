@@ -680,7 +680,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: OcOptical.chatTitle,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.lerp(FontWeight.w600, FontWeight.w700, 0.5),
                             letterSpacing: OcOptical.chatTitleTracking,
                             height: OcOptical.chatTitleHeight,
                             color: tokens.foreground,

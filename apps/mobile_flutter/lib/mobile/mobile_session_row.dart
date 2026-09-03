@@ -19,6 +19,7 @@ class MobileSessionRow extends StatelessWidget {
     required this.onSelect,
     this.highlightQuery = '',
     this.showUnreadKey = false,
+    this.showBottomDivider = false,
   });
 
   final HomeSessionRow row;
@@ -26,16 +27,27 @@ class MobileSessionRow extends StatelessWidget {
   final VoidCallback onSelect;
   final bool showUnreadKey;
 
+  /// Official `.oc-mobile-session-row:not(:last-child)` inset divider.
+  final bool showBottomDivider;
+
   @override
   Widget build(BuildContext context) {
-    return Pressable(
-      haptic: HapticStrength.light,
-      onPressed: onSelect,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: OcOptical.sessionRowVisualHeight),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, OcOptical.sessionRowPadV, 12, OcOptical.sessionRowPadV),
-          child: Row(
+    return DecoratedBox(
+      decoration: showBottomDivider
+          ? BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: context.oc.mobileBorder, width: 1),
+              ),
+            )
+          : const BoxDecoration(),
+      child: Pressable(
+        haptic: HapticStrength.light,
+        onPressed: onSelect,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: OcOptical.sessionRowVisualHeight),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, OcOptical.sessionRowPadV, 12, OcOptical.sessionRowPadV),
+            child: Row(
             children: [
               Container(
                 width: OcOptical.sessionBullet,
@@ -86,6 +98,7 @@ class MobileSessionRow extends StatelessWidget {
                 ),
               ),
             ],
+            ),
           ),
         ),
       ),

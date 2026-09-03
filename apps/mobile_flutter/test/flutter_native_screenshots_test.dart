@@ -24,6 +24,47 @@ import 'package:openchamber/theme/app_theme.dart';
 import 'package:openchamber/theme/ios_chrome.dart';
 import 'review_fonts.dart';
 
+/// Decorative iOS status bar for golden captures (WidgetTester has no UIKit bar).
+class _ScreenshotStatusBar extends StatelessWidget {
+  const _ScreenshotStatusBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.82);
+    return IgnorePointer(
+      child: Container(
+        height: 47,
+        padding: const EdgeInsets.fromLTRB(24, 14, 20, 0),
+        alignment: Alignment.topCenter,
+        child: Row(
+          children: [
+            Text(
+              '23:58',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, height: 1, color: muted, letterSpacing: -0.2),
+            ),
+            const Spacer(),
+            Row(
+              children: [
+                _statusDot(muted),
+                const SizedBox(width: 4),
+                _statusDot(muted),
+                const SizedBox(width: 4),
+                _statusDot(muted),
+                const SizedBox(width: 6),
+                Icon(Icons.wifi, size: 15, color: muted),
+                const SizedBox(width: 5),
+                Icon(Icons.battery_full_rounded, size: 17, color: muted),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statusDot(Color color) => Container(width: 4, height: 4, decoration: BoxDecoration(color: color, shape: BoxShape.circle));
+}
+
 /// Dedicated capture of the real Flutter widgets for Yee's visual review.
 ///
 /// Device: 390×844 logical px @ devicePixelRatio 3 (1170×2532 PNG).
@@ -201,15 +242,8 @@ void main() {
         strings: AppStrings.of(AppStrings.zhCN),
         child: RepaintBoundary(
           key: screenshotKey,
-          child: MaterialApp(
-            debugShowCheckedModeBanner: false,
+          child: _screenshotMaterialApp(
             locale: AppStrings.zhCN,
-            supportedLocales: AppStrings.supported,
-            localizationsDelegates: const [
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
             theme: _reviewTheme(Brightness.light),
             darkTheme: _reviewTheme(Brightness.dark),
             themeMode: ThemeMode.light,
@@ -278,15 +312,8 @@ void main() {
         strings: AppStrings.of(AppStrings.zhCN),
         child: RepaintBoundary(
           key: screenshotKey,
-          child: MaterialApp(
-            debugShowCheckedModeBanner: false,
+          child: _screenshotMaterialApp(
             locale: AppStrings.zhCN,
-            supportedLocales: AppStrings.supported,
-            localizationsDelegates: const [
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
             theme: _reviewTheme(Brightness.light),
             darkTheme: _reviewTheme(Brightness.dark),
             themeMode: ThemeMode.dark,
@@ -307,16 +334,11 @@ void main() {
         strings: AppStrings.of(AppStrings.zhCN),
         child: RepaintBoundary(
           key: screenshotKey,
-          child: MaterialApp(
-            debugShowCheckedModeBanner: false,
+          child: _screenshotMaterialApp(
             locale: AppStrings.zhCN,
-            supportedLocales: AppStrings.supported,
-            localizationsDelegates: const [
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
             theme: _reviewTheme(Brightness.light),
+            darkTheme: _reviewTheme(Brightness.dark),
+            themeMode: ThemeMode.light,
             home: Scaffold(
               body: Column(
                 children: [
@@ -387,15 +409,8 @@ Future<void> _pumpShell(
           strings: AppStrings.of(controller.locale),
           child: RepaintBoundary(
             key: screenshotKey,
-            child: MaterialApp(
-              debugShowCheckedModeBanner: false,
+            child: _screenshotMaterialApp(
               locale: controller.locale,
-              supportedLocales: AppStrings.supported,
-              localizationsDelegates: const [
-                GlobalMaterialLocalizations.delegate,
-                GlobalWidgetsLocalizations.delegate,
-                GlobalCupertinoLocalizations.delegate,
-              ],
               theme: _reviewTheme(Brightness.light),
               darkTheme: _reviewTheme(Brightness.dark),
               themeMode: controller.themeMode,
@@ -415,6 +430,35 @@ ThemeData _reviewTheme(Brightness brightness) {
   return base.copyWith(
     textTheme: base.textTheme.apply(fontFamily: 'ReviewSans', fontFamilyFallback: fallbacks),
     primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'ReviewSans', fontFamilyFallback: fallbacks),
+  );
+}
+
+Widget _screenshotMaterialApp({
+  required Locale locale,
+  required ThemeData theme,
+  required ThemeData darkTheme,
+  required ThemeMode themeMode,
+  required Widget home,
+}) {
+  return MaterialApp(
+    debugShowCheckedModeBanner: false,
+    locale: locale,
+    supportedLocales: AppStrings.supported,
+    localizationsDelegates: const [
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
+    theme: theme,
+    darkTheme: darkTheme,
+    themeMode: themeMode,
+    builder: (context, child) => Stack(
+      children: [
+        if (child != null) child,
+        const Positioned(top: 0, left: 0, right: 0, child: _ScreenshotStatusBar()),
+      ],
+    ),
+    home: home,
   );
 }
 
@@ -607,7 +651,7 @@ MemoryOpenChamberTransport _seededTransport() {
         'parts': [
           {
             'type': 'text',
-            'text': '路径匹配已经按目录前缀对齐。已跑: ToolPart / toolDiffUtils / DiffView 相关测试，58 过。',
+            'text': '路径匹配已经按目录前缀对齐。已跑: `ToolPart` / `toolDiffUtils` / `DiffView` 相关测试，58 过。',
           },
           {
             'id': 'task-1',
