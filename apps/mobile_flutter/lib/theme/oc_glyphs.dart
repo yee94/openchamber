@@ -100,7 +100,9 @@ class _OcGlyphPainter extends CustomPainter {
     // Official dock `Icon weight="medium"` is stroke 2. Folder-open and
     // sparkles are open silhouettes — filling them is a blob or a
     // postage-stamp well. Stroke both at the same medium weight.
-    if ((kind == OcGlyphKind.folder || kind == OcGlyphKind.sparkles) &&
+    if ((kind == OcGlyphKind.folder ||
+            kind == OcGlyphKind.sparkles ||
+            kind == OcGlyphKind.calendar) &&
         filled &&
         official != null) {
       paintOfficialSprite(

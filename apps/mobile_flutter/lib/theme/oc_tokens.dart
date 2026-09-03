@@ -147,12 +147,10 @@ class OcTokens extends ThemeExtension<OcTokens> {
   Color get glassFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
-  /// Official glass-fill is white 0.68 + blur 20. WidgetTester blur of
-  /// cream paints a plate; 0.68 without blur is a coin. Quiet white
-  /// (no blur) + contact/inset is the glassChip language that still
-  /// reads without a 0.68 coin. `+` stays primary.
+  /// Page-bleed chip (3654022): clear fill. Cream + blur paints a plate;
+  /// 0.68 without blur is a coin. Contact + inset define the rim.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: 0.06);
+      .withValues(alpha: 0);
 
   /// Official `--oc-mobile-glass-highlight` is white / 0.60
   /// (dark 0.18). Inset sheen on the elevated plate.
@@ -172,11 +170,10 @@ class OcTokens extends ThemeExtension<OcTokens> {
       foreground.withValues(alpha: isDark ? 0.122 : 0.086);
 
   /// Official selected-tab fill is `bg-interactive-selection/55`.
-  /// Authored `#16121016` already *is* that 55% glass mix. Multiplying
-  /// alpha again (0.086×0.55) vanishes on WidgetTester cream (L 228≈229).
-  /// Paint the authored token. Do not use RGB@0.55 (brown capsule) or a
-  /// second frost. Geometry stays the 58×r29 cell.
-  Color get selectedTabWash => interactiveSelection;
+  /// Mix the authored token at [OcOptical.dockIconWashAlpha]. Do not use
+  /// RGB@0.55 (brown capsule) or a second frost plate.
+  Color get selectedTabWash =>
+      interactiveSelection.withValues(alpha: interactiveSelection.a * OcOptical.dockIconWashAlpha);
 
   /// `--oc-mobile-header-fade` = surface-background 85%.
   Color get headerFade => background.withValues(alpha: 0.85);
