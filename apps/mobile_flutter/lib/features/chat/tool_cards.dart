@@ -450,17 +450,17 @@ class _FileTypeMark extends StatelessWidget {
       height: OcOptical.fileTypeSize,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: tint.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(2),
+          color: tint,
+          borderRadius: BorderRadius.circular(3),
         ),
         child: Center(
           child: Text(
             mark,
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: OcOptical.fileTypeMark,
-              fontWeight: FontWeight.w600,
-              color: tint,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFFFFFFFF),
               height: 1,
               letterSpacing: -0.2,
             ),

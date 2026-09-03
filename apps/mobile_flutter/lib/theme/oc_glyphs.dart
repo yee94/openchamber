@@ -102,6 +102,7 @@ class _OcGlyphPainter extends CustomPainter {
         sprite: official,
         color: color,
         strokeWidth: strokeWidth,
+        filled: filled,
       );
       return;
     }

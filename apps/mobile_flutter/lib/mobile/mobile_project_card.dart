@@ -52,9 +52,9 @@ class MobileProjectCard extends StatelessWidget {
               width: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
               height: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
               decoration: BoxDecoration(
-                color: Color.lerp(context.oc.card, const Color(0xFFFFFFFF), context.oc.isDark ? 0.08 : 0.55),
+                color: context.oc.isDark ? context.oc.card : const Color(0xFFFFFFFF),
                 shape: BoxShape.circle,
-                border: Border.all(color: context.oc.mobileControlBorder),
+                boxShadow: OcElevation.control(context),
               ),
               alignment: Alignment.center,
               child: OcGlyph(

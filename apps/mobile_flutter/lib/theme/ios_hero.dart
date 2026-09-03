@@ -24,7 +24,7 @@ class OcOptical {
   static const double moreLinkPadV = 8;
   static const double groupHeaderPadV = 10;
   static const double groupHeaderPadVCompact = 8;
-  static const double groupTitleMetaGap = 3;
+  static const double groupTitleMetaGap = 5;
 
   /// Root `--oc-mobile-entity-title` 16 / 20. Project-shell tightens to 14 / 18.
   static const double entityTitle = 16;
@@ -42,7 +42,7 @@ class OcOptical {
   static const double sessionTimeHeight = 1.2;
 
   static const double scheduleCardPadV = 10;
-  static const double scheduleTitleMetaGap = 3;
+  static const double scheduleTitleMetaGap = 5;
 
   /// Official `.oc-mobile-detail-title` 0.9375rem / line-height 1.4 / weight 650.
   static const double chatTitle = 15;
@@ -132,12 +132,12 @@ class OcOptical {
   /// Official `Button` `mobileIcon` = `size-10` (40). Same disc as header actions.
   static const double chatChip = 40;
 
-  static const double scheduleStatus = 38;
-  static const double scheduleStatusGlyph = 18;
+  static const double scheduleStatus = 28;
+  static const double scheduleStatusGlyph = 12;
 
   /// Official `FileTypeIcon` mobile size `h-3 w-3` (12px).
-  static const double fileTypeSize = 12;
-  static const double fileTypeMark = 7;
+  static const double fileTypeSize = 16;
+  static const double fileTypeMark = 8;
   static const double fileRowPadV = 4;
 
   static const double composerRadius = 24;

@@ -23,9 +23,9 @@ class OcElevation {
     // and a short tucked far wash (more negative spread, low alpha, small
     // offset) so lift is soft contact, not a drop. Same path cards/dock/composer.
     return const [
-      BoxShadow(color: Color(0x06000000), blurRadius: 2),
-      BoxShadow(color: Color(0x07000000), blurRadius: 8),
-      BoxShadow(color: Color(0x08000000), blurRadius: 14, spreadRadius: -10, offset: Offset(0, 2)),
+      BoxShadow(color: Color(0x05000000), blurRadius: 1),
+      BoxShadow(color: Color(0x06000000), blurRadius: 6),
+      BoxShadow(color: Color(0x07000000), blurRadius: 10, spreadRadius: -8, offset: Offset(0, 1)),
     ];
   }
 

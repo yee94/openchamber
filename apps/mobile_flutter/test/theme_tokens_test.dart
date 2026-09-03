@@ -82,7 +82,7 @@ void main() {
     expect(OcOptical.sessionRowPadV, 5);
     expect(OcOptical.metaHeight, 1.25);
     expect(OcOptical.entityTitleHeight, 1.25);
-    expect(OcOptical.scheduleTitleMetaGap, 3);
+    expect(OcOptical.scheduleTitleMetaGap, 5);
     expect(OcOptical.chatBodyHeight, lessThan(1.50));
     expect(OcOptical.chatTitle, 15);
     expect(OcOptical.chatBodyTracking, 0);
@@ -127,12 +127,12 @@ void main() {
     expect(OcOptical.sessionMore, 14);
     expect(OcOptical.chevron, 14);
     expect(OcOptical.footerGlyph, 14);
-    expect(OcOptical.scheduleStatus, 38);
+    expect(OcOptical.scheduleStatus, 28);
     expect(OcOptical.overflow, 16);
     expect(OcOptical.chatChip, 40);
     expect(OcOptical.chatChip, OcOptical.headerDisc);
     expect(OcOptical.sessionBullet, 5);
-    expect(OcOptical.fileTypeSize, 12);
+    expect(OcOptical.fileTypeSize, 16);
     expect(OcOptical.fileRowPadV, 4);
     expect(OcOptical.composerRadius, 24);
     expect(OcOptical.composerPlus, 20);
@@ -152,7 +152,7 @@ void main() {
 
   test('OcElevation is layered in light and empty in dark', () {
     expect(OcElevation.cardFor(OcTokens.light), hasLength(3));
-    expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, greaterThanOrEqualTo(2));
+    expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, greaterThanOrEqualTo(1));
     expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, lessThanOrEqualTo(16));
     expect(OcElevation.cardFor(OcTokens.light).last.offset.dy, lessThanOrEqualTo(3));
     expect(

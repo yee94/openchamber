@@ -24,46 +24,6 @@ import 'package:openchamber/theme/app_theme.dart';
 import 'package:openchamber/theme/ios_chrome.dart';
 import 'review_fonts.dart';
 
-/// Decorative iOS status bar for golden captures (WidgetTester has no UIKit bar).
-class _ScreenshotStatusBar extends StatelessWidget {
-  const _ScreenshotStatusBar();
-
-  @override
-  Widget build(BuildContext context) {
-    final muted = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.82);
-    return IgnorePointer(
-      child: Container(
-        height: 47,
-        padding: const EdgeInsets.fromLTRB(24, 14, 20, 0),
-        alignment: Alignment.topCenter,
-        child: Row(
-          children: [
-            Text(
-              '23:58',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, height: 1, color: muted, letterSpacing: -0.2),
-            ),
-            const Spacer(),
-            Row(
-              children: [
-                _statusDot(muted),
-                const SizedBox(width: 4),
-                _statusDot(muted),
-                const SizedBox(width: 4),
-                _statusDot(muted),
-                const SizedBox(width: 6),
-                Icon(Icons.wifi, size: 15, color: muted),
-                const SizedBox(width: 5),
-                Icon(Icons.battery_full_rounded, size: 17, color: muted),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _statusDot(Color color) => Container(width: 4, height: 4, decoration: BoxDecoration(color: color, shape: BoxShape.circle));
-}
 
 /// Dedicated capture of the real Flutter widgets for Yee's visual review.
 ///
@@ -129,8 +89,9 @@ void main() {
     expect(find.byKey(const Key('home-project-openchamber')), findsOneWidget);
     expect(find.byKey(const Key('home-project-stack-openchamber')), findsOneWidget);
     expect(find.textContaining('feat/opencode2up'), findsNothing);
-    expect(find.textContaining('feat/remove-ctx'), findsNothing);
-    expect(find.textContaining('ios-native'), findsNothing);
+    expect(find.textContaining('feat-opencode2up'), findsOneWidget);
+    expect(find.textContaining('feat-remove-ctx'), findsOneWidget);
+    expect(find.textContaining('ios-native'), findsOneWidget);
     expect(find.text('发布说明'), findsOneWidget);
     expect(find.byKey(const Key('projects-attention-strip')), findsNothing);
     expect(find.byType(MobileTabPageHeader), findsOneWidget);
@@ -151,6 +112,12 @@ void main() {
     expect(find.text('新建对话'), findsOneWidget);
     await tester.tapAt(const Offset(48, 720));
     await _pumpFrames(tester);
+    await tester.tap(find.textContaining('feat-opencode2up'));
+    await tester.tap(find.textContaining('feat-remove-ctx'));
+    await tester.tap(find.textContaining('ios-native'));
+    await _pumpFrames(tester);
+    expect(find.textContaining('OpenCode 升级'), findsOneWidget);
+    expect(find.textContaining('Composer UIKit overlay'), findsOneWidget);
     await _writePng(tester, screenshotKey, '02-projects.png');
 
     final projectsScroll = tester.widget<SingleChildScrollView>(find.byType(SingleChildScrollView));
@@ -452,12 +419,6 @@ Widget _screenshotMaterialApp({
     theme: theme,
     darkTheme: darkTheme,
     themeMode: themeMode,
-    builder: (context, child) => Stack(
-      children: [
-        if (child != null) child,
-        const Positioned(top: 0, left: 0, right: 0, child: _ScreenshotStatusBar()),
-      ],
-    ),
     home: home,
   );
 }
@@ -554,7 +515,7 @@ MemoryOpenChamberTransport _seededTransport() {
             {
               'id': 'sess-wt-1',
               'title': 'OpenCode 升级',
-              'directory': '/workspace/Code/github/openchamber',
+              'directory': '/workspace/Code/github/openchamber-wt/feat-opencode2up',
               'parentID': null,
               'project': {'name': 'openchamber'},
               'time': {'updated': now - 12 * 3600000},
@@ -563,7 +524,7 @@ MemoryOpenChamberTransport _seededTransport() {
             {
               'id': 'sess-wt-2',
               'title': 'Composer IME',
-              'directory': '/workspace/Code/github/openchamber',
+              'directory': '/workspace/Code/github/openchamber-wt/feat-opencode2up',
               'parentID': null,
               'project': {'name': 'openchamber'},
               'time': {'updated': now - 20 * 3600000},
@@ -572,7 +533,7 @@ MemoryOpenChamberTransport _seededTransport() {
             {
               'id': 'sess-ctx-1',
               'title': '合并上下文窗口',
-              'directory': '/workspace/Code/github/openchamber',
+              'directory': '/workspace/Code/github/openchamber-wt/feat-remove-ctx',
               'parentID': null,
               'project': {'name': 'openchamber'},
               'time': {'updated': now - 4 * 86400000},
@@ -581,7 +542,7 @@ MemoryOpenChamberTransport _seededTransport() {
             {
               'id': 'sess-ctx-2',
               'title': 'Halo greeting',
-              'directory': '/workspace/Code/github/openchamber',
+              'directory': '/workspace/Code/github/openchamber-wt/feat-remove-ctx',
               'parentID': null,
               'project': {'name': 'openchamber'},
               'time': {'updated': now - 6 * 86400000},
@@ -590,7 +551,7 @@ MemoryOpenChamberTransport _seededTransport() {
             {
               'id': 'sess-ctx-3',
               'title': '去掉多余上下文',
-              'directory': '/workspace/Code/github/openchamber',
+              'directory': '/workspace/Code/github/openchamber-wt/feat-remove-ctx',
               'parentID': null,
               'project': {'name': 'openchamber'},
               'time': {'updated': now - 7 * 86400000},
@@ -599,7 +560,7 @@ MemoryOpenChamberTransport _seededTransport() {
             {
               'id': 'sess-ios-1',
               'title': 'Composer UIKit overlay',
-              'directory': '/workspace/Code/github/openchamber',
+              'directory': '/workspace/Code/github/openchamber-wt/ios-native',
               'parentID': null,
               'project': {'name': 'openchamber'},
               'time': {'updated': now - 5 * 60000},
@@ -608,7 +569,7 @@ MemoryOpenChamberTransport _seededTransport() {
             {
               'id': 'sess-ios-2',
               'title': 'Live Activity 状态',
-              'directory': '/workspace/Code/github/openchamber',
+              'directory': '/workspace/Code/github/openchamber-wt/ios-native',
               'parentID': null,
               'project': {'name': 'openchamber'},
               'time': {'updated': now - 2 * 86400000},
@@ -617,7 +578,7 @@ MemoryOpenChamberTransport _seededTransport() {
             {
               'id': 'sess-ios-3',
               'title': 'Tab bar 玻璃',
-              'directory': '/workspace/Code/github/openchamber',
+              'directory': '/workspace/Code/github/openchamber-wt/ios-native',
               'parentID': null,
               'project': {'name': 'openchamber'},
               'time': {'updated': now - 3 * 86400000},

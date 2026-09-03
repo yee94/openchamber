@@ -4,10 +4,15 @@ import 'dart:ui';
 /// Flutter paints these so glyph *shape* matches WebView `Icon`, while
 /// [OcOptical] tokens own the on-screen size. Hit areas stay on the widget.
 class OcOfficialSprite {
-  const OcOfficialSprite({this.paths = const [], this.circles = const []});
+  const OcOfficialSprite({
+    this.paths = const [],
+    this.circles = const [],
+    this.rects = const [],
+  });
 
   final List<String> paths;
   final List<(double cx, double cy, double r)> circles;
+  final List<(double x, double y, double w, double h, double rx)> rects;
 }
 
 /// Homepage / dock / header roles only — names from MobileProjectCard,
@@ -34,13 +39,12 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
       ),
     'calendar' => const OcOfficialSprite(
         paths: [
-          'M16 14v2.2l1.6 1',
-          'M16 2v4',
-          'M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5',
-          'M3 10h5',
           'M8 2v4',
+          'M16 2v4',
+          'M3 10h18',
         ],
-        circles: [(16, 16, 6)],
+        circles: [],
+        rects: [(3, 4, 18, 18, 2)],
       ),
     'gear' => const OcOfficialSprite(
         paths: [
@@ -91,12 +95,15 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
 
 /// Paint a 24×24 official sprite into [size]. [strokeWidth] is the viewBox
 /// stroke (1.5 regular / 2 medium), matching `Icon.tsx`.
+/// [filled] uses fill+stroke so selected dock roles read as solid glyphs
+/// (folder / sparkle / calendar) while settings stay a ring.
 void paintOfficialSprite({
   required Canvas canvas,
   required Size size,
   required OcOfficialSprite sprite,
   required Color color,
   required double strokeWidth,
+  bool filled = false,
 }) {
   if (size.width <= 0 || size.height <= 0) return;
   canvas.save();
@@ -107,11 +114,21 @@ void paintOfficialSprite({
     ..strokeWidth = strokeWidth
     ..strokeCap = StrokeCap.round
     ..strokeJoin = StrokeJoin.round;
+  final fill = Paint()
+    ..color = color
+    ..style = PaintingStyle.fill;
   for (final d in sprite.paths) {
-    canvas.drawPath(parseSvgPath(d), stroke);
+    canvas.drawPath(parseSvgPath(d), filled ? fill : stroke);
+  }
+  for (final rect in sprite.rects) {
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(rect.$1, rect.$2, rect.$3, rect.$4),
+      Radius.circular(rect.$5),
+    );
+    canvas.drawRRect(rrect, filled ? fill : stroke);
   }
   for (final circle in sprite.circles) {
-    canvas.drawCircle(Offset(circle.$1, circle.$2), circle.$3, stroke);
+    canvas.drawCircle(Offset(circle.$1, circle.$2), circle.$3, filled ? fill : stroke);
   }
   canvas.restore();
 }
