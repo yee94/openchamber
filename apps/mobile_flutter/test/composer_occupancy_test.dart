@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openchamber/features/chat/composer_bar.dart';
 import 'package:openchamber/features/chat/composer_occupancy.dart';
 import 'package:openchamber/l10n/app_strings.dart';
+import 'package:openchamber/theme/ios_hero.dart';
 
 void main() {
   test('autocomplete stub pan-scrolls commands and files', () {
@@ -35,5 +36,20 @@ void main() {
     expect(find.byKey(const Key('composer-field')), findsOneWidget);
     expect(find.byKey(const Key('composer-send')), findsOneWidget);
     expect(collapsedComposerOccupancy, 56);
+  });
+
+  test('list reserve clears the Android composer stack including the scroll FAB', () {
+    expect(
+      composerListReserve(ios: true, viewBottom: 34, insetBottom: 0, showScrollToBottom: true),
+      collapsedComposerOccupancy + 34,
+    );
+    expect(
+      composerListReserve(ios: false, viewBottom: 34, insetBottom: 0, showScrollToBottom: true),
+      collapsedComposerOccupancy + 34 + OcOptical.scrollFab + 6 + composerPillBottomPad,
+    );
+    expect(
+      composerListReserve(ios: false, viewBottom: 34, insetBottom: 320, showScrollToBottom: false),
+      collapsedComposerOccupancy + composerPillBottomPad,
+    );
   });
 }

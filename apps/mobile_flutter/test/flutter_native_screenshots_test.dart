@@ -255,12 +255,15 @@ void main() {
     expect(find.textContaining('Agent 参与'), findsOneWidget);
     expect(find.byKey(const Key('chat-tool-diff-edit-1')), findsOneWidget);
     expect(find.byKey(const Key('chat-file-slash-edit-1')), findsOneWidget);
-    expect(find.text('+70'), findsOneWidget);
-    expect(find.text('-15'), findsOneWidget);
+    expect(find.text('+70/-15', findRichText: true), findsOneWidget);
     expect(find.textContaining('已更改文件'), findsOneWidget);
     expect(find.textContaining('个文件'), findsWidgets);
     expect(find.textContaining('+5 个文件'), findsOneWidget);
     expect(find.byKey(const Key('chat-tps-m-asst')), findsOneWidget);
+    expect(
+      tester.getRect(find.byKey(const Key('chat-footer-duration-m-asst'))).bottom,
+      lessThanOrEqualTo(tester.getRect(find.byKey(const Key('composer-field'))).top),
+    );
     expect(find.textContaining('需要权限'), findsNothing);
     expect(find.byKey(const Key('tab-projects')), findsNothing);
     expect(find.byKey(const Key('projects-plus-menu')), findsNothing);

@@ -51,9 +51,8 @@ void main() {
     expect(find.byKey(const Key('chat-action-fork-m-asst')), findsOneWidget);
     expect(find.byKey(const Key('chat-tps-m-asst')), findsOneWidget);
     expect(find.byKey(const Key('chat-file-slash-edit-1')), findsOneWidget);
-    expect(find.text('+3'), findsOneWidget);
-    expect(find.text('+1'), findsOneWidget);
-    expect(find.text('-1'), findsNWidgets(2));
+    expect(find.text('+3/-1', findRichText: true), findsOneWidget);
+    expect(find.text('+1/-1', findRichText: true), findsOneWidget);
   });
 }
 

@@ -346,7 +346,13 @@ class _ChatScreenState extends State<ChatScreen> {
     final view = MediaQuery.viewPaddingOf(context);
     final atLiveEdge = _atLiveEdge;
     final navH = PushedNavBar.overlayHeight(context);
-    final composerReserve = collapsedComposerOccupancy + (ios ? view.bottom : inset.bottom);
+    final showScrollToBottom = !atLiveEdge || _timeline.length >= 2;
+    final composerReserve = composerListReserve(
+      ios: ios,
+      viewBottom: view.bottom,
+      insetBottom: inset.bottom,
+      showScrollToBottom: showScrollToBottom,
+    );
     return Scaffold(
       extendBody: true,
       extendBodyBehindAppBar: true,
@@ -470,7 +476,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     busy: _busy,
                     attachments: _attachments,
                     dictationLabel: _dictationLabel,
-                    showScrollToBottom: !atLiveEdge || _timeline.length >= 2,
+                    showScrollToBottom: showScrollToBottom,
                     onScrollToBottom: _jumpToLatest,
                     onSend: _send,
                     onStop: _stop,
