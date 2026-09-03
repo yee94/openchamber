@@ -121,14 +121,14 @@ Native contracts / shell
 | Contract | Status | Main source | Notes |
 |---|---|---|---|
 | Connection onboarding | landed | `MobileApp.tsx`, HANDOFF | Live `GET /health`, `GET/POST /auth/session`, pairing redeem. Auto-connect last token. Delete-active → connect |
-| QR pairing | landed | `mobileQrScan.ts`, `connectionPayload.ts` | Persist payload + `relayUrl`. **Redeems** `POST /api/client-auth/pairing/redeem` on a LAN candidate. Relay-only payloads are refused (no E2EE tunnel yet) |
+| QR pairing | landed | `mobileQrScan.ts`, `connectionPayload.ts` | Persist payload + `relayUrl` + `hostEncPubJwk` + grant. Redeems `POST /api/client-auth/pairing/redeem` on the first reachable transport (LAN, then official E2EE tunnel) |
 | iOS composer | landed | `OpenChamberComposer` | UIKit platform view, always on |
 | Android composer | landed | IME viewInsets | Material + solid inset surface. ImeSync analogue still later |
 | iOS liquid-glass dock | landed | `OpenChamberTabBar` | iOS 26 `UIGlassEffect`; older: system translucent bar |
 | Android dock | landed (Material 3) | Web `MobileTabBar` | Keep solid/translucent Material `NavigationBar` |
 | Live Activity / Dynamic Island | landed | `OpenChamberLiveActivity` | Driven from `GET /api/session/status` busy/retry; start after 5s; `pushType` nil; no rebuild after dismiss |
 | Share-in | landed | Share extension + `ShareReceiverActivity` | Exact instance+assistant. Catalog published from saved instances |
-| Push | landed (host register) | APNs + FCM → `openchamber-push-relay` | Mobile `POST /api/push/apns-token` + `POST /api/push/visibility`. Host binds relay. iOS requests APNs token. Android FCM token is **null** until Firebase SDK is added (not invented). Presence skip is **host-side** (`isAnyInteractiveClientVisible`) |
+| Push | landed (host register) | APNs + FCM → `openchamber-push-relay` | Mobile `POST /api/push/apns-token` + `POST /api/push/visibility`. Host binds relay. iOS requests APNs token. Android copies Capacitor `google-services.json` (`com.yee94.openchamber` / `openchamber-8bf7e`) and reads the FCM token via the native Firebase SDK — still **null** if Firebase is unavailable (not invented). Presence skip is **host-side** (`isAnyInteractiveClientVisible`) |
 | WidgetKit + Control Center + NSE | landed | `OpenChamberWidget`, NSE | Snapshot JSON `{attentionCount, recentSessions}` written to App Group `widgetSnapshot` from the live index |
 | Haptics | landed | `OpenChamberHaptics` | light / medium / heavy via method channel |
 | Native back | landed | Flutter routes | iOS `CupertinoPageRoute` edge pan; Android `PredictiveBackPageTransitionsBuilder` |
@@ -169,7 +169,7 @@ Capacitor pipelines on `main` are unchanged (`mobile-ci.yml`, `mobile-release.ym
 
 | Workflow | Trigger | What |
 |---|---|---|
-| `.github/workflows/flutter-mobile-ci.yml` | **push to `work/flutter-native` only** + `workflow_dispatch` | Parallel `analyze-test` / `android-debug` / `ios-simulator`. Flutter **3.32.8** pinned (CI `stable` had drifted to 3.47.2 and failed on `unawaited_return_in_try_block`). No `pull_request`. `cursor/flutter-native-8ab3` is not a second trigger. **Actions green is not claimed from this VM.** |
+| `.github/workflows/flutter-mobile-ci.yml` | **push to `work/flutter-native` only** + `workflow_dispatch` | Parallel `analyze-test` / `android-debug` / `ios-simulator`. Flutter **3.32.8** pinned. No `pull_request`. iOS job is a real `flutter build ios --simulator --no-codesign` and asserts `Runner.app`. **Run #9 on `16a6eb215`:** analyze+tests **success**, Android debug APK **success**, iOS **failed** — `Runner.xcodeproj` parse error (`missing semicolon in dictionary` on extension `buildSettings`). Fixed in slice 4 by closing those dictionaries with `};`. **Do not claim this slice green until a later Actions run finishes.** |
 | `.github/workflows/flutter-mobile-release.yml` | `workflow_dispatch` only | Decode **existing** Android keystore + iOS p12 / four profiles; signed Android APK/AAB; iOS archive/export + TestFlight gated by `build_ios` (default **false**) |
 
 Secret names reused (do not invent new ones; do not print values):
@@ -199,13 +199,13 @@ Capgo (`mobile-beta-ota.yml`) stays Capacitor/WebView. Flutter does not consume 
 | Android emulator LAN HTTP + IME composer | Manifest allows cleartext; composer uses solid `viewInsets` |
 | Settings slug walkthrough | Widget test walks all slugs + About |
 | Keyboard / IME | Android solid viewInsets. iOS UIKit composer owns IME |
-| Pairing | v2 parse + `POST /api/client-auth/pairing/redeem` on LAN. Relay-only refused |
+| Pairing | v2 parse + redeem on LAN or official E2EE tunnel. Tunnel-open failure stays on connect |
 | Chat scroll | Reverse list prepend test + re-enter latest |
 | No PIN lock | Widget test asserts no Face ID / PIN / passcode lock |
 | No Chat dock tab | Widget test: 4 destinations |
 | No iosNativeUi | Catalog + Settings home tests |
 | `flutter analyze` + tests on Linux | Required this slice |
-| Flutter CI YAML | Push-only on `work/flutter-native`; parallel jobs. **macos-15 / Actions not claimed green** |
+| Flutter CI YAML | Push-only on `work/flutter-native`; parallel jobs; iOS job asserts `Runner.app`. **Actions green is not claimed from this VM** |
 | Signed-release YAML attaches all four profiles | Committed. **Signed archive not run here** |
 
 ## Commands
@@ -235,19 +235,32 @@ flutter build apk --release
 | Surface | Status | Notes |
 |---|---|---|
 | Live HTTP connect | landed | `GET /health`, `GET/POST /auth/session` (`issueClientToken`, `dedupeKey`). Tokens in SecureStore key `openchamber.mobile.token.${encodeURIComponent(connectionKey)}`. Never logged |
-| Pairing redeem | landed | `POST /api/client-auth/pairing/redeem` on first LAN candidate. Relay-only → `connect.error.relayTunnelMissing` (E2EE tunnel **not** implemented) |
-| Session index home | landed | `GET /api/openchamber/session-index`. Failure ≠ empty. Search + highlight (1.19.3-beta.1). Pinned/in-progress subtitle `项目 · 分支` |
-| Chat transcript + Send/Stop | landed | `GET /api/openchamber/sessions/:id/messages?turns=6`. Send `POST /api/session/:id/prompt_async`. Stop `POST /api/session/:id/abort`. Poll messages + `GET /api/session/status`. No local assistant echo |
+| Pairing redeem | landed | `POST /api/client-auth/pairing/redeem` on first reachable candidate. LAN first, then official E2EE tunnel (`packages/ui/src/lib/relay/*`). Relay-only persists `relay://$serverId` + `hostEncPubJwk` + grant |
+| Session index home | landed | `GET /api/openchamber/session-index`. Failure ≠ empty. Search + highlight (1.19.3-beta.1). Pinned/in-progress subtitle `项目 · 分支`. Works through the tunnel after a successful relay redeem (unit-tested on a memory wire; no live `wss://` from this VM) |
+| Chat transcript + Send/Stop | landed | `GET /api/openchamber/sessions/:id/messages?turns=6`. Send `POST /api/session/:id/prompt_async`. Stop `POST /api/session/:id/abort`. Live `GET /api/global/event` SSE; 2s/4s poll is reconnect fallback only |
+| New session | landed | Projects plus-menu `POST /api/session?directory=` using a directory from the loaded index. Honest error if no directory — not a snackbar-only stub |
 | Live Activity from busy | landed | Status map `busy`/`retry` arms a single 5s timer (polls do not reset it). `pushType` nil. No rebuild after dismiss |
-| Push register | landed (partial) | iOS APNs token → host `POST /api/push/apns-token`. Re-binds when `relayUrl` / instance id changes. Android FCM token is **null** (no Firebase SDK; do not invent a token). Visibility: Flutter `AppLifecycleState` + 20s heartbeat → `POST /api/push/visibility`. Presence skip remains **host-side** (`isAnyInteractiveClientVisible`). This client does not read desktop/web visibility. |
+| Push register | landed | iOS APNs + Android FCM → host `POST /api/push/apns-token` (`platform: ios\|android`). Re-binds when `relayUrl` / instance id changes. Visibility: Flutter `AppLifecycleState` + 20s heartbeat → `POST /api/push/visibility`. Presence skip remains **host-side** |
 | Haptics + native back | landed | See parity table |
 | Widget snapshots | landed (sparse) | Written after each successful index load |
-| Flutter CI concurrency | landed | Push to `work/flutter-native` only + `workflow_dispatch`. Single group `flutter-mobile-ci-work-flutter-native`. Jobs run in parallel (no `needs`). **This agent did not claim Actions green** |
+| Flutter CI concurrency | landed | Push to `work/flutter-native` only + `workflow_dispatch`. Single group `flutter-mobile-ci-work-flutter-native`. Jobs run in parallel (no `needs`). iOS job asserts `build/ios/iphonesimulator/Runner.app`. **This agent did not claim Actions green** |
 
-## Next slices
+## Fourth-slice status
 
-1. E2EE relay tunnel (LAN-only connect works; relay-only pairing is refused)
-2. SSE `/api/global/event` instead of 2s/4s poll
-3. Android FCM token (Firebase) — do not invent a token
-4. Virtual assets / HEIC / picker
-5. Session **create** (`POST /api/session`) once a live directory picker exists
+| Surface | Status | Notes |
+|---|---|---|
+| E2EE relay tunnel | landed (HTTP mux) | Byte-compatible port of `protocol.ts` / `crypto.ts` / `handshake.ts` / `tunnel-codec.ts` / `tunnel-client.ts` fetch path. Layer 1 `ws/wss` + `v=1&role=client&serverId` (+ optional `grant`). Layer 2 ECDH P-256 + HKDF-SHA-256 (`openchamber-relay-v1`) + AES-256-GCM. Layer 3 HTTP frames, odd client stream ids, negotiated single-frame batches. Dummy parse base `http://tunnel.invalid`. **Not invented.** |
+| Tunneled WebSockets | **gap** | `openWebSocket` / `WsOpen`…`WsClose` / `oc_url_token` from `packages/ui/src/lib/relay/tunnel-client.ts` and `packages/ui/src/lib/runtime-auth.ts` are **not** ported. Health / redeem / auth / session-index / prompt / SSE do not need them. Event pipeline on main prefers `/api/global/event/ws` then falls back to SSE (`event-pipeline.ts`). Flutter uses SSE only. |
+| Frame-batching window | partial | Handshake advertises `batch`; single-frame `0x00` envelopes are sent. The 150ms multi-frame body batcher from `createOutboundFrameBatcher` is not ported — legal per protocol. |
+| Live event path | landed (SSE) | `GET /api/global/event` with bearer + `Last-Event-ID`. Poll remains reconnect fallback. |
+| Android FCM | landed (native SDK) | Copied `packages/mobile/android/app/google-services.json`. No new secret names. Token still null if Firebase init/token fails. |
+| Session create | landed | `POST /api/session` |
+| iOS simulator CI | asserted | `flutter build ios --simulator --no-codesign` plus `test -d build/ios/iphonesimulator/Runner.app` |
+
+## Remaining gaps
+
+1. Tunneled WebSockets + `oc_url_token` (`packages/ui/src/lib/relay/tunnel-client.ts` `openWebSocket`, `packages/ui/src/lib/runtime-auth.ts`)
+2. Experimental session-list fallback when index returns 501
+3. Virtual assets / HEIC / picker
+4. Capgo / plan / notes / Todo / Chat dock tab — will not port
+5. A relay-paired **phone** talking to a real hosted relay was **not** exercised from this Linux VM. Dart client ↔ Dart host memory-wire proves redeem + session-index. Live `wss://` + real host private key is still a device/network check.

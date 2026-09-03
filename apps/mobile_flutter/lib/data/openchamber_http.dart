@@ -17,12 +17,14 @@ abstract final class OpenChamberPaths {
   static String sessionAbort(String sessionId) =>
       '/api/session/${Uri.encodeComponent(sessionId)}/abort';
   static const sessionStatus = '/api/session/status';
+  static const sessionCreate = '/api/session';
+  static const globalEvent = '/api/global/event';
   static const pushApnsToken = '/api/push/apns-token';
   static const pushVisibility = '/api/push/visibility';
 }
 
 class OpenChamberHttpException implements Exception {
-  OpenChamberHttpException(this.status, this.path, {this.code});
+  const OpenChamberHttpException(this.status, this.path, {this.code});
 
   final int status;
   final String path;
@@ -87,6 +89,8 @@ class OpenChamberRequest {
     this.query = const {},
     this.body,
     this.bearer,
+    this.extraHeaders = const {},
+    this.stream = false,
     this.timeout = const Duration(seconds: 8),
   });
 
@@ -95,13 +99,25 @@ class OpenChamberRequest {
   final Map<String, String> query;
   final Map<String, Object?>? body;
   final String? bearer;
+  final Map<String, String> extraHeaders;
+  final bool stream;
   final Duration timeout;
 }
+
+/// Dummy parse base from `packages/ui/src/lib/relay/tunnel-payloads.ts`.
+const tunnelParseBase = 'http://tunnel.invalid';
 
 /// Transport for official OpenChamber HTTP. Implementations must never log
 /// bearer tokens, pairing secrets, or passwords.
 abstract class OpenChamberTransport {
   Future<OpenChamberResponse> send(Uri base, OpenChamberRequest request);
+
+  /// Long-lived byte stream (SSE). Direct uses HttpClient; relay uses HTTP mux
+  /// `HttpBody` frames. Must yield chunks as they arrive — do not wait for
+  /// `StreamEnd` before the first event.
+  Stream<List<int>> openByteStream(Uri base, OpenChamberRequest request);
+
+  Future<void> close();
 }
 
 class OpenChamberResponse {
@@ -138,6 +154,7 @@ class LiveOpenChamberTransport implements OpenChamberTransport {
     if (request.bearer != null && request.bearer!.isNotEmpty) {
       httpRequest.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${request.bearer}');
     }
+    request.extraHeaders.forEach(httpRequest.headers.set);
     if (request.body != null) {
       httpRequest.headers.contentType = ContentType.json;
       httpRequest.add(utf8.encode(jsonEncode(request.body)));
@@ -159,6 +176,32 @@ class LiveOpenChamberTransport implements OpenChamberTransport {
     if (basePath.isEmpty || basePath == '/') return path;
     if (path.startsWith('/')) return '$basePath$path';
     return '$basePath/$path';
+  }
+
+  @override
+  Stream<List<int>> openByteStream(Uri base, OpenChamberRequest request) async* {
+    final uri = base.replace(
+      path: _join(base.path, request.path),
+      queryParameters: request.query.isEmpty ? null : request.query,
+    );
+    final httpRequest = await _http.openUrl(request.method, uri);
+    httpRequest.headers.set(HttpHeaders.acceptHeader, 'text/event-stream');
+    if (request.bearer != null && request.bearer!.isNotEmpty) {
+      httpRequest.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${request.bearer}');
+    }
+    request.extraHeaders.forEach(httpRequest.headers.set);
+    final httpResponse = await httpRequest.close();
+    if (httpResponse.statusCode < 200 || httpResponse.statusCode >= 300) {
+      throw OpenChamberHttpException(httpResponse.statusCode, request.path);
+    }
+    await for (final chunk in httpResponse) {
+      yield chunk;
+    }
+  }
+
+  @override
+  Future<void> close() async {
+    _http.close(force: true);
   }
 }
 

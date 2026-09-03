@@ -46,15 +46,48 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _live.selectSession(widget.session.id);
     WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToLatest());
+    widget.appController?.addListener(_onApp);
     unawaited(_load());
   }
 
+  void _onApp() {
+    final controller = widget.appController;
+    if (controller == null || !mounted) return;
+    if (controller.transcriptEpoch != _seenEpoch) {
+      _seenEpoch = controller.transcriptEpoch;
+      unawaited(_reloadFromLive());
+    }
+    _syncBusyFromController();
+    if (controller.liveEventsConnected) {
+      _poll?.cancel();
+      _poll = null;
+    } else if (_busy && _poll == null) {
+      _pollTranscript();
+    }
+  }
+
+  int _seenEpoch = 0;
+
   @override
   void dispose() {
+    widget.appController?.removeListener(_onApp);
     _poll?.cancel();
     _composer.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  Future<void> _reloadFromLive() async {
+    final controller = widget.appController;
+    if (controller == null || !mounted) return;
+    try {
+      final messages = await controller.loadTranscript(widget.session);
+      if (!mounted) return;
+      setState(() => _timeline.replaceAll(messages));
+      _syncBusyFromController();
+    } on OpenChamberHttpException {
+      // Keep the last transcript; failure is not empty success.
+    }
   }
 
   Future<void> _load() async {
@@ -116,7 +149,12 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     try {
       await controller.sendPrompt(session: widget.session, messageId: messageId, text: body);
-      _pollTranscript();
+      if (controller.liveEventsConnected) {
+        _poll?.cancel();
+        _poll = null;
+      } else {
+        _pollTranscript();
+      }
     } on OpenChamberHttpException {
       setState(() {
         _busy = false;

@@ -4,14 +4,22 @@ import 'openchamber_http.dart';
 import 'session_index.dart';
 
 /// Official OpenChamber / OpenCode calls used by mobile connect + home + chat.
+class CreatedSession {
+  const CreatedSession({required this.id, this.title, this.directory});
+
+  final String id;
+  final String? title;
+  final String? directory;
+}
+
 class OpenChamberApi {
   OpenChamberApi({OpenChamberTransport? transport})
-      : _transport = transport ?? LiveOpenChamberTransport();
+      : transport = transport ?? LiveOpenChamberTransport();
 
-  final OpenChamberTransport _transport;
+  OpenChamberTransport transport;
 
   Future<HealthResult> health(Uri base) async {
-    final response = await _transport.send(
+    final response = await transport.send(
       base,
       const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.health, timeout: Duration(milliseconds: 2500)),
     );
@@ -27,7 +35,7 @@ class OpenChamberApi {
   }
 
   Future<AuthSessionResult> getAuthSession(Uri base, {String? bearer}) async {
-    final response = await _transport.send(
+    final response = await transport.send(
       base,
       OpenChamberRequest(method: 'GET', path: OpenChamberPaths.authSession, bearer: bearer),
     );
@@ -58,7 +66,7 @@ class OpenChamberApi {
     required String deviceId,
     String? devicePlatform,
   }) async {
-    final response = await _transport.send(
+    final response = await transport.send(
       base,
       OpenChamberRequest(
         method: 'POST',
@@ -95,7 +103,7 @@ class OpenChamberApi {
     String? devicePlatform,
     String? bearer,
   }) async {
-    final response = await _transport.send(
+    final response = await transport.send(
       base,
       OpenChamberRequest(
         method: 'POST',
@@ -130,7 +138,7 @@ class OpenChamberApi {
   }
 
   Future<SessionIndexSnapshot?> loadSessionIndex(Uri base, {required String bearer}) async {
-    final response = await _transport.send(
+    final response = await transport.send(
       base,
       OpenChamberRequest(method: 'GET', path: OpenChamberPaths.sessionIndex, bearer: bearer),
     );
@@ -142,7 +150,7 @@ class OpenChamberApi {
   }
 
   Future<void> startSessionIndexSync(Uri base, {required String bearer, required List<String> directories}) async {
-    final response = await _transport.send(
+    final response = await transport.send(
       base,
       OpenChamberRequest(
         method: 'POST',
@@ -163,7 +171,7 @@ class OpenChamberApi {
     required String sessionId,
     required String directory,
   }) async {
-    final response = await _transport.send(
+    final response = await transport.send(
       base,
       OpenChamberRequest(
         method: 'GET',
@@ -190,7 +198,7 @@ class OpenChamberApi {
     required String text,
   }) async {
     final path = OpenChamberPaths.sessionPromptAsync(sessionId);
-    final response = await _transport.send(
+    final response = await transport.send(
       base,
       OpenChamberRequest(
         method: 'POST',
@@ -218,7 +226,7 @@ class OpenChamberApi {
     required String directory,
   }) async {
     final path = OpenChamberPaths.sessionAbort(sessionId);
-    final response = await _transport.send(
+    final response = await transport.send(
       base,
       OpenChamberRequest(
         method: 'POST',
@@ -240,7 +248,7 @@ class OpenChamberApi {
     required String bearer,
     String? directory,
   }) async {
-    final response = await _transport.send(
+    final response = await transport.send(
       base,
       OpenChamberRequest(
         method: 'GET',
@@ -264,7 +272,7 @@ class OpenChamberApi {
     required String platform,
     String? locale,
   }) async {
-    final response = await _transport.send(
+    final response = await transport.send(
       base,
       OpenChamberRequest(
         method: 'POST',
@@ -288,7 +296,7 @@ class OpenChamberApi {
     required bool visible,
     required String platform,
   }) async {
-    final response = await _transport.send(
+    final response = await transport.send(
       base,
       OpenChamberRequest(
         method: 'POST',
@@ -303,6 +311,59 @@ class OpenChamberApi {
     if (!response.ok) {
       throw OpenChamberHttpException(response.status, OpenChamberPaths.pushVisibility);
     }
+  }
+
+  /// OpenCode `session.create` → `POST /api/session` with `directory` query.
+  /// See `packages/ui/src/lib/opencode/client.ts` `createSession`.
+  Future<CreatedSession> createSession({
+    required Uri base,
+    required String bearer,
+    required String directory,
+    String? title,
+  }) async {
+    final response = await transport.send(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.sessionCreate,
+        bearer: bearer,
+        query: {
+          if (directory.isNotEmpty) 'directory': directory,
+        },
+        body: {
+          if (title != null && title.isNotEmpty) 'title': title,
+        },
+      ),
+    );
+    if (!response.ok) {
+      throw OpenChamberHttpException(response.status, OpenChamberPaths.sessionCreate);
+    }
+    final created = parseCreatedSession(response.body);
+    if (created == null || created.id.isEmpty) {
+      throw OpenChamberHttpException(response.status, OpenChamberPaths.sessionCreate, code: 'malformed');
+    }
+    return created;
+  }
+
+  Stream<List<int>> openGlobalEventStream({
+    required Uri base,
+    required String bearer,
+    String? lastEventId,
+  }) {
+    return transport.openByteStream(
+      base,
+      OpenChamberRequest(
+        method: 'GET',
+        path: OpenChamberPaths.globalEvent,
+        bearer: bearer,
+        stream: true,
+        extraHeaders: {
+          'accept': 'text/event-stream',
+          if (lastEventId != null && lastEventId.isNotEmpty) 'Last-Event-ID': lastEventId,
+        },
+        timeout: const Duration(seconds: 30),
+      ),
+    );
   }
 }
 
@@ -338,6 +399,19 @@ Map<String, String> parseSessionStatusMap(Object? payload) {
     }
   });
   return out;
+}
+
+CreatedSession? parseCreatedSession(Object? payload) {
+  Object? root = payload;
+  if (root is Map && root['data'] != null) root = root['data'];
+  if (root is! Map) return null;
+  final id = root['id']?.toString() ?? '';
+  if (id.isEmpty) return null;
+  return CreatedSession(
+    id: id,
+    title: root['title']?.toString(),
+    directory: root['directory']?.toString(),
+  );
 }
 
 String _textFromParts(Object? parts) {
@@ -390,9 +464,23 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   int abortStatus = 200;
   int statusStatus = 200;
   int pushStatus = 200;
+  int createStatus = 200;
 
   final List<OpenChamberRequest> calls = [];
   final List<String> sentPrompts = [];
+  final List<Map<String, Object?>> createdSessions = [];
+  List<String> eventChunks = const [];
+
+  @override
+  Stream<List<int>> openByteStream(Uri base, OpenChamberRequest request) async* {
+    calls.add(request);
+    for (final chunk in eventChunks) {
+      yield chunk.codeUnits;
+    }
+  }
+
+  @override
+  Future<void> close() async {}
 
   static final Map<String, Object?> defaultTestSessionIndex = {
     'available': true,
@@ -489,6 +577,18 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
       case OpenChamberPaths.pushApnsToken:
       case OpenChamberPaths.pushVisibility:
         return OpenChamberResponse(status: pushStatus, body: const {'ok': true});
+      case OpenChamberPaths.sessionCreate:
+        final directory = request.query['directory'] ?? '';
+        final id = 'ses_flutter_${createdSessions.length + 1}';
+        final created = <String, Object?>{
+          'id': id,
+          'title': request.body?['title'] ?? 'New Session',
+          'directory': directory,
+        };
+        createdSessions.add(created);
+        return OpenChamberResponse(status: createStatus, body: created);
+      case OpenChamberPaths.globalEvent:
+        return const OpenChamberResponse(status: 200, body: null);
       default:
         if (request.path.contains('/messages')) {
           return OpenChamberResponse(status: messagesStatus, body: {'records': transcript, 'complete': true});

@@ -18,9 +18,13 @@ import 'instance_store.dart';
 import 'openchamber_api.dart';
 import 'openchamber_http.dart';
 import 'pairing_payload.dart';
+import 'relay/tunnel_client.dart';
 import 'secure_store.dart';
 import 'session_index.dart';
+import 'sse.dart';
 import 'widget_snapshot.dart';
+
+typedef OpenRelayTunnel = Future<OpenChamberTransport> Function(PairingRelayCandidate relay);
 
 enum AppPhase { splash, connect, shell }
 
@@ -34,19 +38,25 @@ class AppController extends ChangeNotifier {
     DeepLinkListener? deepLinks,
     OpenChamberApi? api,
     NativePush? push,
+    OpenRelayTunnel? openRelayTunnel,
   })  : _store = store,
         _qrScanner = qrScanner ?? QrScanner(),
         _deepLinks = deepLinks ?? DeepLinkListener(),
         _api = api ?? OpenChamberApi(transport: _defaultTransport()),
         _push = push ?? NativePush(),
         _instances = seed?.instances ?? const [],
-        _activeId = seed?.activeId;
+        _activeId = seed?.activeId {
+    _directTransport = _api.transport;
+    _openRelayTunnel = openRelayTunnel ?? _defaultOpenRelay;
+  }
 
   final SecureStore _store;
   final QrScanner _qrScanner;
   final DeepLinkListener _deepLinks;
   final OpenChamberApi _api;
   final NativePush _push;
+  late final OpenChamberTransport _directTransport;
+  late final OpenRelayTunnel _openRelayTunnel;
   late final InstanceRepository _repository = InstanceRepository(_store);
 
   AppPhase phase = AppPhase.splash;
@@ -74,6 +84,14 @@ class AppController extends ChangeNotifier {
   Timer? _statusPoll;
   Timer? _liveActivityTimer;
   Timer? _visibilityHeartbeat;
+  StreamSubscription<SseEvent>? _eventSub;
+  Timer? _eventReconnect;
+  String? _lastEventId;
+  int _eventFailures = 0;
+  bool liveEventsConnected = false;
+  int transcriptEpoch = 0;
+  SessionIndexSnapshot? lastIndex;
+  String? createSessionErrorKey;
 
   List<SavedInstance> get instances => List.unmodifiable(_instances);
   SavedInstance? get activeInstance {
@@ -87,6 +105,9 @@ class AppController extends ChangeNotifier {
   bool get isConnected => phase == AppPhase.shell && activeInstance != null;
 
   Uri? get activeBase {
+    if (_api.transport is RelayTunnelTransport) {
+      return RelayTunnelTransport.dummyBase;
+    }
     final instance = activeInstance;
     if (instance == null) return null;
     return normalizeServerBase(instance.url);
@@ -203,12 +224,11 @@ class AppController extends ChangeNotifier {
     }
 
     var resolvedUrl = url.trim();
-    String? relayUrl;
     String? pairingId;
     var pairingSecret = '';
     var pairingLabel = label;
-    String? serverId;
     PairingConnectionPayload? decoded;
+    PairingRelayCandidate? relay;
     if (pairing != null) {
       if (!pairing.isV2) {
         connectErrorKey = 'connect.link.invalid';
@@ -223,7 +243,7 @@ class AppController extends ChangeNotifier {
       }
       pairingId = decoded.pairingId;
       pairingSecret = decoded.secret;
-      relayUrl = decoded.firstRelayUrl;
+      relay = decoded.firstRelay;
       pairingLabel = pairingLabel.trim().isEmpty ? (decoded.label ?? pairingLabel) : pairingLabel;
       final direct = decoded.firstDirectUrl;
       if (direct != null) {
@@ -231,18 +251,8 @@ class AppController extends ChangeNotifier {
       }
     }
 
-    final urlError = validateServerUrl(resolvedUrl);
-    if (urlError != null) {
-      connectErrorKey = pairing != null && decoded?.firstDirectUrl == null
-          ? 'connect.error.relayTunnelMissing'
-          : urlError;
-      notifyListeners();
-      return false;
-    }
-
-    final base = normalizeServerBase(resolvedUrl);
-    if (base == null) {
-      connectErrorKey = 'connect.error.invalidUrl';
+    if (decoded == null && validateServerUrl(resolvedUrl) != null) {
+      connectErrorKey = validateServerUrl(resolvedUrl);
       notifyListeners();
       return false;
     }
@@ -250,9 +260,20 @@ class AppController extends ChangeNotifier {
     connecting = true;
     notifyListeners();
     try {
-      final health = await _api.health(base);
-      serverId = health.serverId ?? serverId;
-      instanceVersion = health.openchamberVersion;
+      final chosen = await _establishLiveTransport(
+        directUrl: resolvedUrl.isEmpty ? null : resolvedUrl,
+        relay: relay,
+      );
+      if (chosen == null) {
+        connectErrorKey = relay != null && (resolvedUrl.isEmpty || validateServerUrl(resolvedUrl) != null)
+            ? 'connect.error.relayTunnelMissing'
+            : 'connect.error.unreachable';
+        return false;
+      }
+      _bindTransport(chosen.transport);
+      final base = chosen.base;
+      final serverId = chosen.serverId ?? relay?.serverId;
+      instanceVersion = chosen.openchamberVersion;
 
       if (decoded != null) {
         final redeem = await _api.redeemPairing(
@@ -269,12 +290,14 @@ class AppController extends ChangeNotifier {
         return await _activate(
           SavedInstance(
             id: _newId(),
-            url: redeem.serverUrl ?? resolvedUrl,
+            url: _persistedUrl(redeemUrl: redeem.serverUrl, directUrl: resolvedUrl, relay: relay),
             label: pairingLabel.trim().isEmpty ? (redeem.serverLabel ?? '') : pairingLabel,
             clientToken: redeem.clientToken!,
-            relayUrl: relayUrl,
+            relayUrl: relay?.relayUrl,
             pairingId: pairingId,
             serverId: serverId,
+            hostEncPubJwk: relay?.hostEncPubJwk,
+            grant: relay?.grant,
             lastUsedAt: DateTime.now().millisecondsSinceEpoch,
           ),
         );
@@ -290,11 +313,13 @@ class AppController extends ChangeNotifier {
         return await _activate(
           SavedInstance(
             id: _newId(),
-            url: resolvedUrl,
+            url: _persistedUrl(directUrl: resolvedUrl, relay: relay),
             label: pairingLabel,
             clientToken: providedToken,
-            relayUrl: relayUrl,
+            relayUrl: relay?.relayUrl,
             serverId: serverId,
+            hostEncPubJwk: relay?.hostEncPubJwk,
+            grant: relay?.grant,
             lastUsedAt: DateTime.now().millisecondsSinceEpoch,
           ),
         );
@@ -305,10 +330,12 @@ class AppController extends ChangeNotifier {
         return await _activate(
           SavedInstance(
             id: _newId(),
-            url: resolvedUrl,
+            url: _persistedUrl(directUrl: resolvedUrl, relay: relay),
             label: pairingLabel,
-            relayUrl: relayUrl,
+            relayUrl: relay?.relayUrl,
             serverId: serverId,
+            hostEncPubJwk: relay?.hostEncPubJwk,
+            grant: relay?.grant,
             lastUsedAt: DateTime.now().millisecondsSinceEpoch,
           ),
         );
@@ -316,13 +343,15 @@ class AppController extends ChangeNotifier {
 
       pendingUnlock = SavedInstance(
         id: _newId(),
-        url: resolvedUrl,
+        url: _persistedUrl(directUrl: resolvedUrl, relay: relay),
         label: pairingLabel,
-        relayUrl: relayUrl,
+        relayUrl: relay?.relayUrl,
         pairingId: pairingId,
         pairingSecret: pairingSecret,
         needsPassword: true,
         serverId: serverId,
+        hostEncPubJwk: relay?.hostEncPubJwk,
+        grant: relay?.grant,
       );
       connectForm = ConnectForm.password;
       phase = AppPhase.connect;
@@ -347,17 +376,22 @@ class AppController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    final base = normalizeServerBase(pending.url);
-    if (base == null) {
-      connectErrorKey = 'connect.error.invalidUrl';
-      notifyListeners();
-      return false;
-    }
     connecting = true;
     notifyListeners();
     try {
+      final chosen = await _establishLiveTransport(
+        directUrl: isRelayDisplayUrl(pending.url) ? null : pending.url,
+        relay: pending.relayCandidate,
+      );
+      if (chosen == null) {
+        connectErrorKey = pending.relayCandidate != null
+            ? 'connect.error.relayTunnelMissing'
+            : 'connect.error.unreachable';
+        return false;
+      }
+      _bindTransport(chosen.transport);
       final unlocked = await _api.unlockWithPassword(
-        base: base,
+        base: chosen.base,
         password: password.trim(),
         deviceId: await _deviceId(),
         devicePlatform: _devicePlatform,
@@ -414,10 +448,12 @@ class AppController extends ChangeNotifier {
       _activeId = null;
       sessions = const [];
       sessionStatusById = const {};
+      _stopLiveEvents();
       _statusPoll?.cancel();
       _visibilityHeartbeat?.cancel();
       _pushBindKey = null;
       lastBoundRelayUrl = null;
+      await _dropTunnel();
       phase = AppPhase.connect;
       connectForm = ConnectForm.welcome;
     }
@@ -493,9 +529,11 @@ class AppController extends ChangeNotifier {
       final snapshot = await _api.loadSessionIndex(base, bearer: bearer ?? '');
       if (snapshot == null) {
         sessions = const [];
+        lastIndex = null;
         sessionsErrorKey = 'projects.error.indexUnavailable';
         return;
       }
+      lastIndex = snapshot;
       await refreshSessionStatus();
       sessions = rowsFromSessionIndex(snapshot, statusById: sessionStatusById);
       await _writeWidgetSnapshot();
@@ -546,15 +584,23 @@ class AppController extends ChangeNotifier {
   }
 
   Future<bool> _probeAndActivate(SavedInstance instance, {required bool existing}) async {
-    final base = normalizeServerBase(instance.url);
-    if (base == null) {
-      connectErrorKey = 'connect.error.invalidUrl';
-      return false;
-    }
     connecting = true;
     notifyListeners();
     try {
-      await _api.health(base);
+      final chosen = await _establishLiveTransport(
+        directUrl: isRelayDisplayUrl(instance.url) ? null : instance.url,
+        relay: instance.relayCandidate,
+      );
+      if (chosen == null) {
+        connectErrorKey = instance.relayCandidate != null
+            ? 'connect.error.relayTunnelMissing'
+            : (normalizeServerBase(instance.url) == null
+                ? 'connect.error.invalidUrl'
+                : 'connect.error.unreachable');
+        return false;
+      }
+      _bindTransport(chosen.transport);
+      final base = chosen.base;
       if (instance.clientToken.isNotEmpty) {
         final session = await _api.getAuthSession(base, bearer: instance.clientToken);
         if (!session.authenticated) {
@@ -602,19 +648,205 @@ class AppController extends ChangeNotifier {
     }
     await refreshSessions();
     unawaited(_registerPush());
-    _startStatusPoll();
+    _startLiveEvents();
     _startVisibilityHeartbeat();
     notifyListeners();
     return true;
   }
 
+  Future<HomeSessionRow?> createSession({String? title}) async {
+    createSessionErrorKey = null;
+    final base = activeBase;
+    final directory = _preferredCreateDirectory();
+    if (base == null || directory == null || directory.isEmpty) {
+      createSessionErrorKey = 'projects.newChat.needsServer';
+      notifyListeners();
+      return null;
+    }
+    try {
+      final created = await _api.createSession(
+        base: base,
+        bearer: activeBearer ?? '',
+        directory: directory,
+        title: title,
+      );
+      await refreshSessions();
+      for (final row in sessions) {
+        if (row.id == created.id) return row;
+      }
+      return HomeSessionRow(
+        id: created.id,
+        title: created.title ?? 'New Session',
+        projectLabel: '',
+        kind: HomeSessionKind.catalog,
+        directory: created.directory ?? directory,
+      );
+    } on OpenChamberHttpException {
+      createSessionErrorKey = 'projects.newChat.failed';
+      notifyListeners();
+      return null;
+    }
+  }
+
+  String? _preferredCreateDirectory() {
+    final index = lastIndex;
+    if (index != null) {
+      for (final directory in index.directories) {
+        if (directory.directory.isNotEmpty) return directory.directory;
+      }
+    }
+    for (final row in sessions) {
+      final directory = row.directory;
+      if (directory != null && directory.isNotEmpty) return directory;
+    }
+    return null;
+  }
+
   void _startStatusPoll() {
     _statusPoll?.cancel();
     if (Platform.environment['FLUTTER_TEST'] == 'true') return;
+    if (liveEventsConnected) return;
     _statusPoll = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (!isConnected) return;
+      if (!isConnected || liveEventsConnected) return;
       unawaited(refreshSessionStatus());
     });
+  }
+
+  void _startLiveEvents() {
+    _eventSub?.cancel();
+    _eventReconnect?.cancel();
+    liveEventsConnected = false;
+    unawaited(_listenEvents());
+  }
+
+  void _stopLiveEvents() {
+    _eventSub?.cancel();
+    _eventSub = null;
+    _eventReconnect?.cancel();
+    _eventReconnect = null;
+    liveEventsConnected = false;
+  }
+
+  Future<void> _listenEvents() async {
+    final base = activeBase;
+    if (base == null) return;
+    _eventSub?.cancel();
+    try {
+      liveEventsConnected = true;
+      _eventFailures = 0;
+      _statusPoll?.cancel();
+      notifyListeners();
+      _eventSub = parseSse(
+        _api.openGlobalEventStream(base: base, bearer: activeBearer ?? '', lastEventId: _lastEventId),
+      ).listen(
+        (event) {
+          if (event.id != null && event.id!.isNotEmpty) _lastEventId = event.id;
+          _handleLiveEvent(event);
+        },
+        onError: (_) => _onEventStreamLost(),
+        onDone: _onEventStreamLost,
+      );
+    } catch (_) {
+      _onEventStreamLost();
+    }
+  }
+
+  void _onEventStreamLost() {
+    liveEventsConnected = false;
+    notifyListeners();
+    _startStatusPoll();
+    if (Platform.environment['FLUTTER_TEST'] == 'true') return;
+    _scheduleEventReconnect();
+  }
+
+  void _handleLiveEvent(SseEvent event) {
+    final payload = decodeSseJson(event.data);
+    final type = event.event ?? eventTypeOf(payload);
+    if (type == null) return;
+    if (type == 'session.status' || type == 'session.idle' || type == 'session.error') {
+      unawaited(refreshSessionStatus());
+    } else if (type == 'session.created' || type == 'session.updated' || type == 'session.deleted') {
+      unawaited(refreshSessions());
+    } else if (type.startsWith('message.')) {
+      transcriptEpoch += 1;
+      notifyListeners();
+    }
+  }
+
+  void _scheduleEventReconnect() {
+    if (!isConnected) return;
+    _eventFailures += 1;
+    final exponent = _eventFailures > 8 ? 8 : _eventFailures;
+    var delay = Duration(milliseconds: 250 * (1 << (exponent - 1)));
+    if (delay > const Duration(seconds: 5)) delay = const Duration(seconds: 5);
+    _eventReconnect = Timer(delay, () {
+      if (isConnected) unawaited(_listenEvents());
+    });
+  }
+
+  Future<_LiveTransport?> _establishLiveTransport({
+    String? directUrl,
+    PairingRelayCandidate? relay,
+  }) async {
+    final trimmed = directUrl?.trim();
+    if (trimmed != null && trimmed.isNotEmpty && validateServerUrl(trimmed) == null) {
+      final base = normalizeServerBase(trimmed);
+      if (base != null) {
+        try {
+          final health = await OpenChamberApi(transport: _directTransport).health(base);
+          if (relay == null || health.serverId == null || health.serverId == relay.serverId) {
+            return _LiveTransport(
+              transport: _directTransport,
+              base: base,
+              serverId: health.serverId,
+              openchamberVersion: health.openchamberVersion,
+            );
+          }
+        } on OpenChamberHttpException {
+          // Fall through to relay.
+        }
+      }
+    }
+    if (relay != null) {
+      try {
+        final tunnel = await _openRelayTunnel(relay);
+        final dummy = RelayTunnelTransport.dummyBase;
+        final health = await OpenChamberApi(transport: tunnel).health(dummy);
+        return _LiveTransport(
+          transport: tunnel,
+          base: dummy,
+          serverId: health.serverId ?? relay.serverId,
+          openchamberVersion: health.openchamberVersion,
+        );
+      } catch (_) {
+        try {
+          // Leave an honest failure — do not keep a half-open tunnel.
+        } catch (_) {}
+      }
+    }
+    return null;
+  }
+
+  void _bindTransport(OpenChamberTransport next) {
+    if (!identical(next, _api.transport) && _api.transport is RelayTunnelTransport) {
+      unawaited(_api.transport.close());
+    }
+    _api.transport = next;
+  }
+
+  Future<void> _dropTunnel() async {
+    if (_api.transport is RelayTunnelTransport) {
+      await _api.transport.close();
+    }
+    _api.transport = _directTransport;
+  }
+
+  String _persistedUrl({String? redeemUrl, required String directUrl, PairingRelayCandidate? relay}) {
+    final redeem = redeemUrl?.trim() ?? '';
+    if (redeem.isNotEmpty && validateServerUrl(redeem) == null) return redeem;
+    if (directUrl.isNotEmpty && validateServerUrl(directUrl) == null) return directUrl;
+    if (relay != null) return relayDisplayUrl(relay.serverId);
+    return directUrl;
   }
 
   void _armLiveActivity() {
@@ -784,6 +1016,10 @@ class AppController extends ChangeNotifier {
     return LiveOpenChamberTransport();
   }
 
+  static Future<OpenChamberTransport> _defaultOpenRelay(PairingRelayCandidate relay) {
+    return openRelayTunnel(relay);
+  }
+
   static String get _devicePlatform {
     if (defaultTargetPlatform == TargetPlatform.iOS) return 'ios';
     if (defaultTargetPlatform == TargetPlatform.android) return 'android';
@@ -812,9 +1048,25 @@ class AppController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _stopLiveEvents();
     _statusPoll?.cancel();
     _liveActivityTimer?.cancel();
     _visibilityHeartbeat?.cancel();
+    unawaited(_dropTunnel());
     super.dispose();
   }
+}
+
+class _LiveTransport {
+  const _LiveTransport({
+    required this.transport,
+    required this.base,
+    this.serverId,
+    this.openchamberVersion,
+  });
+
+  final OpenChamberTransport transport;
+  final Uri base;
+  final String? serverId;
+  final String? openchamberVersion;
 }

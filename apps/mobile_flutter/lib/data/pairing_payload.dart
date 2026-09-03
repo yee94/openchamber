@@ -57,9 +57,11 @@ class PairingConnectionPayload {
     return null;
   }
 
-  String? get firstRelayUrl {
+  String? get firstRelayUrl => firstRelay?.relayUrl;
+
+  PairingRelayCandidate? get firstRelay {
     for (final candidate in candidates) {
-      if (candidate is PairingRelayCandidate) return candidate.relayUrl;
+      if (candidate is PairingRelayCandidate) return candidate;
     }
     return null;
   }

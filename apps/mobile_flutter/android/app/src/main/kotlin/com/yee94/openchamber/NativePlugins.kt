@@ -63,8 +63,7 @@ object NativePlugins {
         }
         MethodChannel(messenger, "openchamber/push").setMethodCallHandler { call, result ->
             if (call.method == "requestToken") {
-                // FCM token needs the Firebase SDK. Do not invent a token.
-                result.success(null)
+                requestFcmToken(activity, result)
             } else {
                 result.notImplemented()
             }
@@ -85,5 +84,27 @@ object NativePlugins {
     fun open(uri: String) {
         pendingDeepLink = uri
         deepLinkChannel?.invokeMethod("opened", uri)
+    }
+
+    private fun requestFcmToken(activity: MainActivity, result: MethodChannel.Result) {
+        try {
+            com.google.firebase.FirebaseApp.initializeApp(activity)
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().token
+                .addOnCompleteListener { task ->
+                    if (!task.isSuccessful) {
+                        // Do not invent a token when Firebase is unavailable.
+                        result.success(null)
+                        return@addOnCompleteListener
+                    }
+                    val token = task.result
+                    if (token.isNullOrEmpty()) {
+                        result.success(null)
+                    } else {
+                        result.success(mapOf("token" to token, "platform" to "android"))
+                    }
+                }
+        } catch (_: Exception) {
+            result.success(null)
+        }
     }
 }

@@ -63,7 +63,7 @@ void main() {
           PairingDirectCandidate(type: 'lan', url: 'http://192.168.1.20:4096'),
           PairingRelayCandidate(
             relayUrl: 'wss://relay.example/ws',
-            serverId: 'srv_abc',
+            serverId: 'srv_test',
             hostEncPubJwk: hostEncPubJwk,
           ),
         ],
@@ -73,6 +73,7 @@ void main() {
     expect(ok, isTrue);
     expect(controller.activeInstance?.url, 'http://192.168.1.20:4096');
     expect(controller.activeInstance?.relayUrl, 'wss://relay.example/ws');
+    expect(controller.activeInstance?.hostEncPubJwk, hostEncPubJwk);
     expect(controller.activeInstance?.pairingId, 'pair_persist');
     expect(controller.activeInstance?.label, 'Studio');
     expect(controller.activeInstance?.clientToken, 'oc_client_pair');
@@ -88,7 +89,7 @@ void main() {
     );
   });
 
-  test('relay-only pairing is refused instead of faking a tunnel', () async {
+  test('relay-only pairing without a reachable tunnel stays on connect', () async {
     final controller = AppController(store: MemorySecureStore());
     await controller.bootstrap(skipDelay: true);
     final encoded = encodePairingConnectionPayload(
@@ -98,7 +99,7 @@ void main() {
         candidates: [
           PairingRelayCandidate(
             relayUrl: 'wss://relay.example/ws',
-            serverId: 'srv_abc',
+            serverId: 'srv_test',
             hostEncPubJwk: hostEncPubJwk,
           ),
         ],

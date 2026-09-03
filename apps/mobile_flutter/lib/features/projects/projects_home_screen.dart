@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
@@ -49,9 +51,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                 onSelected: (value) {
                   switch (value) {
                     case 'new-chat':
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(t(context, 'projects.newChat.needsServer'))),
-                      );
+                      unawaited(_createSession(context));
                     case 'scan':
                       controller.scanAndConnect();
                     case 'switch':
@@ -151,6 +151,21 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         _openChat(context, row);
       },
     );
+  }
+
+  Future<void> _createSession(BuildContext context) async {
+    final row = await controller.createSession();
+    if (!context.mounted) return;
+    if (row != null) {
+      _openChat(context, row);
+      return;
+    }
+    final errorKey = controller.createSessionErrorKey;
+    if (errorKey != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(t(context, errorKey))),
+      );
+    }
   }
 
   void _openChat(BuildContext context, HomeSessionRow row) {

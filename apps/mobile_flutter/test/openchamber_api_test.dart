@@ -93,6 +93,50 @@ void main() {
     expect(next, isNot(id));
   });
 
+  test('plus-menu createSession posts /api/session with a live directory', () async {
+    final transport = MemoryOpenChamberTransport();
+    final controller = AppController(store: MemorySecureStore(), api: OpenChamberApi(transport: transport));
+    await controller.bootstrap(skipDelay: true);
+    await controller.connect(url: 'http://192.168.1.74:2606');
+    await controller.refreshSessions();
+    final created = await controller.createSession();
+    expect(created, isNotNull);
+    expect(created!.id, startsWith('ses_flutter_'));
+    expect(created.directory, '/workspace/openchamber');
+    expect(
+      transport.calls.any(
+        (call) => call.method == 'POST' && call.path == OpenChamberPaths.sessionCreate && call.query['directory'] == '/workspace/openchamber',
+      ),
+      isTrue,
+    );
+  });
+
+  test('createSession does not fake success without a live directory', () async {
+    final transport = MemoryOpenChamberTransport()..indexStatus = 501;
+    final controller = AppController(store: MemorySecureStore(), api: OpenChamberApi(transport: transport));
+    await controller.bootstrap(skipDelay: true);
+    await controller.connect(url: 'http://192.168.1.74:2606');
+    final created = await controller.createSession();
+    expect(created, isNull);
+    expect(controller.createSessionErrorKey, 'projects.newChat.needsServer');
+    expect(transport.calls.any((call) => call.path == OpenChamberPaths.sessionCreate), isFalse);
+  });
+
+  test('global event SSE refreshes busy status without inventing a connected poll', () async {
+    final transport = MemoryOpenChamberTransport()
+      ..statusBySession = {'sess-busy': 'busy'}
+      ..eventChunks = [
+        'id: 7\ndata: {"type":"session.status"}\n\n',
+      ];
+    final controller = AppController(store: MemorySecureStore(), api: OpenChamberApi(transport: transport));
+    await controller.bootstrap(skipDelay: true);
+    await controller.connect(url: 'http://192.168.1.74:2606');
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(transport.calls.any((call) => call.path == OpenChamberPaths.globalEvent), isTrue);
+    expect(controller.sessionStatusById['sess-busy'], 'busy');
+  });
+
   test('live activity is armed from real busy session status', () async {
     final transport = MemoryOpenChamberTransport()..statusBySession = {'sess-busy': 'busy'};
     final controller = AppController(store: MemorySecureStore(), api: OpenChamberApi(transport: transport));

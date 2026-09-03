@@ -21,6 +21,8 @@ class SavedInstance {
     this.pairingSecret = '',
     this.needsPassword = false,
     this.serverId,
+    this.hostEncPubJwk,
+    this.grant,
     this.lastUsedAt = 0,
   });
 
@@ -33,6 +35,10 @@ class SavedInstance {
   final String pairingSecret;
   final bool needsPassword;
   final String? serverId;
+  /// Public host ECDH JWK from pairing v2. Required to open the official tunnel.
+  final Map<String, String>? hostEncPubJwk;
+  /// Optional Layer-1 relay grant. Persist for reconnect; never log.
+  final String? grant;
   final int lastUsedAt;
 
   String get displayLabel {
@@ -48,6 +54,8 @@ class SavedInstance {
     String? pairingSecret,
     bool? needsPassword,
     String? serverId,
+    Map<String, String>? hostEncPubJwk,
+    String? grant,
     int? lastUsedAt,
   }) {
     return SavedInstance(
@@ -60,7 +68,24 @@ class SavedInstance {
       pairingSecret: pairingSecret ?? this.pairingSecret,
       needsPassword: needsPassword ?? this.needsPassword,
       serverId: serverId ?? this.serverId,
+      hostEncPubJwk: hostEncPubJwk ?? this.hostEncPubJwk,
+      grant: grant ?? this.grant,
       lastUsedAt: lastUsedAt ?? this.lastUsedAt,
+    );
+  }
+
+  PairingRelayCandidate? get relayCandidate {
+    final url = relayUrl?.trim();
+    final sid = serverId?.trim();
+    final jwk = hostEncPubJwk;
+    if (url == null || url.isEmpty || sid == null || sid.isEmpty || jwk == null) {
+      return null;
+    }
+    return PairingRelayCandidate(
+      relayUrl: url,
+      serverId: sid,
+      hostEncPubJwk: jwk,
+      grant: grant,
     );
   }
 
@@ -72,6 +97,8 @@ class SavedInstance {
         'pairingId': pairingId,
         'needsPassword': needsPassword,
         'serverId': serverId,
+        'hostEncPubJwk': hostEncPubJwk,
+        if (grant != null && grant!.isNotEmpty) 'grant': grant,
         'lastUsedAt': lastUsedAt,
         'hasToken': clientToken.isNotEmpty,
       };
@@ -87,9 +114,26 @@ class SavedInstance {
       pairingSecret: json['pairingSecret'] as String? ?? '',
       needsPassword: json['needsPassword'] as bool? ?? false,
       serverId: json['serverId'] as String?,
+      hostEncPubJwk: _jwkFromJson(json['hostEncPubJwk']),
+      grant: json['grant'] as String?,
       lastUsedAt: json['lastUsedAt'] is num ? (json['lastUsedAt'] as num).toInt() : 0,
     );
   }
+}
+
+Map<String, String>? _jwkFromJson(Object? value) {
+  if (value is! Map) return null;
+  final x = value['x']?.toString();
+  final y = value['y']?.toString();
+  if (x == null || y == null || x.isEmpty || y.isEmpty) return null;
+  return {'kty': 'EC', 'crv': 'P-256', 'x': x, 'y': y};
+}
+
+String relayDisplayUrl(String serverId) => 'relay://$serverId';
+
+bool isRelayDisplayUrl(String raw) {
+  final uri = Uri.tryParse(raw.trim());
+  return uri != null && uri.scheme == 'relay' && uri.host.isNotEmpty;
 }
 
 class InstanceSnapshot {

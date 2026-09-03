@@ -911,7 +911,7 @@
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-			}
+			};
 			name = Debug;
 		};
 		F0A5000000000000000000E2 /* Release */ = {
@@ -934,7 +934,7 @@
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-			}
+			};
 			name = Release;
 		};
 		F0A5000000000000000000E3 /* Profile */ = {
@@ -957,7 +957,7 @@
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-			}
+			};
 			name = Profile;
 		};
 		F0B5000000000000000000E1 /* Debug */ = {
@@ -980,7 +980,7 @@
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-			}
+			};
 			name = Debug;
 		};
 		F0B5000000000000000000E2 /* Release */ = {
@@ -1003,7 +1003,7 @@
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-			}
+			};
 			name = Release;
 		};
 		F0B5000000000000000000E3 /* Profile */ = {
@@ -1026,7 +1026,7 @@
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-			}
+			};
 			name = Profile;
 		};
 		F0E5000000000000000000E1 /* Debug */ = {
@@ -1049,7 +1049,7 @@
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-			}
+			};
 			name = Debug;
 		};
 		F0E5000000000000000000E2 /* Release */ = {
@@ -1072,7 +1072,7 @@
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-			}
+			};
 			name = Release;
 		};
 		F0E5000000000000000000E3 /* Profile */ = {
@@ -1095,7 +1095,7 @@
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-			}
+			};
 			name = Profile;
 		};
 /* End XCBuildConfiguration section */
