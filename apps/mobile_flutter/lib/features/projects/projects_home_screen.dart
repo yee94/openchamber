@@ -115,13 +115,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                               decoration: BoxDecoration(
                                 color: context.oc.primary,
                                 shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: context.oc.primary.withValues(alpha: 0.22),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
+                                boxShadow: OcElevation.control(context),
                               ),
                               child: OcGlyph(
                                 OcGlyphKind.plus,

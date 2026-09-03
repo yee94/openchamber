@@ -5,10 +5,12 @@ import '../motion/pressable.dart';
 import '../motion/selected_spring.dart';
 import '../native/haptics.dart';
 import 'ios_hero.dart';
+import 'oc_elevation.dart';
 import 'oc_glyphs.dart';
 import 'oc_tokens.dart';
 
 export 'ios_hero.dart' show OcOptical;
+export 'oc_elevation.dart' show OcElevation;
 export 'oc_tokens.dart' show OcProductChrome, OcTokens, OcTokensContext;
 
 /// Geometry aliases of official `--oc-mobile-*` tokens.
@@ -109,12 +111,12 @@ class CircularChromeButton extends StatelessWidget {
         : ink
             ? tokens.foreground
             : tokens.primary;
-    final child = Material(
-      color: fill,
-      shape: const CircleBorder(),
-      elevation: filled ? 0.6 : 0.3,
-      shadowColor: Colors.black.withValues(alpha: filled ? 0.10 : 0.06),
-      surfaceTintColor: Colors.transparent,
+    final child = DecoratedBox(
+      decoration: BoxDecoration(
+        color: fill,
+        shape: BoxShape.circle,
+        boxShadow: OcElevation.control(context),
+      ),
       child: Pressable(
         onPressed: onPressed,
         haptic: haptic,
@@ -144,31 +146,37 @@ class GroupedInsetCard extends StatelessWidget {
     required this.child,
     this.margin,
     this.padding,
+    this.tight = false,
   });
 
   final Widget child;
   final EdgeInsetsGeometry? margin;
   final EdgeInsetsGeometry? padding;
+  /// Schedule cards use a slightly tighter float than project shells.
+  final bool tight;
 
   @override
   Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(OcChrome.cardRadius);
+    final dark = context.oc.isDark;
     return Container(
       margin: margin ?? const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 12),
-      padding: padding,
       decoration: BoxDecoration(
-        color: context.oc.card,
-        borderRadius: BorderRadius.circular(OcChrome.cardRadius),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: Theme.of(context).brightness == Brightness.dark ? 0.20 : 0.032),
-            blurRadius: 12,
-            spreadRadius: -4,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: radius,
+        boxShadow: OcElevation.card(context, tight: tight),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: child,
+      child: ClipRRect(
+        borderRadius: radius,
+        child: ColoredBox(
+          color: context.oc.card,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: dark ? Border.all(color: context.oc.mobileBorder, width: 0.5) : null,
+            ),
+            child: padding == null ? child : Padding(padding: padding!, child: child),
+          ),
+        ),
+      ),
     );
   }
 }

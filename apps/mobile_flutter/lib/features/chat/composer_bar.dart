@@ -117,11 +117,12 @@ class ComposerBar extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: Padding(
                 padding: const EdgeInsets.only(right: 22, bottom: 6),
-                child: Material(
-                  color: context.oc.card,
-                  shape: const CircleBorder(),
-                  elevation: 1,
-                  shadowColor: Colors.black.withValues(alpha: 0.10),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: context.oc.card,
+                    shape: BoxShape.circle,
+                    boxShadow: OcElevation.control(context),
+                  ),
                   child: Pressable(
                     key: const Key('chat-scroll-to-bottom'),
                     haptic: HapticStrength.light,
@@ -145,14 +146,7 @@ class ComposerBar extends StatelessWidget {
                 color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(OcChrome.pillRadius),
                 border: Border.all(color: context.oc.mobileBorder),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 10,
-                    spreadRadius: -1,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
+                boxShadow: OcElevation.composer(context),
               ),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),

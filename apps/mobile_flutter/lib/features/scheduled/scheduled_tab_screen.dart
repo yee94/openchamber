@@ -193,6 +193,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
   Widget _taskCard(BuildContext context, ScheduledTaskRecord task) {
     final paused = !task.enabled;
     final card = GroupedInsetCard(
+      tight: true,
       child: Pressable(
         key: Key('scheduled-task-${task.id}'),
         haptic: HapticStrength.light,

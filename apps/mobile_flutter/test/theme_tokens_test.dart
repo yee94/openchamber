@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openchamber/theme/app_theme.dart';
 import 'package:openchamber/theme/ios_hero.dart';
+import 'package:openchamber/theme/oc_elevation.dart';
 import 'package:openchamber/theme/oklch.dart';
 
 void main() {
@@ -67,6 +68,36 @@ void main() {
     expect(OcOptical.searchButton, lessThan(OcTokens.headerButtonSize));
     expect(OcOptical.addButton, lessThan(OcTokens.headerButtonSize));
     expect(OcTokens.light.primary, isNot(const Color(0xFF007AFF)));
+  });
+
+  testWidgets('OcElevation is layered in light and empty in dark', (tester) async {
+    late BuildContext captured;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: materialTheme(Brightness.light),
+        home: Builder(builder: (context) {
+          captured = context;
+          return const SizedBox.shrink();
+        }),
+      ),
+    );
+    expect(OcElevation.card(captured), hasLength(3));
+    expect(OcElevation.card(captured).first.blurRadius, 2);
+    expect(OcElevation.card(captured, tight: true).last.blurRadius, lessThan(OcElevation.card(captured).last.blurRadius));
+    expect(OcElevation.control(captured), isNotEmpty);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: materialTheme(Brightness.dark),
+        home: Builder(builder: (context) {
+          captured = context;
+          return const SizedBox.shrink();
+        }),
+      ),
+    );
+    expect(OcElevation.card(captured), isEmpty);
+    expect(OcElevation.dock(captured), isEmpty);
+    expect(OcElevation.control(captured), isEmpty);
   });
 
   test('resolveOcBrightness honors Light / Dark / System', () {

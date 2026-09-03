@@ -40,14 +40,7 @@ class FloatingCapsuleTabBar extends StatelessWidget {
             color: tokens.card,
             borderRadius: BorderRadius.circular(OcChrome.dockRadius),
             border: Border.all(color: tokens.mobileBorder, width: 0.5),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: tokens.isDark ? 0.26 : 0.05),
-                blurRadius: 14,
-                spreadRadius: -4,
-                offset: const Offset(0, 5),
-              ),
-            ],
+            boxShadow: OcElevation.dock(context),
           ),
           child: Material(
             color: Colors.transparent,
