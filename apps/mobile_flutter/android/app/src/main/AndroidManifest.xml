@@ -35,11 +35,37 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="openchamber" />
             </intent-filter>
-            <!-- TODO(native): ShareReceiverActivity + Direct Share / assistant shortcuts. -->
         </activity>
+        <activity
+            android:name=".ShareReceiverActivity"
+            android:exported="true"
+            android:theme="@style/NormalTheme">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/share_shortcuts" />
+        </activity>
+        <activity
+            android:name=".CameraXQrActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/NormalTheme" />
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode_ui" />
     </application>
     <queries>
         <intent>

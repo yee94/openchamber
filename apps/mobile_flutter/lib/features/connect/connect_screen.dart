@@ -62,11 +62,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
             const SizedBox(height: 24),
             FilledButton.icon(
               key: const Key('connect-scan-qr'),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(t(context, 'connect.qr.todo'))),
-                );
-              },
+              onPressed: controller.scanAndConnect,
               icon: const Icon(Icons.qr_code_scanner),
               label: Text(t(context, 'connect.scanQr')),
             ),

@@ -6,6 +6,6 @@ import 'data/secure_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final controller = AppController(store: MemorySecureStore());
+  final controller = AppController(store: PlatformSecureStore());
   runApp(OpenChamberApp(controller: controller));
 }

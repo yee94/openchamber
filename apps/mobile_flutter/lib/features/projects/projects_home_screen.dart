@@ -7,9 +7,14 @@ import '../../theme/app_theme.dart';
 import '../chat/chat_screen.dart';
 
 class ProjectsHomeScreen extends StatelessWidget {
-  const ProjectsHomeScreen({super.key, required this.controller});
+  const ProjectsHomeScreen({
+    super.key,
+    required this.controller,
+    this.bottomOccupancy = 0,
+  });
 
   final AppController controller;
+  final double bottomOccupancy;
 
   @override
   Widget build(BuildContext context) {
@@ -37,9 +42,7 @@ class ProjectsHomeScreen extends StatelessWidget {
                     ),
                   );
                 case 'scan':
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(t(context, 'connect.qr.todo'))),
-                  );
+                  controller.scanAndConnect();
                 case 'switch':
                   controller.switchToConnect();
                 case 'new-project':
@@ -62,7 +65,7 @@ class ProjectsHomeScreen extends StatelessWidget {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + bottomOccupancy),
         children: [
           if (attention.isNotEmpty) ...[
             _sectionLabel(context, 'projects.section.pinned'),
@@ -120,7 +123,7 @@ class ProjectsHomeScreen extends StatelessWidget {
   void _openChat(BuildContext context, HomeSessionRow row) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ChatScreen(session: row),
+        builder: (_) => ChatScreen(session: row, appController: controller),
       ),
     );
   }

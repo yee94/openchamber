@@ -83,7 +83,11 @@ class InstancesSettingsPage extends StatelessWidget {
                 onTap: controller.switchToConnect,
               ),
               ListTile(
-                title: Text(t(context, 'settings.instances.qrTodo')),
+                key: const Key('instances-scan-qr'),
+                leading: const Icon(Icons.qr_code_scanner),
+                title: Text(t(context, 'connect.scanQr')),
+                subtitle: Text(t(context, 'settings.instances.qrTodo')),
+                onTap: controller.scanAndConnect,
               ),
             ],
           ),

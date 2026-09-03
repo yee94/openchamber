@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="share_requires_exact">Sharing needs an exact instance and assistant. OpenChamber will not pick a default.</string>
+</resources>

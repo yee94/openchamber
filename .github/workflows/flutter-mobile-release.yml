@@ -229,6 +229,21 @@ jobs:
               profile: process.env.IOS_APP_PROFILE_NAME,
               uuid: process.env.IOS_APP_PROFILE_UUID,
             },
+            {
+              bundle: 'com.yee94.openchamber.OpenChamberWidget',
+              profile: process.env.IOS_WIDGET_PROFILE_NAME,
+              uuid: process.env.IOS_WIDGET_PROFILE_UUID,
+            },
+            {
+              bundle: 'com.yee94.openchamber.OpenChamberNotificationService',
+              profile: process.env.IOS_NSE_PROFILE_NAME,
+              uuid: process.env.IOS_NSE_PROFILE_UUID,
+            },
+            {
+              bundle: 'com.yee94.openchamber.OpenChamberShareExtension',
+              profile: process.env.IOS_SHARE_PROFILE_NAME,
+              uuid: process.env.IOS_SHARE_PROFILE_UUID,
+            },
           ];
 
           function setBuildSetting(block, key, value) {
@@ -279,6 +294,9 @@ jobs:
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           IOS_APP_PROFILE_NAME: ${{ secrets.IOS_APP_PROFILE_NAME }}
+          IOS_WIDGET_PROFILE_NAME: ${{ secrets.IOS_WIDGET_PROFILE_NAME }}
+          IOS_NSE_PROFILE_NAME: ${{ secrets.IOS_NSE_PROFILE_NAME }}
+          IOS_SHARE_PROFILE_NAME: ${{ secrets.IOS_SHARE_PROFILE_NAME }}
         run: |
           set -euo pipefail
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
@@ -296,6 +314,12 @@ jobs:
             <dict>
               <key>com.yee94.openchamber</key>
               <string>$IOS_APP_PROFILE_NAME</string>
+              <key>com.yee94.openchamber.OpenChamberWidget</key>
+              <string>$IOS_WIDGET_PROFILE_NAME</string>
+              <key>com.yee94.openchamber.OpenChamberNotificationService</key>
+              <string>$IOS_NSE_PROFILE_NAME</string>
+              <key>com.yee94.openchamber.OpenChamberShareExtension</key>
+              <string>$IOS_SHARE_PROFILE_NAME</string>
             </dict>
             <key>uploadSymbols</key>
             <true/>

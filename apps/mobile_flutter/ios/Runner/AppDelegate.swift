@@ -8,6 +8,21 @@ import UIKit
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
+    if let registrar = self.registrar(forPlugin: "OpenChamberNative") {
+      OpenChamberPluginRegistry.register(with: registrar, messenger: registrar.messenger())
+    }
+    if let url = launchOptions?[.url] as? URL {
+      OpenChamberDeepLinkPlugin.pending = url.absoluteString
+    }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  override func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    OpenChamberDeepLinkPlugin.open(url)
+    return true
   }
 }

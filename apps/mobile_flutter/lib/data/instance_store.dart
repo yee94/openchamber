@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'pairing_payload.dart';
 import 'secure_store.dart';
 
 const instancesStorageKey = 'openchamber.instances.v1';
@@ -16,6 +17,8 @@ class SavedInstance {
     this.label = '',
     this.clientToken = '',
     this.relayUrl,
+    this.pairingId,
+    this.pairingSecret = '',
     this.needsPassword = false,
   });
 
@@ -24,6 +27,8 @@ class SavedInstance {
   final String label;
   final String clientToken;
   final String? relayUrl;
+  final String? pairingId;
+  final String pairingSecret;
   final bool needsPassword;
 
   String get displayLabel {
@@ -35,6 +40,8 @@ class SavedInstance {
     String? label,
     String? clientToken,
     String? relayUrl,
+    String? pairingId,
+    String? pairingSecret,
     bool? needsPassword,
   }) {
     return SavedInstance(
@@ -43,6 +50,8 @@ class SavedInstance {
       label: label ?? this.label,
       clientToken: clientToken ?? this.clientToken,
       relayUrl: relayUrl ?? this.relayUrl,
+      pairingId: pairingId ?? this.pairingId,
+      pairingSecret: pairingSecret ?? this.pairingSecret,
       needsPassword: needsPassword ?? this.needsPassword,
     );
   }
@@ -53,6 +62,8 @@ class SavedInstance {
         'label': label,
         'clientToken': clientToken,
         'relayUrl': relayUrl,
+        'pairingId': pairingId,
+        'pairingSecret': pairingSecret,
         'needsPassword': needsPassword,
       };
 
@@ -63,6 +74,8 @@ class SavedInstance {
       label: json['label'] as String? ?? '',
       clientToken: json['clientToken'] as String? ?? '',
       relayUrl: json['relayUrl'] as String?,
+      pairingId: json['pairingId'] as String?,
+      pairingSecret: json['pairingSecret'] as String? ?? '',
       needsPassword: json['needsPassword'] as bool? ?? false,
     );
   }
@@ -101,13 +114,18 @@ String? validateServerUrl(String raw) {
 }
 
 /// Pairing v2 deep link: `openchamber://connect?v=2&p=...`.
-/// First slice persists the raw payload URL; redeem/handshake is later.
 class PairingLink {
-  const PairingLink({required this.raw, this.payload, this.version});
+  const PairingLink({
+    required this.raw,
+    this.payload,
+    this.version,
+    this.decoded,
+  });
 
   final String raw;
   final String? payload;
   final String? version;
+  final PairingConnectionPayload? decoded;
 
   bool get isV2 => version == '2' && (payload != null && payload!.isNotEmpty);
 }
@@ -115,10 +133,14 @@ class PairingLink {
 PairingLink? parsePairingLink(String raw) {
   final value = raw.trim();
   if (value.isEmpty) return null;
+  final decoded = parsePairingConnectionPayload(value);
+  if (decoded != null) {
+    return PairingLink(raw: value, payload: 'decoded', version: '2', decoded: decoded);
+  }
   final uri = Uri.tryParse(value);
   if (uri == null || uri.scheme != 'openchamber') return null;
-  if (uri.host != 'connect' && uri.path != '/connect' && uri.pathSegments.isEmpty) {
-    if (uri.host != 'connect') return null;
+  if (uri.host != 'connect' && uri.path != '/connect') {
+    return null;
   }
   final version = uri.queryParameters['v'];
   final payload = uri.queryParameters['p'];

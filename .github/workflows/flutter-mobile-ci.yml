@@ -93,4 +93,8 @@ jobs:
 
       - name: Build iOS simulator app
         working-directory: apps/mobile_flutter
-        run: flutter build ios --simulator --no-codesign
+        run: |
+          # Builds Runner plus OpenChamberWidget / NSE / Share extension targets.
+          # --no-codesign skips signing for the app; simulator often also skips
+          # extension signing. Signed four-profile export is release YAML only.
+          flutter build ios --simulator --no-codesign

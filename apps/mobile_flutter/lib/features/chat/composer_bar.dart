@@ -3,25 +3,30 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_strings.dart';
+import 'composer_occupancy.dart';
 
-/// Native composer chrome. iOS is Cupertino; Android is Material 3.
-/// Always the product path — no WebView composer, no iosNativeUi gate.
-/// Deeper UIKit liquid-glass overlay / Android ImeSync analogue: later slice.
+/// Native composer chrome. Android is Material 3 with solid IME viewInsets.
+/// iOS uses the UIKit platform view (`IosComposerHost`) instead of this widget.
 class ComposerBar extends StatelessWidget {
   const ComposerBar({
     super.key,
     required this.controller,
     required this.onSend,
     this.onAttach,
+    this.onStop,
+    this.busy = false,
   });
 
   final TextEditingController controller;
   final VoidCallback onSend;
   final VoidCallback? onAttach;
+  final VoidCallback? onStop;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
+    final suggestions = autocompleteStubFor(controller.text);
     final field = TextField(
       key: const Key('composer-field'),
       controller: controller,
@@ -43,9 +48,13 @@ class ComposerBar extends StatelessWidget {
     );
     final send = IconButton(
       key: const Key('composer-send'),
-      tooltip: t(context, 'chat.composer.send'),
-      onPressed: onSend,
-      icon: Icon(ios ? CupertinoIcons.arrow_up_circle_fill : Icons.send),
+      tooltip: t(context, busy ? 'chat.composer.stop' : 'chat.composer.send'),
+      onPressed: busy ? onStop : onSend,
+      icon: Icon(
+        busy
+            ? (ios ? CupertinoIcons.stop_circle_fill : Icons.stop_circle)
+            : (ios ? CupertinoIcons.arrow_up_circle_fill : Icons.send),
+      ),
     );
 
     return Material(
@@ -53,15 +62,35 @@ class ComposerBar extends StatelessWidget {
       color: Theme.of(context).colorScheme.surface,
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-          child: Row(
-            children: [
-              attach,
-              Expanded(child: field),
-              send,
-            ],
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (suggestions.isNotEmpty)
+              SizedBox(
+                height: 120,
+                child: ListView(
+                  key: const Key('composer-autocomplete'),
+                  children: [
+                    for (final item in suggestions)
+                      ListTile(
+                        dense: true,
+                        title: Text(item.label),
+                        onTap: () => controller.text = item.label,
+                      ),
+                  ],
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+              child: Row(
+                children: [
+                  attach,
+                  Expanded(child: field),
+                  send,
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

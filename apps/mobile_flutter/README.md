@@ -36,12 +36,14 @@ flutter run -d android
 
 Linux VM (this cloud image): `flutter analyze` and `flutter test` only. `flutter build ios` needs Xcode.
 
-## First-slice surfaces
+## Surfaces
 
 1. Splash → connection onboarding (server URL, instance UI password, client token, saved connections, auto-connect). **No local PIN / Face ID lock.**
-2. Four-tab dock: Projects / Assistant / Scheduled / Settings
+2. Four-tab dock: Projects / Assistant / Scheduled / Settings. iOS uses a UIKit `UITabBar` (liquid glass on iOS 26).
 3. Chat is pushed from Projects (including pinned/in-progress `项目 · 分支` subtitles)
-4. Settings home: search + every `MOBILE_SETTINGS_PAGE_SLUGS` page
+4. Always-on native composer (UIKit glass on iOS, Material + solid IME insets on Android)
+5. Settings home: search + every `MOBILE_SETTINGS_PAGE_SLUGS` page
+6. iOS targets: Runner, WidgetKit+Live Activity+Control, NSE, Share Extension (same bundle IDs / App Group as Capacitor)
 
 ## CI
 

@@ -22,7 +22,7 @@ const List<NativeContract> flutterNativeContracts = [
   NativeContract(
     id: 'four-tab-dock',
     status: 'landed',
-    summary: 'Projects / Assistant / Scheduled / Settings. Chat is a pushed page. iOS Cupertino / Android Material 3.',
+    summary: 'Projects / Assistant / Scheduled / Settings. Chat is a pushed page. iOS UIKit UITabBar / Android Material 3.',
   ),
   NativeContract(
     id: 'settings-home',
@@ -31,43 +31,43 @@ const List<NativeContract> flutterNativeContracts = [
   ),
   NativeContract(
     id: 'qr-pairing',
-    status: 'stub',
-    summary: 'TODO: ML Kit barcode + Android Google scanner then CameraX; openchamber://connect?v=2&p=; persist relayUrl.',
+    status: 'landed',
+    summary: 'Parse+persist v2 payload and relayUrl. iOS VisionKit DataScanner; Android Google Code Scanner then CameraX+ML Kit. No fake redeem HTTP.',
   ),
   NativeContract(
     id: 'ios-composer',
-    status: 'stub',
-    summary: 'TODO: always-on UIKit liquid-glass composer (pill/card, IME, / @ autocomplete, attach, Send/Stop). Not optional.',
+    status: 'landed',
+    summary: 'Always-on UIKit liquid-glass composer (pill/card, IME, / @ autocomplete stub, attach, Send/Stop, warm-on-home).',
   ),
   NativeContract(
     id: 'android-composer',
-    status: 'stub',
-    summary: 'TODO: always-on Material composer + ImeSync analogue. No WebView composer path.',
+    status: 'landed',
+    summary: 'Material composer + solid IME viewInsets. No WebView composer path.',
   ),
   NativeContract(
     id: 'ios-liquid-glass-dock',
-    status: 'stub',
-    summary: 'TODO: iOS 26 UIGlassEffect UITabBar for the four homepage roots. Older iOS: system translucent Cupertino bar, not a fake glass clone.',
+    status: 'landed',
+    summary: 'iOS 26 UIGlassEffect UITabBar for the four homepage roots. Older iOS: system translucent UITabBar, not a fake glass clone.',
   ),
   NativeContract(
     id: 'live-activity',
-    status: 'missing',
-    summary: 'TODO: OpenChamberLiveActivity — one Activity for selected top-level session, 5s busy, Dynamic Island + Lock Screen.',
+    status: 'landed',
+    summary: 'iOS 17+ local Activity, 5s busy, no pushType, no rebuild after user dismiss. Android channel is a no-op.',
   ),
   NativeContract(
     id: 'share-in',
-    status: 'missing',
-    summary: 'TODO: iOS Share Extension + Android ShareReceiver / Direct Share. App Group group.com.yee94.openchamber.',
+    status: 'landed',
+    summary: 'iOS Share Extension + Android ShareReceiver / Direct Share. Exact instance+assistant only. App Group group.com.yee94.openchamber.',
   ),
   NativeContract(
     id: 'push',
     status: 'missing',
-    summary: 'TODO: APNs + FCM → openchamber-push-relay. Presence-aware skip. NSE mutable-content widget refresh.',
+    summary: 'TODO: APNs + FCM → openchamber-push-relay. NSE target exists and refreshes the widget snapshot.',
   ),
   NativeContract(
     id: 'widgetkit-nse-control',
-    status: 'missing',
-    summary: 'TODO: OpenChamberWidget, Control Center, OpenChamberNotificationService. Same App Group and bundle IDs as Capacitor.',
+    status: 'landed',
+    summary: 'OpenChamberWidget, Control Center, OpenChamberNotificationService targets in the Flutter Xcode project. Same App Group and bundle IDs as Capacitor.',
   ),
   NativeContract(
     id: 'haptics',
@@ -81,8 +81,8 @@ const List<NativeContract> flutterNativeContracts = [
   ),
   NativeContract(
     id: 'secure-storage',
-    status: 'stub',
-    summary: 'In-memory SecureStore this slice. TODO: iOS Keychain + Android keystore-backed EncryptedSharedPreferences. Never log tokens.',
+    status: 'landed',
+    summary: 'iOS Keychain + Android Keystore AES-GCM. Tests still inject MemorySecureStore. Never log tokens.',
   ),
   NativeContract(
     id: 'ota-capgo',

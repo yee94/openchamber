@@ -1,12 +1,37 @@
+import 'package:flutter/services.dart';
+
+import '../native/platform_channels.dart';
+
 /// Token-safe persistence. Implementations must never log values.
-///
-/// First slice: an in-process store that tests inject, plus a
-/// [MemorySecureStore] used until Keychain / EncryptedSharedPreferences
-/// plugins land. See `docs/flutter-native-gap.md` (secure storage).
 abstract class SecureStore {
   Future<String?> read(String key);
   Future<void> write(String key, String value);
   Future<void> delete(String key);
+}
+
+/// Production store: iOS Keychain + Android Keystore-wrapped prefs.
+/// Never log [key] values or returned secrets.
+class PlatformSecureStore implements SecureStore {
+  PlatformSecureStore({MethodChannel? channel})
+      : _channel = channel ?? const MethodChannel(OpenChamberChannels.secureStore);
+
+  final MethodChannel _channel;
+
+  @override
+  Future<String?> read(String key) async {
+    final value = await _channel.invokeMethod<String>('read', {'key': key});
+    return value;
+  }
+
+  @override
+  Future<void> write(String key, String value) async {
+    await _channel.invokeMethod<void>('write', {'key': key, 'value': value});
+  }
+
+  @override
+  Future<void> delete(String key) async {
+    await _channel.invokeMethod<void>('delete', {'key': key});
+  }
 }
 
 class MemorySecureStore implements SecureStore {

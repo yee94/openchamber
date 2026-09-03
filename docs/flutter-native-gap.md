@@ -79,7 +79,7 @@ Native contracts / shell
 
 | Slug | Group | First-slice page |
 |---|---|---|
-| `instances` | connection | Real-enough list + add + QR TODO |
+| `instances` | connection | List + add + QR scan (persist v2 payload / relayUrl) |
 | `appearance` | personalization | Language + theme. **No iosNativeUi.** |
 | `chat` | personalization | Structured placeholder |
 | `notifications` | personalization | Real-enough toggles (local + push hint) |
@@ -101,29 +101,44 @@ Native contracts / shell
 | `voice` | system | Structured placeholder |
 | `about` | system | App name, native client `1.19.3-beta.5`, instance version separate |
 
+## Second-slice status (this PR)
+
+| Surface | Status | Notes |
+|---|---|---|
+| Four Xcode targets in `Runner.xcodeproj` | landed | Runner `com.yee94.openchamber`; Widget `…OpenChamberWidget` (17.0); NSE `…OpenChamberNotificationService`; Share `…OpenChamberShareExtension`. App Group `group.com.yee94.openchamber`. Embed App Extensions `dstSubfolderSpec = 13`. No `DEVELOPMENT_TEAM` baked in. |
+| Release YAML four-profile signing | landed | `flutter-mobile-release.yml` pbxproj replacements + ExportOptions map all four bundle IDs / existing profile secrets |
+| iOS composer UIKit platform view | landed | `UIGlassEffect` on iOS 26; system blur on older iOS. Attachments, `/` `@` stub that pan-scrolls, IME, Send/Stop. Warm overlay on Projects; hide immediately on leave. Occupancy = collapsed 56pt only |
+| iOS 26 glass tab bar | landed | Chrome-only `UITabBarController`. Older iOS: system translucent `UITabBar`. Chat remains pushed. Widget tests stay on Material `NavigationBar` |
+| Live Activity local MVP | landed (iOS 17+) | One Activity, 5s demo timer, `pushType: nil`, no rebuild after dismiss. Android channel is a no-op |
+| SecureStore | landed | Production `PlatformSecureStore`: iOS Keychain + Android Keystore AES-GCM. Tests still inject `MemorySecureStore`. Never logs values |
+| QR + deep link | landed (thin redeem) | iOS VisionKit `DataScanner` (Apple on-device ML; not a Google ML Kit CocoaPod). Android Google Code Scanner then CameraX + ML Kit. Parses v2 `p=` and persists `relayUrl` / pairing secret. **Does not** call a made-up redeem HTTP API |
+| Android IME + share | landed | Solid `viewInsets` surface. `ShareReceiverActivity` + Direct Share shortcuts. Exact instance+assistant only — no silent default |
+| Simulator CI | documented | `flutter build ios --simulator --no-codesign` includes the new targets. Simulator often skips extension signing. Linux VM cannot run this. **This agent did not run the macos-15 job.** |
+| Capgo / plan / notes / Todo / Chat dock | **not present** | Do not rebuild |
+
 ## Native parity (always on — not optional)
 
-| Contract | Status | Main source | Flutter next slice |
+| Contract | Status | Main source | Notes |
 |---|---|---|---|
-| Connection onboarding | landed | `MobileApp.tsx`, HANDOFF | Live HTTP + `--ui-password` unlock + token issuance |
-| QR pairing | stub | `mobileQrScan.ts`, ML Kit | ML Kit; Android Google scanner then CameraX; `openchamber://connect?v=2&p=`; persist `relayUrl` |
-| iOS composer | stub | `OpenChamberComposer`, `native-composer-keyboard.mjs` | Always-on UIKit liquid-glass pill/card, IME, `/` `@`, attach, Send/Stop, warm-on-home, hide-on-leave |
-| Android composer | stub | Capacitor WebView composer + `ImeSyncBridge` | Native Material composer + IME analogue. **No WebView path.** |
-| iOS liquid-glass dock | stub | `OpenChamberTabBar` (iOS 26 `UIGlassEffect`) | Platform `UITabBar` for the four roots. Older iOS: system translucent bar, not a fake glass clone |
+| Connection onboarding | landed | `MobileApp.tsx`, HANDOFF | Live HTTP + `--ui-password` unlock + token issuance still later |
+| QR pairing | landed | `mobileQrScan.ts`, `connectionPayload.ts` | Persist payload + `relayUrl`. Thin client: no fake redeem session |
+| iOS composer | landed | `OpenChamberComposer` | UIKit platform view, always on |
+| Android composer | landed | IME viewInsets | Material + solid inset surface. ImeSync analogue still later |
+| iOS liquid-glass dock | landed | `OpenChamberTabBar` | iOS 26 `UIGlassEffect`; older: system translucent bar |
 | Android dock | landed (Material 3) | Web `MobileTabBar` | Keep solid/translucent Material `NavigationBar` |
-| Live Activity / Dynamic Island | missing | `OpenChamberLiveActivity` | iOS 17+, one Activity, 5s busy, no rebuild after user dismiss, no `pushType` yet |
-| Share-in | missing | Share extension + `ShareReceiverActivity` | App Group `group.com.yee94.openchamber`; honor exact instance+assistant |
-| Push | missing | APNs + FCM → `openchamber-push-relay` | Presence-aware skip; language-aware APNs title; re-bind on relay URL; NSE `mutable-content` |
-| WidgetKit + Control Center + NSE | missing | `OpenChamberWidget`, NSE | Same four bundle IDs and App Group as Capacitor profiles |
+| Live Activity / Dynamic Island | landed | `OpenChamberLiveActivity` | Local MVP, demo 5s timer until real sync |
+| Share-in | landed | Share extension + `ShareReceiverActivity` | Exact instance+assistant. Catalog published from saved instances |
+| Push | missing | APNs + FCM → `openchamber-push-relay` | NSE target exists and refreshes widget snapshot; relay bind later |
+| WidgetKit + Control Center + NSE | landed (targets) | `OpenChamberWidget`, NSE | Real pbxproj targets. Snapshot write from live sync still later |
 | Haptics | missing | `OpenChamberHaptics` | light / medium / heavy |
 | Native back | missing | `OpenChamberNavigation` | Edge pan + predictive back for pushed Chat / Settings |
-| Secure storage | stub | `@aparajita/capacitor-secure-storage` | iOS Keychain + Android keystore-backed store. Never log tokens |
-| Deep links | stub | `openchamber://` | Pairing, notification taps, widgets, Control Center |
+| Secure storage | landed | Keychain / Android Keystore | Never log tokens |
+| Deep links | landed | `openchamber://` | Pairing cold-launch, share-inbox, session jump URI |
 | Virtual assets / HEIC / Android picker | missing | `OpenChamberVirtualAsset`, `OpenChamberMedia` | Later |
 | External browser | missing | Android-only plugin | Later |
 | App-icon badge | missing | HANDOFF | Later |
 | Status bar | stub | Capacitor overlay | Use Flutter/system insets |
-| Capgo OTA | **will not port** | `@capgo/capacitor-updater` | Full IPA/APK via signed-release. About still shows native vs instance versions |
+| Capgo OTA | **will not port** | `@capgo/capacitor-updater` | Full IPA/APK via signed-release |
 
 ## Android degradation (intentional — native Android, not fake iOS)
 
@@ -171,7 +186,7 @@ Bundle IDs / App Group (profiles already match):
 - `com.yee94.openchamber.OpenChamberShareExtension`
 - App Group `group.com.yee94.openchamber`
 
-First-slice Flutter Xcode project has **Runner only**. The release workflow still **decodes all four profiles**. Archive/export currently signs Runner (`com.yee94.openchamber`). Widget / NSE / Share **targets** are the next native slice; TestFlight of a complete extension-bearing IPA waits on those targets.
+Second-slice Flutter Xcode project has **four native targets**. Release workflow decodes all four profiles **and** writes provisioning settings + ExportOptions for all four bundle IDs. Simulator (`flutter build ios --simulator --no-codesign`) compiles the extension targets; signing those `.appex` bundles on simulator is commonly skipped — signed four-profile export is the macos-26 `flutter-mobile-release.yml` job only.
 
 Capgo (`mobile-beta-ota.yml`) stays Capacitor/WebView. Flutter does not consume Capgo channels.
 
@@ -179,18 +194,19 @@ Capgo (`mobile-beta-ota.yml`) stays Capacitor/WebView. Flutter does not consume 
 
 | Check | This slice |
 |---|---|
-| iOS Simulator four-tab shell + pushed Chat | Commands below; needs Mac/Xcode. Linux VM: analyze/tests only |
-| Android emulator LAN HTTP + IME composer | Manifest allows cleartext; IME uses Flutter `viewInsets` |
+| iOS Simulator four-tab shell + pushed Chat | Needs Mac/Xcode. Linux VM: analyze/tests only |
+| Four native targets in pbxproj | Landed (Runner / Widget / NSE / Share) |
+| Android emulator LAN HTTP + IME composer | Manifest allows cleartext; composer uses solid `viewInsets` |
 | Settings slug walkthrough | Widget test walks all slugs + About |
-| Keyboard / IME | Composer above `SafeArea`; Android ImeSync analogue still stub |
-| Pairing | URL + `openchamber://connect?v=2&p=` parse; QR is stub |
+| Keyboard / IME | Android solid viewInsets. iOS UIKit composer owns IME |
+| Pairing | v2 payload parse + persist `relayUrl`. QR wired; redeem HTTP still later |
 | Chat scroll | Reverse list prepend test + re-enter latest |
 | No PIN lock | Widget test asserts no Face ID / PIN / passcode lock |
 | No Chat dock tab | Widget test: 4 destinations |
 | No iosNativeUi | Catalog + Settings home tests |
 | `flutter analyze` + tests on Linux | Required this slice |
-| Flutter CI YAML valid | Committed |
-| Signed-release YAML references existing secrets | Committed |
+| Flutter CI YAML valid | Committed. **macos-15 simulator job not run on this Linux VM** |
+| Signed-release YAML attaches all four profiles | Committed. **Signed archive not run here** |
 
 ## Commands
 
@@ -216,10 +232,9 @@ flutter build apk --release
 
 ## Next slices
 
-1. Keychain / keystore `SecureStore` (replace in-memory)
-2. Live HTTP connect + password unlock + pairing redeem + `relayUrl`
-3. ML Kit / CameraX QR + `openchamber://` cold launch
-4. Always-on iOS UIKit composer + UIGlassEffect dock + Live Activity / Widget / NSE / Share targets (same bundle IDs)
-5. Always-on Android composer IME analogue, share receiver, FCM
-6. Session sync against official OpenCode / OpenChamber APIs (LegendList-class transcript)
-7. Wire Widget/NSE/Share into the Flutter Xcode project so TestFlight export can attach all four profiles
+1. Live HTTP connect + `--ui-password` unlock + pairing **redeem** (payload is already persisted)
+2. Real session sync against official OpenCode / OpenChamber APIs (LegendList-class transcript) driving Live Activity instead of the 5s demo timer
+3. FCM / APNs push-relay bind; presence-aware skip
+4. Haptics + native back (edge pan / predictive back)
+5. Virtual assets / HEIC / Android picker
+6. Widget snapshot writes from live session index (targets exist; data is still demo/empty)

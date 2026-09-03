@@ -1,7 +1,16 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../l10n/app_strings.dart';
+import '../native/deep_link.dart';
+import '../native/live_activity_controller.dart';
+import '../native/qr_scanner.dart';
+import '../native/share_targeting.dart';
 import 'instance_store.dart';
+import 'pairing_payload.dart';
 import 'secure_store.dart';
 
 enum AppPhase { splash, connect, shell }
@@ -9,12 +18,20 @@ enum AppPhase { splash, connect, shell }
 enum ConnectForm { welcome, password }
 
 class AppController extends ChangeNotifier {
-  AppController({required SecureStore store, InstanceSnapshot? seed})
-      : _store = store,
+  AppController({
+    required SecureStore store,
+    InstanceSnapshot? seed,
+    QrScanner? qrScanner,
+    DeepLinkListener? deepLinks,
+  })  : _store = store,
+        _qrScanner = qrScanner ?? QrScanner(),
+        _deepLinks = deepLinks ?? DeepLinkListener(),
         _instances = seed?.instances ?? const [],
         _activeId = seed?.activeId;
 
   final SecureStore _store;
+  final QrScanner _qrScanner;
+  final DeepLinkListener _deepLinks;
   late final InstanceRepository _repository = InstanceRepository(_store);
 
   AppPhase phase = AppPhase.splash;
@@ -49,8 +66,18 @@ class AppController extends ChangeNotifier {
     final snapshot = await _repository.load();
     _instances = snapshot.instances;
     _activeId = snapshot.activeId;
+    if (_useNativeLinks) {
+      _deepLinks.listen(handleIncomingLink);
+    }
     if (!skipDelay) {
       await Future<void>.delayed(const Duration(milliseconds: 350));
+    }
+    if (_useNativeLinks) {
+      final initial = await _deepLinks.takeInitial();
+      if (initial != null && initial.isNotEmpty) {
+        await handleIncomingLink(initial);
+        return;
+      }
     }
     if (activeInstance != null) {
       phase = AppPhase.shell;
@@ -59,6 +86,31 @@ class AppController extends ChangeNotifier {
       connectForm = ConnectForm.welcome;
     }
     notifyListeners();
+  }
+
+  Future<void> handleIncomingLink(String raw) async {
+    final link = classifyDeepLink(raw);
+    if (link.kind == DeepLinkKind.pairing) {
+      await connect(pairingLink: raw);
+      return;
+    }
+    pendingDeepLink = link;
+    notifyListeners();
+  }
+
+  IncomingDeepLink? pendingDeepLink;
+  final LiveActivityController liveActivity = LiveActivityController();
+
+  Future<bool> scanAndConnect() async {
+    try {
+      final raw = await _qrScanner.scan();
+      if (raw == null || raw.isEmpty) return false;
+      return connect(pairingLink: raw);
+    } catch (_) {
+      connectErrorKey = 'connect.qr.unavailable';
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<void> setLocale(Locale next) async {
@@ -99,7 +151,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<bool> connect({
-    required String url,
+    String url = '',
     String label = '',
     String clientToken = '',
     String pairingLink = '',
@@ -115,16 +167,32 @@ class AppController extends ChangeNotifier {
 
     var resolvedUrl = url.trim();
     String? relayUrl;
+    String? pairingId;
+    var pairingSecret = '';
+    var pairingLabel = label;
     if (pairing != null) {
       if (!pairing.isV2) {
         connectErrorKey = 'connect.link.invalid';
         notifyListeners();
         return false;
       }
-      // Pairing v2 persists relayUrl with the connection on main. First slice
-      // keeps the raw link on the instance until redeem lands.
-      resolvedUrl = resolvedUrl.isEmpty ? pairing.raw : resolvedUrl;
-      relayUrl = pairing.raw;
+      final decoded = pairing.decoded ?? parsePairingConnectionPayload(pairing.raw);
+      if (decoded == null) {
+        connectErrorKey = 'connect.link.invalid';
+        notifyListeners();
+        return false;
+      }
+      pairingId = decoded.pairingId;
+      pairingSecret = decoded.secret;
+      relayUrl = decoded.firstRelayUrl;
+      pairingLabel = pairingLabel.trim().isEmpty ? (decoded.label ?? pairingLabel) : pairingLabel;
+      final direct = decoded.firstDirectUrl;
+      if (direct != null) {
+        resolvedUrl = direct;
+      } else if (resolvedUrl.isEmpty) {
+        // Relay-only payload: persist pairing + relayUrl, no made-up HTTP origin.
+        resolvedUrl = 'openchamber://pairing/${decoded.pairingId}';
+      }
     }
 
     final urlError = validateServerUrl(resolvedUrl);
@@ -133,16 +201,15 @@ class AppController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    if (pairing != null && resolvedUrl.startsWith('openchamber://')) {
-      resolvedUrl = 'https://pending-pairing.invalid';
-    }
 
     if (requiresPassword && clientToken.trim().isEmpty) {
       pendingUnlock = SavedInstance(
         id: _newId(),
         url: resolvedUrl,
-        label: label,
+        label: pairingLabel,
         relayUrl: relayUrl,
+        pairingId: pairingId,
+        pairingSecret: pairingSecret,
         needsPassword: true,
       );
       connectForm = ConnectForm.password;
@@ -154,9 +221,11 @@ class AppController extends ChangeNotifier {
       SavedInstance(
         id: _newId(),
         url: resolvedUrl,
-        label: label,
+        label: pairingLabel,
         clientToken: clientToken.trim(),
         relayUrl: relayUrl,
+        pairingId: pairingId,
+        pairingSecret: pairingSecret,
       ),
     );
   }
@@ -227,9 +296,47 @@ class AppController extends ChangeNotifier {
     connecting = false;
     connectForm = ConnectForm.welcome;
     phase = AppPhase.shell;
+    if (_useNativeLinks) {
+      await _publishShareCatalog();
+    }
     notifyListeners();
     return true;
   }
+
+  Future<void> _publishShareCatalog() async {
+    final targets = _instances
+        .where((item) => item.id.isNotEmpty)
+        .map(
+          (item) => ShareTarget(
+            serverInstanceId: item.id,
+            assistantId: item.id,
+            name: item.displayLabel,
+          ),
+        )
+        .toList();
+    try {
+      const channel = MethodChannel('openchamber/share');
+      await channel
+          .invokeMethod<void>(
+            'updateCatalog',
+            targets
+                .map(
+                  (target) => {
+                    'serverInstanceID': target.serverInstanceId,
+                    'assistantID': target.assistantId,
+                    'name': target.name,
+                    'enabled': true,
+                  },
+                )
+                .toList(),
+          )
+          .timeout(const Duration(milliseconds: 80));
+    } catch (_) {
+      // Catalog publish is best-effort until native plugins register.
+    }
+  }
+
+  static bool get _useNativeLinks => Platform.environment['FLUTTER_TEST'] != 'true';
 
   String _newId() => 'inst-${DateTime.now().microsecondsSinceEpoch}';
 
