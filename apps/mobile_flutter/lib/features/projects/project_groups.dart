@@ -46,8 +46,8 @@ class ProjectHomeGroup {
 }
 
 /// Group catalog rows the way official `MobileProjectsHome` does:
-/// one project card + main-workspace sessions, then linked branch worktrees
-/// as their own elevated cards.
+/// one project, one floating surface. Linked worktrees stay inset groups
+/// inside that surface — never their own elevated cards.
 List<ProjectHomeGroup> groupSessionsByProject(List<HomeSessionRow> rows) {
   final byProject = <String, List<HomeSessionRow>>{};
   for (final row in rows) {

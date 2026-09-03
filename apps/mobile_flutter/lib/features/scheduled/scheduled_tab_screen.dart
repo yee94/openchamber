@@ -258,15 +258,6 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
         ),
       ),
     );
-    if (!paused) return card;
-    return ColorFiltered(
-      colorFilter: const ColorFilter.matrix(<double>[
-        0.2126, 0.7152, 0.0722, 0, 0,
-        0.2126, 0.7152, 0.0722, 0, 0,
-        0.2126, 0.7152, 0.0722, 0, 0,
-        0, 0, 0, 1, 0,
-      ]),
-      child: Opacity(opacity: 0.78, child: card),
-    );
+    return card;
   }
 }

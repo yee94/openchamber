@@ -17,7 +17,7 @@ class OcOptical {
   /// visual slot to 2.5rem (40). 40 ≥ 36 touch min, so hit == visual — no
   /// extra outer pad (that would balloon the card).
   static const double rowTitle = 12;
-  static const double rowTitleTracking = 0.04;
+  static const double rowTitleTracking = -0.14;
   static const double rowTitleHeight = 1.33;
   static const double sessionRowHeight = 46;
   static const double sessionRowVisualHeight = 40;
@@ -32,7 +32,7 @@ class OcOptical {
   static const double entityTitleTracking = 0.04;
   static const double entityTitleHeight = 1.25;
   static const double projectTitle = 14;
-  static const double projectTitleTracking = 0.04;
+  static const double projectTitleTracking = -0.34;
   static const double projectTitleHeight = 1.29;
 
   static const double meta = 12;
@@ -88,16 +88,16 @@ class OcOptical {
   static const double dockIconGlowAlpha = 0.0;
   static const double dockIconGlowBlur = 0;
 
-  /// `.oc-mobile-project-shell` icon 2.375rem; in-card glyph stays thinner
-  /// than the official 18px filled sprite.
+  /// Official project-shell icon 2.375rem; glyph `1.125rem` (18). Worktree
+  /// label uses `size-3.5` (14), not a second 38px card icon.
   static const double leadingCircle = 38;
-  static const double leadingCircleCompact = 28;
-  static const double leadingGlyph = 9;
-  static const double leadingGlyphCompact = 7;
+  static const double leadingCircleCompact = 22;
+  static const double leadingGlyph = 18;
+  static const double leadingGlyphCompact = 14;
 
   static const double sessionBullet = 5;
   static const double overflow = 16;
-  static const double chevron = 20;
+  static const double chevron = 14;
   static const double chatChip = 44;
 
   static const double scheduleStatus = 44;

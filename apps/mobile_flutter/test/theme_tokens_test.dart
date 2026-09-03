@@ -59,8 +59,8 @@ void main() {
     expect(OcOptical.largeTitleTracking, closeTo(-1.28, 0.01));
     expect(OcOptical.largeTitleHeight, 1.2);
     expect(OcOptical.rowTitle, 12);
-    expect(OcOptical.rowTitleTracking, greaterThanOrEqualTo(0));
-    expect(OcOptical.rowTitleTracking, lessThan(0.12));
+    expect(OcOptical.rowTitleTracking, closeTo(-0.14, 0.01));
+    expect(OcOptical.projectTitleTracking, closeTo(-0.34, 0.01));
     expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
     expect(OcOptical.rowTitleHeight, lessThan(1.42));
     expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);
@@ -86,6 +86,9 @@ void main() {
     expect(OcOptical.dockGlyphStroke, 1.75);
     expect(OcOptical.listGlyphStroke, lessThan(OcOptical.headerGlyphStroke));
     expect(OcOptical.leadingCircle, 38);
+    expect(OcOptical.leadingGlyph, 18);
+    expect(OcOptical.leadingGlyphCompact, 14);
+    expect(OcOptical.chevron, 14);
     expect(OcOptical.footerGlyph, 14);
     expect(OcOptical.scheduleStatus, 44);
     expect(OcOptical.overflow, 16);

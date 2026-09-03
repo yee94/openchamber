@@ -23,9 +23,9 @@ class OcElevation {
     // and a short tucked far wash (more negative spread, low alpha, small
     // offset) so lift is soft contact, not a drop. Same path cards/dock/composer.
     return const [
-      BoxShadow(color: Color(0x08000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0A000000), blurRadius: 10),
-      BoxShadow(color: Color(0x0B000000), blurRadius: 16, spreadRadius: -8, offset: Offset(0, 3)),
+      BoxShadow(color: Color(0x06000000), blurRadius: 2),
+      BoxShadow(color: Color(0x07000000), blurRadius: 8),
+      BoxShadow(color: Color(0x08000000), blurRadius: 14, spreadRadius: -10, offset: Offset(0, 2)),
     ];
   }
 
@@ -46,9 +46,9 @@ class OcElevation {
     if (tokens.isDark) return const [];
     // Search / + discs still need a visible plate, but must not out-lift cards.
     return const [
-      BoxShadow(color: Color(0x08000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0A000000), blurRadius: 7),
-      BoxShadow(color: Color(0x0C000000), blurRadius: 10, spreadRadius: -6, offset: Offset(0, 2)),
+      BoxShadow(color: Color(0x06000000), blurRadius: 2),
+      BoxShadow(color: Color(0x08000000), blurRadius: 6),
+      BoxShadow(color: Color(0x09000000), blurRadius: 8, spreadRadius: -6, offset: Offset(0, 1)),
     ];
   }
 

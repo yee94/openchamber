@@ -213,70 +213,123 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
 
   Widget _projectSurface(BuildContext context, ProjectHomeGroup group) {
     final expanded = !_collapsed.contains(group.id);
-    return Column(
-      key: Key('home-project-stack-${group.id}'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        MobileFloatingSurface(
-          key: Key('home-project-${group.id}'),
-          child: Column(
-            children: [
-              MobileProjectCard(
-                name: group.name,
-                count: group.sessionCount,
-                activity: formatRelativeTime(group.latestUpdated),
-                pathHint: group.pathHint,
-                expanded: expanded,
-                highlightQuery: _query,
-                onToggle: () => setState(() {
-                  if (_collapsed.contains(group.id)) {
-                    _collapsed.remove(group.id);
-                  } else {
-                    _collapsed.add(group.id);
-                  }
-                }),
-              ),
-              if (expanded) ..._sessionSlice(context, group.id, _mainSessions(group), true),
-            ],
-          ),
-        ),
-        if (expanded)
-          for (final tree in group.worktrees) _worktreeCard(context, group.id, tree),
-      ],
-    );
-  }
-
-  Widget _worktreeCard(BuildContext context, String projectId, WorktreeHomeGroup tree) {
-    final id = '$projectId::${tree.name}';
-    final expanded = _isWorktreeExpanded(id, tree);
-    final activity = formatRelativeTime(
-      tree.sessions.fold<num>(0, (latest, row) => row.updated > latest ? row.updated : latest),
-    );
+    final mains = _mainSessions(group);
     return MobileFloatingSurface(
-      key: Key('home-worktree-$id'),
+      key: Key('home-project-${group.id}'),
       child: Column(
+        key: Key('home-project-stack-${group.id}'),
         children: [
           MobileProjectCard(
-            name: tree.name,
-            glyph: OcGlyphKind.branch,
-            count: tree.sessionCount,
-            activity: activity,
+            name: group.name,
+            count: group.sessionCount,
+            activity: formatRelativeTime(group.latestUpdated),
+            pathHint: group.pathHint,
             expanded: expanded,
-            compact: true,
             highlightQuery: _query,
             onToggle: () => setState(() {
-              final next = !_isWorktreeExpanded(id, tree);
-              _worktreeToggled.add(id);
-              if (next) {
-                _expandedWorktrees.add(id);
+              if (_collapsed.contains(group.id)) {
+                _collapsed.remove(group.id);
               } else {
-                _expandedWorktrees.remove(id);
+                _collapsed.add(group.id);
               }
             }),
           ),
-          if (expanded) ..._sessionSlice(context, id, tree.sessions, true),
+          if (expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 2, 12, 14),
+              child: Column(
+                children: [
+                  if (mains.isNotEmpty) _insetGroup(context, children: _sessionSlice(context, group.id, mains, true)),
+                  for (var i = 0; i < group.worktrees.length; i += 1) ...[
+                    if (mains.isNotEmpty || i > 0) const SizedBox(height: 10),
+                    _worktreeGroup(context, group.id, group.worktrees[i]),
+                  ],
+                ],
+              ),
+            ),
         ],
       ),
+    );
+  }
+
+  Widget _insetGroup(BuildContext context, {Widget? label, required List<Widget> children}) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(OcTokens.insetRadius),
+        border: Border.all(color: context.oc.mobileBorder),
+      ),
+      child: Column(
+        children: [
+          if (label != null) label,
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _worktreeGroup(BuildContext context, String projectId, WorktreeHomeGroup tree) {
+    final id = '$projectId::${tree.name}';
+    final expanded = _isWorktreeExpanded(id, tree);
+    return _insetGroup(
+      context,
+      label: Pressable(
+        key: Key('home-worktree-$id'),
+        haptic: HapticStrength.light,
+        onPressed: () => setState(() {
+          final next = !_isWorktreeExpanded(id, tree);
+          _worktreeToggled.add(id);
+          if (next) {
+            _expandedWorktrees.add(id);
+          } else {
+            _expandedWorktrees.remove(id);
+          }
+        }),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+          child: Row(
+            children: [
+              OcGlyph(
+                OcGlyphKind.branch,
+                size: OcOptical.leadingGlyphCompact,
+                strokeWidth: OcOptical.listGlyphStroke,
+                color: context.oc.mutedForeground,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  tree.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: OcOptical.projectTitle,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: OcOptical.projectTitleTracking,
+                    height: OcOptical.projectTitleHeight,
+                    color: context.oc.foreground,
+                  ),
+                ),
+              ),
+              Text(
+                tree.sessionCount == 1
+                    ? t(context, 'projects.sessionsCount.one')
+                    : t(context, 'projects.sessionsCount', {'count': '${tree.sessionCount}'}),
+                style: TextStyle(
+                  fontSize: OcOptical.meta,
+                  color: context.oc.mutedForeground,
+                ),
+              ),
+              const SizedBox(width: 6),
+              OcGlyph(
+                expanded ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
+                size: OcOptical.chevron,
+                strokeWidth: OcOptical.listGlyphStroke,
+                color: context.oc.mutedForeground,
+              ),
+            ],
+          ),
+        ),
+      ),
+      children: expanded ? _sessionSlice(context, id, tree.sessions, true) : const [],
     );
   }
 
