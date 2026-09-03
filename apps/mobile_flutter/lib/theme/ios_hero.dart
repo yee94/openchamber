@@ -1,8 +1,7 @@
-/// README-measured optical sizes for type and glyphs.
+/// Official `packages/ui/src/styles/mobile.css` rem tokens, in px at 16.
 ///
-/// Colors stay on [OcTokens] (design-system orange / sand). These numbers
-/// are from the README mobile photos' tracking, leading, and icon scale —
-/// not a theme recolor. WidgetTester cannot paint `UIGlassEffect`.
+/// Colors stay on [OcTokens] (design-system orange / sand). Do not free-tune
+/// these knobs. WidgetTester cannot paint `UIGlassEffect`.
 class OcOptical {
   const OcOptical._();
 
@@ -45,19 +44,31 @@ class OcOptical {
   static const double scheduleCardPadV = 10;
   static const double scheduleTitleMetaGap = 3;
 
+  /// Official `.oc-mobile-detail-title` 0.9375rem / line-height 1.4 / weight 650.
   static const double chatTitle = 15;
-  static const double chatTitleTracking = 0.4;
-  static const double chatTitleHeight = 1.33;
+  static const double chatTitleTracking = 0;
+  static const double chatTitleHeight = 1.4;
+  static const double detailSubtitle = 10;
+  static const double detailSubtitleHeight = 1.4;
+  static const double detailNavigationHeight = 56;
+  static const double detailActionEdgeInset = 16;
+  static const double detailActionColumn = 44;
+  static const double headerFadeExtra = 28;
+  static const double headerFadeMidStop = 0.35;
   static const double chatHeaderButton = 28;
   static const double chatBodyHeight = 1.45;
   static const double chatBodyTracking = 0.28;
 
+  /// Official `.oc-mobile-tab-button` 0.75rem / line-height 0.75rem / tracking-tight.
   static const double dockLabel = 12;
-  static const double dockLabelTracking = 0.2;
+  static const double dockLabelTracking = -0.3;
+  static const double dockLabelHeight = 1.0;
   static const double dockLabelGap = 3;
+  static const double dockGap = 3;
   static const double dockCapsuleHeight = 68;
   static const double dockCapsuleRadius = 34;
   static const double dockInnerInset = 5;
+  static const double dockTabHeight = 58;
   static const double dockTabRadius = 29;
   static const double dockBottomPad = 20;
   static const double dockMaxWidth = 416;
@@ -72,12 +83,22 @@ class OcOptical {
   /// In-card strokes stay thinner than header medium, not hairline.
   static const double listGlyphStroke = 1.45;
 
-  /// `--oc-mobile-collapsing-action-size` / expand-shift / collapse distance.
+  /// Official `.oc-mobile-collapsing-header` — exact rem tokens, not optical guesses.
   static const double collapsingActionSize = 40;
+  static const double collapsingTitleCompactSize = 20;
   static const double collapsingTopPad = 12;
   static const double collapsingExpandShift = 10;
+  static const double collapsingInnerGap = 16;
+  static const double collapsingTrailingGap = 14;
+  static const double collapsingInlineExtra = 4;
   static const double titleCollapseDistance = 48;
+  static const double titleCollapseScaleReduce = 0.375;
   static const double titleCollapseScaleEnd = 0.625;
+  static const double pageScrollBottomExtra = 40;
+
+  /// `.oc-mobile-root-page-title` letter-spacing: −0.04em + 0.02em × collapse.
+  static double rootTitleTracking(double collapse) =>
+      largeTitle * (-0.04 + 0.02 * collapse.clamp(0.0, 1.0));
 
   /// Official dock `Icon` is `size-[23px]` medium. Selected chrome is the
   /// full tab slot (icon + label), matching `.oc-mobile-tab-button`.
@@ -98,7 +119,8 @@ class OcOptical {
   static const double sessionBullet = 5;
   static const double overflow = 16;
   static const double chevron = 14;
-  static const double chatChip = 44;
+  /// Official `Button` `mobileIcon` = `size-10` (40). Same disc as header actions.
+  static const double chatChip = 40;
 
   static const double scheduleStatus = 44;
   static const double scheduleStatusGlyph = 16;

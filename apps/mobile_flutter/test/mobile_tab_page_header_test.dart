@@ -11,9 +11,11 @@ void main() {
     tester.view.physicalSize = const Size(390 * 3, 844 * 3);
     tester.view.devicePixelRatio = 3;
     tester.view.padding = const FakeViewPadding(top: 47 * 3);
+    tester.view.viewPadding = const FakeViewPadding(top: 47 * 3);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
 
     await tester.pumpWidget(
       StringsScope(
@@ -41,7 +43,7 @@ void main() {
     expect(expanded.height, 47 + OcOptical.collapsingTopPad + OcOptical.collapsingActionSize);
     expect(
       tester.getSize(find.byKey(const Key('mobile-tab-page-header-slot'))).height,
-      expanded.height - MobileTabPageHeader.restPeek,
+      expanded.height,
     );
     expect(tester.getSize(find.byKey(const Key('mobile-tab-page-header-spacer'))).height, 10);
 
@@ -67,5 +69,33 @@ void main() {
     final headerBottom = tester.getBottomLeft(find.byType(MobileTabPageHeader)).dy;
     final rowTop = tester.getTopLeft(find.text('row-0')).dy;
     expect(rowTop, lessThan(headerBottom));
+  });
+
+  testWidgets('detail nav consumes viewPadding.top and keeps a 56px band', (tester) async {
+    tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+    tester.view.devicePixelRatio = 3;
+    tester.view.padding = const FakeViewPadding(top: 47 * 3, left: 0, right: 0);
+    tester.view.viewPadding = const FakeViewPadding(top: 47 * 3, left: 12 * 3, right: 8 * 3);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+
+    await tester.pumpWidget(
+      StringsScope(
+        strings: AppStrings.of(AppStrings.zhCN),
+        child: MaterialApp(
+          theme: materialTheme(Brightness.light),
+          home: const Scaffold(
+            body: PushedNavBar(title: '会话标题', leadingKey: Key('chat-back')),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.getSize(find.byType(PushedNavBar)).height, 47 + 56);
+    expect(tester.getSize(find.byKey(const Key('chat-back'))).height, 40);
+    expect(tester.getTopLeft(find.byKey(const Key('chat-back'))).dx, 16);
   });
 }

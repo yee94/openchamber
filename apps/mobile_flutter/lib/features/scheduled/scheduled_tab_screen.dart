@@ -225,7 +225,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                         fontWeight: FontWeight.w500,
                         letterSpacing: OcOptical.projectTitleTracking,
                         height: OcOptical.projectTitleHeight,
-                        color: paused ? context.oc.mutedForeground : context.oc.foreground,
+                        color: context.oc.foreground,
                       ),
                     ),
                     const SizedBox(height: OcOptical.scheduleTitleMetaGap),

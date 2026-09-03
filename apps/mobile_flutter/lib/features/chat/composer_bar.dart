@@ -66,8 +66,11 @@ class ComposerBar extends StatelessWidget {
       ),
     );
 
-    return SafeArea(
-      top: false,
+    final view = MediaQuery.viewPaddingOf(context);
+    final inset = MediaQuery.viewInsetsOf(context).bottom;
+    final bottomSafe = inset > 0 ? 0.0 : view.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomSafe),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

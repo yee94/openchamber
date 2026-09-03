@@ -6,6 +6,7 @@ import '../features/projects/highlighted_text.dart';
 import '../motion/pressable.dart';
 import '../native/haptics.dart';
 import '../theme/ios_chrome.dart';
+import '../theme/oc_glyphs.dart';
 
 /// Official `MobileSessionRow` — one home-list session.
 ///
@@ -60,7 +61,7 @@ class MobileSessionRow extends StatelessWidget {
               ),
               if (formatRelativeTime(row.updated) != null)
                 Padding(
-                  padding: const EdgeInsets.only(left: 8, right: 4),
+                  padding: const EdgeInsets.only(left: 8, right: 2),
                   child: Text(
                     formatRelativeTime(row.updated)!,
                     style: TextStyle(
@@ -72,6 +73,17 @@ class MobileSessionRow extends StatelessWidget {
                     ),
                   ),
                 ),
+              SizedBox(
+                width: 36,
+                height: 36,
+                child: Center(
+                  child: OcGlyph(
+                    OcGlyphKind.ellipsis,
+                    size: 14,
+                    color: context.oc.mutedForeground,
+                  ),
+                ),
+              ),
             ],
           ),
         ),

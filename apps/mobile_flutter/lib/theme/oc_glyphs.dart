@@ -115,23 +115,36 @@ class _OcGlyphPainter extends CustomPainter {
         canvas.drawLine(Offset(w * 0.26, h * 0.26), Offset(w * 0.74, h * 0.74), stroke);
         canvas.drawLine(Offset(w * 0.74, h * 0.26), Offset(w * 0.26, h * 0.74), stroke);
       case OcGlyphKind.folder:
-        final folder = Path()
-          ..moveTo(w * 0.10, h * 0.34)
-          ..lineTo(w * 0.10, h * 0.84)
-          ..lineTo(w * 0.90, h * 0.84)
-          ..lineTo(w * 0.90, h * 0.40)
-          ..lineTo(w * 0.54, h * 0.40)
-          ..lineTo(w * 0.44, h * 0.24)
-          ..lineTo(w * 0.10, h * 0.24)
+        // Remix `folder-open`: tabbed back + dropped front flap.
+        final back = Path()
+          ..moveTo(w * 0.10, h * 0.22)
+          ..lineTo(w * 0.10, h * 0.78)
+          ..lineTo(w * 0.38, h * 0.78)
+          ..lineTo(w * 0.38, h * 0.40)
+          ..lineTo(w * 0.70, h * 0.40)
+          ..lineTo(w * 0.70, h * 0.32)
+          ..lineTo(w * 0.46, h * 0.32)
+          ..lineTo(w * 0.38, h * 0.22)
           ..close();
-        canvas.drawPath(folder, filled ? fill : stroke);
+        final flap = Path()
+          ..moveTo(w * 0.22, h * 0.56)
+          ..lineTo(w * 0.92, h * 0.56)
+          ..lineTo(w * 0.80, h * 0.86)
+          ..lineTo(w * 0.10, h * 0.86)
+          ..close();
+        canvas.drawPath(back, filled ? fill : stroke);
+        canvas.drawPath(flap, filled ? fill : stroke);
       case OcGlyphKind.sparkles:
+        // Remix `sparkling`: one 4-point star + small plus + small circle.
         if (filled) {
-          _sparkleFill(canvas, Offset(w * 0.46, h * 0.46), w * 0.34, fill);
-          canvas.drawCircle(Offset(w * 0.80, h * 0.22), w * 0.07, fill);
+          _fourPointStar(canvas, Offset(w * 0.46, h * 0.46), w * 0.40, fill);
+          canvas.drawCircle(Offset(w * 0.18, h * 0.84), w * 0.085, fill);
+          canvas.drawLine(Offset(w * 0.82, h * 0.08), Offset(w * 0.82, h * 0.30), stroke..strokeWidth = strokeWidth * 1.15);
+          canvas.drawLine(Offset(w * 0.71, h * 0.19), Offset(w * 0.93, h * 0.19), stroke);
         } else {
-          _sparkle(canvas, Offset(w * 0.42, h * 0.42), w * 0.28, stroke);
-          _sparkle(canvas, Offset(w * 0.74, h * 0.24), w * 0.12, stroke);
+          _fourPointStar(canvas, Offset(w * 0.46, h * 0.46), w * 0.34, stroke);
+          _sparkle(canvas, Offset(w * 0.80, h * 0.18), w * 0.10, stroke);
+          canvas.drawCircle(Offset(w * 0.18, h * 0.82), w * 0.07, fill);
         }
       case OcGlyphKind.calendar:
         final body = RRect.fromRectAndRadius(
@@ -386,11 +399,11 @@ class _OcGlyphPainter extends CustomPainter {
     canvas.drawLine(Offset(center.dx + diag, center.dy - diag), Offset(center.dx - diag, center.dy + diag), paint);
   }
 
-  void _sparkleFill(Canvas canvas, Offset center, double radius, Paint paint) {
+  void _fourPointStar(Canvas canvas, Offset center, double radius, Paint paint) {
     final star = Path();
     for (var i = 0; i < 8; i += 1) {
       final a = (i / 8) * math.pi * 2 - math.pi / 2;
-      final r = i.isEven ? radius : radius * 0.38;
+      final r = i.isEven ? radius : radius * 0.36;
       final point = Offset(center.dx + math.cos(a) * r, center.dy + math.sin(a) * r);
       if (i == 0) {
         star.moveTo(point.dx, point.dy);
@@ -403,44 +416,28 @@ class _OcGlyphPainter extends CustomPainter {
   }
 
   void _gear(Canvas canvas, Size size, Paint paint, bool filled) {
+    // Remix `settings-3`: six rounded lobes + inner hole, not sun rays.
     final w = size.width;
     final h = size.height;
     final c = Offset(w * 0.5, h * 0.5);
-    final ring = Path()..fillType = PathFillType.evenOdd;
-    ring.addOval(Rect.fromCircle(center: c, radius: w * 0.30));
-    ring.addOval(Rect.fromCircle(center: c, radius: w * 0.14));
+    final body = Path()..fillType = PathFillType.evenOdd;
+    for (var i = 0; i < 6; i += 1) {
+      final a = i * math.pi / 3 - math.pi / 2;
+      body.addOval(
+        Rect.fromCircle(
+          center: Offset(c.dx + math.cos(a) * w * 0.28, c.dy + math.sin(a) * h * 0.28),
+          radius: w * 0.195,
+        ),
+      );
+    }
+    body.addOval(Rect.fromCircle(center: c, radius: w * 0.22));
+    body.addOval(Rect.fromCircle(center: c, radius: w * 0.125));
     if (filled) {
-      canvas.drawPath(ring, paint);
-      for (var i = 0; i < 8; i += 1) {
-        canvas.save();
-        canvas.translate(c.dx, c.dy);
-        canvas.rotate(i * math.pi / 4);
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromCenter(center: Offset(0, -w * 0.36), width: w * 0.13, height: w * 0.16),
-            Radius.circular(w * 0.03),
-          ),
-          paint,
-        );
-        canvas.restore();
-      }
+      canvas.drawPath(body, paint);
       return;
     }
-    canvas.drawCircle(c, w * 0.16, paint);
-    canvas.drawCircle(c, w * 0.30, paint);
-    for (var i = 0; i < 8; i += 1) {
-      canvas.save();
-      canvas.translate(c.dx, c.dy);
-      canvas.rotate(i * math.pi / 4);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(0, -w * 0.36), width: w * 0.12, height: w * 0.14),
-          Radius.circular(w * 0.025),
-        ),
-        paint,
-      );
-      canvas.restore();
-    }
+    canvas.drawPath(body, paint);
+    canvas.drawCircle(c, w * 0.125, paint);
   }
 
   @override

@@ -127,32 +127,28 @@ class SettingsPageScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final navH = PushedNavBar.overlayHeight(context);
     return Scaffold(
+      extendBodyBehindAppBar: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 16, 8),
-              child: Row(
-                children: [
-                  CircularChromeButton(
-                    key: const Key('settings-back'),
-                    glyph: OcGlyphKind.chevronBack,
-                    tooltip: t(context, 'settings.view.actions.back'),
-                    onPressed: () => Navigator.of(context).maybePop(),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Padding(
+              padding: EdgeInsets.only(top: navH),
+              child: child,
             ),
-            Expanded(child: child),
-          ],
-        ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: PushedNavBar(
+              title: title,
+              leadingKey: const Key('settings-back'),
+            ),
+          ),
+        ],
       ),
     );
   }

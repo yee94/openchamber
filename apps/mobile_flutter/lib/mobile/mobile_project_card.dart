@@ -107,9 +107,12 @@ class MobileProjectCard extends StatelessWidget {
               strokeWidth: OcOptical.listGlyphStroke,
               color: context.oc.mutedForeground,
             ),
-            Padding(
-              padding: const EdgeInsets.only(left: 2, right: 6),
-              child: OcGlyph(OcGlyphKind.ellipsis, size: OcOptical.overflow, color: context.oc.foreground),
+            SizedBox(
+              width: 36,
+              height: 36,
+              child: Center(
+                child: OcGlyph(OcGlyphKind.ellipsis, size: OcOptical.overflow, color: context.oc.mutedForeground),
+              ),
             ),
           ],
         ),

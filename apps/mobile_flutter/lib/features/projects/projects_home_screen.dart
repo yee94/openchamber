@@ -325,6 +325,17 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                 strokeWidth: OcOptical.listGlyphStroke,
                 color: context.oc.mutedForeground,
               ),
+              SizedBox(
+                width: 36,
+                height: 36,
+                child: Center(
+                  child: OcGlyph(
+                    OcGlyphKind.ellipsis,
+                    size: 14,
+                    color: context.oc.mutedForeground,
+                  ),
+                ),
+              ),
             ],
           ),
         ),

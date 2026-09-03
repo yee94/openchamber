@@ -102,13 +102,19 @@ class _MobileTabPageScaffoldState extends State<MobileTabPageScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    final safeTop = MediaQuery.paddingOf(context).top;
+    final view = MediaQuery.viewPaddingOf(context);
+    final safeTop = view.top;
     Widget scroll = SingleChildScrollView(
       controller: _scroll,
       clipBehavior: Clip.none,
       physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
-        padding: EdgeInsets.only(bottom: 24 + widget.bottomOccupancy),
+        padding: EdgeInsets.only(
+          bottom: OcTokens.dockHeight +
+              OcOptical.pageScrollBottomExtra +
+              view.bottom +
+              widget.bottomOccupancy,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

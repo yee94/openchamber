@@ -35,7 +35,7 @@ class FloatingCapsuleTabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     assert(_items.length == 4);
     final tokens = context.oc;
-    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     final radius = BorderRadius.circular(OcTokens.dockRadius);
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -67,16 +67,18 @@ class FloatingCapsuleTabBar extends StatelessWidget {
                       padding: const EdgeInsets.all(OcOptical.dockInnerInset),
                       child: Row(
                         children: [
-                          for (final item in _items)
+                          for (var i = 0; i < _items.length; i += 1) ...[
+                            if (i > 0) const SizedBox(width: OcOptical.dockGap),
                             Expanded(
                               child: _TabSlot(
-                                id: item.id,
-                                glyph: item.glyph,
-                                label: t(context, item.labelKey),
-                                selected: selectedId == item.id,
-                                onTap: () => onSelect(item.id),
+                                id: _items[i].id,
+                                glyph: _items[i].glyph,
+                                label: t(context, _items[i].labelKey),
+                                selected: selectedId == _items[i].id,
+                                onTap: () => onSelect(_items[i].id),
                               ),
                             ),
+                          ],
                         ],
                       ),
                     ),
@@ -118,35 +120,37 @@ class _TabSlot extends StatelessWidget {
         child: OcSelectedSpring(
           selected: selected,
           builder: (context, t) {
-            return DecoratedBox(
-              decoration: BoxDecoration(
-                color: Color.lerp(Colors.transparent, tokens.interactiveSelection, t),
-                borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  OcGlyph(
-                    glyph,
-                    size: OcOptical.dockGlyph,
-                    color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
-                    strokeWidth: OcOptical.dockGlyphStroke,
-                    filled: true,
-                  ),
-                  SizedBox(height: OcOptical.dockLabelGap),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: OcOptical.dockLabel,
-                      letterSpacing: OcOptical.dockLabelTracking,
-                      height: 1.2,
-                      fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
+            return SizedBox.expand(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Color.lerp(Colors.transparent, tokens.selectedTabWash, t),
+                  borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    OcGlyph(
+                      glyph,
+                      size: OcOptical.dockGlyph,
                       color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
+                      strokeWidth: OcOptical.dockGlyphStroke,
+                      filled: true,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: OcOptical.dockLabelGap),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: OcOptical.dockLabel,
+                        letterSpacing: OcOptical.dockLabelTracking,
+                        height: OcOptical.dockLabelHeight,
+                        fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w500,
+                        color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },

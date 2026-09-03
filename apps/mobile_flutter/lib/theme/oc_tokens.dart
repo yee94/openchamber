@@ -145,8 +145,17 @@ class OcTokens extends ThemeExtension<OcTokens> {
   /// Legacy alias. Floating chrome uses [glassFill] + blur instead.
   Color get dockFill => glassFill;
 
-  /// Official selected-tab wash: `bg-interactive-selection/55`.
-  Color get interactiveSelection => primary.withValues(alpha: 0.55);
+  /// Official `--interactive-selection` is a muted foreground wash
+  /// (`#16121016` light / `#f1ece81f` dark), not primary orange.
+  Color get interactiveSelection =>
+      foreground.withValues(alpha: isDark ? 0.122 : 0.086);
+
+  /// Official selected-tab fill: `bg-interactive-selection/55`.
+  Color get selectedTabWash =>
+      interactiveSelection.withValues(alpha: interactiveSelection.a * 0.55);
+
+  /// `--oc-mobile-header-fade` = surface-background 85%.
+  Color get headerFade => background.withValues(alpha: 0.85);
 
   bool get isDark => brightness == Brightness.dark;
 
@@ -264,6 +273,36 @@ class OcTokens extends ThemeExtension<OcTokens> {
 
   /// `--oc-mobile-dock-inline-inset` = 1rem
   static const double dockInlineInset = 16;
+
+  /// `--oc-mobile-dock-inner-inset` = 0.3125rem
+  static const double dockInnerInset = 5;
+
+  /// `--oc-mobile-dock-gap` = 0.1875rem
+  static const double dockGap = 3;
+
+  /// `--oc-mobile-dock-max-width` = 26rem
+  static const double dockMaxWidth = 416;
+
+  /// `--oc-mobile-tab-height` = 68 − 5×2
+  static const double tabHeight = 58;
+
+  /// `--oc-mobile-tab-radius` = 34 − 5
+  static const double tabRadius = 29;
+
+  /// `--oc-mobile-detail-navigation-height` = 3.5rem
+  static const double detailNavigationHeight = 56;
+
+  /// `--oc-mobile-detail-action-edge-inset` = 1rem
+  static const double detailActionEdgeInset = 16;
+
+  /// Official detail-nav back column `2.75rem`.
+  static const double detailActionColumn = 44;
+
+  /// Header `::after` extra below the 56px band = 1.75rem
+  static const double headerFadeExtra = 28;
+
+  /// Tabpanel `pb` extra after the dock = 2.5rem
+  static const double pageScrollBottomExtra = 40;
 
   /// `--oc-mobile-page-gap` = 1.25rem
   static const double pageGap = 20;

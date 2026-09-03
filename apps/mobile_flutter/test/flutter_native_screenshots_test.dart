@@ -45,9 +45,11 @@ void main() {
     tester.view.physicalSize = Size(logical.width * dpr, logical.height * dpr);
     tester.view.devicePixelRatio = dpr;
     tester.view.padding = FakeViewPadding(top: 47 * dpr, bottom: 34 * dpr);
+    tester.view.viewPadding = FakeViewPadding(top: 47 * dpr, bottom: 34 * dpr);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
 
     final transport = _seededTransport();
     final controller = AppController(
@@ -91,6 +93,8 @@ void main() {
     expect(find.byKey(const Key('mobile-tab-page-header-slot')), findsOneWidget);
     expect(find.byKey(const Key('mobile-tab-page-header-spacer')), findsOneWidget);
     expect(find.byType(MobileFloatingSurface), findsWidgets);
+    expect(tester.getSize(find.byType(MobileTabPageHeader)).height, 47 + OcOptical.collapsingTopPad + OcOptical.collapsingActionSize);
+    expect(tester.getSize(find.byKey(const Key('mobile-tab-page-header-spacer'))).height, OcOptical.collapsingExpandShift);
     expect(tester.getSize(find.byKey(const Key('dock-capsule'))).height, OcTokens.dockHeight);
     expect(
       tester.getSize(find.byKey(const Key('dock-capsule'))).width,
@@ -133,6 +137,16 @@ void main() {
     expect(find.textContaining('weekly-architecture-review'), findsOneWidget);
     expect(find.text('任务'), findsWidgets);
     expect(find.text('历史记录'), findsWidgets);
+    expect(find.byKey(const Key('segment-0')), findsOneWidget);
+    expect(find.byKey(const Key('segment-1')), findsOneWidget);
+    expect(find.byKey(const Key('segment-2')), findsNothing);
+    expect(tester.getSize(find.byKey(const Key('segment-0'))).height, 40);
+    expect(
+      (tester.getSize(find.byKey(const Key('segment-0'))).width -
+              tester.getSize(find.byKey(const Key('segment-1'))).width)
+          .abs(),
+      lessThan(2),
+    );
     expect(find.text('已暂停'), findsWidgets);
     final filterAll = tester.getSize(find.byKey(const Key('filter-0')));
     final filterEnabled = tester.getSize(find.byKey(const Key('filter-1')));
@@ -208,6 +222,8 @@ void main() {
     await _pumpUntil(tester, find.byKey(const Key('chat-busy')));
     await _pumpFrames(tester);
     expect(find.byKey(const Key('chat-back')), findsOneWidget);
+    expect(tester.getSize(find.byType(PushedNavBar)).height, 47 + OcOptical.detailNavigationHeight);
+    expect(tester.getSize(find.byKey(const Key('chat-back'))).height, OcOptical.headerDisc);
     expect(find.byKey(const Key('chat-busy')), findsOneWidget);
     expect(find.byKey(const Key('reverse-chat-list')), findsOneWidget);
     expect(find.byKey(const Key('composer-field')), findsOneWidget);
@@ -288,8 +304,11 @@ void main() {
             ],
             theme: _reviewTheme(Brightness.light),
             home: Scaffold(
-              appBar: const PushedNavBar(title: '发布说明'),
-              body: ListView(
+              body: Column(
+                children: [
+                  const PushedNavBar(title: '发布说明'),
+                  Expanded(
+                    child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: const [
                   ChatTranscriptBody(
@@ -314,6 +333,9 @@ void main() {
                           metadata: {'command': 'git status'},
                         ),
                       ],
+                    ),
+                  ),
+                ],
                     ),
                   ),
                 ],

@@ -343,37 +343,21 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
     final inset = MediaQuery.viewInsetsOf(context);
+    final view = MediaQuery.viewPaddingOf(context);
     final atLiveEdge = _atLiveEdge;
-    final navH = const PushedNavBar(title: '').preferredSize.height;
-    final safeTop = MediaQuery.paddingOf(context).top;
-    final composerReserve = collapsedComposerOccupancy + (ios ? MediaQuery.paddingOf(context).bottom : inset.bottom);
+    final navH = PushedNavBar.overlayHeight(context);
+    final composerReserve = collapsedComposerOccupancy + (ios ? view.bottom : inset.bottom);
     return Scaffold(
+      extendBody: true,
       extendBodyBehindAppBar: true,
       resizeToAvoidBottomInset: !ios,
       backgroundColor: context.oc.background,
-      appBar: PushedNavBar(
-        title: widget.session.title,
-        leadingKey: const Key('chat-back'),
-        busy: _busy,
-        trailing: Pressable(
-          haptic: HapticStrength.light,
-          highlight: false,
-          onPressed: () {},
-          child: OcGlassChip(
-            child: OcGlyph(
-              OcGlyphKind.ellipsis,
-              size: OcOptical.headerGlyph,
-              color: context.oc.foreground,
-            ),
-          ),
-        ),
-      ),
       body: Stack(
         children: [
           ReverseChatList(
             controller: _timeline,
             scrollController: _scroll,
-            padding: EdgeInsets.fromLTRB(12, safeTop + navH + 4, 12, composerReserve + 12),
+            padding: EdgeInsets.fromLTRB(12, navH, 12, composerReserve + 12),
               itemBuilder: (context, message, reverseIndex) {
                 final isLastAssistant = !message.isUser && _isNewestAssistant(reverseIndex);
                 if (message.isUser) {
@@ -432,11 +416,34 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           if (_errorKey != null)
             Positioned(
-              top: safeTop + navH,
+              top: navH,
               left: 8,
               right: 8,
               child: Text(t(context, _errorKey!), style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: PushedNavBar(
+              title: widget.session.title,
+              leadingKey: const Key('chat-back'),
+              busy: _busy,
+              trailing: Pressable(
+                haptic: HapticStrength.light,
+                highlight: false,
+                onPressed: () {},
+                child: OcGlassChip(
+                  size: OcOptical.headerDisc,
+                  child: OcGlyph(
+                    OcGlyphKind.ellipsis,
+                    size: OcOptical.headerGlyph,
+                    color: context.oc.foreground,
+                  ),
+                ),
+              ),
+            ),
+          ),
           Positioned(
             left: 0,
             right: 0,

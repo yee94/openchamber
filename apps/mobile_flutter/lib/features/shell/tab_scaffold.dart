@@ -72,7 +72,7 @@ class _MobileTabScaffoldState extends State<MobileTabScaffold> {
 
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
     final hideDock = SecondaryChrome.hideHomepageDock;
-    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     final dockReserve = hideDock
         ? safeBottom
         : (ios

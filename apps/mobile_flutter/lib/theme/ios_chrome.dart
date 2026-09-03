@@ -54,12 +54,50 @@ class OcFrosted extends StatelessWidget {
   }
 }
 
-/// Official `Button` `mobileGlass` + `mobileIcon` circular chip.
+/// Official header / detail-nav `::after` fade. Not backdrop-filter glass.
+class OcHeaderFade extends StatelessWidget {
+  const OcHeaderFade({
+    super.key,
+    required this.safeTop,
+    this.opacity = 1,
+  });
+
+  final double safeTop;
+  final double opacity;
+
+  static double heightFor(double safeTop) =>
+      safeTop + OcOptical.detailNavigationHeight + OcOptical.headerFadeExtra;
+
+  @override
+  Widget build(BuildContext context) {
+    if (opacity <= 0) return const SizedBox.shrink();
+    final fade = context.oc.headerFade;
+    final fadeH = heightFor(safeTop);
+    final mid = ((safeTop + fadeH * OcOptical.headerFadeMidStop) / fadeH).clamp(0.0, 1.0);
+    return IgnorePointer(
+      child: Opacity(
+        opacity: opacity.clamp(0.0, 1.0),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [fade, fade, fade.withValues(alpha: 0)],
+              stops: [0, mid, 1],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Official `Button` `mobileGlass` + `mobileIcon` circular chip (40).
 class OcGlassChip extends StatelessWidget {
   const OcGlassChip({
     super.key,
     required this.child,
-    this.size = OcOptical.chatChip,
+    this.size = OcOptical.headerDisc,
   });
 
   final Widget child;
@@ -368,70 +406,83 @@ class SegmentedPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const trackRadius = OcTokens.surfaceRadius;
+    const pad = 4.0;
+    const gap = 4.0;
+    const itemHeight = 40.0;
+    const itemRadius = 20.0;
     return Container(
-      margin: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 4, OcChrome.pageGutter, 12),
-      padding: const EdgeInsets.all(2),
+      margin: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, OcTokens.pageGap),
+      padding: const EdgeInsets.all(pad),
       decoration: BoxDecoration(
-        color: context.oc.muted,
-        borderRadius: BorderRadius.circular(11),
+        color: context.oc.card.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(trackRadius),
+        boxShadow: OcElevation.card(context),
       ),
       child: Row(
         children: [
-          for (var i = 0; i < labels.length; i += 1)
+          for (var i = 0; i < labels.length; i += 1) ...[
+            if (i > 0) const SizedBox(width: gap),
             Expanded(
               child: Pressable(
                 key: Key('segment-$i'),
                 haptic: HapticStrength.light,
                 onPressed: () => onSelected(i),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(itemRadius),
                 child: OcSelectedSpring(
                   selected: selectedIndex == i,
                   builder: (context, t) {
                     final tokens = context.oc;
-                    return Container(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Color.lerp(Colors.transparent, tokens.card, t),
-                        borderRadius: BorderRadius.circular(9),
-                        boxShadow: t > 0.01
-                            ? [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.025 * t),
-                                  blurRadius: 3,
-                                  offset: const Offset(0, 1),
+                    return SizedBox(
+                      height: itemHeight,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Color.lerp(Colors.transparent, tokens.card, t),
+                          borderRadius: BorderRadius.circular(itemRadius),
+                          boxShadow: t > 0.01
+                              ? [
+                                  BoxShadow(
+                                    color: tokens.foreground.withValues(alpha: 0.08 * t),
+                                    blurRadius: 2,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (icons != null) ...[
+                              OcGlyph(
+                                icons![i],
+                                size: 16,
+                                strokeWidth: OcOptical.headerGlyphStroke,
+                                color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            Flexible(
+                              child: Text(
+                                labels[i],
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: OcTokens.textUiHeader,
+                                  height: 1.0,
+                                  fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
+                                  color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
                                 ),
-                              ]
-                            : null,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (icons != null) ...[
-                            OcGlyph(
-                              icons![i],
-                              size: OcOptical.toolbarGlyph,
-                              strokeWidth: OcOptical.headerGlyphStroke,
-                              color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
+                              ),
                             ),
-                            const SizedBox(width: 5),
                           ],
-                          Text(
-                            labels[i],
-                            style: TextStyle(
-                              fontSize: 14,
-                              letterSpacing: 0.35,
-                              height: 1.25,
-                              fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
-                              color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     );
                   },
                 ),
               ),
             ),
+          ],
         ],
       ),
     );
@@ -460,42 +511,55 @@ class FilterChipBar extends StatelessWidget {
         children: [
           Expanded(
             child: Container(
-              padding: const EdgeInsets.all(2),
+              padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: context.oc.muted.withValues(alpha: 0.55),
-                borderRadius: BorderRadius.circular(16),
+                color: context.oc.card.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(OcTokens.surfaceRadius),
+                boxShadow: OcElevation.card(context),
               ),
               child: Row(
                 children: [
-                  for (var i = 0; i < labels.length; i += 1)
+                  for (var i = 0; i < labels.length; i += 1) ...[
+                    if (i > 0) const SizedBox(width: 4),
                     Expanded(
                       child: Pressable(
                         key: Key('filter-$i'),
                         haptic: HapticStrength.light,
                         onPressed: () => onSelected(i),
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(20),
                         child: OcSelectedSpring(
                           selected: selectedIndex == i,
                           builder: (context, t) {
                             final tokens = context.oc;
-                            return Container(
-                              alignment: Alignment.center,
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Color.lerp(Colors.transparent, tokens.card.withValues(alpha: 0.92), t),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Text(
-                                labels[i],
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  letterSpacing: 0.28,
-                                  height: 1.2,
-                                  fontWeight: t > 0.5 ? FontWeight.w500 : FontWeight.w400,
-                                  color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
+                            return SizedBox(
+                              height: 40,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Color.lerp(Colors.transparent, tokens.card, t),
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: t > 0.01
+                                      ? [
+                                          BoxShadow(
+                                            color: tokens.foreground.withValues(alpha: 0.08 * t),
+                                            blurRadius: 2,
+                                            offset: const Offset(0, 1),
+                                          ),
+                                        ]
+                                      : null,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    labels[i],
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: OcTokens.textUiLabel,
+                                      height: 1.0,
+                                      fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
+                                      color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
+                                    ),
+                                  ),
                                 ),
                               ),
                             );
@@ -503,6 +567,7 @@ class FilterChipBar extends StatelessWidget {
                         ),
                       ),
                     ),
+                  ],
                 ],
               ),
             ),
@@ -517,89 +582,157 @@ class FilterChipBar extends StatelessWidget {
   }
 }
 
+/// Official `.oc-mobile-detail-navigation`: sticky, transparent, 56px band
+/// under the status bar. Content scrolls underneath. Not a frosted banner.
 class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
   const PushedNavBar({
     super.key,
     required this.title,
+    this.subtitle,
     this.leadingKey,
     this.trailing,
     this.busy = false,
   });
 
   final String title;
+  final String? subtitle;
   final Key? leadingKey;
   final Widget? trailing;
   final bool busy;
 
+  static double overlayHeight(BuildContext context) =>
+      MediaQuery.viewPaddingOf(context).top + OcOptical.detailNavigationHeight;
+
   @override
-  Size get preferredSize => const Size.fromHeight(56);
+  Size get preferredSize => const Size.fromHeight(OcOptical.detailNavigationHeight);
 
   @override
   Widget build(BuildContext context) {
     final tokens = context.oc;
-    final top = MediaQuery.paddingOf(context).top;
-    return ClipRect(
-      child: OcFrosted(
-        fill: tokens.background.withValues(alpha: 0.55),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(12, top + 6, 12, 6),
-          child: Row(
-            children: [
-              Tooltip(
-                message: t(context, 'chat.back'),
-                child: Pressable(
-                  key: leadingKey,
-                  haptic: HapticStrength.light,
-                  highlight: false,
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  child: OcGlassChip(
-                    child: OcGlyph(
-                      OcGlyphKind.chevronBack,
-                      size: OcOptical.headerGlyph,
-                      strokeWidth: OcOptical.headerGlyphStroke,
-                      color: tokens.foreground,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  textAlign: TextAlign.left,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: OcOptical.chatTitle,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: OcOptical.chatTitleTracking,
-                    height: OcOptical.chatTitleHeight,
-                    color: tokens.foreground,
-                  ),
-                ),
-              ),
-              if (busy) ...[
-                const SizedBox(width: 8),
-                OcGlassChip(
-                  child: SizedBox(
-                    key: const Key('chat-busy'),
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.2,
-                      color: tokens.mutedForeground,
-                    ),
-                  ),
-                ),
-              ],
-              if (trailing != null) ...[
-                const SizedBox(width: 8),
-                trailing!,
-              ] else
-                const SizedBox(width: OcOptical.chatChip),
-            ],
+    final view = MediaQuery.viewPaddingOf(context);
+    final inlineLeft = view.left > OcOptical.detailActionEdgeInset
+        ? view.left
+        : OcOptical.detailActionEdgeInset;
+    final inlineRight = view.right > OcOptical.detailActionEdgeInset
+        ? view.right
+        : OcOptical.detailActionEdgeInset;
+    final fadeH = OcHeaderFade.heightFor(view.top);
+    final bandH = view.top + OcOptical.detailNavigationHeight;
+    final disc = OcOptical.headerDisc;
+
+    Widget actionDisc({required Widget child, Key? key, VoidCallback? onPressed}) {
+      final chip = OcGlassChip(size: disc, child: child);
+      if (onPressed == null) return chip;
+      return Pressable(
+        key: key,
+        haptic: HapticStrength.light,
+        highlight: false,
+        onPressed: onPressed,
+        child: chip,
+      );
+    }
+
+    return SizedBox(
+      height: bandH,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: fadeH,
+            child: OcHeaderFade(safeTop: view.top),
           ),
-        ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(inlineLeft, view.top, inlineRight, 0),
+            child: SizedBox(
+              height: OcOptical.detailNavigationHeight,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: OcOptical.detailActionColumn,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Tooltip(
+                        message: t(context, 'chat.back'),
+                        child: actionDisc(
+                          key: leadingKey,
+                          onPressed: () => Navigator.of(context).maybePop(),
+                          child: OcGlyph(
+                            OcGlyphKind.chevronBack,
+                            size: OcOptical.headerGlyph,
+                            strokeWidth: OcOptical.headerGlyphStroke,
+                            color: tokens.foreground,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          title,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: OcOptical.chatTitle,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: OcOptical.chatTitleTracking,
+                            height: OcOptical.chatTitleHeight,
+                            color: tokens.foreground,
+                          ),
+                        ),
+                        if (subtitle != null)
+                          Text(
+                            subtitle!,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: OcOptical.detailSubtitle,
+                              fontWeight: FontWeight.w400,
+                              height: OcOptical.detailSubtitleHeight,
+                              color: tokens.mutedForeground,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    width: trailing == null && !busy
+                        ? OcOptical.detailActionColumn
+                        : null,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (busy)
+                          OcGlassChip(
+                            size: disc,
+                            child: SizedBox(
+                              key: const Key('chat-busy'),
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                color: tokens.mutedForeground,
+                              ),
+                            ),
+                          ),
+                        if (busy && trailing != null) const SizedBox(width: 8),
+                        if (trailing != null) trailing!,
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

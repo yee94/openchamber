@@ -9,12 +9,8 @@ import '../theme/ios_chrome.dart';
 ///
 /// Layout height is FIXED (`safe-area + 0.75rem + 2.5rem`). Background is
 /// transparent. Scroll only drives compositor props (title scale 1→0.625,
-/// inner translateY, fade opacity). The 0.625rem spacer lives in
-/// [MobileTabPageScaffold], not here.
-///
-/// WidgetTester / Android paint [OcFrosted] (`BackdropFilter` + glass fill)
-/// so scrolled content can peek through. Real iOS still keeps live glass on
-/// the UIKit `UITabBar` overlay — this is not a `UIGlassEffect` clone.
+/// inner translateY, fade opacity, letter-spacing). The 0.625rem spacer lives
+/// in [MobileTabPageScaffold] as a real sibling — not folded into padding.
 class MobileTabPageHeader extends StatelessWidget {
   const MobileTabPageHeader({
     super.key,
@@ -38,15 +34,10 @@ class MobileTabPageHeader extends StatelessWidget {
 
   static double layoutHeight(double safeAreaTop) => safeAreaTop + topPad + actionSize;
 
-  /// In-flow clearance so overlay chrome does not cover the first card at rest.
-  /// A few pixels shorter than the painted header so the first card can peek
-  /// under the transparent title band (not a fade banner).
-  static const double restPeek = 6;
-
   static Widget layoutSlot({required double safeTop}) {
     return SizedBox(
       key: const Key('mobile-tab-page-header-slot'),
-      height: layoutHeight(safeTop) - restPeek,
+      height: layoutHeight(safeTop),
     );
   }
 
@@ -55,10 +46,7 @@ class MobileTabPageHeader extends StatelessWidget {
     height: expandShift,
   );
 
-  static double fadeHeight(double safeAreaTop) {
-    // Official: safe-area + --oc-mobile-detail-navigation-height (3.5rem) + 1.75rem.
-    return safeAreaTop + 56 + 28;
-  }
+  static double fadeHeight(double safeAreaTop) => OcHeaderFade.heightFor(safeAreaTop);
 
   static double collapseProgress({required double offset, required bool reduceMotion}) {
     final raw = (offset / collapseDistance).clamp(0.0, 1.0);
@@ -68,9 +56,8 @@ class MobileTabPageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.oc;
-    final safeTop = MediaQuery.paddingOf(context).top;
+    final safeTop = MediaQuery.viewPaddingOf(context).top;
     final t = collapse.clamp(0.0, 1.0);
-    final fade = tokens.background.withValues(alpha: 0.72);
     final fadeH = fadeHeight(safeTop);
     final headerH = layoutHeight(safeTop);
 
@@ -85,99 +72,74 @@ class MobileTabPageHeader extends StatelessWidget {
             left: 0,
             right: 0,
             height: fadeH,
-            child: IgnorePointer(
-              child: ClipRect(
-                child: OcFrosted(
-                  fill: tokens.background.withValues(alpha: 0.42),
-                  child: Opacity(
-                    opacity: 0.55 + (0.45 * t),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [fade, fade, fade.withValues(alpha: 0)],
-                          stops: [
-                            0,
-                            ((safeTop + fadeH * 0.35) / fadeH).clamp(0.0, 1.0),
-                            1,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            child: OcHeaderFade(safeTop: safeTop, opacity: t),
           ),
           Padding(
             padding: EdgeInsets.fromLTRB(
-              OcChrome.pageGutter + 4,
+              OcChrome.pageGutter + OcOptical.collapsingInlineExtra,
               safeTop + topPad,
-              OcChrome.pageGutter + 4,
+              OcChrome.pageGutter + OcOptical.collapsingInlineExtra,
               0,
             ),
-            child: SizedBox(
-              height: actionSize,
-              child: Transform.translate(
-                offset: Offset(0, expandShift * (1 - t)),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: OverflowBox(
-                        maxHeight: 56,
-                        alignment: Alignment.centerLeft,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (eyebrow != null)
-                              Opacity(
-                                opacity: 1 - t,
-                                child: Transform.scale(
-                                  alignment: Alignment.topLeft,
-                                  scaleY: 1 - t,
-                                  child: Text(
-                                    eyebrow!,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: OcTokens.textMicro,
-                                      fontWeight: FontWeight.w500,
-                                      color: tokens.mutedForeground,
-                                    ),
+            child: Transform.translate(
+              offset: Offset(0, expandShift * (1 - t)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: actionSize,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (eyebrow != null)
+                            Opacity(
+                              opacity: 1 - t,
+                              child: Transform.scale(
+                                alignment: Alignment.topLeft,
+                                scaleY: 1 - t,
+                                child: Text(
+                                  eyebrow!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: OcTokens.textMicro,
+                                    fontWeight: FontWeight.w500,
+                                    color: tokens.mutedForeground,
                                   ),
                                 ),
                               ),
-                            Transform.scale(
-                              key: const Key('mobile-tab-page-title'),
-                              alignment: Alignment.centerLeft,
-                              scale: 1 - ((1 - OcOptical.titleCollapseScaleEnd) * t),
-                              child: Text(
-                                title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: OcOptical.largeTitle,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: OcOptical.largeTitleTracking,
-                                  height: OcOptical.largeTitleHeight,
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                ),
+                            ),
+                          Transform.scale(
+                            key: const Key('mobile-tab-page-title'),
+                            alignment: Alignment.centerLeft,
+                            scale: 1 - (OcOptical.titleCollapseScaleReduce * t),
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: OcOptical.largeTitle,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: OcOptical.rootTitleTracking(t),
+                                height: OcOptical.largeTitleHeight,
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
-                    if (trailing != null)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 14),
-                        child: trailing,
-                      ),
+                  ),
+                  if (trailing != null) ...[
+                    const SizedBox(width: OcOptical.collapsingInnerGap),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: actionSize),
+                      child: trailing,
+                    ),
                   ],
-                ),
+                ],
               ),
             ),
           ),
