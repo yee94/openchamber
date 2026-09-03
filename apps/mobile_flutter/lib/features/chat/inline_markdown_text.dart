@@ -51,8 +51,17 @@ class InlineMarkdownText extends StatelessWidget {
           alignment: PlaceholderAlignment.baseline,
           baseline: TextBaseline.alphabetic,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1),
-            child: Text(code, style: codeStyle),
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: codeStyle.backgroundColor,
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                child: Text(code, style: codeStyle.copyWith(backgroundColor: Colors.transparent)),
+              ),
+            ),
           ),
         ),
       );

@@ -85,6 +85,7 @@ void main() {
     expect(OcOptical.scheduleTitleMetaGap, 3);
     expect(OcOptical.chatBodyHeight, lessThan(1.50));
     expect(OcOptical.chatTitle, 15);
+    expect(OcOptical.chatBodyTracking, 0);
     expect(OcOptical.chatTitleHeight, 1.4);
     expect(OcOptical.detailSubtitle, 10);
     expect(OcOptical.detailSubtitleHeight, 1.4);

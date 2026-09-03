@@ -413,77 +413,83 @@ class SegmentedPill extends StatelessWidget {
     const itemRadius = 20.0;
     return Container(
       margin: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, OcTokens.pageGap),
-      padding: const EdgeInsets.all(pad),
       decoration: BoxDecoration(
-        color: context.oc.card.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(trackRadius),
         boxShadow: OcElevation.card(context),
       ),
-      child: Row(
-        children: [
-          for (var i = 0; i < labels.length; i += 1) ...[
-            if (i > 0) const SizedBox(width: gap),
-            Expanded(
-              child: Pressable(
-                key: Key('segment-$i'),
-                haptic: HapticStrength.light,
-                onPressed: () => onSelected(i),
-                borderRadius: BorderRadius.circular(itemRadius),
-                child: OcSelectedSpring(
-                  selected: selectedIndex == i,
-                  builder: (context, t) {
-                    final tokens = context.oc;
-                    return SizedBox(
-                      height: itemHeight,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Color.lerp(Colors.transparent, tokens.card, t),
-                          borderRadius: BorderRadius.circular(itemRadius),
-                          boxShadow: t > 0.01
-                              ? [
-                                  BoxShadow(
-                                    color: tokens.foreground.withValues(alpha: 0.08 * t),
-                                    blurRadius: 2,
-                                    offset: const Offset(0, 1),
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            if (icons != null) ...[
-                              OcGlyph(
-                                icons![i],
-                                size: 16,
-                                strokeWidth: OcOptical.headerGlyphStroke,
-                                color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(trackRadius),
+        child: OcFrosted(
+          child: Padding(
+            padding: const EdgeInsets.all(pad),
+            child: Row(
+              children: [
+                for (var i = 0; i < labels.length; i += 1) ...[
+                  if (i > 0) const SizedBox(width: gap),
+                  Expanded(
+                    child: Pressable(
+                      key: Key('segment-$i'),
+                      haptic: HapticStrength.light,
+                      onPressed: () => onSelected(i),
+                      borderRadius: BorderRadius.circular(itemRadius),
+                      child: OcSelectedSpring(
+                        selected: selectedIndex == i,
+                        builder: (context, t) {
+                          final tokens = context.oc;
+                          return SizedBox(
+                            height: itemHeight,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Color.lerp(Colors.transparent, tokens.card, t),
+                                borderRadius: BorderRadius.circular(itemRadius),
+                                boxShadow: t > 0.01
+                                    ? [
+                                        BoxShadow(
+                                          color: tokens.foreground.withValues(alpha: 0.08 * t),
+                                          blurRadius: 2,
+                                          offset: const Offset(0, 1),
+                                        ),
+                                      ]
+                                    : null,
                               ),
-                              const SizedBox(width: 6),
-                            ],
-                            Flexible(
-                              child: Text(
-                                labels[i],
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: OcTokens.textUiHeader,
-                                  height: 1.0,
-                                  fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
-                                  color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
-                                ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  if (icons != null) ...[
+                                    OcGlyph(
+                                      icons![i],
+                                      size: 16,
+                                      strokeWidth: OcOptical.headerGlyphStroke,
+                                      color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
+                                    ),
+                                    const SizedBox(width: 6),
+                                  ],
+                                  Flexible(
+                                    child: Text(
+                                      labels[i],
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: OcTokens.textUiHeader,
+                                        height: 1.0,
+                                        fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
+                                        color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
-              ),
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ],
-        ],
+          ),
+        ),
       ),
     );
   }
@@ -510,65 +516,71 @@ class FilterChipBar extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(4),
+            child: DecoratedBox(
               decoration: BoxDecoration(
-                color: context.oc.card.withValues(alpha: 0.92),
                 borderRadius: BorderRadius.circular(OcTokens.surfaceRadius),
                 boxShadow: OcElevation.card(context),
               ),
-              child: Row(
-                children: [
-                  for (var i = 0; i < labels.length; i += 1) ...[
-                    if (i > 0) const SizedBox(width: 4),
-                    Expanded(
-                      child: Pressable(
-                        key: Key('filter-$i'),
-                        haptic: HapticStrength.light,
-                        onPressed: () => onSelected(i),
-                        borderRadius: BorderRadius.circular(20),
-                        child: OcSelectedSpring(
-                          selected: selectedIndex == i,
-                          builder: (context, t) {
-                            final tokens = context.oc;
-                            return SizedBox(
-                              height: 40,
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: Color.lerp(Colors.transparent, tokens.card, t),
-                                  borderRadius: BorderRadius.circular(20),
-                                  boxShadow: t > 0.01
-                                      ? [
-                                          BoxShadow(
-                                            color: tokens.foreground.withValues(alpha: 0.08 * t),
-                                            blurRadius: 2,
-                                            offset: const Offset(0, 1),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(OcTokens.surfaceRadius),
+                child: OcFrosted(
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Row(
+                      children: [
+                        for (var i = 0; i < labels.length; i += 1) ...[
+                          if (i > 0) const SizedBox(width: 4),
+                          Expanded(
+                            child: Pressable(
+                              key: Key('filter-$i'),
+                              haptic: HapticStrength.light,
+                              onPressed: () => onSelected(i),
+                              borderRadius: BorderRadius.circular(20),
+                              child: OcSelectedSpring(
+                                selected: selectedIndex == i,
+                                builder: (context, t) {
+                                  final tokens = context.oc;
+                                  return SizedBox(
+                                    height: 40,
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        color: Color.lerp(Colors.transparent, tokens.card, t),
+                                        borderRadius: BorderRadius.circular(20),
+                                        boxShadow: t > 0.01
+                                            ? [
+                                                BoxShadow(
+                                                  color: tokens.foreground.withValues(alpha: 0.08 * t),
+                                                  blurRadius: 2,
+                                                  offset: const Offset(0, 1),
+                                                ),
+                                              ]
+                                            : null,
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          labels[i],
+                                          textAlign: TextAlign.center,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: OcTokens.textUiLabel,
+                                            height: 1.0,
+                                            fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
+                                            color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
                                           ),
-                                        ]
-                                      : null,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    labels[i],
-                                    textAlign: TextAlign.center,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: OcTokens.textUiLabel,
-                                      height: 1.0,
-                                      fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
-                                      color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
+                                  );
+                                },
                               ),
-                            );
-                          },
-                        ),
-                      ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                  ],
-                ],
+                  ),
+                ),
               ),
             ),
           ),

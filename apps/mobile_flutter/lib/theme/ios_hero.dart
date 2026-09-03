@@ -57,7 +57,7 @@ class OcOptical {
   static const double headerFadeMidStop = 0.35;
   static const double chatHeaderButton = 28;
   static const double chatBodyHeight = 1.45;
-  static const double chatBodyTracking = 0.28;
+  static const double chatBodyTracking = 0;
 
   /// Official `.oc-mobile-tab-button` 0.75rem / line-height 0.75rem / tracking-tight.
   static const double dockLabel = 12;

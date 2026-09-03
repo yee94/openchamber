@@ -140,6 +140,7 @@ class _MobileTabPageScaffoldState extends State<MobileTabPageScaffold> {
     }
 
     return Scaffold(
+      backgroundColor: context.oc.pageBackground,
       body: Stack(
         clipBehavior: Clip.none,
         children: [
