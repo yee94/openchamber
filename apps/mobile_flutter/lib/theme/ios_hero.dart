@@ -198,7 +198,7 @@ class OcOptical {
   /// Official `--oc-mobile-glass-blur` on the 36 `mobileGlass` disc.
   static const double chipBlur = 20;
   /// WidgetTester cream + [chipBlur] paints a solid disc. 0 = page bleed
-  /// through a clear chip (official contact + inset still define the rim).
+  /// through a clear chip. Contact rim only — no inset sheen coin.
   static const double chipBleedBlur = 0;
   /// Official `.oc-mobile-floating-surface` `blur(22px) saturate(1.35)`.
   /// Distinct from control-scale [chipBlur] / [glassSaturate].
