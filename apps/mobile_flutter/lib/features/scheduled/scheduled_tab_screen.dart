@@ -105,6 +105,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
       body: SafeArea(
         bottom: false,
         child: ListView(
+          clipBehavior: Clip.none,
           padding: const EdgeInsets.only(bottom: 24),
           children: [
             LargeTitleHeader(title: t(context, 'tabs.scheduled')),

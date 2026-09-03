@@ -58,6 +58,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
             child: RefreshIndicator(
               onRefresh: controller.refreshSessions,
               child: ListView(
+                clipBehavior: Clip.none,
                 padding: EdgeInsets.fromLTRB(0, 0, 0, 24 + widget.bottomOccupancy),
                 children: [
                   if (inProgress.isNotEmpty)
