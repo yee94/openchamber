@@ -42,10 +42,10 @@ class FloatingCapsuleTabBar extends StatelessWidget {
             border: Border.all(color: tokens.mobileBorder, width: 0.5),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: tokens.isDark ? 0.40 : 0.08),
-                blurRadius: 18,
-                spreadRadius: -2,
-                offset: const Offset(0, 8),
+                color: Colors.black.withValues(alpha: tokens.isDark ? 0.26 : 0.05),
+                blurRadius: 14,
+                spreadRadius: -4,
+                offset: const Offset(0, 5),
               ),
             ],
           ),

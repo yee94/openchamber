@@ -157,13 +157,13 @@ class GroupedInsetCard extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: context.oc.card,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(OcChrome.cardRadius),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: Theme.of(context).brightness == Brightness.dark ? 0.36 : 0.055),
-            blurRadius: 16,
-            spreadRadius: -2,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: Theme.of(context).brightness == Brightness.dark ? 0.20 : 0.032),
+            blurRadius: 12,
+            spreadRadius: -4,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -319,14 +319,14 @@ class SegmentedPill extends StatelessWidget {
                   builder: (context, t) {
                     final tokens = context.oc;
                     return Container(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      padding: const EdgeInsets.symmetric(vertical: 5),
                       decoration: BoxDecoration(
                         color: Color.lerp(Colors.transparent, tokens.card, t),
-                        borderRadius: BorderRadius.circular(9),
+                        borderRadius: BorderRadius.circular(8),
                         boxShadow: t > 0.01
                             ? [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.06 * t),
+                                  color: Colors.black.withValues(alpha: 0.04 * t),
                                   blurRadius: 2,
                                   offset: const Offset(0, 1),
                                 ),
@@ -403,14 +403,18 @@ class FilterChipBar extends StatelessWidget {
                         selected: selectedIndex == i,
                         builder: (context, t) {
                           final tokens = context.oc;
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Color.lerp(Colors.transparent, tokens.muted, t * 0.9),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                             child: Text(
                               labels[i],
                               style: TextStyle(
-                                fontSize: 14,
-                                letterSpacing: 0.4,
-                                height: 1.3,
+                                fontSize: 13,
+                                letterSpacing: 0.55,
+                                height: 1.25,
                                 fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
                                 color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
                               ),
@@ -503,10 +507,10 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 17,
+                      fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      letterSpacing: 0.25,
-                      height: 1.25,
+                      letterSpacing: 0.45,
+                      height: 1.28,
                       color: context.oc.foreground,
                     ),
                   ),
