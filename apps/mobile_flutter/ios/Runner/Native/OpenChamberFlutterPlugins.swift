@@ -292,6 +292,7 @@ final class OpenChamberComposerPlatformView: NSObject, FlutterPlatformView {
     viewRef.onSend = { [weak self] text in self?.channel.invokeMethod("send", arguments: text) }
     viewRef.onStop = { [weak self] in self?.channel.invokeMethod("stop", arguments: nil) }
     viewRef.onAttach = { [weak self] in self?.channel.invokeMethod("attach", arguments: nil) }
+    viewRef.onDictate = { [weak self] in self?.channel.invokeMethod("dictate", arguments: nil) }
     viewRef.onText = { [weak self] text in self?.channel.invokeMethod("text", arguments: text) }
     viewRef.onOccupancy = { [weak self] height in self?.channel.invokeMethod("occupancy", arguments: height) }
     viewRef.onAutocomplete = { [weak self] text in self?.channel.invokeMethod("autocomplete", arguments: text) }

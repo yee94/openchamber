@@ -19,6 +19,7 @@ class IosComposerHost extends StatefulWidget {
     required this.onSend,
     required this.onStop,
     required this.onAttach,
+    this.onDictate,
     required this.onText,
     this.onOccupancy,
   });
@@ -32,6 +33,7 @@ class IosComposerHost extends StatefulWidget {
   final ValueChanged<String> onSend;
   final VoidCallback onStop;
   final VoidCallback onAttach;
+  final VoidCallback? onDictate;
   final ValueChanged<String> onText;
   final ValueChanged<double>? onOccupancy;
 
@@ -58,6 +60,8 @@ class _IosComposerHostState extends State<IosComposerHost> {
           widget.onStop();
         case 'attach':
           widget.onAttach();
+        case 'dictate':
+          widget.onDictate?.call();
         case 'text':
           widget.onText(call.arguments is String ? call.arguments as String : '');
         case 'occupancy':

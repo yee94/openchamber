@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../data/chat_timeline.dart';
 import '../../data/context_tool_grouping.dart';
+import '../../data/generated_result.dart';
+import '../../data/skill_tool_grouping.dart';
 import '../../l10n/app_strings.dart';
 import '../../theme/app_theme.dart';
 
@@ -49,7 +51,15 @@ class ChatTranscriptBody extends StatelessWidget {
     final out = <Widget>[];
     for (final part in message.parts) {
       if (part.kind == ChatPartKind.text && (part.body ?? '').trim().isNotEmpty) {
-        out.add(Text(part.body!.trim()));
+        final generated = parseGeneratedJsonResult(part.body!.trim());
+        if (generated != null) {
+          out.add(Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: _GeneratedResultCard(result: generated, partId: part.id),
+          ));
+        } else {
+          out.add(Text(part.body!.trim()));
+        }
       } else if (part.kind == ChatPartKind.mermaid) {
         out.add(Padding(
           padding: const EdgeInsets.only(top: 8),
@@ -59,6 +69,11 @@ class ChatTranscriptBody extends StatelessWidget {
         out.add(Padding(
           padding: const EdgeInsets.only(top: 8),
           child: _PermissionCard(part: part, onPermission: onPermission),
+        ));
+      } else if (_isImagePreviewPart(part)) {
+        out.add(Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: ToolPartCard(part: part),
         ));
       }
     }
@@ -78,11 +93,17 @@ class ChatTranscriptBody extends StatelessWidget {
   }
 }
 
-bool _isActivityPart(ChatPart part) =>
-    part.kind == ChatPartKind.diff ||
-    part.kind == ChatPartKind.fileOp ||
-    part.kind == ChatPartKind.task ||
-    part.kind == ChatPartKind.tool;
+bool _isImagePreviewPart(ChatPart part) =>
+    part.kind == ChatPartKind.fileOp &&
+    (part.toolName == 'image-preview' || (part.metadata['mime']?.toString().startsWith('image/') ?? false));
+
+bool _isActivityPart(ChatPart part) {
+  if (_isImagePreviewPart(part)) return false;
+  return part.kind == ChatPartKind.diff ||
+      part.kind == ChatPartKind.fileOp ||
+      part.kind == ChatPartKind.task ||
+      part.kind == ChatPartKind.tool;
+}
 
 class _ActivityItems extends StatelessWidget {
   const _ActivityItems({
@@ -118,6 +139,17 @@ class _ActivityItems extends StatelessWidget {
                 isTurnLive: isTurnLive,
               ),
             ),
+          ),
+        );
+        index = grouped.end;
+        continue;
+      }
+      if (isSkillGroupTool(part.toolName)) {
+        final grouped = collectConsecutiveSkillTools(parts, index);
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: _SkillToolGroup(parts: grouped.items),
           ),
         );
         index = grouped.end;
@@ -312,6 +344,163 @@ class _ContextToolGroupState extends State<_ContextToolGroup> {
   }
 }
 
+class _SkillToolGroup extends StatefulWidget {
+  const _SkillToolGroup({required this.parts});
+
+  final List<ChatPart> parts;
+
+  @override
+  State<_SkillToolGroup> createState() => _SkillToolGroupState();
+}
+
+class _SkillToolGroupState extends State<_SkillToolGroup> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = summarizeSkillNames(widget.parts.map(getSkillNameFromPart));
+    final label = summary.hiddenCount > 0
+        ? t(context, 'chat.skillGroup.summaryOverflow', {
+            'names': summary.joinedVisible,
+            'count': '${summary.hiddenCount}',
+          })
+        : summary.joinedVisible;
+    final active = widget.parts.any(isToolPartActive);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          key: Key('chat-skill-group-${widget.parts.first.id}'),
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Row(
+            children: [
+              Icon(active ? Icons.auto_stories : Icons.menu_book, size: 16, color: OcTokens.mutedLight),
+              const SizedBox(width: 6),
+              Text(t(context, 'chat.tools.display.skill'), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              if (label.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    label,
+                    key: Key('chat-skill-summary-${widget.parts.first.id}'),
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: OcTokens.mutedLight, fontSize: 12),
+                  ),
+                ),
+              ],
+              Icon(_expanded ? Icons.expand_more : Icons.chevron_right, size: 16, color: OcTokens.mutedLight),
+            ],
+          ),
+        ),
+        if (_expanded)
+          Padding(
+            padding: const EdgeInsets.only(left: 12, top: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final part in widget.parts)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: ToolPartCard(part: part),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ExpandableToolCard extends StatefulWidget {
+  const _ExpandableToolCard({
+    required this.part,
+    required this.cardKey,
+    required this.displayTitle,
+  });
+
+  final ChatPart part;
+  final String cardKey;
+  final String displayTitle;
+
+  @override
+  State<_ExpandableToolCard> createState() => _ExpandableToolCardState();
+}
+
+class _ExpandableToolCardState extends State<_ExpandableToolCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final output = widget.part.body;
+    return _CardShell(
+      key: Key(widget.cardKey),
+      title: widget.displayTitle,
+      subtitle: [widget.part.title, widget.part.status].whereType<String>().where((item) => item.isNotEmpty).join(' · '),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (output != null && output.isNotEmpty)
+            InkWell(
+              key: Key('${widget.cardKey}-toggle'),
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Text(
+                _expanded ? t(context, 'chat.messageBody.shellCommand.hideOutput') : t(context, 'chat.messageBody.shellCommand.showOutput'),
+                style: TextStyle(color: OcTokens.mutedLight, fontSize: 12),
+              ),
+            ),
+          if (_expanded && output != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(output, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GeneratedResultCard extends StatelessWidget {
+  const _GeneratedResultCard({required this.result, required this.partId});
+
+  final GeneratedResult result;
+  final String partId;
+
+  @override
+  Widget build(BuildContext context) {
+    final isCommit = result.kind == 'commit';
+    return _CardShell(
+      key: Key('chat-generated-${result.kind}-$partId'),
+      title: t(
+        context,
+        isCommit ? 'chat.generatedResult.commit.title' : 'chat.generatedResult.pullRequest.title',
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (isCommit) ...[
+            Text(result.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+            if (result.highlights.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(t(context, 'chat.generatedResult.commit.highlights'), style: TextStyle(color: OcTokens.mutedLight, fontSize: 12)),
+              for (final item in result.highlights) Text('• $item'),
+            ],
+          ] else ...[
+            if (result.title.isNotEmpty) ...[
+              Text(t(context, 'chat.generatedResult.pullRequest.titleLabel'), style: TextStyle(color: OcTokens.mutedLight, fontSize: 12)),
+              Text(result.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+            ],
+            if (result.body != null) ...[
+              const SizedBox(height: 6),
+              Text(t(context, 'chat.generatedResult.pullRequest.bodyLabel'), style: TextStyle(color: OcTokens.mutedLight, fontSize: 12)),
+              Text(result.body!),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class ToolPartCard extends StatelessWidget {
   const ToolPartCard({super.key, required this.part, this.onPermission});
 
@@ -330,6 +519,14 @@ class ToolPartCard extends StatelessWidget {
           child: _DiffViewer(part: part),
         );
       case ChatPartKind.fileOp:
+        if (part.toolName == 'image-preview' || (part.metadata['mime']?.toString().startsWith('image/') ?? false)) {
+          return _CardShell(
+            key: Key('chat-tool-image-${part.id}'),
+            title: t(context, 'chat.tools.display.image'),
+            subtitle: part.path ?? part.title,
+            child: part.body == null ? null : Text(part.body!, maxLines: 2, overflow: TextOverflow.ellipsis),
+          );
+        }
         return _CardShell(
           key: Key('chat-tool-file-${part.id}'),
           title: part.title,
@@ -349,6 +546,40 @@ class ToolPartCard extends StatelessWidget {
       case ChatPartKind.permission:
         return _PermissionCard(part: part, onPermission: onPermission);
       case ChatPartKind.tool:
+        if (isBashTool(part.toolName)) {
+          return _ExpandableToolCard(
+            part: part,
+            cardKey: 'chat-tool-bash-${part.id}',
+            displayTitle: t(context, 'chat.tools.display.bash'),
+          );
+        }
+        if (isWebFetchTool(part.toolName)) {
+          return _ExpandableToolCard(
+            part: part,
+            cardKey: 'chat-tool-fetch-${part.id}',
+            displayTitle: t(context, 'chat.tools.display.webfetch'),
+          );
+        }
+        if (isWebSearchTool(part.toolName)) {
+          return _ExpandableToolCard(
+            part: part,
+            cardKey: 'chat-tool-search-${part.id}',
+            displayTitle: t(
+              context,
+              normalizeContextToolName(part.toolName) == 'codesearch'
+                  ? 'chat.tools.display.codesearch'
+                  : 'chat.tools.display.websearch',
+            ),
+          );
+        }
+        if (isQuestionTool(part.toolName)) {
+          return _CardShell(
+            key: Key('chat-tool-question-${part.id}'),
+            title: t(context, 'chat.tools.display.question'),
+            subtitle: part.title,
+            child: part.body == null ? null : Text(part.body!),
+          );
+        }
         return _CardShell(
           key: Key('chat-tool-row-${part.id}'),
           title: part.title,

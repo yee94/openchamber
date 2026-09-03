@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'chat_timeline.dart';
+import 'context_tool_grouping.dart';
 
 class PermissionRequestRecord {
   const PermissionRequestRecord({
@@ -73,14 +76,17 @@ List<ChatPart> parseChatParts(Object? parts, {required String messageId}) {
     }
     if (type == 'file') {
       final path = part['filename']?.toString() ?? part['url']?.toString() ?? '';
+      final mime = part['mime']?.toString() ?? '';
+      final image = mime.startsWith('image/');
       out.add(ChatPart(
         id: id,
         kind: ChatPartKind.fileOp,
-        title: path.isEmpty ? 'File' : path,
-        subtitle: part['mime']?.toString(),
+        title: path.isEmpty ? (image ? 'Image' : 'File') : path,
+        subtitle: mime,
         path: path,
-        status: 'file',
-        toolName: 'file',
+        status: image ? 'image' : 'file',
+        toolName: image ? 'image-preview' : 'file',
+        metadata: {'mime': mime, if (part['url'] != null) 'url': part['url']},
       ));
       continue;
     }
@@ -137,6 +143,20 @@ List<ChatPart> parseChatParts(Object? parts, {required String messageId}) {
         toolName: tool,
         tokensPerSecond: tps,
         body: _taskSummary(state, output),
+      ));
+      continue;
+    }
+    if (normalizeContextToolName(tool) == 'skill') {
+      final name = _skillName(state, input, output) ?? 'skill';
+      out.add(ChatPart(
+        id: id,
+        kind: ChatPartKind.tool,
+        title: name,
+        subtitle: status,
+        status: status,
+        toolName: tool,
+        metadata: _metadataMap(state['metadata']),
+        body: _short(output),
       ));
       continue;
     }
@@ -347,13 +367,44 @@ String _fileOpTitle(String tool, String? path) {
 }
 
 String _toolTitle(String tool, Map<String, Object?> input, String? path) {
-  if (tool == 'bash' || tool == 'shell' || tool == 'cmd' || tool == 'terminal') {
-    return input['command']?.toString() ?? 'Terminal';
+  if (tool == 'bash' || tool == 'shell' || tool == 'cmd' || tool == 'terminal' || tool == 'shell_command') {
+    return input['command']?.toString() ?? input['cmd']?.toString() ?? 'Terminal';
+  }
+  if (tool == 'webfetch' || tool == 'fetch' || tool == 'curl' || tool == 'wget') {
+    return input['url']?.toString() ?? input['URL']?.toString() ?? input['uri']?.toString() ?? tool;
+  }
+  if (tool == 'websearch' ||
+      tool == 'web-search' ||
+      tool == 'search_web' ||
+      tool == 'codesearch' ||
+      tool == 'perplexity' ||
+      tool == 'google' ||
+      tool == 'bing' ||
+      tool == 'duckduckgo') {
+    return input['query']?.toString() ?? input['q']?.toString() ?? tool;
   }
   if (tool == 'grep' || tool == 'search' || tool == 'glob') {
     return input['pattern']?.toString() ?? input['query']?.toString() ?? tool;
   }
   return path ?? tool;
+}
+
+String? _skillName(Map<String, Object?> state, Map<String, Object?> input, String output) {
+  final metadata = state['metadata'] is Map ? Map<String, Object?>.from(state['metadata'] as Map) : const <String, Object?>{};
+  for (final source in [metadata, input]) {
+    for (final key in const ['name', 'id']) {
+      final value = source[key]?.toString().trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+  }
+  try {
+    final decoded = jsonDecode(output);
+    if (decoded is Map) {
+      final name = decoded['name']?.toString().trim();
+      if (name != null && name.isNotEmpty) return name;
+    }
+  } catch (_) {}
+  return null;
 }
 
 String? _toolPath(Map<String, Object?> input, String output) {

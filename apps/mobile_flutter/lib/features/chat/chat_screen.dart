@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
 import '../../data/chat_timeline.dart';
+import '../../data/dictation.dart';
 import '../../data/home_session.dart';
 import '../../data/message_id.dart';
 import '../../data/openchamber_http.dart';
@@ -42,7 +43,10 @@ class _ChatScreenState extends State<ChatScreen> {
   late final MediaChannel _media = widget.media ?? MediaChannel();
   bool _busy = false;
   String? _errorKey;
+  String? _dictationLabel;
   Timer? _poll;
+
+  DictationSession get _dictation => widget.appController?.dictation ?? UnavailableDictation();
 
   LiveActivityController get _live => widget.appController?.liveActivity ?? LiveActivityController();
 
@@ -252,6 +256,28 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _dictate() async {
+    final session = _dictation;
+    if (session.status == DictationStatus.recording) {
+      final result = await session.confirm();
+      if (!mounted) return;
+      if (result != null && result.text.isNotEmpty) {
+        _composer.text = _composer.text.isEmpty ? result.text : '${_composer.text} ${result.text}';
+        setState(() => _dictationLabel = null);
+      } else {
+        setState(() => _dictationLabel = t(context, 'chat.dictation.failed'));
+      }
+      return;
+    }
+    await session.start();
+    if (!mounted) return;
+    setState(() {
+      _dictationLabel = session.status == DictationStatus.failed
+          ? t(context, 'chat.dictation.unavailable')
+          : t(context, 'chat.dictation.listening');
+    });
+  }
+
   Future<void> _stop() async {
     _poll?.cancel();
     _haptics.impact(HapticStrength.heavy);
@@ -331,6 +357,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 onSend: _send,
                 onStop: _stop,
                 onAttach: _attach,
+                onDictate: _dictate,
                 onText: (value) => setState(() => _composer.text = value),
               ),
             )
@@ -339,13 +366,15 @@ class _ChatScreenState extends State<ChatScreen> {
               color: Theme.of(context).colorScheme.surface,
               child: Padding(
                 padding: EdgeInsets.only(bottom: inset.bottom),
-                child:                 ComposerBar(
+                child: ComposerBar(
                   controller: _composer,
                   busy: _busy,
                   attachments: _attachments,
+                  dictationLabel: _dictationLabel,
                   onSend: _send,
                   onStop: _stop,
                   onAttach: _attach,
+                  onDictate: _dictate,
                   onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
                 ),
               ),

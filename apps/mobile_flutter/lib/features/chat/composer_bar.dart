@@ -14,8 +14,10 @@ class ComposerBar extends StatelessWidget {
     required this.controller,
     required this.onSend,
     this.onAttach,
+    this.onDictate,
     this.onStop,
     this.busy = false,
+    this.dictationLabel,
     this.attachments = const [],
     this.onRemoveAttachment,
   });
@@ -23,7 +25,9 @@ class ComposerBar extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
   final VoidCallback? onAttach;
+  final VoidCallback? onDictate;
   final VoidCallback? onStop;
+  final String? dictationLabel;
   final bool busy;
   final List<AttachmentDraft> attachments;
   final ValueChanged<int>? onRemoveAttachment;
@@ -50,6 +54,12 @@ class ComposerBar extends StatelessWidget {
       tooltip: t(context, 'chat.composer.attach'),
       onPressed: onAttach,
       icon: Icon(ios ? CupertinoIcons.add : Icons.add),
+    );
+    final mic = IconButton(
+      key: const Key('composer-dictate'),
+      tooltip: t(context, 'chat.dictation.start'),
+      onPressed: onDictate,
+      icon: Icon(ios ? CupertinoIcons.mic : Icons.mic),
     );
     final send = IconButton(
       key: const Key('composer-send'),
@@ -105,12 +115,19 @@ class ComposerBar extends StatelessWidget {
                   },
                 ),
               ),
+            if (dictationLabel != null)
+              Padding(
+                key: const Key('composer-dictate-status'),
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                child: Text(dictationLabel!, style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
               child: Row(
                 children: [
                   attach,
                   Expanded(child: field),
+                  mic,
                   send,
                 ],
               ),

@@ -92,10 +92,10 @@ void main() {
     );
     await tester.pumpWidget(_wrap(ChatTranscriptBody(message: live, isLastAssistant: true, isTurnLive: true)));
     expect(find.text('Working'), findsOneWidget);
-    expect(find.byKey(const Key('chat-tool-row-bash-1')), findsOneWidget);
+    expect(find.byKey(const Key('chat-tool-bash-bash-1')), findsOneWidget);
     await tester.tap(find.byKey(const Key('chat-activity-m-live')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('chat-tool-row-bash-1')), findsOneWidget);
+    expect(find.byKey(const Key('chat-tool-bash-bash-1')), findsOneWidget);
   });
 
   testWidgets('diff toggle switches unified default to side-by-side', (tester) async {

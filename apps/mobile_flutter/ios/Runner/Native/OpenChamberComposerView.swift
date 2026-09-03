@@ -9,6 +9,7 @@ final class OpenChamberComposerView: UIView, UITextViewDelegate {
   var onSend: ((String) -> Void)?
   var onStop: (() -> Void)?
   var onAttach: (() -> Void)?
+  var onDictate: (() -> Void)?
   var onText: ((String) -> Void)?
   var onOccupancy: ((CGFloat) -> Void)?
   var onAutocomplete: ((String) -> Void)?
@@ -17,6 +18,7 @@ final class OpenChamberComposerView: UIView, UITextViewDelegate {
   private let textView = UITextView()
   private let placeholder = UILabel()
   private let attachButton = UIButton(type: .system)
+  private let dictateButton = UIButton(type: .system)
   private let sendButton = UIButton(type: .system)
   private let attachmentStrip = UIScrollView()
   private let attachmentStack = UIStackView()
@@ -79,6 +81,9 @@ final class OpenChamberComposerView: UIView, UITextViewDelegate {
     attachButton.setImage(UIImage(systemName: "plus"), for: .normal)
     attachButton.accessibilityIdentifier = "composer-attach"
     attachButton.addTarget(self, action: #selector(attachTapped), for: .touchUpInside)
+    dictateButton.setImage(UIImage(systemName: "mic"), for: .normal)
+    dictateButton.accessibilityIdentifier = "composer-dictate"
+    dictateButton.addTarget(self, action: #selector(dictateTapped), for: .touchUpInside)
     sendButton.setImage(UIImage(systemName: "arrow.up"), for: .normal)
     sendButton.accessibilityIdentifier = "composer-send"
     sendButton.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
@@ -98,10 +103,12 @@ final class OpenChamberComposerView: UIView, UITextViewDelegate {
     card.contentView.addSubview(attachButton)
     card.contentView.addSubview(textView)
     card.contentView.addSubview(placeholder)
+    card.contentView.addSubview(dictateButton)
     card.contentView.addSubview(sendButton)
     addSubview(autocomplete)
     autocomplete.translatesAutoresizingMaskIntoConstraints = false
     attachButton.translatesAutoresizingMaskIntoConstraints = false
+    dictateButton.translatesAutoresizingMaskIntoConstraints = false
     sendButton.translatesAutoresizingMaskIntoConstraints = false
     textView.translatesAutoresizingMaskIntoConstraints = false
     placeholder.translatesAutoresizingMaskIntoConstraints = false
@@ -119,12 +126,16 @@ final class OpenChamberComposerView: UIView, UITextViewDelegate {
       sendButton.centerYAnchor.constraint(equalTo: card.contentView.centerYAnchor),
       sendButton.widthAnchor.constraint(equalToConstant: 36),
       sendButton.heightAnchor.constraint(equalToConstant: 36),
+      dictateButton.trailingAnchor.constraint(equalTo: sendButton.leadingAnchor, constant: -4),
+      dictateButton.centerYAnchor.constraint(equalTo: card.contentView.centerYAnchor),
+      dictateButton.widthAnchor.constraint(equalToConstant: 36),
+      dictateButton.heightAnchor.constraint(equalToConstant: 36),
       attachmentStrip.leadingAnchor.constraint(equalTo: attachButton.trailingAnchor, constant: 8),
-      attachmentStrip.trailingAnchor.constraint(equalTo: sendButton.leadingAnchor, constant: -8),
+      attachmentStrip.trailingAnchor.constraint(equalTo: dictateButton.leadingAnchor, constant: -8),
       attachmentStrip.topAnchor.constraint(equalTo: card.contentView.topAnchor, constant: 6),
       attachmentStrip.heightAnchor.constraint(equalToConstant: 0),
       textView.leadingAnchor.constraint(equalTo: attachButton.trailingAnchor, constant: 8),
-      textView.trailingAnchor.constraint(equalTo: sendButton.leadingAnchor, constant: -8),
+      textView.trailingAnchor.constraint(equalTo: dictateButton.leadingAnchor, constant: -8),
       textView.topAnchor.constraint(equalTo: attachmentStrip.bottomAnchor, constant: 2),
       textView.bottomAnchor.constraint(equalTo: card.contentView.bottomAnchor, constant: -6),
       placeholder.leadingAnchor.constraint(equalTo: textView.leadingAnchor, constant: 4),
@@ -179,6 +190,10 @@ final class OpenChamberComposerView: UIView, UITextViewDelegate {
 
   @objc private func attachTapped() {
     onAttach?()
+  }
+
+  @objc private func dictateTapped() {
+    onDictate?()
   }
 }
 

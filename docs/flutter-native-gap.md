@@ -72,7 +72,7 @@ Native contracts / shell
 | Appearance `iosNativeUi` | **not present** | Do not rebuild. Native is always on. |
 | Plan mode / project notes / Todo | **not present** | Removed in 1.19.2. Do not rebuild. |
 | Capgo OTA | **not ported** | WebView web-bundle hot update only. Flutter ships IPA/APK. |
-| Flutter CI | landed | `.github/workflows/flutter-mobile-ci.yml` automatic on this track. **#13** `332ad6f82` and **#14** `77baf9b6f` both fully green (analyze + Android APK + iOS simulator). **#15** `10f97ff86` iOS simulator **failed** (`OpenChamberFlutterPlugins.swift:598` missing `await` on MainActor `mime`). **#16** `37074feea` fully green (analyze + Android debug APK + iOS simulator): https://github.com/yee94/openchambery/actions/runs/33715865698. Linux analyze-test alone is never treated as green. |
+| Flutter CI | landed | `.github/workflows/flutter-mobile-ci.yml` automatic on this track. **#13** `332ad6f82` and **#14** `77baf9b6f` both fully green (analyze + Android APK + iOS simulator). **#15** `10f97ff86` iOS simulator **failed** (`OpenChamberFlutterPlugins.swift:598` missing `await` on MainActor `mime`). **#16** `37074feea` fully green: https://github.com/yee94/openchambery/actions/runs/33715865698. **#17** `1f32bed56` fully green (analyze + Android debug APK + iOS simulator): https://github.com/yee94/openchambery/actions/runs/33716649360. Linux analyze-test alone is never treated as green. |
 | Signed release workflow | landed | `.github/workflows/flutter-mobile-release.yml` — existing secret names only |
 
 ## Settings slug checklist (`MOBILE_SETTINGS_PAGE_SLUGS`)
@@ -306,7 +306,23 @@ Read on main (do not invent): `MobileChatScreen.tsx` is a shell around the same 
 | Activity disclosure | landed | `ProgressiveGroup.tsx`, `activityExpansion.ts` | Title chrome: Working while live, Processed when settled. Locked open while the turn is live. Permission stays outside. |
 | Permission prompt UX | landed | `PermissionCard.tsx` | Warning + “Permission required” + tool name, patterns, tool-specific body, 3-column Allow once / Always agree / Deny. Reply path unchanged. |
 | Mermaid in chat | landed (source card) | `MarkdownRendererImpl.tsx` + `beautiful-mermaid` | Fenced ` ```mermaid ` becomes a first-class card. **No** SVG / pan-zoom — `beautiful-mermaid` is not added. |
-| Skill-tool grouping | **not in this slice** | `SkillToolGroup.tsx` | Present on main; not requested. |
+| Skill-tool grouping | **Slice 9** | `SkillToolGroup.tsx`, `skillToolGrouping.ts` | Not in Slice 8. |
+| Capgo / plan / notes / Todo / Chat dock / iosNativeUi | **will not port** | — | Unchanged. |
+
+## Ninth-slice status
+
+Read on main (do not invent): skill grouping is `isSkillGroupTool` + `SkillToolGroup`. `MobileChatScreen` has no mic; `ChatInput` → `ComposerDictation` uses `/api/dictation/ws`. There is no image-generation tool — image preview is `type: file` + `mime: image/*` (`tool: 'image-preview'`). TTS is message-body `POST /api/tts/speak` / `/api/dictation/tts/speak`, not composer.
+
+| Surface | Status | Main source | Notes |
+|---|---|---|---|
+| Skill-tool grouping | landed | `skillToolGrouping.ts`, `SkillToolGroup.tsx` | Consecutive `skill` (including `runtime.skill:N`) collapse to “Load Skill” + names (3 visible, overflow). Lone skill still uses the group header. |
+| Composer voice (STT) | landed (mic chrome) | `ComposerDictation`, `dictation-client.ts` | Mic on Material composer + iOS UIKit composer (`composer-dictate`). Official path is `/api/dictation/ws` + 16 kHz PCM. Production is `UnavailableDictation` (failure stays visible). Tests use `MemoryDictation`. No live PCM / WS. |
+| Bash / fetch / search cards | landed | `ToolPart.tsx`, `toolPresentation.tsx` | Expandable Shell Command / Fetch URL / Web Search (and Code Search) with command/url/query titles, not raw JSON. |
+| Question card | landed | `toolPresentation.tsx` `question` | First-class Question card. |
+| Image preview | landed | `FileAttachment.tsx` `tool: 'image-preview'` | `type: file` + `image/*` is a named Image card **outside** Activity. No invented image-gen tool. |
+| Generated commit / PR JSON | landed | `generatedJsonResult.ts` | Assistant text that is commit/PR JSON becomes a card, not a raw dump. |
+| Composer TTS | **not composer** | `useLocalTTS.ts` | Message-body `/api/tts/speak`. Settings → Voice already reads `/api/tts/status`. |
+| todowrite / todoread | **will not port** | Todo removed in 1.19.2 | Do not rebuild. |
 | Capgo / plan / notes / Todo / Chat dock / iosNativeUi | **will not port** | — | Unchanged. |
 
 ## Remaining gaps
@@ -318,4 +334,5 @@ Read on main (do not invent): `MobileChatScreen.tsx` is a shell around the same 
 5. A relay-paired **phone** talking to a real hosted relay was **not** exercised from this Linux VM. Dart client ↔ Dart host memory-wire proves redeem + session-index. Live `wss://` + real host private key is still a device/network check.
 6. Android launcher badge — no official API without posting a notification. iOS badge is local `attentionCount`.
 7. Pierre `@pierre/diffs` SVG hunk chrome and `beautiful-mermaid` SVG / pan-zoom — not ported; no new packages.
-8. Skill-tool grouping (`skill` → SkillToolGroup) exists on main and is not in this slice.
+8. Live composer STT: official `/api/dictation/ws` + 16 kHz PCM capture — mic chrome only; no PCM / WS.
+9. Message-body TTS (`/api/tts/speak` / `/api/dictation/tts/speak`) — not ported.
