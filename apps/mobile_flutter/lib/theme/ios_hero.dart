@@ -158,8 +158,10 @@ class OcOptical {
   /// Official dock `Icon weight="medium"` (`ICON_STROKE_WIDTH_MEDIUM` = 2).
   static const double dockGlyphStroke = 2;
   static const bool dockSelectedFullSlot = true;
-  static const double dockSelectedPillPadH = 12;
-  static const double dockSelectedPillPadV = 5;
+  static const double dockSelectedPillPadH = 16;
+  static const double dockSelectedPillPadV = 4;
+  /// Wider than the icon+label stack so the wash reads as a stadium, not a disc.
+  static const double dockSelectedPillMinWidth = 64;
   static const double dockIconWashAlpha = 0.55;
   static const double dockIconGlowAlpha = 0.0;
   static const double dockIconGlowBlur = 0;

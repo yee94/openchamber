@@ -181,7 +181,9 @@ void main() {
     expect(OcOptical.sessionMoreHit, 36);
     expect(OcOptical.sessionMoreEdge, 8);
     expect(OcOptical.sessionTimeGap, 8);
-    expect(OcOptical.dockSelectedPillPadH, 12);
+    expect(OcOptical.dockSelectedPillPadH, 16);
+    expect(OcOptical.dockSelectedPillPadV, 4);
+    expect(OcOptical.dockSelectedPillMinWidth, 64);
     expect(OcOptical.scrollFab, 36);
     expect(OcOptical.glassBlur, 20);
     expect(OcOptical.dockCapsuleHeight, OcTokens.dockHeight);

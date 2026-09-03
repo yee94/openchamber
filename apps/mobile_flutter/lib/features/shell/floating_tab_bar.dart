@@ -125,7 +125,9 @@ class _TabSlot extends StatelessWidget {
           builder: (context, t) {
             return SizedBox.expand(
               child: Align(
-                child: DecoratedBox(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: OcOptical.dockSelectedPillMinWidth),
+                  child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: Color.lerp(Colors.transparent, tokens.selectedTabWash, t),
                     borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
@@ -161,6 +163,7 @@ class _TabSlot extends StatelessWidget {
                         ),
                       ],
                     ),
+                  ),
                   ),
                 ),
               ),
