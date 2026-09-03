@@ -277,10 +277,10 @@ void main() {
       OcElevation.chipFor(OcTokens.light).every((s) => s.blurStyle != BlurStyle.inner),
       isTrue,
     );
-    expect(
-      [...OcElevation.chipFor(OcTokens.light), ...OcElevation.glassHighlightFor(OcTokens.light)],
-      hasLength(2),
-    );
+    // OcGlassChip is contact-only (wake-0706). Inset sheen stays on
+    // elevated plates, not the 36 disc.
+    expect(OcElevation.chipFor(OcTokens.light), hasLength(1));
+    expect(OcElevation.glassHighlightFor(OcTokens.light), hasLength(1));
     expect(OcElevation.glassHighlightFor(OcTokens.light).single.blurStyle, BlurStyle.inner);
     expect(
       (OcElevation.controlFor(OcTokens.light).last.color.a * 255).round(),

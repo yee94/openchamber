@@ -470,15 +470,17 @@ class _OcGlyphPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
     final c = Offset(w * 0.5, h * 0.5);
-    final rim = w * 0.26;
-    final hole = w * 0.155;
+    // Slim vs official medium stroke mass (wake-0706). Keep a holed
+    // 8-tooth cog — not settings-3 flower lobes and not a filled disc.
+    final rim = w * 0.24;
+    final hole = w * 0.15;
     final tooth = RRect.fromRectAndRadius(
       Rect.fromCenter(
-        center: Offset(0, -(rim + w * 0.016)),
-        width: w * 0.10,
-        height: w * 0.07,
+        center: Offset(0, -(rim + w * 0.014)),
+        width: w * 0.085,
+        height: w * 0.06,
       ),
-      Radius.circular(w * 0.018),
+      Radius.circular(w * 0.016),
     );
     final stroke = Paint()
       ..color = paint.color

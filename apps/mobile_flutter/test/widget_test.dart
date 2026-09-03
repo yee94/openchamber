@@ -120,6 +120,26 @@ void main() {
     );
   });
 
+  testWidgets('projects search chip is contact-only, no inset sheen', (tester) async {
+    await pumpConnected(tester);
+    final discs = tester.widgetList<DecoratedBox>(
+      find.descendant(
+        of: find.byKey(const Key('projects-search-toggle')),
+        matching: find.byType(DecoratedBox),
+      ),
+    );
+    final chip = discs.firstWhere((box) {
+      final decoration = box.decoration;
+      return decoration is BoxDecoration && decoration.shape == BoxShape.circle;
+    });
+    final decoration = chip.decoration as BoxDecoration;
+    expect(decoration.boxShadow, OcElevation.chipFor(OcTokens.light));
+    expect(
+      decoration.boxShadow!.every((s) => s.blurStyle != BlurStyle.inner),
+      isTrue,
+    );
+  });
+
   testWidgets('settings home lists every mobile slug and search filters', (tester) async {
     await pumpConnected(tester);
     await tester.tap(find.byKey(const Key('tab-settings')));

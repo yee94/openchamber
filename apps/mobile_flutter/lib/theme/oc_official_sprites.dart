@@ -158,7 +158,9 @@ void paintOfficialSprite({
   }
   for (final circle in sprite.circles) {
     final center = Offset(circle.$1, circle.$2);
-    if (filled && circle.$3 <= 2.6) {
+    // Calendar date cells are dots. Stroking r≤1 at medium weight
+    // blooms into rings (wake-0706). Search/branch eyes stay stroke.
+    if (circle.$3 <= 1.0 || (filled && circle.$3 <= 2.6)) {
       canvas.drawCircle(center, circle.$3, fill);
     } else {
       canvas.drawCircle(center, circle.$3, stroke);

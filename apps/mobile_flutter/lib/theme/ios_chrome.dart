@@ -136,12 +136,10 @@ class OcGlassChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          // 3654022 page-bleed: clear fill, no chip blur, contact + inset.
-          // No 8/20 umbra. WidgetTester is not UIGlassEffect.
-          boxShadow: [
-            ...OcElevation.chip(context),
-            ...OcElevation.glassHighlight(context),
-          ],
+          // 3654022 page-bleed + wake-0706: clear fill, chipBleedBlur 0,
+          // contact-only. Inset sheen reads as a painted disc rim vs live
+          // UIGlassEffect. No 8/20 umbra.
+          boxShadow: OcElevation.chip(context),
         ),
         child: ClipOval(
           child: OcFrosted(

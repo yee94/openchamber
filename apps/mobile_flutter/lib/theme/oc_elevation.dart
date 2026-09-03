@@ -41,7 +41,8 @@ class OcElevation {
     ];
   }
 
-  /// Official `inset 0 1px 0 var(--oc-mobile-glass-highlight)` for chips.
+  /// Official `inset 0 1px 0 var(--oc-mobile-glass-highlight)` for
+  /// elevated plates. The 36 search disc stays [chip] (wake-0706).
   static List<BoxShadow> glassHighlight(BuildContext context) =>
       glassHighlightFor(OcTokens.of(context));
 
