@@ -1,4 +1,4 @@
-import 'dart:ui' show ImageFilter;
+import 'dart:ui' show ColorFilter, ImageFilter;
 
 import 'package:flutter/material.dart';
 
@@ -28,7 +28,7 @@ class OcChrome {
   static const double headerButtonSize = OcTokens.headerButtonSize;
 }
 
-/// Official `--oc-mobile-glass-fill` + `--oc-mobile-glass-blur` (20).
+/// Official `--oc-mobile-glass-fill` + blur 20 + saturate 1.25.
 /// WidgetTester paints [BackdropFilter]; this is not a `UIGlassEffect` clone.
 class OcFrosted extends StatelessWidget {
   const OcFrosted({
@@ -36,11 +36,13 @@ class OcFrosted extends StatelessWidget {
     required this.child,
     this.fill,
     this.sigma = OcOptical.glassBlur,
+    this.saturate = OcOptical.glassSaturate,
   });
 
   final Widget child;
   final Color? fill;
   final double sigma;
+  final double saturate;
 
   @override
   Widget build(BuildContext context) {
@@ -49,11 +51,32 @@ class OcFrosted extends StatelessWidget {
       child: child,
     );
     if (sigma <= 0) return plate;
+    ImageFilter filter = ImageFilter.blur(sigmaX: sigma, sigmaY: sigma);
+    if (saturate != 1.0) {
+      // Official `backdrop-filter: blur() saturate()`. Blur first.
+      filter = ImageFilter.compose(
+        inner: filter,
+        outer: ColorFilter.matrix(_saturateMatrix(saturate)),
+      );
+    }
     return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+      filter: filter,
       child: plate,
     );
   }
+}
+
+List<double> _saturateMatrix(double s) {
+  const r = 0.2126;
+  const g = 0.7152;
+  const b = 0.0722;
+  final inv = 1 - s;
+  return <double>[
+    r * inv + s, g * inv, b * inv, 0, 0,
+    r * inv, g * inv + s, b * inv, 0, 0,
+    r * inv, g * inv, b * inv + s, 0, 0,
+    0, 0, 0, 1, 0,
+  ];
 }
 
 /// Official header / detail-nav `::after` fade. Not backdrop-filter glass.
