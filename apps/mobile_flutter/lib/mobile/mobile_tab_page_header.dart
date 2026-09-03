@@ -104,46 +104,50 @@ class MobileTabPageHeader extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (eyebrow != null)
-                            Opacity(
-                              opacity: 1 - t,
-                              child: Transform.scale(
-                                alignment: Alignment.topLeft,
-                                scaleY: 1 - t,
-                                child: Text(
-                                  eyebrow!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: OcTokens.textMicro,
-                                    fontWeight: FontWeight.w500,
-                                    color: tokens.mutedForeground,
+                      child: OverflowBox(
+                        maxHeight: 56,
+                        alignment: Alignment.centerLeft,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (eyebrow != null)
+                              Opacity(
+                                opacity: 1 - t,
+                                child: Transform.scale(
+                                  alignment: Alignment.topLeft,
+                                  scaleY: 1 - t,
+                                  child: Text(
+                                    eyebrow!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: OcTokens.textMicro,
+                                      fontWeight: FontWeight.w500,
+                                      color: tokens.mutedForeground,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          Transform.scale(
-                            key: const Key('mobile-tab-page-title'),
-                            alignment: Alignment.centerLeft,
-                            scale: 1 - ((1 - OcOptical.titleCollapseScaleEnd) * t),
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: OcOptical.largeTitle,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: OcOptical.largeTitleTracking,
-                                height: OcOptical.largeTitleHeight,
-                                color: Theme.of(context).colorScheme.onSurface,
+                            Transform.scale(
+                              key: const Key('mobile-tab-page-title'),
+                              alignment: Alignment.centerLeft,
+                              scale: 1 - ((1 - OcOptical.titleCollapseScaleEnd) * t),
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: OcOptical.largeTitle,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: OcOptical.largeTitleTracking,
+                                  height: OcOptical.largeTitleHeight,
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                     if (trailing != null)

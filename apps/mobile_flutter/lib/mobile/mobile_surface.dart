@@ -97,30 +97,23 @@ class _MobileTabPageScaffoldState extends State<MobileTabPageScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    final safeTop = MediaQuery.paddingOf(context).top;
-    final headerH = MobileTabPageHeader.layoutHeight(safeTop);
-
-    Widget scroll = CustomScrollView(
+    Widget scroll = SingleChildScrollView(
       controller: _scroll,
       clipBehavior: Clip.none,
       physics: const AlwaysScrollableScrollPhysics(),
-      slivers: [
-        SliverToBoxAdapter(
-          child: SizedBox(height: headerH, key: const Key('mobile-tab-page-header-slot')),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: 24 + widget.bottomOccupancy),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(
+              key: Key('mobile-tab-page-header-spacer'),
+              height: MobileTabPageHeader.expandShift,
+            ),
+            ...widget.children,
+          ],
         ),
-        const SliverToBoxAdapter(
-          child: SizedBox(
-            key: Key('mobile-tab-page-header-spacer'),
-            height: MobileTabPageHeader.expandShift,
-          ),
-        ),
-        SliverPadding(
-          padding: EdgeInsets.only(bottom: 24 + widget.bottomOccupancy),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate(widget.children),
-          ),
-        ),
-      ],
+      ),
     );
 
     if (widget.onRefresh != null) {
@@ -128,26 +121,20 @@ class _MobileTabPageScaffoldState extends State<MobileTabPageScaffold> {
     }
 
     return Scaffold(
-      body: Stack(
-        clipBehavior: Clip.none,
+      body: Column(
         children: [
-          Positioned.fill(child: scroll),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: ValueListenableBuilder<double>(
-              valueListenable: _collapse,
-              builder: (context, collapse, _) {
-                return MobileTabPageHeader(
-                  title: widget.title,
-                  eyebrow: widget.eyebrow,
-                  trailing: widget.trailing,
-                  collapse: collapse,
-                );
-              },
-            ),
+          ValueListenableBuilder<double>(
+            valueListenable: _collapse,
+            builder: (context, collapse, _) {
+              return MobileTabPageHeader(
+                title: widget.title,
+                eyebrow: widget.eyebrow,
+                trailing: widget.trailing,
+                collapse: collapse,
+              );
+            },
           ),
+          Expanded(child: scroll),
         ],
       ),
     );

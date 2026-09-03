@@ -41,15 +41,18 @@ void main() {
     expect(tester.getSize(find.byKey(const Key('mobile-tab-page-header-spacer'))).height, 10);
 
     final titleAtRest = tester.widget<Transform>(find.byKey(const Key('mobile-tab-page-title')));
-    expect(titleAtRest.transform.getMaxScaleOnAxis(), closeTo(1, 0.001));
+    expect(titleAtRest.transform.storage[0], closeTo(1, 0.001));
 
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -80));
-    await tester.pumpAndSettle();
+    final view = tester.widget<SingleChildScrollView>(find.byType(SingleChildScrollView));
+    view.controller!.jumpTo(80);
+    await tester.pump();
 
     final collapsed = tester.getSize(find.byKey(const Key('mobile-tab-page-header')));
     expect(collapsed.height, expanded.height);
 
+    final header = tester.widget<MobileTabPageHeader>(find.byType(MobileTabPageHeader));
+    expect(header.collapse, closeTo(1, 0.02));
     final titleCollapsed = tester.widget<Transform>(find.byKey(const Key('mobile-tab-page-title')));
-    expect(titleCollapsed.transform.getMaxScaleOnAxis(), closeTo(0.625, 0.02));
+    expect(titleCollapsed.transform.storage[0], closeTo(0.625, 0.02));
   });
 }
