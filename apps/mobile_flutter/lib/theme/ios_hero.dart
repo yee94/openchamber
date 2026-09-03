@@ -17,32 +17,32 @@ class OcOptical {
   /// a little positive tracking. Leading stays just above 16/12 so the 12/16
   /// rhythm reads; pad stays inside the 46px slot (do not balloon cards).
   static const double rowTitle = 12;
-  static const double rowTitleTracking = 0.28;
-  static const double rowTitleHeight = 1.38;
+  static const double rowTitleTracking = 0.26;
+  static const double rowTitleHeight = 1.40;
   static const double sessionRowHeight = 46;
   static const double sessionRowPadV = 6;
   static const double moreLinkPadV = 8;
   static const double groupHeaderPadV = 11;
   static const double groupHeaderPadVCompact = 10;
-  static const double groupTitleMetaGap = 5;
+  static const double groupTitleMetaGap = 6;
 
   /// Root `--oc-mobile-entity-title` 16 / 20. Project-shell tightens to 14 / 18.
   static const double entityTitle = 16;
   static const double entityTitleTracking = 0.18;
-  static const double entityTitleHeight = 1.28;
+  static const double entityTitleHeight = 1.30;
   static const double projectTitle = 14;
-  static const double projectTitleTracking = 0.24;
-  static const double projectTitleHeight = 1.30;
+  static const double projectTitleTracking = 0.22;
+  static const double projectTitleHeight = 1.32;
 
   static const double meta = 13;
-  static const double metaTracking = 0.18;
-  static const double metaHeight = 1.31;
+  static const double metaTracking = 0.16;
+  static const double metaHeight = 1.33;
   static const double sessionTime = 10;
   static const double sessionTimeTracking = 0.15;
   static const double sessionTimeHeight = 1.2;
 
   static const double scheduleCardPadV = 12;
-  static const double scheduleTitleMetaGap = 5;
+  static const double scheduleTitleMetaGap = 6;
 
   static const double chatTitle = 15;
   static const double chatTitleTracking = 0.4;
@@ -66,10 +66,10 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  static const double headerGlyph = 14;
-  static const double headerGlyphStroke = 0.48;
+  static const double headerGlyph = 13;
+  static const double headerGlyphStroke = 0.40;
   /// In-card / dock / footer strokes stay thinner than header.
-  static const double listGlyphStroke = 0.36;
+  static const double listGlyphStroke = 0.28;
 
   /// `--oc-mobile-collapsing-action-size` / expand-shift / collapse distance.
   static const double collapsingActionSize = 40;
@@ -81,8 +81,8 @@ class OcOptical {
   /// Official dock icon is `size-[23px]` medium. Stroke glyphs stay smaller
   /// and lighter so they do not read heavier than the sprite. Selected
   /// chrome is an icon-only wash — never a full-slot slab.
-  static const double dockGlyph = 10;
-  static const double dockGlyphStroke = 0.36;
+  static const double dockGlyph = 9;
+  static const double dockGlyphStroke = 0.28;
   static const double dockIconPillWidth = 32;
   static const double dockIconPillHeight = 22;
   static const double dockIconPillRadius = 11;
@@ -94,15 +94,15 @@ class OcOptical {
   /// than the official 18px filled sprite.
   static const double leadingCircle = 38;
   static const double leadingCircleCompact = 28;
-  static const double leadingGlyph = 9;
-  static const double leadingGlyphCompact = 7;
+  static const double leadingGlyph = 8;
+  static const double leadingGlyphCompact = 6;
 
   static const double sessionBullet = 5;
   static const double overflow = 8;
   static const double chevron = 8;
 
   static const double scheduleStatus = 38;
-  static const double scheduleStatusGlyph = 9;
+  static const double scheduleStatusGlyph = 8;
 
   static const double fileTypeW = 11;
   static const double fileTypeH = 7;
@@ -112,7 +112,7 @@ class OcOptical {
   static const double composerRadius = 24;
   static const double composerPlus = 9;
   static const double sendRing = 28;
-  static const double sendRingStroke = 0.58;
+  static const double sendRingStroke = 0.48;
   static const double sendStop = 8;
   static const double scrollFab = 26;
   static const double scrollChevron = 9;
