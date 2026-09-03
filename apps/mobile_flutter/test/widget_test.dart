@@ -1,0 +1,79 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openchamber/app.dart';
+import 'package:openchamber/data/app_controller.dart';
+import 'package:openchamber/data/secure_store.dart';
+import 'package:openchamber/data/settings_catalog.dart';
+import 'package:openchamber/features/shell/tab_scaffold.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  Future<AppController> pumpConnected(WidgetTester tester) async {
+    final controller = AppController(store: MemorySecureStore());
+    await controller.bootstrap(skipDelay: true);
+    await controller.connect(url: 'http://192.168.1.74:2606', label: 'lan');
+    await tester.pumpWidget(OpenChamberApp(controller: controller));
+    await tester.pumpAndSettle();
+    return controller;
+  }
+
+  testWidgets('connect onboarding is not a local PIN lock', (tester) async {
+    final controller = AppController(store: MemorySecureStore());
+    await controller.bootstrap(skipDelay: true);
+    await tester.pumpWidget(OpenChamberApp(controller: controller));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Connect to OpenChamber'), findsOneWidget);
+    expect(find.byKey(const Key('connect-url')), findsOneWidget);
+    expect(find.byKey(const Key('connect-scan-qr')), findsOneWidget);
+    expect(find.text('Face ID'), findsNothing);
+    expect(find.text('PIN'), findsNothing);
+    expect(find.textContaining('passcode'), findsNothing);
+  });
+
+  testWidgets('four-tab dock has no Chat root tab', (tester) async {
+    await pumpConnected(tester);
+    expect(find.byKey(const Key('mobile-tab-scaffold')), findsOneWidget);
+    expect(mobileTabIds, ['projects', 'assistant', 'scheduled', 'settings']);
+    expect(find.text('Projects'), findsWidgets);
+    expect(find.text('Agent'), findsOneWidget);
+    expect(find.text('Schedule'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
+    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(bar.destinations.length, 4);
+  });
+
+  testWidgets('chat is a pushed secondary page from Projects', (tester) async {
+    await pumpConnected(tester);
+    await tester.tap(find.byKey(const Key('home-session-sess-pinned')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('reverse-chat-list')), findsOneWidget);
+    expect(find.byKey(const Key('composer-field')), findsOneWidget);
+    expect(find.byKey(const Key('chat-back')), findsOneWidget);
+    expect(find.text('Release notes'), findsOneWidget);
+  });
+
+  testWidgets('settings home lists every mobile slug and search filters', (tester) async {
+    await pumpConnected(tester);
+    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Settings')));
+    await tester.pumpAndSettle();
+
+    for (final slug in mobileSettingsPageSlugs) {
+      final slugFinder = find.byKey(Key('settings-slug-$slug'), skipOffstage: false);
+      expect(slugFinder, findsOneWidget, reason: slug);
+      await tester.ensureVisible(find.byKey(Key('settings-slug-$slug'), skipOffstage: false));
+    }
+    expect(find.byKey(const Key('settings-slug-iosNativeUi'), skipOffstage: false), findsNothing);
+
+    await tester.enterText(find.byKey(const Key('settings-search')), 'about');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('settings-slug-about')), findsOneWidget);
+    expect(find.byKey(const Key('settings-slug-mcp')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('settings-slug-about')));
+    await tester.pumpAndSettle();
+    expect(find.text('Native client'), findsOneWidget);
+    expect(find.text('1.19.3-beta.5'), findsOneWidget);
+  });
+}

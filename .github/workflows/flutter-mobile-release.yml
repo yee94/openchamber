@@ -1,0 +1,346 @@
+name: Flutter Mobile Release
+
+# Signed Flutter IPA/APK using the SAME Capacitor mobile-release secrets.
+# Do not invent new secret names. Capgo OTA is WebView-only — not used here.
+# Capacitor `.github/workflows/mobile-release.yml` on main is unchanged.
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: Version name / marketing version. Leave empty to use package.json version.
+        required: false
+        type: string
+      build_number:
+        description: Build number. Leave empty to use GitHub run number.
+        required: false
+        type: string
+      build_android:
+        description: Build Android signed APK/AAB artifacts.
+        required: false
+        default: true
+        type: boolean
+      build_ios:
+        description: Build iOS IPA and upload it to TestFlight.
+        required: false
+        default: false
+        type: boolean
+      publish_external_testflight:
+        description: Associate the uploaded iOS build with the external TestFlight group.
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: flutter-mobile-release-${{ github.run_id }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_APP_DIR: apps/mobile_flutter
+  IOS_PROJECT_DIR: apps/mobile_flutter/ios
+
+jobs:
+  resolve-version:
+    name: Resolve Flutter mobile version
+    runs-on: ubuntu-latest
+    outputs:
+      version_name: ${{ steps.version.outputs.version_name }}
+      ios_marketing_version: ${{ steps.version.outputs.ios_marketing_version }}
+      build_number: ${{ steps.version.outputs.build_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version values
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          input_version='${{ inputs.version_name }}'
+          input_build='${{ inputs.build_number }}'
+          build_android='${{ inputs.build_android }}'
+          build_ios='${{ inputs.build_ios }}'
+          package_version="$(node -p "require('./package.json').version")"
+
+          if [[ "$build_android" != "true" && "$build_ios" != "true" ]]; then
+            echo "Select at least one platform: build_android or build_ios."
+            exit 1
+          fi
+
+          version_name="${input_version:-$package_version}"
+          build_number="${input_build:-${{ github.run_number }}}"
+          if [[ "$version_name" == *-* ]]; then
+            ios_marketing_version="${version_name%%-*}"
+          else
+            ios_marketing_version="$version_name"
+          fi
+
+          {
+            echo "version_name=$version_name"
+            echo "ios_marketing_version=$ios_marketing_version"
+            echo "build_number=$build_number"
+          } >> "$GITHUB_OUTPUT"
+
+  android-release:
+    name: Android signed release
+    if: inputs.build_android
+    runs-on: ubuntu-latest
+    needs: resolve-version
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Prepare Android keystore
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$ANDROID_KEYSTORE_BASE64" ]]; then
+            echo "ANDROID_KEYSTORE_BASE64 secret is required."
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/openchamber-release.keystore"
+
+      - name: Build signed Android release
+        working-directory: apps/mobile_flutter
+        env:
+          OPENCHAMBER_ANDROID_VERSION_CODE: ${{ needs.resolve-version.outputs.build_number }}
+          OPENCHAMBER_ANDROID_VERSION_NAME: ${{ needs.resolve-version.outputs.version_name }}
+          OPENCHAMBER_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/openchamber-release.keystore
+          OPENCHAMBER_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          OPENCHAMBER_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          OPENCHAMBER_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          flutter pub get
+          flutter build apk --release
+          flutter build appbundle --release
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: openchamber-flutter-android-${{ needs.resolve-version.outputs.version_name }}-${{ needs.resolve-version.outputs.build_number }}
+          path: |
+            apps/mobile_flutter/build/app/outputs/flutter-apk/*-release.apk
+            apps/mobile_flutter/build/app/outputs/bundle/release/*.aab
+          if-no-files-found: error
+
+  ios-testflight:
+    name: iOS archive and TestFlight
+    if: inputs.build_ios
+    runs-on: macos-26
+    needs: resolve-version
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Apple signing assets
+        shell: bash
+        env:
+          IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
+          IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          IOS_APP_PROFILE_BASE64: ${{ secrets.IOS_APP_PROFILE_BASE64 }}
+          IOS_WIDGET_PROFILE_BASE64: ${{ secrets.IOS_WIDGET_PROFILE_BASE64 }}
+          IOS_NSE_PROFILE_BASE64: ${{ secrets.IOS_NSE_PROFILE_BASE64 }}
+          IOS_SHARE_PROFILE_BASE64: ${{ secrets.IOS_SHARE_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          for name in IOS_DISTRIBUTION_CERTIFICATE_BASE64 IOS_APP_PROFILE_BASE64 IOS_WIDGET_PROFILE_BASE64 IOS_NSE_PROFILE_BASE64 IOS_SHARE_PROFILE_BASE64; do
+            if [[ -z "${!name}" ]]; then
+              echo "$name secret is required."
+              exit 1
+            fi
+          done
+
+          cert_path="$RUNNER_TEMP/ios_distribution.p12"
+          keychain_path="$RUNNER_TEMP/app-signing.keychain-db"
+          profiles_dir="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$profiles_dir"
+
+          printf '%s' "$IOS_DISTRIBUTION_CERTIFICATE_BASE64" | base64 -D > "$cert_path"
+          security create-keychain -p "$RUNNER_TEMP" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$RUNNER_TEMP" "$keychain_path"
+          security import "$cert_path" -P "$IOS_DISTRIBUTION_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+          security list-keychain -d user -s "$keychain_path"
+
+          app_profile="$RUNNER_TEMP/openchamber-app.mobileprovision"
+          widget_profile="$RUNNER_TEMP/openchamber-widget.mobileprovision"
+          nse_profile="$RUNNER_TEMP/openchamber-notification-service.mobileprovision"
+          share_profile="$RUNNER_TEMP/openchamber-share-extension.mobileprovision"
+          printf '%s' "$IOS_APP_PROFILE_BASE64" | base64 -D > "$app_profile"
+          printf '%s' "$IOS_WIDGET_PROFILE_BASE64" | base64 -D > "$widget_profile"
+          printf '%s' "$IOS_NSE_PROFILE_BASE64" | base64 -D > "$nse_profile"
+          printf '%s' "$IOS_SHARE_PROFILE_BASE64" | base64 -D > "$share_profile"
+
+          profile_uuid() {
+            security cms -D -i "$1" > "$RUNNER_TEMP/profile.plist"
+            /usr/libexec/PlistBuddy -c 'Print :UUID' "$RUNNER_TEMP/profile.plist"
+          }
+          install_profile() {
+            local source_path="$1"
+            local env_name="$2"
+            local uuid
+            uuid="$(profile_uuid "$source_path")"
+            cp "$source_path" "$profiles_dir/$uuid.mobileprovision"
+            echo "$env_name=$uuid" >> "$GITHUB_ENV"
+          }
+          install_profile "$app_profile" IOS_APP_PROFILE_UUID
+          install_profile "$widget_profile" IOS_WIDGET_PROFILE_UUID
+          install_profile "$nse_profile" IOS_NSE_PROFILE_UUID
+          install_profile "$share_profile" IOS_SHARE_PROFILE_UUID
+
+      - name: Set versions and Runner signing
+        working-directory: apps/mobile_flutter/ios
+        shell: bash
+        env:
+          VERSION_NAME: ${{ needs.resolve-version.outputs.ios_marketing_version }}
+          BUILD_NUMBER: ${{ needs.resolve-version.outputs.build_number }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          IOS_APP_PROFILE_NAME: ${{ secrets.IOS_APP_PROFILE_NAME }}
+          IOS_WIDGET_PROFILE_NAME: ${{ secrets.IOS_WIDGET_PROFILE_NAME }}
+          IOS_NSE_PROFILE_NAME: ${{ secrets.IOS_NSE_PROFILE_NAME }}
+          IOS_SHARE_PROFILE_NAME: ${{ secrets.IOS_SHARE_PROFILE_NAME }}
+        run: |
+          set -euo pipefail
+          xcrun agvtool new-marketing-version "$VERSION_NAME"
+          xcrun agvtool new-version -all "$BUILD_NUMBER"
+
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+
+          const projectPath = 'Runner.xcodeproj/project.pbxproj';
+          let project = readFileSync(projectPath, 'utf8');
+          const releaseBlockPattern = /\n\t\t[^\n]+ \/\* Release \*\/ = \{\n\t\t\tisa = XCBuildConfiguration;[\s\S]*?\n\t\t\tname = Release;\n\t\t\};/g;
+          const replacements = [
+            {
+              bundle: 'com.yee94.openchamber',
+              profile: process.env.IOS_APP_PROFILE_NAME,
+              uuid: process.env.IOS_APP_PROFILE_UUID,
+            },
+          ];
+
+          function setBuildSetting(block, key, value) {
+            const settingPattern = new RegExp(`\\n\\t\\t\\t\\t${key} = [^;]+;`);
+            const line = `\n\t\t\t\t${key} = ${value};`;
+            if (settingPattern.test(block)) return block.replace(settingPattern, line);
+            return block.replace('\n\t\t\t};', `${line}\n\t\t\t};`);
+          }
+
+          for (const { bundle, profile, uuid } of replacements) {
+            if (!profile) throw new Error(`Missing provisioning profile name for ${bundle}`);
+            if (!uuid) throw new Error(`Missing provisioning profile UUID for ${bundle}`);
+            const marker = `PRODUCT_BUNDLE_IDENTIFIER = ${bundle};`;
+            const match = [...project.matchAll(releaseBlockPattern)].find(([block]) => block.includes(marker));
+            if (!match) throw new Error(`Could not find ${bundle} Release build settings block`);
+
+            let block = match[0];
+            block = setBuildSetting(block, 'CODE_SIGN_IDENTITY', '"Apple Distribution"');
+            block = setBuildSetting(block, 'CODE_SIGN_STYLE', 'Manual');
+            block = setBuildSetting(block, 'DEVELOPMENT_TEAM', process.env.APPLE_TEAM_ID);
+            block = setBuildSetting(block, 'PROVISIONING_PROFILE', `"${uuid}"`);
+            block = setBuildSetting(block, 'PROVISIONING_PROFILE_SPECIFIER', `"${profile}"`);
+            project = project.replace(match[0], block);
+          }
+
+          writeFileSync(projectPath, project);
+          NODE
+
+      - name: Flutter iOS release assemble
+        working-directory: apps/mobile_flutter
+        run: flutter build ios --release --no-codesign
+
+      - name: Archive iOS app
+        working-directory: apps/mobile_flutter/ios
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/OpenChamber.xcarchive" \
+            "OTHER_CODE_SIGN_FLAGS=--keychain $RUNNER_TEMP/app-signing.keychain-db"
+
+      - name: Export IPA
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          IOS_APP_PROFILE_NAME: ${{ secrets.IOS_APP_PROFILE_NAME }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>teamID</key>
+            <string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.yee94.openchamber</key>
+              <string>$IOS_APP_PROFILE_NAME</string>
+            </dict>
+            <key>uploadSymbols</key>
+            <true/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/OpenChamber.xcarchive" \
+            -exportPath "$RUNNER_TEMP/OpenChamberExport" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openchamber-flutter-ios-${{ needs.resolve-version.outputs.version_name }}-${{ needs.resolve-version.outputs.build_number }}
+          path: ${{ runner.temp }}/OpenChamberExport/*.ipa
+          if-no-files-found: error
+
+      - name: Upload to TestFlight
+        shell: bash
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          key_path="$RUNNER_TEMP/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          mkdir -p "$(dirname "$key_path")" "$HOME/private_keys"
+          printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY_BASE64" | base64 -D > "$key_path"
+          ln -sf "$key_path" "$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          ipa="$(ls "$RUNNER_TEMP/OpenChamberExport"/*.ipa | head -n 1)"
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$ipa" \
+            --apiKey "$APP_STORE_CONNECT_KEY_ID" \
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+
+      - name: Publish build to external TestFlight group
+        if: inputs.publish_external_testflight
+        shell: bash
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY_PATH: ${{ runner.temp }}/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
+          TESTFLIGHT_BUNDLE_ID: com.yee94.openchamber
+          TESTFLIGHT_BUILD_NUMBER: ${{ needs.resolve-version.outputs.build_number }}
+          TESTFLIGHT_EXTERNAL_BETA_GROUP_ID: ${{ vars.TESTFLIGHT_EXTERNAL_BETA_GROUP_ID }}
+        run: node scripts/publish-testflight-external-build.mjs
