@@ -180,52 +180,8 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                         child: Text(t(context, 'projects.empty')),
                       )
                     else
-                      for (final group in groups) ...[
-                        _projectCard(
-                          context,
-                          id: group.id,
-                          name: group.name,
-                          glyph: OcGlyphKind.code,
-                          count: group.sessionCount,
-                          activity: formatRelativeTime(group.latestUpdated),
-                          pathHint: group.pathHint,
-                          expanded: !_collapsed.contains(group.id),
-                          onToggle: () => setState(() {
-                            if (_collapsed.contains(group.id)) {
-                              _collapsed.remove(group.id);
-                            } else {
-                              _collapsed.add(group.id);
-                            }
-                          }),
-                          sessions: _projectSessions(group),
-                          assignSessionKeys: true,
-                        ),
-                        for (final tree in group.worktrees)
-                          _projectCard(
-                            context,
-                            id: '${group.id}::${tree.name}',
-                            name: tree.name,
-                            glyph: OcGlyphKind.branch,
-                            count: tree.sessionCount,
-                            activity: formatRelativeTime(
-                              tree.sessions.fold<num>(0, (latest, row) => row.updated > latest ? row.updated : latest),
-                            ),
-                            pathHint: null,
-                            expanded: _isWorktreeExpanded('${group.id}::${tree.name}', tree.sessionCount),
-                            onToggle: () => setState(() {
-                              final key = '${group.id}::${tree.name}';
-                              final next = !_isWorktreeExpanded(key, tree.sessionCount);
-                              _worktreeToggled.add(key);
-                              if (next) {
-                                _expandedWorktrees.add(key);
-                              } else {
-                                _expandedWorktrees.remove(key);
-                              }
-                            }),
-                            sessions: tree.sessions,
-                            assignSessionKeys: false,
-                          ),
-                      ],
+                      for (final group in groups)
+                        _projectSurface(context, group),
                   ],
                 ],
               ),
@@ -241,24 +197,90 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     return count >= 3;
   }
 
-  List<HomeSessionRow> _projectSessions(ProjectHomeGroup group) {
+  /// Main-workspace rows only. Worktree sessions stay in their nested groups.
+  List<HomeSessionRow> _mainSessions(ProjectHomeGroup group) {
     final seen = <String>{};
     final out = <HomeSessionRow>[];
     void add(HomeSessionRow row) {
       if (seen.add(row.id)) out.add(row);
     }
-    for (final row in [...group.sessions, ...group.worktrees.expand((tree) => tree.sessions)]) {
+    for (final row in group.sessions) {
       if (row.kind != HomeSessionKind.catalog) add(row);
     }
-    for (final row in [...group.sessions, ...group.worktrees.expand((tree) => tree.sessions)]) {
+    for (final row in group.sessions) {
       add(row);
     }
     return out;
   }
 
-  Widget _projectCard(
+  Widget _projectSurface(BuildContext context, ProjectHomeGroup group) {
+    final expanded = !_collapsed.contains(group.id);
+    return GroupedInsetCard(
+      child: Column(
+        children: [
+          _groupHeader(
+            context,
+            name: group.name,
+            glyph: OcGlyphKind.code,
+            count: group.sessionCount,
+            activity: formatRelativeTime(group.latestUpdated),
+            pathHint: group.pathHint,
+            expanded: expanded,
+            onToggle: () => setState(() {
+              if (_collapsed.contains(group.id)) {
+                _collapsed.remove(group.id);
+              } else {
+                _collapsed.add(group.id);
+              }
+            }),
+          ),
+          if (expanded) ...[
+            Divider(height: 1, thickness: 0.5, color: context.oc.mobileBorder),
+            ..._sessionSlice(context, group.id, _mainSessions(group), true),
+            for (final tree in group.worktrees) ...[
+              Divider(height: 1, thickness: 0.5, color: context.oc.mobileBorder),
+              _worktreeSection(context, group.id, tree),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _worktreeSection(BuildContext context, String projectId, WorktreeHomeGroup tree) {
+    final id = '$projectId::${tree.name}';
+    final expanded = _isWorktreeExpanded(id, tree.sessionCount);
+    final activity = formatRelativeTime(
+      tree.sessions.fold<num>(0, (latest, row) => row.updated > latest ? row.updated : latest),
+    );
+    return Column(
+      children: [
+        _groupHeader(
+          context,
+          name: tree.name,
+          glyph: OcGlyphKind.branch,
+          count: tree.sessionCount,
+          activity: activity,
+          pathHint: null,
+          expanded: expanded,
+          compact: true,
+          onToggle: () => setState(() {
+            final next = !_isWorktreeExpanded(id, tree.sessionCount);
+            _worktreeToggled.add(id);
+            if (next) {
+              _expandedWorktrees.add(id);
+            } else {
+              _expandedWorktrees.remove(id);
+            }
+          }),
+        ),
+        if (expanded) ..._sessionSlice(context, id, tree.sessions, false),
+      ],
+    );
+  }
+
+  Widget _groupHeader(
     BuildContext context, {
-    required String id,
     required String name,
     required OcGlyphKind glyph,
     required int count,
@@ -266,67 +288,56 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     required String? pathHint,
     required bool expanded,
     required VoidCallback onToggle,
-    required List<HomeSessionRow> sessions,
-    required bool assignSessionKeys,
+    bool compact = false,
   }) {
-    return GroupedInsetCard(
-      child: Column(
-        children: [
-          InkWell(
-            onTap: onToggle,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-              child: Row(
+    return InkWell(
+      onTap: onToggle,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(compact ? 14 : 12, compact ? 8 : 10, 8, compact ? 8 : 10),
+        child: Row(
+          children: [
+            Container(
+              width: compact ? 26 : 30,
+              height: compact ? 26 : 30,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.10),
+                shape: BoxShape.circle,
+              ),
+              child: OcGlyph(glyph, size: compact ? 14 : 16, color: Theme.of(context).colorScheme.primary),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.10),
-                      shape: BoxShape.circle,
-                    ),
-                    child: OcGlyph(glyph, size: 16, color: Theme.of(context).colorScheme.primary),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        HighlightedText(name, query: _query, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 2),
-                        Text(
-                          [
-                            count == 1
-                                ? t(context, 'projects.sessionsCount.one')
-                                : t(context, 'projects.sessionsCount', {'count': '$count'}),
-                            if (activity != null) activity,
-                            if (pathHint != null && pathHint.isNotEmpty) pathHint,
-                          ].join(' · '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 13, color: context.oc.mutedForeground),
-                        ),
-                      ],
-                    ),
-                  ),
-                  OcGlyph(
-                    expanded ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
-                    size: 16,
-                    color: context.oc.mutedForeground,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 2, right: 6),
-                    child: OcGlyph(OcGlyphKind.ellipsis, size: 14, color: context.oc.mutedForeground),
+                  HighlightedText(name, query: _query, style: TextStyle(fontSize: compact ? 15 : 16, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 1),
+                  Text(
+                    [
+                      count == 1
+                          ? t(context, 'projects.sessionsCount.one')
+                          : t(context, 'projects.sessionsCount', {'count': '$count'}),
+                      if (activity != null) activity,
+                      if (pathHint != null && pathHint.isNotEmpty) pathHint,
+                    ].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: context.oc.mutedForeground),
                   ),
                 ],
               ),
             ),
-          ),
-          if (expanded) ...[
-            Divider(height: 1, thickness: 0.5, color: context.oc.mobileBorder),
-            ..._sessionSlice(context, id, sessions, assignSessionKeys),
+            OcGlyph(
+              expanded ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
+              size: 15,
+              color: context.oc.mutedForeground,
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 2, right: 6),
+              child: OcGlyph(OcGlyphKind.ellipsis, size: 14, color: context.oc.mutedForeground),
+            ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -374,7 +385,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         _openChat(context, row);
       },
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+        padding: const EdgeInsets.fromLTRB(16, 5, 8, 5),
         child: Row(
           children: [
             Container(

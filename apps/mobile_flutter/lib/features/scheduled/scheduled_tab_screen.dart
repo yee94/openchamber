@@ -199,12 +199,12 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                 height: 28,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: paused ? context.oc.mutedForeground.withValues(alpha: 0.35) : context.oc.statusSuccess,
+                  color: context.oc.muted.withValues(alpha: 0.72),
                 ),
                 child: OcGlyph(
                   paused ? OcGlyphKind.pause : OcGlyphKind.check,
                   size: 14,
-                  color: paused ? context.oc.mutedForeground : context.oc.background,
+                  color: paused ? context.oc.mutedForeground : context.oc.statusSuccess,
                 ),
               ),
               const SizedBox(width: 12),

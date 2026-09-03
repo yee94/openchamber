@@ -352,16 +352,9 @@ class _ChatScreenState extends State<ChatScreen> {
         subtitle: widget.session.subtitle,
         leadingKey: const Key('chat-back'),
         busy: _busy,
-        trailing: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: () {},
-          child: SizedBox(
-            width: 32,
-            height: 32,
-            child: Center(
-              child: OcGlyph(OcGlyphKind.ellipsis, size: 18, color: Theme.of(context).colorScheme.onSurface),
-            ),
-          ),
+        trailing: CircularChromeButton(
+          glyph: OcGlyphKind.ellipsis,
+          onPressed: () {},
         ),
       ),
       body: Column(

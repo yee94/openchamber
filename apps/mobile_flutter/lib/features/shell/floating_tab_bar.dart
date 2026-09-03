@@ -35,8 +35,8 @@ class FloatingCapsuleTabBar extends StatelessWidget {
         child: Material(
           key: Key('dock-selected-$selectedId'),
           color: context.oc.dockFill,
-          elevation: 6,
-          shadowColor: context.oc.surfaceForeground.withValues(alpha: 0.10),
+          elevation: 3,
+          shadowColor: context.oc.surfaceForeground.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(OcChrome.dockRadius),
           child: SizedBox(
             height: OcChrome.tabBarHeight,
@@ -90,16 +90,18 @@ class _TabSlot extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+            width: 28,
+            height: 22,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: selected ? primary.withValues(alpha: 0.14) : Colors.transparent,
-              borderRadius: BorderRadius.circular(7),
+              color: selected ? primary.withValues(alpha: 0.16) : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
             ),
             child: OcGlyph(
               glyph,
-              size: 20,
+              size: 18,
               color: selected ? primary : context.oc.mutedForeground,
-              strokeWidth: selected ? 2.0 : 1.7,
+              strokeWidth: selected ? 2.0 : 1.6,
             ),
           ),
           const SizedBox(height: 2),

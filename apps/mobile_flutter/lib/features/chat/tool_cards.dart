@@ -68,7 +68,7 @@ class ChatTranscriptBody extends StatelessWidget {
             child: _GeneratedResultCard(result: generated, partId: part.id),
           ));
         } else if (message.isUser && textParts.length > 1 && textIndex == 0) {
-          // Mention lives in [UserTurnToolbar] above the bubble, like official mobile.
+          // Mention is transcript data, not chrome. README toolbar is clock + actions only.
         } else {
           out.add(Text(part.body!.trim()));
         }
@@ -259,10 +259,15 @@ class _FileChangeCard extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  t(context, 'chat.filesChanged', {'count': '${parts.length}'}),
+                  t(context, 'chat.filesChanged.title'),
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
               ),
+              Text(
+                t(context, 'chat.filesChanged.count', {'count': '${parts.length}'}),
+                style: TextStyle(fontSize: 12, color: OcTokens.of(context).mutedForeground),
+              ),
+              const SizedBox(width: 2),
               OcGlyph(OcGlyphKind.chevronRight, size: 14, color: OcTokens.of(context).mutedForeground),
             ],
           ),
@@ -290,7 +295,7 @@ class _FileChangeCard extends StatelessWidget {
                           text: '+${part.added.length}',
                           style: TextStyle(color: OcTokens.of(context).statusSuccess),
                         ),
-                        const TextSpan(text: ' / '),
+                        const TextSpan(text: ' '),
                         TextSpan(
                           text: '-${part.removed.length}',
                           style: TextStyle(color: OcTokens.of(context).destructive),
@@ -325,39 +330,16 @@ class UserTurnToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mention = _userMention(message);
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (mention != null) ...[
-            Flexible(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  OcGlyph(OcGlyphKind.link, size: 12, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 3),
-                  Flexible(
-                    child: Text(
-                      mention,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 6),
-          ],
           if (message.completedClock != null) ...[
+            OcGlyph(OcGlyphKind.clock, size: 12, color: OcTokens.of(context).mutedForeground),
+            const SizedBox(width: 3),
             Text(message.completedClock!, style: TextStyle(fontSize: 11, color: OcTokens.of(context).mutedForeground)),
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
           ],
           _icon(context, key: const Key('chat-action-revert'), glyph: OcGlyphKind.undo, tooltip: t(context, 'chat.messageBody.actions.revert')),
           _icon(context, key: const Key('chat-action-edit'), glyph: OcGlyphKind.edit, tooltip: t(context, 'chat.messageBody.actions.edit')),
@@ -390,15 +372,6 @@ class UserTurnToolbar extends StatelessWidget {
   }
 }
 
-String? _userMention(ChatMessage message) {
-  final texts = message.parts
-      .where((part) => part.kind == ChatPartKind.text && (part.body ?? '').trim().isNotEmpty)
-      .map((part) => part.body!.trim())
-      .toList();
-  if (texts.length < 2) return null;
-  return texts.first;
-}
-
 class _FileTypeMark extends StatelessWidget {
   const _FileTypeMark({required this.path});
 
@@ -409,33 +382,18 @@ class _FileTypeMark extends StatelessWidget {
     final tokens = OcTokens.of(context);
     final lower = path.toLowerCase();
     final Color tint;
-    final String mark;
     if (lower.endsWith('.md')) {
       tint = tokens.chart1;
-      mark = 'M';
     } else if (lower.endsWith('.tsx') || lower.endsWith('.jsx')) {
       tint = tokens.chart3;
-      mark = 'X';
     } else if (lower.endsWith('.ts') || lower.endsWith('.js')) {
       tint = tokens.chart2;
-      mark = 'T';
     } else if (lower.endsWith('.dart')) {
       tint = tokens.primary;
-      mark = 'D';
     } else {
       tint = tokens.mutedForeground;
-      mark = 'F';
     }
-    return Container(
-      width: 16,
-      height: 16,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: tint.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(mark, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: tint, height: 1)),
-    );
+    return OcGlyph(OcGlyphKind.file, size: 14, color: tint, strokeWidth: 1.5);
   }
 }
 

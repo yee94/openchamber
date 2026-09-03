@@ -306,7 +306,7 @@ class SegmentedPill extends StatelessWidget {
                 onTap: () => onSelected(i),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   decoration: BoxDecoration(
                     color: selectedIndex == i
                         ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.16)
@@ -463,62 +463,56 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-        padding: const EdgeInsets.fromLTRB(8, 2, 8, 6),
-        child: Row(
-          children: [
-            Tooltip(
-              message: t(context, 'chat.back'),
-              child: InkWell(
-                key: leadingKey,
-                customBorder: const CircleBorder(),
-                onTap: () => Navigator.of(context).maybePop(),
-                child: SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: Center(
-                    child: OcGlyph(OcGlyphKind.chevronBack, size: 20, color: context.oc.foreground),
-                  ),
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
+      child: Row(
+        children: [
+          CircularChromeButton(
+            key: leadingKey,
+            glyph: OcGlyphKind.chevronBack,
+            tooltip: t(context, 'chat.back'),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                 ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+                if (subtitle != null && subtitle!.isNotEmpty)
                   Text(
-                    title,
+                    subtitle!,
+                    key: const Key('chat-header-subtitle'),
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                    style: TextStyle(fontSize: OcTokens.textMicro, color: context.oc.mutedForeground),
                   ),
-                  if (subtitle != null && subtitle!.isNotEmpty)
-                    Text(
-                      subtitle!,
-                      key: const Key('chat-header-subtitle'),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: OcTokens.textMicro, color: context.oc.mutedForeground),
-                    ),
-                ],
-              ),
+              ],
             ),
-            const SizedBox(width: 6),
-            if (busy)
-              const Padding(
-                key: Key('chat-busy'),
-                padding: EdgeInsets.only(right: 8),
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 8),
+          if (busy)
+            Padding(
+              key: const Key('chat-busy'),
+              padding: const EdgeInsets.only(right: 8),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: context.oc.mutedForeground,
                 ),
               ),
-            if (trailing != null) trailing! else const SizedBox(width: 32),
-          ],
-        ),
+            ),
+          if (trailing != null) trailing! else SizedBox(width: OcChrome.headerButtonSize),
+        ],
+      ),
     );
   }
 }
