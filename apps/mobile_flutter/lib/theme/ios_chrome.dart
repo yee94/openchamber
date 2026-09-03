@@ -537,11 +537,12 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.oc;
+    final top = MediaQuery.paddingOf(context).top;
     return ClipRect(
       child: OcFrosted(
         fill: tokens.background.withValues(alpha: 0.55),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+          padding: EdgeInsets.fromLTRB(12, top + 6, 12, 6),
           child: Row(
             children: [
               Tooltip(
