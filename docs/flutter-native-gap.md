@@ -72,7 +72,7 @@ Native contracts / shell
 | Appearance `iosNativeUi` | **not present** | Do not rebuild. Native is always on. |
 | Plan mode / project notes / Todo | **not present** | Removed in 1.19.2. Do not rebuild. |
 | Capgo OTA | **not ported** | WebView web-bundle hot update only. Flutter ships IPA/APK. |
-| Flutter CI | landed | `.github/workflows/flutter-mobile-ci.yml` automatic on this track. **#13** `332ad6f82` and **#14** `77baf9b6f` both fully green (analyze + Android APK + iOS simulator). **#15** `10f97ff86` iOS simulator **failed** (`OpenChamberFlutterPlugins.swift:598` missing `await` on MainActor `mime`). Android/APK was still in progress when Slice 7 started. Linux analyze-test on #15 succeeded — that is not iOS/Android green. |
+| Flutter CI | landed | `.github/workflows/flutter-mobile-ci.yml` automatic on this track. **#13** `332ad6f82` and **#14** `77baf9b6f` both fully green (analyze + Android APK + iOS simulator). **#15** `10f97ff86` iOS simulator **failed** (`OpenChamberFlutterPlugins.swift:598` missing `await` on MainActor `mime`). **#16** `37074feea` fully green (analyze + Android debug APK + iOS simulator): https://github.com/yee94/openchambery/actions/runs/33715865698. Linux analyze-test alone is never treated as green. |
 | Signed release workflow | landed | `.github/workflows/flutter-mobile-release.yml` — existing secret names only |
 
 ## Settings slug checklist (`MOBILE_SETTINGS_PAGE_SLUGS`)
@@ -292,7 +292,22 @@ flutter build apk --release
 | Plugin source files | landed | Official file GET/POST/PUT/DELETE |
 | Chat tool cards | landed | Diff / file op / permission / task (tok/s) cards. Not raw JSON. Permission reply `POST /api/permission/{id}/reply`. |
 | Scheduled in-progress cards | landed | Status from start; run-now optimistic `running`; schedule/next/error so cards are not blank names |
-| #15 CI | **iOS red on 10f97ff86** | Swift MainActor `mime` missing await. Fixed in this slice. Do not cite #15 as green. |
+| #15 CI | **iOS red on 10f97ff86** | Swift MainActor `mime` missing await. Fixed in Slice 7 (`37074feea`). Do not cite #15 as green. |
+| #16 CI | **green on 37074feea** | Analyze + Android debug APK + iOS simulator: https://github.com/yee94/openchambery/actions/runs/33715865698 |
+
+## Eighth-slice status
+
+Read on main (do not invent): `MobileChatScreen.tsx` is a shell around the same `ChatView` as desktop. Tool/activity/mermaid rendering is shared.
+
+| Surface | Status | Main source | Notes |
+|---|---|---|---|
+| Unified + side-by-side diff | landed (native) | `ToolPart.tsx` `PatchDiff` + `DiffViewToggle.tsx` | Default **unified**. Toggle to side-by-side. Live lines refresh with the transcript. **Not** `@pierre/diffs`. |
+| Context-tool grouping | landed | `contextToolGrouping.ts`, `ContextToolGroup.tsx` | Consecutive `read` / `glob` / `grep` / `list` only. Exploring while live / Explored + search/read/list counts. |
+| Activity disclosure | landed | `ProgressiveGroup.tsx`, `activityExpansion.ts` | Title chrome: Working while live, Processed when settled. Locked open while the turn is live. Permission stays outside. |
+| Permission prompt UX | landed | `PermissionCard.tsx` | Warning + “Permission required” + tool name, patterns, tool-specific body, 3-column Allow once / Always agree / Deny. Reply path unchanged. |
+| Mermaid in chat | landed (source card) | `MarkdownRendererImpl.tsx` + `beautiful-mermaid` | Fenced ` ```mermaid ` becomes a first-class card. **No** SVG / pan-zoom — `beautiful-mermaid` is not added. |
+| Skill-tool grouping | **not in this slice** | `SkillToolGroup.tsx` | Present on main; not requested. |
+| Capgo / plan / notes / Todo / Chat dock / iosNativeUi | **will not port** | — | Unchanged. |
 
 ## Remaining gaps
 
@@ -302,4 +317,5 @@ flutter build apk --release
 4. Capgo / plan / notes / Todo / Chat dock tab — will not port
 5. A relay-paired **phone** talking to a real hosted relay was **not** exercised from this Linux VM. Dart client ↔ Dart host memory-wire proves redeem + session-index. Live `wss://` + real host private key is still a device/network check.
 6. Android launcher badge — no official API without posting a notification. iOS badge is local `attentionCount`.
-7. Chat tool cards do not port Pierre live diffs, context-tool grouping, or the full 1.19 Activity disclosure. They render the official part types as cards.
+7. Pierre `@pierre/diffs` SVG hunk chrome and `beautiful-mermaid` SVG / pan-zoom — not ported; no new packages.
+8. Skill-tool grouping (`skill` → SkillToolGroup) exists on main and is not in this slice.

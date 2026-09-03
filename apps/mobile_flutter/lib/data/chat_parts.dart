@@ -6,12 +6,14 @@ class PermissionRequestRecord {
     required this.sessionId,
     required this.permission,
     this.patterns = const [],
+    this.metadata = const {},
   });
 
   final String id;
   final String sessionId;
   final String permission;
   final List<String> patterns;
+  final Map<String, Object?> metadata;
 }
 
 List<ChatMessage> parseTurnPageMessages(Object? payload, {List<PermissionRequestRecord> permissions = const []}) {
@@ -66,10 +68,7 @@ List<ChatPart> parseChatParts(Object? parts, {required String messageId}) {
     final id = part['id']?.toString() ?? '$messageId-$index';
     index += 1;
     if (type == 'text') {
-      final text = part['text']?.toString() ?? '';
-      if (text.isNotEmpty) {
-        out.add(ChatPart(id: id, kind: ChatPartKind.text, title: 'text', body: text));
-      }
+      out.addAll(splitTextAndMermaid(part['text']?.toString() ?? '', id: id));
       continue;
     }
     if (type == 'file') {
@@ -109,6 +108,7 @@ List<ChatPart> parseChatParts(Object? parts, {required String messageId}) {
         path: path,
         added: diff.added,
         removed: diff.removed,
+        diffLines: diff.lines,
         body: diff.preview,
       ));
       continue;
@@ -145,7 +145,8 @@ List<ChatPart> parseChatParts(Object? parts, {required String messageId}) {
         id: state['id']?.toString() ?? part['id']?.toString() ?? id,
         sessionId: '',
         permission: state['permission']?.toString() ?? tool,
-        patterns: state['patterns'] is List ? (state['patterns'] as List).map((item) => item.toString()).toList() : const [],
+        patterns: _stringList(state['patterns'] ?? part['patterns']),
+        metadata: _metadataMap(state['metadata'] ?? part['metadata'] ?? input),
       )));
       continue;
     }
@@ -171,6 +172,9 @@ ChatPart _permissionPart(PermissionRequestRecord request) {
     subtitle: request.patterns.join(', '),
     permissionId: request.id,
     status: 'pending',
+    toolName: request.permission,
+    patterns: request.patterns,
+    metadata: request.metadata,
   );
 }
 
@@ -185,30 +189,82 @@ List<PermissionRequestRecord> parsePermissionList(Object? payload, {String? sess
       id: item['id']?.toString() ?? '',
       sessionId: item['sessionID']?.toString() ?? item['sessionId']?.toString() ?? '',
       permission: item['permission']?.toString() ?? '',
-      patterns: item['patterns'] is List ? (item['patterns'] as List).map((entry) => entry.toString()).toList() : const [],
+      patterns: _stringList(item['patterns']),
+      metadata: _metadataMap(item['metadata']),
     );
   }).where((item) => item.id.isNotEmpty && (sessionId == null || item.sessionId.isEmpty || item.sessionId == sessionId)).toList();
 }
 
 class ParsedDiff {
-  const ParsedDiff({this.added = const [], this.removed = const [], this.preview});
+  const ParsedDiff({this.added = const [], this.removed = const [], this.lines = const [], this.preview});
   final List<String> added;
   final List<String> removed;
+  final List<DiffLine> lines;
   final String? preview;
+}
+
+final _mermaidFence = RegExp(r'```mermaid[ \t]*\n([\s\S]*?)```', multiLine: true);
+
+List<ChatPart> splitTextAndMermaid(String text, {required String id}) {
+  if (text.isEmpty) return const [];
+  final out = <ChatPart>[];
+  var cursor = 0;
+  var mermaidIndex = 0;
+  for (final match in _mermaidFence.allMatches(text)) {
+    final before = text.substring(cursor, match.start);
+    if (before.trim().isNotEmpty) {
+      out.add(ChatPart(
+        id: mermaidIndex == 0 ? id : '$id-text-$mermaidIndex',
+        kind: ChatPartKind.text,
+        title: 'text',
+        body: before.trim(),
+      ));
+    }
+    final source = (match.group(1) ?? '').trim();
+    if (source.isNotEmpty) {
+      out.add(ChatPart(
+        id: '$id-mermaid-$mermaidIndex',
+        kind: ChatPartKind.mermaid,
+        title: 'Mermaid',
+        body: source,
+      ));
+    }
+    mermaidIndex += 1;
+    cursor = match.end;
+  }
+  final rest = text.substring(cursor);
+  if (rest.trim().isNotEmpty || out.isEmpty) {
+    if (rest.trim().isNotEmpty || mermaidIndex == 0) {
+      out.add(ChatPart(
+        id: mermaidIndex == 0 ? id : '$id-text-tail',
+        kind: ChatPartKind.text,
+        title: 'text',
+        body: mermaidIndex == 0 ? text : rest.trim(),
+      ));
+    }
+  }
+  return out;
 }
 
 ParsedDiff parseUnifiedDiff(String raw) {
   if (raw.trim().isEmpty) return const ParsedDiff();
   final added = <String>[];
   final removed = <String>[];
+  final lines = <DiffLine>[];
   for (final line in raw.replaceAll('\r\n', '\n').split('\n')) {
     if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff ') || line.startsWith('@@')) {
       continue;
     }
     if (line.startsWith('+')) {
-      added.add(line.substring(1));
+      final text = line.substring(1);
+      added.add(text);
+      lines.add(DiffLine(kind: 'add', text: text));
     } else if (line.startsWith('-')) {
-      removed.add(line.substring(1));
+      final text = line.substring(1);
+      removed.add(text);
+      lines.add(DiffLine(kind: 'remove', text: text));
+    } else if (line.startsWith(' ')) {
+      lines.add(DiffLine(kind: 'context', text: line.substring(1)));
     }
   }
   final previewLines = [
@@ -218,6 +274,7 @@ ParsedDiff parseUnifiedDiff(String raw) {
   return ParsedDiff(
     added: added,
     removed: removed,
+    lines: lines,
     preview: previewLines.isEmpty ? null : previewLines.join('\n'),
   );
 }
@@ -316,3 +373,13 @@ String? _short(String? value) {
 }
 
 num? _num(Object? value) => value is num ? value : null;
+
+List<String> _stringList(Object? value) {
+  if (value is! List) return const [];
+  return value.map((entry) => entry.toString()).where((entry) => entry.isNotEmpty).toList();
+}
+
+Map<String, Object?> _metadataMap(Object? value) {
+  if (value is! Map) return const {};
+  return Map<String, Object?>.from(value);
+}

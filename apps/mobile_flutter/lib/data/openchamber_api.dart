@@ -996,6 +996,7 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
       'sessionID': 'sess-catalog',
       'permission': 'bash',
       'patterns': ['git status'],
+      'metadata': {'command': 'git status'},
     },
   ];
   List<String> eventChunks = const [];

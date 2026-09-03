@@ -10,7 +10,15 @@
 /// newest message (visual bottom). Prepending older items appends to the
 /// unreversed oldest-first buffer, which becomes high indices — the reverse
 /// scroller keeps its bottom-relative offset.
-enum ChatPartKind { text, diff, fileOp, permission, task, tool }
+enum ChatPartKind { text, mermaid, diff, fileOp, permission, task, tool }
+
+class DiffLine {
+  const DiffLine({required this.kind, required this.text});
+
+  /// `add`, `remove`, or `context`.
+  final String kind;
+  final String text;
+}
 
 class ChatPart {
   const ChatPart({
@@ -24,8 +32,11 @@ class ChatPart {
     this.path,
     this.added = const [],
     this.removed = const [],
+    this.diffLines = const [],
     this.permissionId,
     this.tokensPerSecond,
+    this.patterns = const [],
+    this.metadata = const {},
   });
 
   final String id;
@@ -38,8 +49,11 @@ class ChatPart {
   final String? path;
   final List<String> added;
   final List<String> removed;
+  final List<DiffLine> diffLines;
   final String? permissionId;
   final String? tokensPerSecond;
+  final List<String> patterns;
+  final Map<String, Object?> metadata;
 
   bool get isPendingPermission => kind == ChatPartKind.permission && permissionId != null;
 }

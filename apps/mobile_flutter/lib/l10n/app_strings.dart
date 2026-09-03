@@ -18,7 +18,15 @@ class AppStrings {
     return AppStrings._(_en);
   }
 
-  String t(String key) => _values[key] ?? key;
+  String t(String key, [Map<String, String>? params]) {
+    var value = _values[key] ?? key;
+    if (params != null) {
+      for (final entry in params.entries) {
+        value = value.replaceAll('{${entry.key}}', entry.value);
+      }
+    }
+    return value;
+  }
 
   static const Map<String, String> _en = {
     'app.name': 'OpenChamber',
@@ -146,6 +154,39 @@ class AppStrings {
     'chat.permission.once': 'Allow once',
     'chat.permission.always': 'Always allow',
     'chat.permission.reject': 'Reject',
+    'sessions.sidebar.session.status.permissionRequired': 'Permission required',
+    'chat.permissionCard.patterns': 'Patterns:',
+    'chat.permissionCard.allowOnce': 'Allow once',
+    'chat.permissionCard.alwaysAgree': 'Always agree',
+    'chat.permissionToast.actions.deny': 'Deny',
+    'chat.permissionCard.workingDirectory': 'Working Directory:',
+    'chat.permissionCard.timeout': 'Timeout:',
+    'chat.permissionCard.request': 'Request:',
+    'chat.permissionCard.headers': 'Headers:',
+    'chat.permissionCard.body': 'Request body:',
+    'chat.permissionCard.details': 'Details:',
+    'chat.permissionCard.replaceAll': 'Replace all matches',
+    'chat.permissionCard.responseFormat': 'Response format:',
+    'chat.activity.title': 'Processing details',
+    'chat.activity.active': 'Working',
+    'chat.activity.completedStatus': 'Processed',
+    'chat.activity.expandAria': 'Expand processing details',
+    'chat.activity.collapseAria': 'Collapse processing details',
+    'chat.contextGroup.exploring': 'Exploring',
+    'chat.contextGroup.explored': 'Explored',
+    'chat.contextGroup.expandAria': 'Expand explored tools',
+    'chat.contextGroup.collapseAria': 'Collapse explored tools',
+    'chat.contextGroup.readSingle': '{count} read',
+    'chat.contextGroup.readPlural': '{count} reads',
+    'chat.contextGroup.searchSingle': '{count} search',
+    'chat.contextGroup.searchPlural': '{count} searches',
+    'chat.contextGroup.listSingle': '{count} list',
+    'chat.contextGroup.listPlural': '{count} lists',
+    'chat.diff.switchToUnified': 'Switch to unified view',
+    'chat.diff.switchToSideBySide': 'Switch to side-by-side view',
+    'chat.diff.moreLines': '{count} more lines',
+    'chat.mermaid.title': 'Mermaid',
+    'chat.mermaid.sourceOnly': 'Source (SVG / pan-zoom not in this client)',
     'chat.error.permissionFailed': 'Could not reply to that permission request.',
     'scheduled.runNow': 'Run now',
     'scheduled.nextRun': 'Next run scheduled',
@@ -422,6 +463,39 @@ class AppStrings {
     'chat.permission.once': '允许一次',
     'chat.permission.always': '始终允许',
     'chat.permission.reject': '拒绝',
+    'sessions.sidebar.session.status.permissionRequired': '需要权限',
+    'chat.permissionCard.patterns': '模式：',
+    'chat.permissionCard.allowOnce': '允许一次',
+    'chat.permissionCard.alwaysAgree': '始终同意',
+    'chat.permissionToast.actions.deny': '拒绝',
+    'chat.permissionCard.workingDirectory': '工作目录：',
+    'chat.permissionCard.timeout': '超时：',
+    'chat.permissionCard.request': '请求：',
+    'chat.permissionCard.headers': '请求头：',
+    'chat.permissionCard.body': '请求体：',
+    'chat.permissionCard.details': '详情：',
+    'chat.permissionCard.replaceAll': '替换所有匹配项',
+    'chat.permissionCard.responseFormat': '响应格式：',
+    'chat.activity.title': '处理详情',
+    'chat.activity.active': '正在处理',
+    'chat.activity.completedStatus': '已处理',
+    'chat.activity.expandAria': '展开处理详情',
+    'chat.activity.collapseAria': '收起处理详情',
+    'chat.contextGroup.exploring': '探索中',
+    'chat.contextGroup.explored': '探索',
+    'chat.contextGroup.expandAria': '展开已探索的工具',
+    'chat.contextGroup.collapseAria': '折叠已探索的工具',
+    'chat.contextGroup.readSingle': '{count} 次读取',
+    'chat.contextGroup.readPlural': '{count} 次读取',
+    'chat.contextGroup.searchSingle': '{count} 次搜索',
+    'chat.contextGroup.searchPlural': '{count} 次搜索',
+    'chat.contextGroup.listSingle': '{count} 次列举',
+    'chat.contextGroup.listPlural': '{count} 次列举',
+    'chat.diff.switchToUnified': '切换为统一视图',
+    'chat.diff.switchToSideBySide': '切换为并排视图',
+    'chat.diff.moreLines': '还有 {count} 行',
+    'chat.mermaid.title': 'Mermaid',
+    'chat.mermaid.sourceOnly': '源码（此客户端不渲染 SVG / 平移缩放）',
     'chat.error.permissionFailed': '无法回复该权限请求。',
     'scheduled.runNow': '立即运行',
     'scheduled.nextRun': '已安排下次运行',
@@ -591,4 +665,5 @@ class StringsScope extends InheritedWidget {
   bool updateShouldNotify(StringsScope oldWidget) => oldWidget.strings != strings;
 }
 
-String t(BuildContext context, String key) => StringsScope.of(context).t(key);
+String t(BuildContext context, String key, [Map<String, String>? params]) =>
+    StringsScope.of(context).t(key, params);

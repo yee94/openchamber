@@ -233,6 +233,14 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  bool _isNewestAssistant(int reverseIndex) {
+    if (_timeline.length == 0) return false;
+    for (var i = 0; i < reverseIndex; i += 1) {
+      if (!_timeline.newestAtReverseIndex(i).isUser) return false;
+    }
+    return !_timeline.newestAtReverseIndex(reverseIndex).isUser;
+  }
+
   Future<void> _replyPermission(String requestId, String reply) async {
     final controller = widget.appController;
     if (controller == null) return;
@@ -283,6 +291,7 @@ class _ChatScreenState extends State<ChatScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               itemBuilder: (context, message, reverseIndex) {
                 final align = message.isUser ? Alignment.centerRight : Alignment.centerLeft;
+                final isLastAssistant = !message.isUser && _isNewestAssistant(reverseIndex);
                 return Align(
                   alignment: align,
                   child: Container(
@@ -298,6 +307,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     child: ChatTranscriptBody(
                       message: message,
+                      isLastAssistant: isLastAssistant,
+                      isTurnLive: _busy && isLastAssistant,
                       onPermission: widget.appController == null
                           ? null
                           : (requestId, reply) => _replyPermission(requestId, reply),
