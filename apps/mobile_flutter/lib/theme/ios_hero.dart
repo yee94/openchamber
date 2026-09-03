@@ -196,9 +196,10 @@ class OcOptical {
   /// a cream plate that hid the list. 0 = mix only so rows show through.
   static const double dockWashBlur = 0;
   /// Official `--oc-mobile-glass-blur` on the 36 `mobileGlass` disc.
-  /// ClipOval + quiet [OcTokens.glassChipFill] so content behind frosts
-  /// instead of a painted plate.
   static const double chipBlur = 20;
+  /// WidgetTester cream + [chipBlur] paints a solid disc. 0 = page bleed
+  /// through a clear chip (official contact + inset still define the rim).
+  static const double chipBleedBlur = 0;
   /// Official `.oc-mobile-floating-surface` `blur(22px) saturate(1.35)`.
   /// Distinct from control-scale [chipBlur] / [glassSaturate].
   static const double floatBlur = 22;

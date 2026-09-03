@@ -149,7 +149,9 @@ class OcTokens extends ThemeExtension<OcTokens> {
 
   /// Any white wash (0.02–0.68) lifts WidgetTester L into a cream disc.
   /// Fill is fully clear so official blur + saturate frost page through.
-  /// Chip chrome is contact only — no inset sheen plate, no 8/20 umbra. `+` stays primary.
+  /// Chip chrome is official contact + inset on a clear fill — no 8/20
+  /// umbra and no cream plate. WidgetTester chip blur stays 0 so the page
+  /// shows through. `+` stays primary.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: 0);
 

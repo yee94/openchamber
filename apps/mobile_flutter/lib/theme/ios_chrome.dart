@@ -136,15 +136,18 @@ class OcGlassChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          // Through-frost: clear fill + official blur. Contact only —
-          // inset sheen plated a cream disc on WidgetTester. No umbra.
-          // WidgetTester is not live UIGlassEffect.
-          boxShadow: OcElevation.chip(context),
+          // Official glass path: contact + inset. Fill stays clear.
+          // Chip blur on cream paints a solid disc — sigma 0 so the page
+          // shows through. Not a UIGlassEffect clone and not a cream plate.
+          boxShadow: [
+            ...OcElevation.chip(context),
+            ...OcElevation.glassHighlight(context),
+          ],
         ),
         child: ClipOval(
           child: OcFrosted(
             fill: context.oc.glassChipFill,
-            sigma: OcOptical.chipBlur,
+            sigma: OcOptical.chipBleedBlur,
             child: Center(child: child),
           ),
         ),

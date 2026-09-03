@@ -184,6 +184,8 @@ void main() {
     expect(OcOptical.dockWashBlur, 0);
     expect(OcOptical.dockWashBlur, lessThan(OcOptical.glassBlur));
     expect(OcOptical.chipBlur, OcOptical.glassBlur);
+    expect(OcOptical.chipBleedBlur, 0);
+    expect(OcOptical.chipBleedBlur, lessThan(OcOptical.chipBlur));
     expect(OcOptical.glassSaturate, closeTo(1.25, 0.01));
     expect(OcOptical.floatBlur, 22);
     expect(OcOptical.floatSaturate, closeTo(1.35, 0.01));
@@ -276,8 +278,8 @@ void main() {
       isTrue,
     );
     expect(
-      OcElevation.chipFor(OcTokens.light).every((s) => s.blurRadius < 8 && s.offset == Offset.zero),
-      isTrue,
+      [...OcElevation.chipFor(OcTokens.light), ...OcElevation.glassHighlightFor(OcTokens.light)],
+      hasLength(2),
     );
     expect(OcElevation.glassHighlightFor(OcTokens.light).single.blurStyle, BlurStyle.inner);
     expect(

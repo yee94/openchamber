@@ -59,8 +59,8 @@ class OcGlyph extends StatelessWidget {
   final double size;
   final Color? color;
   final double? strokeWidth;
-  /// Dock [filled] paints official filled-mass bodies (folder-open-fill,
-  /// sparkling star, calendar plate, holed gear). Not a stroke-width bump.
+  /// Dock [filled] is official medium: folder-open + sparkles stay stroke
+  /// silhouettes; calendar is a grid; gear is a slim holed cog.
   final bool filled;
 
   @override
@@ -97,13 +97,12 @@ class _OcGlyphPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final official = officialSpriteFor(kind.name);
-    if (kind == OcGlyphKind.folder && filled) {
-      _folderFill(canvas, size, color);
-      return;
-    }
-    // Official `Icon weight="medium"` is stroke 2. Filling the sparkles
-    // star path is a heavy blob vs delicate medium.
-    if (kind == OcGlyphKind.sparkles && filled && official != null) {
+    // Official dock `Icon weight="medium"` is stroke 2. Folder-open and
+    // sparkles are open silhouettes — filling them is a blob or a
+    // postage-stamp well. Stroke both at the same medium weight.
+    if ((kind == OcGlyphKind.folder || kind == OcGlyphKind.sparkles) &&
+        filled &&
+        official != null) {
       paintOfficialSprite(
         canvas: canvas,
         size: size,
@@ -463,55 +462,21 @@ class _OcGlyphPainter extends CustomPainter {
     canvas.drawPath(star, paint);
   }
 
-  void _folderFill(Canvas canvas, Size size, Color color) {
-    // Official `folder-open` is a stroke silhouette — filling that path
-    // does not enclose a body. Delicate filled-medium at 23px: a compact
-    // tab + body with a punched well (~medium 2px walls), not a brick.
-    final w = size.width;
-    final h = size.height;
-    final fill = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    final tab = Path()
-      ..moveTo(w * 0.34, h * 0.39)
-      ..lineTo(w * 0.34, h * 0.46)
-      ..lineTo(w * 0.43, h * 0.46)
-      ..lineTo(w * 0.41, h * 0.39)
-      ..close();
-    final body = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.355, h * 0.46, w * 0.29, h * 0.14),
-      Radius.circular(w * 0.026),
-    );
-    canvas.saveLayer(Rect.fromLTWH(0, 0, w, h), Paint());
-    canvas.drawPath(tab, fill);
-    canvas.drawRRect(body, fill);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(w * 0.40, h * 0.505, w * 0.20, h * 0.06),
-        Radius.circular(w * 0.018),
-      ),
-      Paint()
-        ..blendMode = BlendMode.dstOut
-        ..style = PaintingStyle.fill,
-    );
-    canvas.restore();
-  }
-
   void _gear(Canvas canvas, Size size, Paint paint, bool filled) {
     // Narrow 8-tooth holed cog. Not a sunburst and not settings-3
     // flower lobes.
     final w = size.width;
     final h = size.height;
     final c = Offset(w * 0.5, h * 0.5);
-    final rim = w * 0.28;
-    final hole = w * 0.14;
+    final rim = w * 0.26;
+    final hole = w * 0.155;
     final tooth = RRect.fromRectAndRadius(
       Rect.fromCenter(
-        center: Offset(0, -(rim + w * 0.018)),
-        width: w * 0.12,
-        height: w * 0.08,
+        center: Offset(0, -(rim + w * 0.016)),
+        width: w * 0.10,
+        height: w * 0.07,
       ),
-      Radius.circular(w * 0.02),
+      Radius.circular(w * 0.018),
     );
     final stroke = Paint()
       ..color = paint.color

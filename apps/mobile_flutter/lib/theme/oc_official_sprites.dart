@@ -149,7 +149,7 @@ void paintOfficialSprite({
     if (filled) {
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(rect.$1, rect.$2, rect.$3, 1.8), // shaved header band
+          Rect.fromLTWH(rect.$1, rect.$2, rect.$3, 1.45), // slim header band
           Radius.circular(rect.$5),
         ),
         fill,
