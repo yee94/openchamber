@@ -43,8 +43,14 @@ void main() {
 
   testWidgets('finger-down scales immediately; release springs back', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      MaterialApp(
+        builder: (context, child) {
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: false),
+            child: child ?? const SizedBox.shrink(),
+          );
+        },
+        home: const Scaffold(
           body: Center(
             child: Pressable(
               key: Key('press-target'),
@@ -55,8 +61,8 @@ void main() {
       ),
     );
 
-    final gesture = await tester.startGesture(tester.getCenter(find.byKey(const Key('press-target'))));
-    await tester.pump(OcMotion.pressEngage);
+    final gesture = await tester.startGesture(tester.getCenter(find.text('Row')));
+    await tester.pump();
     expect(_scaleOf(tester, 'press-target'), closeTo(OcMotion.pressScale, 0.008));
 
     await gesture.up();
@@ -144,43 +150,48 @@ void main() {
 
   testWidgets('iOS platform route disables Flutter pop gesture', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-
-    late IosNativePageRoute<void> route;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) {
-            return TextButton(
-              onPressed: () {
-                route = IosNativePageRoute<void>(
-                  builder: (_) => const Scaffold(body: Text('chat-page')),
-                );
-                Navigator.of(context).push(route);
-              },
-              child: const Text('open'),
-            );
-          },
+    try {
+      late IosNativePageRoute<void> route;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              return TextButton(
+                onPressed: () {
+                  route = IosNativePageRoute<void>(
+                    builder: (_) => const Scaffold(body: Text('chat-page')),
+                  );
+                  Navigator.of(context).push(route);
+                },
+                child: const Text('open'),
+              );
+            },
+          ),
         ),
-      ),
-    );
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
-    expect(find.text('chat-page'), findsOneWidget);
-    expect(route.popGestureEnabled, isFalse);
-    expect(platformPageRoute<void>(builder: (_) => const SizedBox()).runtimeType, IosNativePageRoute<void>);
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      expect(find.text('chat-page'), findsOneWidget);
+      expect(route.popGestureEnabled, isFalse);
+      expect(platformPageRoute<void>(builder: (_) => const SizedBox()).runtimeType, IosNativePageRoute<void>);
 
-    await NativeBackDriver.instance.handle(
-      const NativeBackEvent(kind: NativeBackKind.invoked, progress: 0.42, velocityX: 820),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('chat-page'), findsNothing);
+      await NativeBackDriver.instance.handle(
+        const NativeBackEvent(kind: NativeBackKind.invoked, progress: 0.42, velocityX: 820),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('chat-page'), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   testWidgets('Android platform route stays Material + predictive back', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-    expect(platformPageRoute<void>(builder: (_) => const SizedBox()), isA<MaterialPageRoute<void>>());
+    try {
+      expect(platformPageRoute<void>(builder: (_) => const SizedBox()), isA<MaterialPageRoute<void>>());
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   test('native back events parse Capacitor-shaped payloads', () {
@@ -202,5 +213,5 @@ double _scaleOf(WidgetTester tester, String key) {
       matching: find.byKey(const ValueKey<String>('oc-press-transform')),
     ),
   );
-  return transform.transform.getMaxScaleOnAxis();
+  return transform.transform.storage[0];
 }

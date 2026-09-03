@@ -1,4 +1,3 @@
-import 'package:flutter/physics.dart';
 import 'package:flutter/widgets.dart';
 
 /// Press / spring timing owned by the Flutter motion layer.

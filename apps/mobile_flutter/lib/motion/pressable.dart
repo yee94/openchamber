@@ -56,11 +56,9 @@ class _PressableState extends State<Pressable> with SingleTickerProviderStateMix
   }
 
   void _engage() {
-    if (!widget.enabled || _reduceMotion) {
-      _controller.value = _reduceMotion ? 0 : 1;
-      return;
-    }
-    _controller.animateTo(1, duration: OcMotion.pressEngage, curve: OcMotion.pressEngageEase);
+    if (!widget.enabled || _reduceMotion) return;
+    // Finger-down is immediate; the official 80ms cubic is the spring-back language.
+    _controller.value = 1;
   }
 
   void _release() {
