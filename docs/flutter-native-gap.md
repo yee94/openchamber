@@ -77,28 +77,28 @@ Native contracts / shell
 
 ## Settings slug checklist (`MOBILE_SETTINGS_PAGE_SLUGS`)
 
-| Slug | Group | First-slice page |
+| Slug | Group | Fifth-slice page |
 |---|---|---|
 | `instances` | connection | List + add + QR scan (persist v2 payload / relayUrl) |
 | `appearance` | personalization | Language + theme. **No iosNativeUi.** |
-| `chat` | personalization | Structured placeholder |
-| `notifications` | personalization | Real-enough toggles (local + push hint) |
-| `sessions` | personalization | Structured placeholder |
-| `summary-ai` | personalization | Structured placeholder |
-| `projects` | workspace | Structured placeholder |
-| `git` | workspace | Structured placeholder |
-| `providers` | opencode | Structured placeholder |
-| `agents` | opencode | Structured placeholder |
-| `assistants` | opencode | Structured placeholder |
-| `behavior` | opencode | Structured placeholder |
-| `commands` | opencode | Structured placeholder |
-| `mcp` | opencode | Structured placeholder |
-| `plugins` | opencode | Structured placeholder |
-| `magic-prompts` | content | Structured placeholder |
-| `snippets` | content | Structured placeholder |
-| `skills.installed` | content | Structured placeholder |
-| `usage` | system | Structured placeholder |
-| `voice` | system | Structured placeholder |
+| `chat` | personalization | Real: GET/PUT `/api/config/settings` (`chatRenderMode`, `messageStreamTransport`, `followUpBehavior`, reasoning/wrap/spellcheck) |
+| `notifications` | personalization | Real: local toggles + PUT `nativeNotificationsEnabled` / `notifyOn*` + APNs/FCM register |
+| `sessions` | personalization | Real: defaults + retention fields from the settings blob |
+| `summary-ai` | personalization | Real: settings blob + GET `/api/small-model` callable list |
+| `projects` | workspace | Real: `projects[]` from the settings blob |
+| `git` | workspace | Real: gitmoji / view mode + GET `/api/git/identities` |
+| `providers` | opencode | Real: GET `/api/config/catalog/providers` (failure ≠ empty) |
+| `agents` | opencode | Real: GET `/api/agent` |
+| `assistants` | opencode | Real: GET `/api/openchamber/assistants/snapshot` |
+| `behavior` | opencode | Real: response-style fields + GET `/api/behavior/agents-md` |
+| `commands` | opencode | Real: POST `/api/config/commands/metadata` `{catalog:true}` |
+| `mcp` | opencode | Real: GET `/api/config/mcp` |
+| `plugins` | opencode | Real: GET `/api/config/plugins` |
+| `magic-prompts` | content | Real: GET `/api/magic-prompts` overrides |
+| `snippets` | content | Real: GET `/api/config/snippets` |
+| `skills.installed` | content | Real: GET `/api/config/skills?summary=true` |
+| `usage` | system | Real: GET `/api/quota/{providerId}` per official id; one failure stays on that row |
+| `voice` | system | Real: `sttProvider` + GET `/api/dictation/status` + GET `/api/tts/status` |
 | `about` | system | App name, native client `1.19.3-beta.5`, instance version separate |
 
 ## Second-slice status (this PR)
@@ -169,7 +169,7 @@ Capacitor pipelines on `main` are unchanged (`mobile-ci.yml`, `mobile-release.ym
 
 | Workflow | Trigger | What |
 |---|---|---|
-| `.github/workflows/flutter-mobile-ci.yml` | **push to `work/flutter-native` only** + `workflow_dispatch` | Parallel `analyze-test` / `android-debug` / `ios-simulator`. Flutter **3.32.8** pinned. No `pull_request`. iOS job is a real `flutter build ios --simulator --no-codesign` and asserts `Runner.app`. **#9** pbxproj `};`. **#10** `UIApplication.open` async. **#11** `UIGlassEffect` SDK lookup. **#12 (`53a905157`):** analyze+Android **success**; iOS compiled 194.8s then VisionKit `DataScannerViewController` MainActor isolation — QR present + coordinator are `@MainActor`. **Do not claim Actions green until a later run finishes.** |
+| `.github/workflows/flutter-mobile-ci.yml` | **push to `work/flutter-native` only** + `workflow_dispatch` | Parallel `analyze-test` / `android-debug` / `ios-simulator`. Flutter **3.32.8** pinned. No `pull_request`. iOS job is a real `flutter build ios --simulator --no-codesign` and asserts `Runner.app`. **#13 (`332ad6f82`, [run 33713282610](https://github.com/yee94/openchambery/actions/runs/33713282610)):** analyze + Android debug APK + iOS simulator **all success**. |
 | `.github/workflows/flutter-mobile-release.yml` | `workflow_dispatch` only | Decode **existing** Android keystore + iOS p12 / four profiles; signed Android APK/AAB; iOS archive/export + TestFlight gated by `build_ios` (default **false**) |
 
 Secret names reused (do not invent new ones; do not print values):
@@ -205,7 +205,7 @@ Capgo (`mobile-beta-ota.yml`) stays Capacitor/WebView. Flutter does not consume 
 | No Chat dock tab | Widget test: 4 destinations |
 | No iosNativeUi | Catalog + Settings home tests |
 | `flutter analyze` + tests on Linux | Required this slice |
-| Flutter CI YAML | Push-only on `work/flutter-native`; parallel jobs; iOS job asserts `Runner.app`. **Actions green is not claimed from this VM** |
+| Flutter CI YAML | Push-only on `work/flutter-native`; parallel jobs; iOS job asserts `Runner.app`. **#13 green** on `332ad6f82`: https://github.com/yee94/openchambery/actions/runs/33713282610 |
 | Signed-release YAML attaches all four profiles | Committed. **Signed archive not run here** |
 
 ## Commands
@@ -243,7 +243,7 @@ flutter build apk --release
 | Push register | landed | iOS APNs + Android FCM → host `POST /api/push/apns-token` (`platform: ios\|android`). Re-binds when `relayUrl` / instance id changes. Visibility: Flutter `AppLifecycleState` + 20s heartbeat → `POST /api/push/visibility`. Presence skip remains **host-side** |
 | Haptics + native back | landed | See parity table |
 | Widget snapshots | landed (sparse) | Written after each successful index load |
-| Flutter CI concurrency | landed | Push to `work/flutter-native` only + `workflow_dispatch`. Single group `flutter-mobile-ci-work-flutter-native`. Jobs run in parallel (no `needs`). iOS job asserts `build/ios/iphonesimulator/Runner.app`. **This agent did not claim Actions green** |
+| Flutter CI concurrency | landed | Push to `work/flutter-native` only + `workflow_dispatch`. Single group `flutter-mobile-ci-work-flutter-native`. Jobs run in parallel (no `needs`). iOS job asserts `build/ios/iphonesimulator/Runner.app`. **#13 green:** https://github.com/yee94/openchambery/actions/runs/33713282610 |
 
 ## Fourth-slice status
 
@@ -256,6 +256,16 @@ flutter build apk --release
 | Android FCM | landed (native SDK) | Copied `packages/mobile/android/app/google-services.json`. No new secret names. Token still null if Firebase init/token fails. |
 | Session create | landed | `POST /api/session` |
 | iOS simulator CI | asserted | `flutter build ios --simulator --no-codesign` plus `test -d build/ios/iphonesimulator/Runner.app` |
+
+## Fifth-slice status
+
+| Surface | Status | Notes |
+|---|---|---|
+| Settings completeness | landed (list + official fields) | Every `MOBILE_SETTINGS_PAGE_SLUGS` page except already-real instances/appearance/about now reads official APIs. Collection pages are list + key fields + honest empty/error. Full agent/MCP/plugin **editors** (create/OAuth/file write) are not ported. |
+| Settings blob | landed | GET/PUT `/api/config/settings` is a merge PUT, same as `createWebSettingsAPI`. Failure keeps the previous snapshot. |
+| Notifications finish | landed | Toggles PUT `nativeNotificationsEnabled` / `notifyOnCompletion` / `notifyOnError` / `notifyOnQuestion`. Background push still uses `POST /api/push/apns-token`. |
+| Tunneled WebSockets | **gap** | Still not ported. SSE-through-HTTP-mux is enough for chat + live events. |
+| Virtual assets / HEIC / picker | **gap** | Not cheap; left for later. |
 
 ## Remaining gaps
 

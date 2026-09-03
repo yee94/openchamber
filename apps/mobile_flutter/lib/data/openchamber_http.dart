@@ -21,6 +21,26 @@ abstract final class OpenChamberPaths {
   static const globalEvent = '/api/global/event';
   static const pushApnsToken = '/api/push/apns-token';
   static const pushVisibility = '/api/push/visibility';
+  static const configSettings = '/api/config/settings';
+  static const providerCatalog = '/api/config/catalog/providers';
+  static const agents = '/api/agent';
+  static const agentsMetadata = '/api/config/agents/metadata';
+  static const assistantsSnapshot = '/api/openchamber/assistants/snapshot';
+  static const assistantsCapability = '/api/openchamber/assistants/capability';
+  static const commandsMetadata = '/api/config/commands/metadata';
+  static const mcp = '/api/config/mcp';
+  static const plugins = '/api/config/plugins';
+  static const skills = '/api/config/skills';
+  static const snippets = '/api/config/snippets';
+  static const magicPrompts = '/api/magic-prompts';
+  static const gitIdentities = '/api/git/identities';
+  static const gitGlobalIdentity = '/api/git/global-identity';
+  static const behaviorAgentsMd = '/api/behavior/agents-md';
+  static const smallModel = '/api/small-model';
+  static const dictationStatus = '/api/dictation/status';
+  static const ttsStatus = '/api/tts/status';
+  static String quota(String providerId) =>
+      '/api/quota/${Uri.encodeComponent(providerId)}';
 }
 
 class OpenChamberHttpException implements Exception {

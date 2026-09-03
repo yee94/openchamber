@@ -21,6 +21,7 @@ import 'pairing_payload.dart';
 import 'relay/tunnel_client.dart';
 import 'secure_store.dart';
 import 'session_index.dart';
+import 'settings_remote.dart';
 import 'sse.dart';
 import 'widget_snapshot.dart';
 
@@ -48,7 +49,15 @@ class AppController extends ChangeNotifier {
         _activeId = seed?.activeId {
     _directTransport = _api.transport;
     _openRelayTunnel = openRelayTunnel ?? _defaultOpenRelay;
+    remoteSettings = SettingsRemoteStore(
+      api: _api,
+      base: () => activeBase,
+      bearer: () => activeBearer,
+      onChanged: notifyListeners,
+    );
   }
+
+  late final SettingsRemoteStore remoteSettings;
 
   final SecureStore _store;
   final QrScanner _qrScanner;
@@ -184,21 +193,25 @@ class AppController extends ChangeNotifier {
   void setNotificationsEnabled(bool value) {
     notificationsEnabled = value;
     notifyListeners();
+    unawaited(_patchNotificationField('nativeNotificationsEnabled', value));
   }
 
   void setNotifyOnCompletion(bool value) {
     notifyOnCompletion = value;
     notifyListeners();
+    unawaited(_patchNotificationField('notifyOnCompletion', value));
   }
 
   void setNotifyOnError(bool value) {
     notifyOnError = value;
     notifyListeners();
+    unawaited(_patchNotificationField('notifyOnError', value));
   }
 
   void setNotifyOnQuestion(bool value) {
     notifyOnQuestion = value;
     notifyListeners();
+    unawaited(_patchNotificationField('notifyOnQuestion', value));
   }
 
   void setBackgroundPushEnabled(bool value) {
@@ -453,6 +466,7 @@ class AppController extends ChangeNotifier {
       _visibilityHeartbeat?.cancel();
       _pushBindKey = null;
       lastBoundRelayUrl = null;
+      remoteSettings.clear();
       await _dropTunnel();
       phase = AppPhase.connect;
       connectForm = ConnectForm.welcome;
@@ -647,11 +661,41 @@ class AppController extends ChangeNotifier {
       await _publishShareCatalog();
     }
     await refreshSessions();
+    unawaited(_refreshRemoteSettings());
     unawaited(_registerPush());
     _startLiveEvents();
     _startVisibilityHeartbeat();
     notifyListeners();
     return true;
+  }
+
+  Future<void> _refreshRemoteSettings() async {
+    await remoteSettings.loadBlob();
+    final loaded = remoteSettings.blob.value;
+    if (loaded == null) return;
+    notificationsEnabled = loaded.boolField('nativeNotificationsEnabled') ?? notificationsEnabled;
+    notifyOnCompletion = loaded.boolField('notifyOnCompletion') ?? notifyOnCompletion;
+    notifyOnError = loaded.boolField('notifyOnError') ?? notifyOnError;
+    notifyOnQuestion = loaded.boolField('notifyOnQuestion') ?? notifyOnQuestion;
+    notifyListeners();
+  }
+
+  Future<void> _patchNotificationField(String key, bool value) async {
+    if (!isConnected) return;
+    try {
+      await remoteSettings.patchBlob({key: value});
+    } on OpenChamberHttpException {
+      // Keep the local toggle. The settings page shows saveFailed separately.
+    }
+  }
+
+  Future<void> patchChatSetting(String key, Object? value) async {
+    if (!isConnected) return;
+    try {
+      await remoteSettings.patchBlob({key: value});
+    } on OpenChamberHttpException {
+      // Preserve the previous blob snapshot; errorKey is set on the resource.
+    }
   }
 
   Future<HomeSessionRow?> createSession({String? title}) async {

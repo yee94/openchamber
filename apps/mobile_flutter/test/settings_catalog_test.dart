@@ -46,6 +46,32 @@ void main() {
     expect(hits, isNot(contains('voice')));
   });
 
+  test('required settings slugs are marked real-enough', () {
+    const required = {
+      'chat',
+      'notifications',
+      'sessions',
+      'providers',
+      'agents',
+      'assistants',
+      'mcp',
+      'plugins',
+      'skills.installed',
+      'usage',
+      'git',
+      'projects',
+      'behavior',
+      'commands',
+      'magic-prompts',
+      'snippets',
+      'voice',
+      'summary-ai',
+    };
+    for (final slug in required) {
+      expect(settingsPageBySlug(slug)?.realEnough, isTrue, reason: slug);
+    }
+  });
+
   test('groups follow official SETTINGS_PAGE_GROUP_ORDER', () {
     final groups = groupMobileSettingsPages();
     expect(groups.map((entry) => entry.group).toList(), [

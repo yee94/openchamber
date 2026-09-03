@@ -86,4 +86,28 @@ void main() {
     expect(find.text('Native client'), findsOneWidget);
     expect(find.text('1.19.3-beta.5'), findsOneWidget);
   });
+
+  testWidgets('chat settings load official blob fields instead of a placeholder', (tester) async {
+    await pumpConnected(tester);
+    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Settings')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('settings-slug-chat')));
+    await tester.tap(find.byKey(const Key('settings-slug-chat')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('settings-chat-render-sorted')), findsOneWidget);
+    expect(find.text('This page is structured for the Flutter rewrite. Server-backed controls land in a later slice.'), findsNothing);
+    expect(find.textContaining('iosNativeUi'), findsNothing);
+  });
+
+  testWidgets('providers settings lists catalog rows and failed fetch is not empty', (tester) async {
+    await pumpConnected(tester);
+    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Settings')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('settings-slug-providers')));
+    await tester.tap(find.byKey(const Key('settings-slug-providers')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('settings-item-anthropic')), findsOneWidget);
+    expect(find.byKey(const Key('settings-item-openai')), findsOneWidget);
+    expect(find.byKey(const Key('settings-resource-error')), findsNothing);
+  });
 }

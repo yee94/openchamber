@@ -90,6 +90,25 @@ class SettingsToggleRow extends StatelessWidget {
   }
 }
 
+class SettingsValueRow extends StatelessWidget {
+  const SettingsValueRow({
+    super.key,
+    required this.label,
+    this.subtitle,
+  });
+
+  final String label;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      title: Text(label),
+      subtitle: subtitle == null ? null : Text(subtitle!),
+    );
+  }
+}
+
 class SettingsPageScaffold extends StatelessWidget {
   const SettingsPageScaffold({
     super.key,

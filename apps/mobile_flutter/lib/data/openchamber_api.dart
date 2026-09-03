@@ -365,6 +365,117 @@ class OpenChamberApi {
       ),
     );
   }
+
+  Future<Map<String, Object?>> getConfigSettings({required Uri base, String? bearer}) {
+    return _requireMap(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.configSettings), bearer);
+  }
+
+  Future<Map<String, Object?>> putConfigSettings({
+    required Uri base,
+    String? bearer,
+    required Map<String, Object?> changes,
+  }) {
+    return _requireMap(
+      base,
+      OpenChamberRequest(method: 'PUT', path: OpenChamberPaths.configSettings, body: changes),
+      bearer,
+    );
+  }
+
+  Future<Object?> getProviderCatalog({required Uri base, String? bearer}) {
+    return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.providerCatalog), bearer);
+  }
+
+  Future<Object?> getAgents({required Uri base, String? bearer}) {
+    return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.agents), bearer);
+  }
+
+  Future<Object?> getAssistantsSnapshot({required Uri base, String? bearer}) {
+    return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.assistantsSnapshot), bearer);
+  }
+
+  Future<Object?> getCommandCatalog({required Uri base, String? bearer}) {
+    return _requireOk(
+      base,
+      const OpenChamberRequest(method: 'POST', path: OpenChamberPaths.commandsMetadata, body: {'catalog': true}),
+      bearer,
+    );
+  }
+
+  Future<Object?> getMcpConfigs({required Uri base, String? bearer}) {
+    return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.mcp), bearer);
+  }
+
+  Future<Object?> getPlugins({required Uri base, String? bearer}) {
+    return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.plugins), bearer);
+  }
+
+  Future<Object?> getInstalledSkills({required Uri base, String? bearer}) {
+    return _requireOk(
+      base,
+      const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.skills, query: {'summary': 'true'}),
+      bearer,
+    );
+  }
+
+  Future<Object?> getSnippets({required Uri base, String? bearer}) {
+    return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.snippets), bearer);
+  }
+
+  Future<Object?> getMagicPrompts({required Uri base, String? bearer}) {
+    return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.magicPrompts), bearer);
+  }
+
+  Future<Object?> getGitIdentities({required Uri base, String? bearer}) {
+    return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.gitIdentities), bearer);
+  }
+
+  Future<Object?> getBehaviorAgentsMd({required Uri base, String? bearer}) {
+    return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.behaviorAgentsMd), bearer);
+  }
+
+  Future<Object?> getDictationStatus({required Uri base, String? bearer}) {
+    return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.dictationStatus), bearer);
+  }
+
+  Future<Object?> getTtsStatus({required Uri base, String? bearer}) {
+    return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.ttsStatus), bearer);
+  }
+
+  Future<Object?> getSmallModel({required Uri base, String? bearer}) {
+    return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.smallModel), bearer);
+  }
+
+  Future<Object?> getQuota({required Uri base, String? bearer, required String providerId}) {
+    return _requireOk(base, OpenChamberRequest(method: 'GET', path: OpenChamberPaths.quota(providerId)), bearer);
+  }
+
+  Future<Map<String, Object?>> _requireMap(Uri base, OpenChamberRequest request, String? bearer) async {
+    final body = await _requireOk(base, request, bearer);
+    if (body is Map<String, Object?>) return body;
+    if (body is Map) return body.map((key, value) => MapEntry(key.toString(), value));
+    throw OpenChamberHttpException(200, request.path, code: 'malformed');
+  }
+
+  Future<Object?> _requireOk(Uri base, OpenChamberRequest request, String? bearer) async {
+    final response = await transport.send(
+      base,
+      OpenChamberRequest(
+        method: request.method,
+        path: request.path,
+        query: request.query,
+        body: request.body,
+        bearer: bearer,
+        extraHeaders: request.extraHeaders,
+        stream: request.stream,
+        timeout: request.timeout,
+      ),
+    );
+    if (!response.ok) {
+      throw OpenChamberHttpException(response.status, request.path);
+    }
+    return response.body;
+  }
 }
 
 List<ChatMessage> parseTurnPageMessages(Object? payload) {
@@ -465,6 +576,25 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   int statusStatus = 200;
   int pushStatus = 200;
   int createStatus = 200;
+  int settingsStatus = 200;
+  int catalogStatus = 200;
+
+  Map<String, Object?> settings = Map<String, Object?>.from(defaultTestSettings);
+  Object? providerCatalog = defaultTestProviderCatalog;
+  Object? agents = defaultTestAgents;
+  Object? assistants = defaultTestAssistants;
+  Object? commands = defaultTestCommands;
+  Object? mcp = defaultTestMcp;
+  Object? plugins = defaultTestPlugins;
+  Object? skills = defaultTestSkills;
+  Object? snippets = defaultTestSnippets;
+  Object? magicPrompts = defaultTestMagicPrompts;
+  Object? gitIdentities = defaultTestGitIdentities;
+  Object? agentsMd = const {'content': 'Use official APIs. Do not invent endpoints.'};
+  Object? dictationStatus = defaultTestDictation;
+  Object? ttsStatus = const {'available': true};
+  Object? smallModel = defaultTestSmallModel;
+  Map<String, Object?> quotas = Map<String, Object?>.from(defaultTestQuotas);
 
   final List<OpenChamberRequest> calls = [];
   final List<String> sentPrompts = [];
@@ -548,6 +678,140 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
     },
   ];
 
+  static const Map<String, Object?> defaultTestSettings = {
+    'chatRenderMode': 'sorted',
+    'messageStreamTransport': 'sse',
+    'followUpBehavior': 'steer',
+    'showReasoningTraces': true,
+    'codeBlockLineWrap': false,
+    'inputSpellcheckEnabled': true,
+    'nativeNotificationsEnabled': true,
+    'notifyOnCompletion': true,
+    'notifyOnError': true,
+    'notifyOnQuestion': true,
+    'defaultModel': 'anthropic/claude-sonnet-4',
+    'defaultAgent': 'build',
+    'autoDeleteEnabled': false,
+    'autoDeleteAfterDays': 30,
+    'sessionRetentionAction': 'archive',
+    'gitmojiEnabled': true,
+    'gitChangesViewMode': 'tree',
+    'summaryModelMode': 'provider',
+    'summaryProviderID': 'anthropic',
+    'summaryModelID': 'claude-haiku-4-5',
+    'sttProvider': 'local',
+    'responseStyleEnabled': false,
+    'responseStylePreset': 'concise',
+    'usageDropdownProviders': ['openai', 'claude'],
+    'projects': [
+      {'id': 'proj-1', 'path': '/workspace/openchamber', 'label': 'openchamber'},
+    ],
+  };
+
+  static const Map<String, Object?> defaultTestProviderCatalog = {
+    'schemaVersion': 1,
+    'providers': [
+      {
+        'id': 'anthropic',
+        'name': 'Anthropic',
+        'models': {'claude-sonnet-4': {'id': 'claude-sonnet-4'}},
+      },
+      {
+        'id': 'openai',
+        'name': 'OpenAI',
+        'models': {'gpt-5': {'id': 'gpt-5'}},
+      },
+    ],
+    'default': <String, Object?>{},
+    'partial': false,
+  };
+
+  static const List<Map<String, Object?>> defaultTestAgents = [
+    {'name': 'build', 'mode': 'primary'},
+    {'name': 'plan', 'mode': 'subagent'},
+  ];
+
+  static const Map<String, Object?> defaultTestAssistants = {
+    'revision': 1,
+    'enabled': true,
+    'assistants': [
+      {'id': 'asst-1', 'name': 'Home', 'providerID': 'anthropic', 'modelID': 'claude-sonnet-4', 'mode': 'chat'},
+    ],
+  };
+
+  static const Map<String, Object?> defaultTestCommands = {
+    'commands': [
+      {'name': 'review', 'description': 'Review the current diff', 'scope': 'user', 'isBuiltIn': false},
+    ],
+  };
+
+  static const List<Map<String, Object?>> defaultTestMcp = [
+    {'name': 'filesystem', 'type': 'local', 'enabled': true},
+  ];
+
+  static const Map<String, Object?> defaultTestPlugins = {
+    'entries': [
+      {'id': 'plug-1', 'spec': 'opencode-plugin/example', 'scope': 'user'},
+    ],
+    'files': <Object?>[],
+  };
+
+  static const Map<String, Object?> defaultTestSkills = {
+    'skills': [
+      {'name': 'release-notes', 'path': '/skills/release-notes/SKILL.md', 'scope': 'user', 'description': 'Draft release notes'},
+    ],
+  };
+
+  static const List<Map<String, Object?>> defaultTestSnippets = [
+    {'name': 'repro', 'content': 'Please include a repro', 'source': 'global'},
+  ];
+
+  static const Map<String, Object?> defaultTestMagicPrompts = {
+    'version': 1,
+    'overrides': {'git.commit.generate.visible': 'Write a Conventional Commits subject.'},
+  };
+
+  static const List<Map<String, Object?>> defaultTestGitIdentities = [
+    {'id': 'git-1', 'name': 'Work', 'userName': 'Yee', 'userEmail': 'dev@example.com'},
+  ];
+
+  static const Map<String, Object?> defaultTestDictation = {
+    'models': [
+      {'id': 'whisper-small', 'installed': true},
+    ],
+  };
+
+  static const Map<String, Object?> defaultTestSmallModel = {
+    'callableModels': {
+      'anthropic': ['claude-haiku-4-5'],
+    },
+  };
+
+  static const Map<String, Object?> defaultTestQuotas = {
+    'openai': {
+      'providerId': 'openai',
+      'providerName': 'OpenAI',
+      'ok': true,
+      'configured': true,
+      'usage': {
+        'windows': [
+          {'usedPercent': 12},
+        ],
+      },
+    },
+    'claude': {
+      'providerId': 'claude',
+      'providerName': 'Claude',
+      'ok': true,
+      'configured': true,
+      'usage': {
+        'windows': [
+          {'usedPercent': 4},
+        ],
+      },
+    },
+  };
+
   @override
   Future<OpenChamberResponse> send(Uri base, OpenChamberRequest request) async {
     calls.add(request);
@@ -589,7 +853,45 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         return OpenChamberResponse(status: createStatus, body: created);
       case OpenChamberPaths.globalEvent:
         return const OpenChamberResponse(status: 200, body: null);
+      case OpenChamberPaths.configSettings:
+        if (request.method == 'PUT') {
+          final changes = request.body ?? const {};
+          settings = {...settings, ...changes};
+        }
+        return OpenChamberResponse(status: settingsStatus, body: settings);
+      case OpenChamberPaths.providerCatalog:
+        return OpenChamberResponse(status: catalogStatus, body: providerCatalog);
+      case OpenChamberPaths.agents:
+        return OpenChamberResponse(status: catalogStatus, body: agents);
+      case OpenChamberPaths.assistantsSnapshot:
+        return OpenChamberResponse(status: catalogStatus, body: assistants);
+      case OpenChamberPaths.commandsMetadata:
+        return OpenChamberResponse(status: catalogStatus, body: commands);
+      case OpenChamberPaths.mcp:
+        return OpenChamberResponse(status: catalogStatus, body: mcp);
+      case OpenChamberPaths.plugins:
+        return OpenChamberResponse(status: catalogStatus, body: plugins);
+      case OpenChamberPaths.skills:
+        return OpenChamberResponse(status: catalogStatus, body: skills);
+      case OpenChamberPaths.snippets:
+        return OpenChamberResponse(status: catalogStatus, body: snippets);
+      case OpenChamberPaths.magicPrompts:
+        return OpenChamberResponse(status: catalogStatus, body: magicPrompts);
+      case OpenChamberPaths.gitIdentities:
+        return OpenChamberResponse(status: catalogStatus, body: gitIdentities);
+      case OpenChamberPaths.behaviorAgentsMd:
+        return OpenChamberResponse(status: catalogStatus, body: agentsMd);
+      case OpenChamberPaths.dictationStatus:
+        return OpenChamberResponse(status: catalogStatus, body: dictationStatus);
+      case OpenChamberPaths.ttsStatus:
+        return OpenChamberResponse(status: catalogStatus, body: ttsStatus);
+      case OpenChamberPaths.smallModel:
+        return OpenChamberResponse(status: catalogStatus, body: smallModel);
       default:
+        if (request.path.startsWith('/api/quota/')) {
+          final id = Uri.decodeComponent(request.path.substring('/api/quota/'.length));
+          return OpenChamberResponse(status: catalogStatus, body: quotas[id] ?? {'providerId': id, 'ok': false, 'configured': false});
+        }
         if (request.path.contains('/messages')) {
           return OpenChamberResponse(status: messagesStatus, body: {'records': transcript, 'complete': true});
         }
