@@ -358,13 +358,13 @@ def main() -> None:
         f"\t\t\t\t9705A1C41CF9048500538489 /* Embed Frameworks */,\n\t\t\t\t{IDS['embed']} /* Embed App Extensions */,\n\t\t\t\t3B06AD1E1E4923F5004D2608 /* Thin Binary */,",
     )
     text = text.replace(
-        "\t\t\t\tdependencies = (\n\t\t\t\t);\n\t\t\t\tname = Runner;",
-        f"""\t\t\t\tdependencies = (
-\t\t\t\t\t{IDS['widget_dep']} /* PBXTargetDependency */,
-\t\t\t\t\t{IDS['nse_dep']} /* PBXTargetDependency */,
-\t\t\t\t\t{IDS['share_dep']} /* PBXTargetDependency */,
-\t\t\t\t);
-\t\t\t\tname = Runner;""",
+        "\t\t\tdependencies = (\n\t\t\t);\n\t\t\tname = Runner;",
+        f"""\t\t\tdependencies = (
+\t\t\t\t{IDS['widget_dep']} /* PBXTargetDependency */,
+\t\t\t\t{IDS['nse_dep']} /* PBXTargetDependency */,
+\t\t\t\t{IDS['share_dep']} /* PBXTargetDependency */,
+\t\t\t);
+\t\t\tname = Runner;""",
     )
     text = text.replace(
         "\t\t\t\t331C8080294A63A400263BE5 /* RunnerTests */,\n",

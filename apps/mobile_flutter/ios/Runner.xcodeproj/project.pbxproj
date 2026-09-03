@@ -316,6 +316,9 @@
 			buildRules = (
 			);
 			dependencies = (
+				F0A4000000000000000000D2 /* PBXTargetDependency */,
+				F0B4000000000000000000D2 /* PBXTargetDependency */,
+				F0E4000000000000000000D2 /* PBXTargetDependency */,
 			);
 			name = Runner;
 			productName = Runner;
@@ -391,6 +394,18 @@
 					97C146ED1CF9000F007C117D = {
 						CreatedOnToolsVersion = 7.3.1;
 						LastSwiftMigration = 1100;
+					};
+					F0A4000000000000000000D3 = {
+						CreatedOnToolsVersion = 16.0;
+						ProvisioningStyle = Automatic;
+					};
+					F0B4000000000000000000D3 = {
+						CreatedOnToolsVersion = 16.0;
+						ProvisioningStyle = Automatic;
+					};
+					F0E4000000000000000000D3 = {
+						CreatedOnToolsVersion = 16.0;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
