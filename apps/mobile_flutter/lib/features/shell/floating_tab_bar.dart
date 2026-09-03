@@ -124,7 +124,9 @@ class _TabSlot extends StatelessWidget {
         child: OcSelectedSpring(
           selected: selected,
           builder: (context, t) {
-            return SizedBox.expand(
+            return SizedBox(
+              height: OcOptical.dockTabHeight,
+              width: double.infinity,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: Color.lerp(Colors.transparent, tokens.selectedTabWash, t),

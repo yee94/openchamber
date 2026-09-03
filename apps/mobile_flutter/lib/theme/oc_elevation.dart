@@ -18,12 +18,13 @@ class OcElevation {
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
     if (tokens.isDark) return const [];
-    // Official `--oc-mobile-float-shadow` family as 2 / 12 / 16 offset 6,
-    // lighter than the 0x0A far stop so cream plates stay near-shadowless.
+    // Official `--oc-mobile-float-shadow` near pair (0 0 2px / 0.04,
+    // 0 0 12px / 0.05). The far 10/24/-6 stop is a contact umbra on
+    // small schedule plates and the project shell — drop it so both
+    // share the same near-shadowless family.
     return const [
-      BoxShadow(color: Color(0x05000000), blurRadius: 2),
-      BoxShadow(color: Color(0x06000000), blurRadius: 12),
-      BoxShadow(color: Color(0x06000000), blurRadius: 16, spreadRadius: -6, offset: Offset(0, 6)),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 12),
     ];
   }
 
