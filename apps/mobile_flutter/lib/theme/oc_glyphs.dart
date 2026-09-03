@@ -468,16 +468,16 @@ class _OcGlyphPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
     final c = Offset(w * 0.5, h * 0.5);
-    // Slim filled-medium 8-tooth cog. Not settings-3 flower lobes.
-    final rim = w * 0.22;
-    final hole = w * 0.14;
+    // Tighten tooth/rim vs official medium outline mass (wake-0722).
+    final rim = w * 0.205;
+    final hole = w * 0.132;
     final tooth = RRect.fromRectAndRadius(
       Rect.fromCenter(
-        center: Offset(0, -(rim + w * 0.012)),
-        width: w * 0.075,
-        height: w * 0.055,
+        center: Offset(0, -(rim + w * 0.010)),
+        width: w * 0.068,
+        height: w * 0.048,
       ),
-      Radius.circular(w * 0.014),
+      Radius.circular(w * 0.012),
     );
     final stroke = Paint()
       ..color = paint.color

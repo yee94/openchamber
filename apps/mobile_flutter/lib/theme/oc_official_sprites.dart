@@ -43,12 +43,12 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
         paths: ['M8 2v4', 'M16 2v4', 'M3 10h18'],
         rects: [(3, 4, 18, 18, 2)],
         circles: [
-          (8, 14, 0.65),
-          (12, 14, 0.65),
-          (16, 14, 0.65),
-          (8, 18, 0.65),
-          (12, 18, 0.65),
-          (16, 18, 0.65),
+          (8, 14, 0.55),
+          (12, 14, 0.55),
+          (16, 14, 0.55),
+          (8, 18, 0.55),
+          (12, 18, 0.55),
+          (16, 18, 0.55),
         ],
       ),
     // `gear` is painted by OcGlyph `_gear` (narrow 8-tooth holed cog).
