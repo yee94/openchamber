@@ -460,22 +460,22 @@ class _OcGlyphPainter extends CustomPainter {
       ..color = color
       ..style = PaintingStyle.fill;
     final tab = Path()
-      ..moveTo(w * 0.32, h * 0.38)
-      ..lineTo(w * 0.32, h * 0.45)
-      ..lineTo(w * 0.42, h * 0.45)
-      ..lineTo(w * 0.40, h * 0.38)
+      ..moveTo(w * 0.34, h * 0.39)
+      ..lineTo(w * 0.34, h * 0.46)
+      ..lineTo(w * 0.43, h * 0.46)
+      ..lineTo(w * 0.41, h * 0.39)
       ..close();
     final body = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.32, h * 0.44, w * 0.36, h * 0.18),
-      Radius.circular(w * 0.03),
+      Rect.fromLTWH(w * 0.34, h * 0.45, w * 0.32, h * 0.16),
+      Radius.circular(w * 0.028),
     );
     canvas.saveLayer(Rect.fromLTWH(0, 0, w, h), Paint());
     canvas.drawPath(tab, fill);
     canvas.drawRRect(body, fill);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(w * 0.38, h * 0.495, w * 0.24, h * 0.08),
-        Radius.circular(w * 0.02),
+        Rect.fromLTWH(w * 0.39, h * 0.50, w * 0.22, h * 0.07),
+        Radius.circular(w * 0.018),
       ),
       Paint()
         ..blendMode = BlendMode.dstOut
@@ -485,20 +485,20 @@ class _OcGlyphPainter extends CustomPainter {
   }
 
   void _gear(Canvas canvas, Size size, Paint paint, bool filled) {
-    // Official filled-medium gear: six spaced rectangular cogs + a
-    // clear hub. Not settings-3 flower lobes and not a packed sunburst.
+    // Official filled-medium 8-tooth gear + clear hub. Narrow cogs so
+    // eight teeth do not pack into a sun. Not settings-3 flower lobes.
     final w = size.width;
     final h = size.height;
     final c = Offset(w * 0.5, h * 0.5);
-    final rim = w * 0.30;
+    final rim = w * 0.28;
     final hole = w * 0.17;
     final tooth = RRect.fromRectAndRadius(
       Rect.fromCenter(
-        center: Offset(0, -(rim + w * 0.02)),
-        width: w * 0.22,
-        height: w * 0.09,
+        center: Offset(0, -(rim + w * 0.018)),
+        width: w * 0.12,
+        height: w * 0.08,
       ),
-      Radius.circular(w * 0.02),
+      Radius.circular(w * 0.018),
     );
     final stroke = Paint()
       ..color = paint.color
@@ -511,11 +511,10 @@ class _OcGlyphPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     void teeth(Paint p) {
-      // Six cogs with air between them — eight packed teeth read as a sun.
-      for (var i = 0; i < 6; i += 1) {
+      for (var i = 0; i < 8; i += 1) {
         canvas.save();
         canvas.translate(c.dx, c.dy);
-        canvas.rotate(i * math.pi / 3);
+        canvas.rotate(i * math.pi / 4);
         canvas.drawRRect(tooth, p);
         canvas.restore();
       }

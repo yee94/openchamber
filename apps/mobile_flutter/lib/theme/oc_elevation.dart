@@ -99,14 +99,15 @@ class OcElevation {
     ];
   }
 
-  /// Glass chips — official 2px contact only. The 12px halo plus the
-  /// 8/20/−6 umbra both read as a second circle on the 36 disc.
+  /// Glass chips — official glass-shadow near pair. The 8/20/−6 umbra
+  /// is the offset second circle; keep contact + halo so the disc lifts.
   static List<BoxShadow> chip(BuildContext context) => chipFor(OcTokens.of(context));
 
   static List<BoxShadow> chipFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
       BoxShadow(color: Color(0x0D000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0F000000), blurRadius: 12),
     ];
   }
 

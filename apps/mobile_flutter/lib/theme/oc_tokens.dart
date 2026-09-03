@@ -146,11 +146,11 @@ class OcTokens extends ThemeExtension<OcTokens> {
   Color get glassFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
-  /// Circular `Button` `mobileGlass` chips. Official fill is 0.68; that
-  /// paints a coin in WidgetTester. Quiet white so [OcFrosted] blur +
-  /// saturate can show content through the plate. 40 hit / 36 visual.
-  Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.10 : 0.10);
+  /// Official `--oc-mobile-glass-fill` on the 36 disc. Quiet fills
+  /// blended into the cream page (same-cream plate). The chip must lift
+  /// as a distinct white/frost coin (README ΔL ~22). Pair with frost +
+  /// saturate. 40 hit / 36 visual. `+` stays primary.
+  Color get glassChipFill => glassFill;
 
   /// Official `--oc-mobile-glass-highlight` is white / 0.60
   /// (dark 0.18). Inset sheen on the elevated plate.

@@ -188,10 +188,10 @@ class OcOptical {
   static const bool dockGlyphFillBodies = true;
   static const bool dockSelectedFullSlot = true;
   static const double dockIconWashAlpha = 0.55;
-  /// Cell frost only — nested 20/8 smeared a cream well; sigma 2 painted
-  /// a beige coin. Official is `bg-interactive-selection/55` over dock
-  /// glass. Sigma 4 + saturate: frost, not muddy 8+ and not a painted coin.
-  static const double dockWashBlur = 4;
+  /// Official selected tab is `bg-interactive-selection/55` on already-
+  /// frosted dock glass — no second BackdropFilter. Nested sigma painted
+  /// a cream plate that hid the list. 0 = mix only so rows show through.
+  static const double dockWashBlur = 0;
   /// Official `--oc-mobile-glass-blur` on the 36 `mobileGlass` disc.
   /// ClipOval + quiet [OcTokens.glassChipFill] so content behind frosts
   /// instead of a painted plate.

@@ -34,9 +34,9 @@ void main() {
     expect(OcTokens.light.glassFill.g, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassFill.b, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassFill, isNot(OcTokens.light.surfaceElevated));
-    expect(OcTokens.light.glassChipFill.a, closeTo(0.10, 0.01));
-    expect(OcTokens.light.glassChipFill.a, lessThan(OcTokens.light.glassFill.a));
-    expect(OcTokens.light.glassChipFill.a, greaterThan(0.06));
+    expect(OcTokens.light.glassChipFill, OcTokens.light.glassFill);
+    expect(OcTokens.light.glassChipFill.a, closeTo(0.68, 0.01));
+    expect(OcTokens.dark.glassChipFill.a, closeTo(0.66, 0.01));
     expect(OcTokens.light.glassChipFill.r, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassHighlight.a, closeTo(0.60, 0.01));
     expect(OcTokens.dark.glassHighlight.a, closeTo(0.18, 0.01));
@@ -180,7 +180,7 @@ void main() {
     expect(OcOptical.dockGlyphStrokeVisual, closeTo(1.55, 0.01));
     expect(OcOptical.dockGlyphStrokeVisual, greaterThan(1.4));
     expect(OcOptical.dockGlyphFillBodies, isTrue);
-    expect(OcOptical.dockWashBlur, 4);
+    expect(OcOptical.dockWashBlur, 0);
     expect(OcOptical.dockWashBlur, lessThan(OcOptical.glassBlur));
     expect(OcOptical.chipBlur, OcOptical.glassBlur);
     expect(OcOptical.glassSaturate, closeTo(1.25, 0.01));
@@ -261,9 +261,9 @@ void main() {
     expect(OcElevation.controlFor(OcTokens.light).last.blurRadius, 20);
     expect(OcElevation.controlFor(OcTokens.light).last.offset.dy, 8);
     expect(OcElevation.controlFor(OcTokens.light).last.spreadRadius, -6);
-    expect(OcElevation.chipFor(OcTokens.light), hasLength(1));
-    expect(OcElevation.chipFor(OcTokens.light).single.blurRadius, 2);
-    expect(OcElevation.chipFor(OcTokens.light).single.offset, Offset.zero);
+    expect(OcElevation.chipFor(OcTokens.light), hasLength(2));
+    expect(OcElevation.chipFor(OcTokens.light).every((s) => s.offset == Offset.zero), isTrue);
+    expect(OcElevation.chipFor(OcTokens.light).last.blurRadius, 12);
     expect(OcElevation.chipFor(OcTokens.dark), isEmpty);
     expect(
       (OcElevation.controlFor(OcTokens.light).last.color.a * 255).round(),

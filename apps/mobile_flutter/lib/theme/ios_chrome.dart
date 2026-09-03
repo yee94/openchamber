@@ -136,9 +136,8 @@ class OcGlassChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          // Official `mobileGlass`: frost of content behind + near-pair
-          // glass-shadow. No 8px umbra (second offset circle). No inset
-          // sheen. No cream plate. 40 hit / 36 visual.
+          // Official `mobileGlass`: glass-fill 0.68 + frost + near-pair
+          // shadow so the disc lifts vs the page. No 8px umbra. 40 / 36.
           boxShadow: OcElevation.chip(context),
         ),
         child: ClipOval(
