@@ -20,6 +20,8 @@ class SavedInstance {
     this.pairingId,
     this.pairingSecret = '',
     this.needsPassword = false,
+    this.serverId,
+    this.lastUsedAt = 0,
   });
 
   final String id;
@@ -30,6 +32,8 @@ class SavedInstance {
   final String? pairingId;
   final String pairingSecret;
   final bool needsPassword;
+  final String? serverId;
+  final int lastUsedAt;
 
   String get displayLabel {
     final trimmed = label.trim();
@@ -43,6 +47,8 @@ class SavedInstance {
     String? pairingId,
     String? pairingSecret,
     bool? needsPassword,
+    String? serverId,
+    int? lastUsedAt,
   }) {
     return SavedInstance(
       id: id,
@@ -53,6 +59,8 @@ class SavedInstance {
       pairingId: pairingId ?? this.pairingId,
       pairingSecret: pairingSecret ?? this.pairingSecret,
       needsPassword: needsPassword ?? this.needsPassword,
+      serverId: serverId ?? this.serverId,
+      lastUsedAt: lastUsedAt ?? this.lastUsedAt,
     );
   }
 
@@ -60,11 +68,12 @@ class SavedInstance {
         'id': id,
         'url': url,
         'label': label,
-        'clientToken': clientToken,
         'relayUrl': relayUrl,
         'pairingId': pairingId,
-        'pairingSecret': pairingSecret,
         'needsPassword': needsPassword,
+        'serverId': serverId,
+        'lastUsedAt': lastUsedAt,
+        'hasToken': clientToken.isNotEmpty,
       };
 
   static SavedInstance fromJson(Map<String, Object?> json) {
@@ -77,6 +86,8 @@ class SavedInstance {
       pairingId: json['pairingId'] as String?,
       pairingSecret: json['pairingSecret'] as String? ?? '',
       needsPassword: json['needsPassword'] as bool? ?? false,
+      serverId: json['serverId'] as String?,
+      lastUsedAt: json['lastUsedAt'] is num ? (json['lastUsedAt'] as num).toInt() : 0,
     );
   }
 }

@@ -9,10 +9,34 @@ import 'features/splash/splash_screen.dart';
 import 'l10n/app_strings.dart';
 import 'theme/app_theme.dart';
 
-class OpenChamberApp extends StatelessWidget {
+class OpenChamberApp extends StatefulWidget {
   const OpenChamberApp({super.key, required this.controller});
 
   final AppController controller;
+
+  @override
+  State<OpenChamberApp> createState() => _OpenChamberAppState();
+}
+
+class _OpenChamberAppState extends State<OpenChamberApp> with WidgetsBindingObserver {
+  AppController get controller => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    controller.setAppVisible(state == AppLifecycleState.resumed);
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -233,7 +233,8 @@ class AboutSettingsPage extends StatelessWidget {
               ListTile(
                 title: Text(t(context, 'settings.about.instanceVersion')),
                 subtitle: Text(
-                  instance == null ? t(context, 'settings.about.instanceUnknown') : instance.displayLabel,
+                  controller.instanceVersion ??
+                      (instance == null ? t(context, 'settings.about.instanceUnknown') : instance.displayLabel),
                 ),
               ),
             ],

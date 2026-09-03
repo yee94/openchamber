@@ -46,6 +46,32 @@ object NativePlugins {
                 else -> result.notImplemented()
             }
         }
+        MethodChannel(messenger, "openchamber/haptics").setMethodCallHandler { call, result ->
+            if (call.method == "impact") {
+                val strength = (call.arguments as? Map<*, *>)?.get("strength") as? String ?: "light"
+                val view = activity.window?.decorView
+                val feedback = when (strength) {
+                    "medium" -> android.view.HapticFeedbackConstants.KEYBOARD_TAP
+                    "heavy" -> android.view.HapticFeedbackConstants.LONG_PRESS
+                    else -> android.view.HapticFeedbackConstants.CLOCK_TICK
+                }
+                view?.performHapticFeedback(feedback)
+                result.success(null)
+            } else {
+                result.notImplemented()
+            }
+        }
+        MethodChannel(messenger, "openchamber/push").setMethodCallHandler { call, result ->
+            if (call.method == "requestToken") {
+                // FCM token needs the Firebase SDK. Do not invent a token.
+                result.success(null)
+            } else {
+                result.notImplemented()
+            }
+        }
+        MethodChannel(messenger, "openchamber/widget_snapshot").setMethodCallHandler { call, result ->
+            result.success(null)
+        }
         MethodChannel(messenger, "openchamber/live_activity").setMethodCallHandler { call, result ->
             when (call.method) {
                 "supported" -> result.success(false)

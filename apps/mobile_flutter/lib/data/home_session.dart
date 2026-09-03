@@ -20,6 +20,7 @@ class HomeSessionRow {
     required this.kind,
     this.branch,
     this.unread = false,
+    this.directory,
   });
 
   final String id;
@@ -28,12 +29,12 @@ class HomeSessionRow {
   final String? branch;
   final HomeSessionKind kind;
   final bool unread;
+  final String? directory;
 
   String get subtitle => formatHomeSessionSubtitle(projectLabel, branch);
 }
 
-/// First-slice demo rows so Projects home can push Chat and show the
-/// 1.19.3-beta.4 subtitle + 1.19.2 unread-dot contract without a live server.
+/// Fixture rows for unit tests. Production home reads `AppController.sessions`.
 List<HomeSessionRow> demoHomeSessions() => const [
       HomeSessionRow(
         id: 'sess-pinned',

@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openchamber/data/app_controller.dart';
 import 'package:openchamber/data/instance_store.dart';
+import 'package:openchamber/data/openchamber_api.dart';
+import 'package:openchamber/data/openchamber_http.dart';
 import 'package:openchamber/data/secure_store.dart';
 
 void main() {
@@ -37,12 +39,13 @@ void main() {
   });
 
   test('password unlock is instance UI password, not a local PIN', () async {
-    final controller = AppController(store: MemorySecureStore());
-    await controller.bootstrap(skipDelay: true);
-    final opened = await controller.connect(
-      url: 'http://10.0.0.8:2606',
-      requiresPassword: true,
+    final transport = MemoryOpenChamberTransport()..auth = {'authenticated': false, 'locked': true};
+    final controller = AppController(
+      store: MemorySecureStore(),
+      api: OpenChamberApi(transport: transport),
     );
+    await controller.bootstrap(skipDelay: true);
+    final opened = await controller.connect(url: 'http://10.0.0.8:2606');
     expect(opened, isFalse);
     expect(controller.connectForm, ConnectForm.password);
     expect(controller.phase, AppPhase.connect);
@@ -50,5 +53,26 @@ void main() {
     final unlocked = await controller.unlockWithPassword('ui-password');
     expect(unlocked, isTrue);
     expect(controller.phase, AppPhase.shell);
+    expect(controller.activeInstance?.clientToken, 'oc_client_test');
+  });
+
+  test('auto-connects last instance after token hydrate', () async {
+    final store = MemorySecureStore();
+    final instance = const SavedInstance(
+      id: 'inst-last',
+      url: 'http://192.168.1.74:2606',
+      label: 'lan',
+      lastUsedAt: 9,
+    );
+    await InstanceRepository(store).persist(InstanceSnapshot(instances: [instance], activeId: instance.id));
+    await store.write(
+      tokenStorageKey(connectionKeyFor(url: instance.url)),
+      'oc_client_test',
+    );
+    final controller = AppController(store: store);
+    await controller.bootstrap(skipDelay: true);
+    expect(controller.phase, AppPhase.shell);
+    expect(controller.activeInstance?.id, 'inst-last');
+    expect(controller.activeInstance?.clientToken, 'oc_client_test');
   });
 }

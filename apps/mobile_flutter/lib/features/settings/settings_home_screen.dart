@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../data/app_controller.dart';
 import '../../data/settings_catalog.dart';
 import '../../l10n/app_strings.dart';
+import '../../navigation/platform_route.dart';
 import 'settings_pages.dart';
 import 'settings_primitives.dart';
 
@@ -62,7 +63,7 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
                     subtitle: page.descriptionKey == null ? null : t(context, page.descriptionKey!),
                     onTap: () {
                       Navigator.of(context).push(
-                        MaterialPageRoute<void>(
+                        platformPageRoute<void>(
                           builder: (_) => AnimatedBuilder(
                             animation: widget.controller,
                             builder: (context, _) => SettingsDetailPage(

@@ -8,6 +8,9 @@ abstract final class OpenChamberChannels {
   static const deepLink = 'openchamber/deep_link';
   static const composer = 'openchamber/composer';
   static const tabBar = 'openchamber/tab_bar';
+  static const haptics = 'openchamber/haptics';
+  static const push = 'openchamber/push';
+  static const widgetSnapshot = 'openchamber/widget_snapshot';
 }
 
 abstract final class OpenChamberPlatformViews {

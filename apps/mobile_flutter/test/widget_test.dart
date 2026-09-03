@@ -52,6 +52,16 @@ void main() {
     expect(find.byKey(const Key('composer-field')), findsOneWidget);
     expect(find.byKey(const Key('chat-back')), findsOneWidget);
     expect(find.text('Release notes'), findsOneWidget);
+    expect(find.text('Open a session from Projects.'), findsOneWidget);
+  });
+
+  testWidgets('session search matches titles and hides non-matches', (tester) async {
+    await pumpConnected(tester);
+    await tester.enterText(find.byKey(const Key('projects-search')), 'Release');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('home-session-sess-pinned')), findsOneWidget);
+    expect(find.byKey(const Key('home-session-sess-catalog')), findsNothing);
+    expect(find.byKey(const Key('home-session-sess-busy')), findsNothing);
   });
 
   testWidgets('settings home lists every mobile slug and search filters', (tester) async {

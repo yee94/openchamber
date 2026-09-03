@@ -6,6 +6,10 @@ import 'package:flutter/material.dart';
 import '../../data/app_controller.dart';
 import '../../data/chat_timeline.dart';
 import '../../data/home_session.dart';
+import '../../data/message_id.dart';
+import '../../data/openchamber_http.dart';
+import '../../l10n/app_strings.dart';
+import '../../native/haptics.dart';
 import '../../native/live_activity_controller.dart';
 import 'composer_bar.dart';
 import 'composer_occupancy.dart';
@@ -26,40 +30,64 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  late final ReverseChatController _timeline = widget.timeline ?? ReverseChatController(seed: demoTranscript());
+  late final ReverseChatController _timeline = widget.timeline ?? ReverseChatController();
   final TextEditingController _composer = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final List<String> _attachments = [];
+  final _haptics = NativeHaptics();
   bool _busy = false;
-  Timer? _workTimer;
+  String? _errorKey;
+  Timer? _poll;
 
   LiveActivityController get _live => widget.appController?.liveActivity ?? LiveActivityController();
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToLatest());
     _live.selectSession(widget.session.id);
-    if (widget.session.kind == HomeSessionKind.inProgress) {
-      _startDemoWork();
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToLatest());
+    unawaited(_load());
   }
 
   @override
   void dispose() {
-    _workTimer?.cancel();
+    _poll?.cancel();
     _composer.dispose();
     _scroll.dispose();
     super.dispose();
   }
 
-  void _startDemoWork() {
-    _busy = true;
-    _live.markWorkStarted();
-    _workTimer = Timer(liveActivityBusyDelay, () async {
-      await _live.startIfDue();
-      if (mounted) setState(() {});
-    });
+  Future<void> _load() async {
+    final controller = widget.appController;
+    if (controller == null) {
+      setState(() => _errorKey = 'chat.error.loadFailed');
+      return;
+    }
+    try {
+      final messages = await controller.loadTranscript(widget.session);
+      if (!mounted) return;
+      setState(() {
+        _timeline.prependOlder(messages);
+        _errorKey = null;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToLatest());
+      await controller.refreshSessionStatus(directory: widget.session.directory);
+      _syncBusyFromController();
+    } on OpenChamberHttpException {
+      if (!mounted) return;
+      setState(() {
+        _errorKey = 'chat.error.loadFailed';
+      });
+    }
+  }
+
+  void _syncBusyFromController() {
+    final status = widget.appController?.sessionStatusById[widget.session.id];
+    final busy = status == 'busy' || status == 'retry';
+    if (busy) {
+      _live.markWorkStarted();
+    }
+    if (mounted) setState(() => _busy = busy);
   }
 
   void _jumpToLatest() {
@@ -67,30 +95,74 @@ class _ChatScreenState extends State<ChatScreen> {
     _scroll.jumpTo(ReverseChatController.latestReverseIndex.toDouble());
   }
 
-  void _send([String? raw]) {
+  Future<void> _send([String? raw]) async {
     final body = (raw ?? _composer.text).trim();
     if (body.isEmpty) return;
+    final controller = widget.appController;
+    final messageId = ascendingId('msg');
     setState(() {
-      _timeline.appendNewer(
-        ChatMessage(id: 'local-${DateTime.now().microsecondsSinceEpoch}', body: body, isUser: true),
-      );
+      _timeline.appendNewer(ChatMessage(id: messageId, body: body, isUser: true));
       _composer.clear();
       _attachments.clear();
       _busy = true;
+      _errorKey = null;
     });
-    _live.markWorkStarted();
-    _workTimer?.cancel();
-    _workTimer = Timer(liveActivityBusyDelay, () async {
-      await _live.startIfDue();
-      if (mounted) setState(() {});
-    });
+    _haptics.impact(HapticStrength.medium);
     _jumpToLatest();
+    if (controller == null) {
+      _errorKey = 'chat.error.sendFailed';
+      setState(() => _busy = false);
+      return;
+    }
+    try {
+      await controller.sendPrompt(session: widget.session, messageId: messageId, text: body);
+      _pollTranscript();
+    } on OpenChamberHttpException {
+      setState(() {
+        _busy = false;
+        _errorKey = 'chat.error.sendFailed';
+      });
+    }
   }
 
-  void _stop() {
-    _workTimer?.cancel();
-    _live.complete(error: false);
-    setState(() => _busy = false);
+  void _pollTranscript() {
+    _poll?.cancel();
+    var ticks = 0;
+    _poll = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      ticks += 1;
+      final controller = widget.appController;
+      if (controller == null || !mounted) {
+        timer.cancel();
+        return;
+      }
+      try {
+        final messages = await controller.loadTranscript(widget.session);
+        if (!mounted) return;
+        setState(() {
+          _timeline.replaceAll(messages);
+        });
+        await controller.refreshSessionStatus(directory: widget.session.directory);
+        _syncBusyFromController();
+        if (!_busy || ticks >= 30) timer.cancel();
+      } on OpenChamberHttpException {
+        timer.cancel();
+      }
+    });
+  }
+
+  Future<void> _stop() async {
+    _poll?.cancel();
+    _haptics.impact(HapticStrength.heavy);
+    final controller = widget.appController;
+    if (controller != null) {
+      try {
+        await controller.abortPrompt(widget.session);
+      } on OpenChamberHttpException {
+        // Stop still clears local busy; server abort failure is surfaced.
+        setState(() => _errorKey = 'chat.error.stopFailed');
+      }
+    }
+    if (mounted) setState(() => _busy = false);
   }
 
   @override
@@ -105,6 +177,11 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
+          if (_errorKey != null)
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Text(t(context, _errorKey!), style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            ),
           Expanded(
             child: ReverseChatList(
               controller: _timeline,

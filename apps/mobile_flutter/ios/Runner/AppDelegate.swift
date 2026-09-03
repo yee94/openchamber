@@ -17,6 +17,15 @@ import UIKit
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
+  override func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    let token = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+    OpenChamberPushPlugin.didRegister(token: token)
+  }
+
+  override func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+    OpenChamberPushPlugin.didFail()
+  }
+
   override func application(
     _ app: UIApplication,
     open url: URL,

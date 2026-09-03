@@ -40,6 +40,8 @@ class LiveActivityController {
     _started = false;
   }
 
+  bool get hasWorkStarted => _workStartedAt != null;
+
   void markWorkStarted({DateTime? at}) {
     final sessionId = selectedSessionId;
     if (sessionId == null || sessionId.isEmpty) return;

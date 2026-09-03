@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 /// Pairing v2 payload. Port of `packages/ui/src/lib/connectionPayload.ts`.
-/// Persist the parsed payload. Do not invent a redeem HTTP session.
+/// Persist the parsed payload. Redeem uses POST /api/client-auth/pairing/redeem.
 
 const maxPairingPayloadLength = 16384;
 

@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openchamber/data/app_controller.dart';
+import 'package:openchamber/data/openchamber_api.dart';
+import 'package:openchamber/data/openchamber_http.dart';
 import 'package:openchamber/data/pairing_payload.dart';
 import 'package:openchamber/data/secure_store.dart';
 
@@ -44,9 +46,13 @@ void main() {
     expect(parsePairingConnectionPayload('openchamber://connect?v=2&p=$userinfo'), isNull);
   });
 
-  test('connect persists pairing payload and relayUrl without inventing redeem', () async {
+  test('connect redeems LAN pairing and persists relayUrl + client token', () async {
     final store = MemorySecureStore();
-    final controller = AppController(store: store);
+    final transport = MemoryOpenChamberTransport();
+    final controller = AppController(
+      store: store,
+      api: OpenChamberApi(transport: transport),
+    );
     await controller.bootstrap(skipDelay: true);
     final encoded = encodePairingConnectionPayload(
       const PairingConnectionPayload(
@@ -69,6 +75,38 @@ void main() {
     expect(controller.activeInstance?.relayUrl, 'wss://relay.example/ws');
     expect(controller.activeInstance?.pairingId, 'pair_persist');
     expect(controller.activeInstance?.label, 'Studio');
+    expect(controller.activeInstance?.clientToken, 'oc_client_pair');
     expect(controller.phase, AppPhase.shell);
+    expect(transport.calls.any((call) => call.path == OpenChamberPaths.pairingRedeem), isTrue);
+    expect(
+      store.snapshot[tokenStorageKey(connectionKeyFor(
+        url: 'http://192.168.1.20:4096',
+        relayUrl: 'wss://relay.example/ws',
+        serverId: 'srv_test',
+      ))],
+      'oc_client_pair',
+    );
+  });
+
+  test('relay-only pairing is refused instead of faking a tunnel', () async {
+    final controller = AppController(store: MemorySecureStore());
+    await controller.bootstrap(skipDelay: true);
+    final encoded = encodePairingConnectionPayload(
+      const PairingConnectionPayload(
+        pairingId: 'pair_relay_only',
+        secret: 'one-time-secret',
+        candidates: [
+          PairingRelayCandidate(
+            relayUrl: 'wss://relay.example/ws',
+            serverId: 'srv_abc',
+            hostEncPubJwk: hostEncPubJwk,
+          ),
+        ],
+      ),
+    );
+    final ok = await controller.connect(pairingLink: encoded);
+    expect(ok, isFalse);
+    expect(controller.phase, AppPhase.connect);
+    expect(controller.connectErrorKey, 'connect.error.relayTunnelMissing');
   });
 }

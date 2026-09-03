@@ -4,6 +4,7 @@ import Vision
 import VisionKit
 import AVFoundation
 import Security
+import WidgetKit
 
 enum OpenChamberPluginRegistry {
   static func register(with registrar: FlutterPluginRegistrar, messenger: FlutterBinaryMessenger) {
@@ -12,6 +13,9 @@ enum OpenChamberPluginRegistry {
     OpenChamberLiveActivityPlugin.register(with: messenger)
     OpenChamberSharePlugin.register(with: messenger)
     OpenChamberDeepLinkPlugin.register(with: messenger)
+    OpenChamberHapticsPlugin.register(with: messenger)
+    OpenChamberPushPlugin.register(with: messenger)
+    OpenChamberWidgetSnapshotPlugin.register(with: messenger)
     registrar.register(OpenChamberComposerFactory(messenger: messenger), withId: "openchamber/composer_view")
     registrar.register(OpenChamberTabBarFactory(messenger: messenger), withId: "openchamber/tab_bar_view")
   }
@@ -353,5 +357,78 @@ final class OpenChamberTabBarPlatformView: NSObject, FlutterPlatformView {
 
   func attach(to parent: UIViewController) {
     viewRef.attach(to: parent)
+  }
+}
+
+final class OpenChamberHapticsPlugin: NSObject {
+  static func register(with messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(name: "openchamber/haptics", binaryMessenger: messenger)
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "impact" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      let strength = (call.arguments as? [String: Any])?["strength"] as? String ?? "light"
+      let style: UIImpactFeedbackGenerator.FeedbackStyle
+      switch strength {
+      case "medium": style = .medium
+      case "heavy": style = .heavy
+      default: style = .light
+      }
+      UIImpactFeedbackGenerator(style: style).impactOccurred()
+      result(nil)
+    }
+  }
+}
+
+final class OpenChamberPushPlugin: NSObject {
+  static var token: String?
+  static var pending: FlutterResult?
+
+  static func register(with messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(name: "openchamber/push", binaryMessenger: messenger)
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "requestToken" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      if let token {
+        result(["token": token, "platform": "ios"])
+        return
+      }
+      pending = result
+      DispatchQueue.main.async {
+        UIApplication.shared.registerForRemoteNotifications()
+      }
+    }
+  }
+
+  static func didRegister(token: String) {
+    self.token = token
+    pending?(["token": token, "platform": "ios"])
+    pending = nil
+  }
+
+  static func didFail() {
+    pending?(nil)
+    pending = nil
+  }
+}
+
+final class OpenChamberWidgetSnapshotPlugin: NSObject {
+  static func register(with messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(name: "openchamber/widget_snapshot", binaryMessenger: messenger)
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "write" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      let json = call.arguments as? String ?? ""
+      UserDefaults(suiteName: "group.com.yee94.openchamber")?.set(json, forKey: "widgetSnapshot")
+      if #available(iOS 14.0, *) {
+        WidgetCenter.shared.reloadAllTimelines()
+      }
+      result(nil)
+    }
   }
 }

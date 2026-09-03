@@ -51,6 +51,11 @@ ThemeData materialTheme(Brightness brightness) {
       indicatorColor: OcTokens.primary.withValues(alpha: 0.16),
       elevation: 0,
     ),
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+      },
+    ),
   );
 }
 

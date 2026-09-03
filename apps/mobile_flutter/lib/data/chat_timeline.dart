@@ -46,6 +46,12 @@ class ReverseChatController {
     _oldestFirst.add(message);
   }
 
+  void replaceAll(List<ChatMessage> messages) {
+    _oldestFirst
+      ..clear()
+      ..addAll(messages);
+  }
+
   /// 1.19.3-beta.5: re-entering a session scrolls to latest, not the last
   /// sent user message. Reverse index 0 is that latest edge.
   static const int latestReverseIndex = 0;

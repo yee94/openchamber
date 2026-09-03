@@ -22,7 +22,6 @@ class _ConnectScreenState extends State<ConnectScreen> {
   final _pairing = TextEditingController();
   final _password = TextEditingController();
   bool _manualOpen = true;
-  bool _requiresPassword = false;
 
   @override
   void dispose() {
@@ -113,13 +112,6 @@ class _ConnectScreenState extends State<ConnectScreen> {
                   hintText: t(context, 'connect.link.placeholder'),
                 ),
               ),
-              SwitchListTile(
-                key: const Key('connect-requires-password'),
-                contentPadding: EdgeInsets.zero,
-                title: Text(t(context, 'connect.requiresPassword')),
-                value: _requiresPassword,
-                onChanged: (value) => setState(() => _requiresPassword = value),
-              ),
               const SizedBox(height: 8),
               FilledButton(
                 key: const Key('connect-submit'),
@@ -130,7 +122,6 @@ class _ConnectScreenState extends State<ConnectScreen> {
                           label: _label.text,
                           clientToken: _token.text,
                           pairingLink: _pairing.text,
-                          requiresPassword: _requiresPassword,
                         ),
                 child: Text(
                   controller.connecting ? t(context, 'connect.connecting') : t(context, 'connect.connectButton'),

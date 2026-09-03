@@ -38,14 +38,14 @@ Linux VM (this cloud image): `flutter analyze` and `flutter test` only. `flutter
 
 ## Surfaces
 
-1. Splash → connection onboarding (server URL, instance UI password, client token, saved connections, auto-connect). **No local PIN / Face ID lock.**
+1. Splash → live HTTP onboarding (`GET /health`, `GET/POST /auth/session`, pairing redeem). **No local PIN / Face ID lock.**
 2. Four-tab dock: Projects / Assistant / Scheduled / Settings. iOS uses a UIKit `UITabBar` (liquid glass on iOS 26).
-3. Chat is pushed from Projects (including pinned/in-progress `项目 · 分支` subtitles)
+3. Chat is pushed from the live session index (pinned/in-progress `项目 · 分支` subtitles). Send/Stop hit `prompt_async` / `abort`.
 4. Always-on native composer (UIKit glass on iOS, Material + solid IME insets on Android)
 5. Settings home: search + every `MOBILE_SETTINGS_PAGE_SLUGS` page
 6. iOS targets: Runner, WidgetKit+Live Activity+Control, NSE, Share Extension (same bundle IDs / App Group as Capacitor)
 
 ## CI
 
-- Smoke (automatic on `work/flutter-native`): `.github/workflows/flutter-mobile-ci.yml`
+- Smoke (push to `work/flutter-native` only): `.github/workflows/flutter-mobile-ci.yml`
 - Signed release (`workflow_dispatch`, existing Capacitor secrets): `.github/workflows/flutter-mobile-release.yml`
