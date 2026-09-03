@@ -336,7 +336,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                       height: compact ? OcOptical.rowTitleHeight : OcOptical.entityTitleHeight,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 7),
                   Text(
                     [
                       count == 1
@@ -424,7 +424,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
       haptic: HapticStrength.light,
       onPressed: () => _openChat(context, row),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
         child: Row(
           children: [
             Container(

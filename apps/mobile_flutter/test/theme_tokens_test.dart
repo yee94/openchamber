@@ -58,12 +58,12 @@ void main() {
     expect(OcOptical.largeTitleTracking, greaterThan(0.8));
     expect(OcOptical.largeTitleHeight, greaterThan(1.15));
     expect(OcOptical.metaHeight, greaterThanOrEqualTo(1.45));
-    expect(OcOptical.searchButton, 28);
-    expect(OcOptical.addButton, 30);
+    expect(OcOptical.searchButton, 26);
+    expect(OcOptical.addButton, 28);
     expect(OcOptical.addButton, greaterThan(OcOptical.searchButton));
-    expect(OcOptical.headerGlyph, 11);
-    expect(OcOptical.dockGlyph, 13);
-    expect(OcOptical.leadingCircle, 20);
+    expect(OcOptical.headerGlyph, 10);
+    expect(OcOptical.dockGlyph, 12);
+    expect(OcOptical.leadingCircle, 18);
     expect(OcOptical.searchButton, lessThan(OcTokens.headerButtonSize));
     expect(OcOptical.addButton, lessThan(OcTokens.headerButtonSize));
     expect(OcTokens.light.primary, isNot(const Color(0xFF007AFF)));

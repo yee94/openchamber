@@ -233,7 +233,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                         color: paused ? context.oc.mutedForeground : context.oc.foreground,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     Text(
                       paused
                           ? [_humanSchedule(context, task), '—'].join(' · ')
