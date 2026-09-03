@@ -108,6 +108,12 @@ class MobileSessionRow extends StatelessWidget {
                         padding: const EdgeInsets.only(left: OcOptical.sessionTimeGap),
                         child: Text(
                           formatRelativeTime(row.updated)!,
+                          strutStyle: const StrutStyle(
+                            fontSize: OcOptical.sessionTime,
+                            height: OcOptical.sessionTimeHeight,
+                            leading: 0,
+                            forceStrutHeight: true,
+                          ),
                           style: TextStyle(
                             fontSize: OcOptical.sessionTime,
                             fontWeight: FontWeight.w400,

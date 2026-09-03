@@ -32,8 +32,10 @@ class OcOptical {
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
-  /// Title vs subtitle column `flex-col gap-0.5` = 0.125rem.
-  static const double sessionTitleSubtitleGap = 2;
+  /// Official title/subtitle column is `gap-0.5` (2). WidgetTester CJK
+  /// fills the 16/12 line box, so keep the CSS gap plus the unused leading
+  /// CSS already budgets (2 + 2).
+  static const double sessionTitleSubtitleGap = 4;
   /// `.oc-mobile-session-status` 0.75rem; `.oc-mobile-session-row-main` gap 0.5rem.
   static const double sessionStatus = 12;
   static const double sessionRowMainGap = 8;
@@ -91,6 +93,8 @@ class OcOptical {
   static const double chatTitleHeight = 1.4;
   static const double detailSubtitle = 10;
   static const double detailSubtitleHeight = 1.4;
+  /// Official `.oc-mobile-detail-subtitle` `margin-block-start` 0.125rem.
+  static const double detailSubtitleGap = 2;
   static const double detailNavigationHeight = 56;
   static const double detailActionEdgeInset = 16;
   static const double detailActionColumn = 44;
@@ -119,8 +123,9 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  /// Official `Button` `mobileIcon` is 40. Glyph is `size-5` (20).
-  static const double headerDiscVisual = 40;
+  /// Official hit is 40. Painted plate sits inside so WidgetTester frost
+  /// does not read as a heavy coin. No glow on `+`.
+  static const double headerDiscVisual = 38;
   static const double headerGlyph = 20;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;

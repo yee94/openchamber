@@ -112,10 +112,9 @@ class OcGlassChip extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           // Official `.oc-mobile-floating-action` is borderless glass.
-          boxShadow: [
-            ...OcElevation.control(context),
-            ...OcElevation.highlight(context),
-          ],
+          // Drop shadows read as Material coins in WidgetTester — hairline
+          // highlight only.
+          boxShadow: OcElevation.highlight(context),
         ),
         child: ClipOval(
           child: OcFrosted(
@@ -447,7 +446,7 @@ class SegmentedPill extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, OcTokens.pageGap),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(trackRadius),
-        boxShadow: OcElevation.card(context),
+        boxShadow: OcElevation.highlight(context),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(trackRadius),
@@ -479,15 +478,6 @@ class SegmentedPill extends StatelessWidget {
                                   t,
                                 ),
                                 borderRadius: BorderRadius.circular(itemRadius),
-                                boxShadow: t > 0.01
-                                    ? [
-                                        BoxShadow(
-                                          color: tokens.foreground.withValues(alpha: 0.08 * t),
-                                          blurRadius: 2,
-                                          offset: const Offset(0, 1),
-                                        ),
-                                      ]
-                                    : null,
                               ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -556,7 +546,7 @@ class FilterChipBar extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(OcTokens.surfaceRadius),
-                boxShadow: OcElevation.card(context),
+                boxShadow: OcElevation.highlight(context),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(OcTokens.surfaceRadius),
@@ -588,15 +578,6 @@ class FilterChipBar extends StatelessWidget {
                                   t,
                                 ),
                                         borderRadius: BorderRadius.circular(20),
-                                        boxShadow: t > 0.01
-                                            ? [
-                                                BoxShadow(
-                                                  color: tokens.foreground.withValues(alpha: 0.08 * t),
-                                                  blurRadius: 2,
-                                                  offset: const Offset(0, 1),
-                                                ),
-                                              ]
-                                            : null,
                                       ),
                                       child: Center(
                                         child: Text(
@@ -701,7 +682,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
             left: 0,
             right: 0,
             height: fadeH,
-            child: OcHeaderFade(safeTop: view.top),
+            child: OcHeaderFade(safeTop: view.top, opacity: 0.58),
           ),
           Padding(
             padding: EdgeInsets.fromLTRB(inlineLeft, view.top, inlineRight, 0),
@@ -745,7 +726,8 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                             color: tokens.foreground,
                           ),
                         ),
-                        if (subtitle != null && subtitle!.trim().isNotEmpty)
+                        if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                          const SizedBox(height: OcOptical.detailSubtitleGap),
                           Text(
                             key: const Key('chat-header-subtitle'),
                             subtitle!,
@@ -759,6 +741,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                               color: tokens.mutedForeground,
                             ),
                           ),
+                        ],
                       ],
                     ),
                   ),

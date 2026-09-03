@@ -12,9 +12,7 @@ class HighlightedText extends StatelessWidget {
   Widget build(BuildContext context) {
     final needle = query.trim();
     if (needle.isEmpty) {
-      // Official `.oc-mobile-session-title` / subtitle keep CSS line-height
-      // boxes (16px / 12px). Collapsing Flutter leading made rows denser.
-      return Text(text, style: style);
+      return Text(text, style: style, strutStyle: _cssLineBox(style));
     }
     final lower = text.toLowerCase();
     final match = needle.toLowerCase();
@@ -35,6 +33,20 @@ class HighlightedText extends StatelessWidget {
       );
       start = index + needle.length;
     }
-    return Text.rich(TextSpan(style: style, children: spans));
+    return Text.rich(
+      TextSpan(style: style, children: spans),
+      strutStyle: _cssLineBox(style),
+    );
   }
+}
+
+/// Official CSS `line-height` boxes (title 16, subtitle/time 12).
+StrutStyle? _cssLineBox(TextStyle? style) {
+  if (style?.fontSize == null || style?.height == null) return null;
+  return StrutStyle(
+    fontSize: style!.fontSize,
+    height: style.height,
+    leading: 0,
+    forceStrutHeight: true,
+  );
 }

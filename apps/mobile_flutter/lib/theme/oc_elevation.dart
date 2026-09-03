@@ -59,7 +59,15 @@ class OcElevation {
   /// not the softer card `--oc-mobile-float-shadow`.
   static List<BoxShadow> dock(BuildContext context) => dockFor(OcTokens.of(context));
 
-  static List<BoxShadow> dockFor(OcTokens tokens) => controlFor(tokens);
+  /// Dock sits in the page, not a floating Material stadium. Keep the
+  /// contact + halo from glass-shadow; drop the 8px umbra.
+  static List<BoxShadow> dockFor(OcTokens tokens) {
+    if (tokens.isDark) return const [];
+    return const [
+      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 12),
+    ];
+  }
 
   /// Search / + discs — `--oc-mobile-shadow-control`.
   static List<BoxShadow> control(BuildContext context) => controlFor(OcTokens.of(context));
