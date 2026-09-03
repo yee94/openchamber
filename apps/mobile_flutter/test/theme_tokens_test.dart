@@ -70,34 +70,17 @@ void main() {
     expect(OcTokens.light.primary, isNot(const Color(0xFF007AFF)));
   });
 
-  testWidgets('OcElevation is layered in light and empty in dark', (tester) async {
-    late BuildContext captured;
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: materialTheme(Brightness.light),
-        home: Builder(builder: (context) {
-          captured = context;
-          return const SizedBox.shrink();
-        }),
-      ),
+  test('OcElevation is layered in light and empty in dark', () {
+    expect(OcElevation.cardFor(OcTokens.light), hasLength(3));
+    expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, 2);
+    expect(
+      OcElevation.cardFor(OcTokens.light, tight: true).last.blurRadius,
+      lessThan(OcElevation.cardFor(OcTokens.light).last.blurRadius),
     );
-    expect(OcElevation.card(captured), hasLength(3));
-    expect(OcElevation.card(captured).first.blurRadius, 2);
-    expect(OcElevation.card(captured, tight: true).last.blurRadius, lessThan(OcElevation.card(captured).last.blurRadius));
-    expect(OcElevation.control(captured), isNotEmpty);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: materialTheme(Brightness.dark),
-        home: Builder(builder: (context) {
-          captured = context;
-          return const SizedBox.shrink();
-        }),
-      ),
-    );
-    expect(OcElevation.card(captured), isEmpty);
-    expect(OcElevation.dock(captured), isEmpty);
-    expect(OcElevation.control(captured), isEmpty);
+    expect(OcElevation.controlFor(OcTokens.light), isNotEmpty);
+    expect(OcElevation.cardFor(OcTokens.dark), isEmpty);
+    expect(OcElevation.dockFor(OcTokens.dark), isEmpty);
+    expect(OcElevation.controlFor(OcTokens.dark), isEmpty);
   });
 
   test('resolveOcBrightness honors Light / Dark / System', () {
