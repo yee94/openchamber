@@ -142,6 +142,7 @@ List<HomeSessionRow> rowsFromSessionIndex(
           kind: kind,
           unread: session.unread,
           directory: session.directory,
+          updated: session.updated,
         ),
       );
     }

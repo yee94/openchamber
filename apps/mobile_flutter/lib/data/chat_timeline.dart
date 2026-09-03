@@ -65,6 +65,11 @@ class ChatMessage {
     required this.isUser,
     this.parts = const [],
     this.tokensPerSecond,
+    this.modelName,
+    this.agentRole,
+    this.processedLabel,
+    this.completedClock,
+    this.agentCount = 0,
   });
 
   final String id;
@@ -72,6 +77,11 @@ class ChatMessage {
   final bool isUser;
   final List<ChatPart> parts;
   final String? tokensPerSecond;
+  final String? modelName;
+  final String? agentRole;
+  final String? processedLabel;
+  final String? completedClock;
+  final int agentCount;
 
   ChatMessage copyWith({List<ChatPart>? parts}) {
     return ChatMessage(
@@ -80,6 +90,11 @@ class ChatMessage {
       isUser: isUser,
       parts: parts ?? this.parts,
       tokensPerSecond: tokensPerSecond,
+      modelName: modelName,
+      agentRole: agentRole,
+      processedLabel: processedLabel,
+      completedClock: completedClock,
+      agentCount: agentCount,
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -14,6 +15,7 @@ import '../../l10n/app_strings.dart';
 import '../../native/haptics.dart';
 import '../../native/live_activity_controller.dart';
 import '../../native/media_channel.dart';
+import '../../theme/ios_chrome.dart';
 import 'composer_bar.dart';
 import 'composer_occupancy.dart';
 import 'ios_composer_host.dart';
@@ -322,11 +324,18 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
     final inset = MediaQuery.viewInsetsOf(context);
+    final atLiveEdge = !_scroll.hasClients || _scroll.offset <= 24;
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       resizeToAvoidBottomInset: !ios,
-      appBar: AppBar(
-        title: Text(widget.session.title),
-        leading: BackButton(key: const Key('chat-back'), onPressed: () => Navigator.of(context).maybePop()),
+      appBar: PushedNavBar(
+        title: widget.session.title,
+        leadingKey: const Key('chat-back'),
+        busy: _busy,
+        trailing: CircularChromeButton(
+          icon: CupertinoIcons.ellipsis,
+          onPressed: () {},
+        ),
       ),
       body: Column(
         children: [
@@ -341,33 +350,40 @@ class _ChatScreenState extends State<ChatScreen> {
               scrollController: _scroll,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               itemBuilder: (context, message, reverseIndex) {
-                final align = message.isUser ? Alignment.centerRight : Alignment.centerLeft;
                 final isLastAssistant = !message.isUser && _isNewestAssistant(reverseIndex);
-                return Align(
-                  alignment: align,
-                  child: Container(
-                    key: Key('chat-message-${message.id}'),
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    constraints: const BoxConstraints(maxWidth: 320),
-                    decoration: BoxDecoration(
-                      color: message.isUser
-                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.16)
-                          : Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
+                if (message.isUser) {
+                  return Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      key: Key('chat-message-${message.id}'),
+                      margin: const EdgeInsets.symmetric(vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      constraints: const BoxConstraints(maxWidth: 300),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: ChatTranscriptBody(
+                        message: message,
+                        isLastAssistant: isLastAssistant,
+                        isTurnLive: _busy && isLastAssistant,
+                        isSpeaking: _speakingMessageId == message.id,
+                      ),
                     ),
-                    child: ChatTranscriptBody(
-                      message: message,
-                      isLastAssistant: isLastAssistant,
-                      isTurnLive: _busy && isLastAssistant,
-                      isSpeaking: _speakingMessageId == message.id,
-                      onSpeak: message.isUser || widget.appController == null
-                          ? null
-                          : () => _speak(message),
-                      onPermission: widget.appController == null
-                          ? null
-                          : (requestId, reply) => _replyPermission(requestId, reply),
-                    ),
+                  );
+                }
+                return Padding(
+                  key: Key('chat-message-${message.id}'),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: ChatTranscriptBody(
+                    message: message,
+                    isLastAssistant: isLastAssistant,
+                    isTurnLive: _busy && isLastAssistant,
+                    isSpeaking: _speakingMessageId == message.id,
+                    onSpeak: widget.appController == null ? null : () => _speak(message),
+                    onPermission: widget.appController == null
+                        ? null
+                        : (requestId, reply) => _replyPermission(requestId, reply),
                   ),
                 );
               },
@@ -391,21 +407,20 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             )
           else
-            ColoredBox(
-              color: Theme.of(context).colorScheme.surface,
-              child: Padding(
-                padding: EdgeInsets.only(bottom: inset.bottom),
-                child: ComposerBar(
-                  controller: _composer,
-                  busy: _busy,
-                  attachments: _attachments,
-                  dictationLabel: _dictationLabel,
-                  onSend: _send,
-                  onStop: _stop,
-                  onAttach: _attach,
-                  onDictate: _dictate,
-                  onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
-                ),
+            Padding(
+              padding: EdgeInsets.only(bottom: inset.bottom),
+              child: ComposerBar(
+                controller: _composer,
+                busy: _busy,
+                attachments: _attachments,
+                dictationLabel: _dictationLabel,
+                showScrollToBottom: !atLiveEdge,
+                onScrollToBottom: _jumpToLatest,
+                onSend: _send,
+                onStop: _stop,
+                onAttach: _attach,
+                onDictate: _dictate,
+                onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
               ),
             ),
         ],

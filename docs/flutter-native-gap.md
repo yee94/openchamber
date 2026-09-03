@@ -354,3 +354,42 @@ Read on main (do not invent): `event-pipeline.ts` prefers `/api/global/event/ws`
 | Event pipeline WS + SSE fallback | landed | `event-pipeline.ts` | Relay uses tunneled WS. Memory tests stay on SSE (no fake LAN socket). Mint failure → SSE for 60s, same as main. |
 | Android launcher badge | **gap (honest)** | `APNS.md`, `relay-server/src/push/schema.js` | No official FCM send. Do not invent a badge API. |
 | Capgo / plan / notes / Todo / Chat dock / iosNativeUi | **will not port** | — | Unchanged. |
+
+## Twelfth-slice status (official look + always-on native chrome)
+
+Yee rejected the Material 3 WidgetTester shots (underline fields, full-width search, flat session list, play-triangle scheduled rows, Projects tab stuck selected). This slice restores the README IA (`docs/references/mobile_*.png` / `packages/ui/src/mobile/*`) without adding product features.
+
+### Visual gap matrix vs README
+
+| Surface | README target | Flutter now | Remaining pixel gap |
+|---|---|---|---|
+| Projects | Large title, circular search + filled +, grouped project/worktree cards, 「N 个会话」, relative time, nested rows, 「更多」 | Landed (same IA). WidgetTester cannot paint iOS 26 liquid glass. | Live-activity status strip is a simple attention row (first in-progress title), not Dynamic Island chrome. Provider 「Code/github」 badge only when the path hint exists — session-index has no provider field. |
+| Chat | Pushed header, assistant model/role, file-change card, tok/s + duration + clock, floating glass pill, scroll-to-bottom disc | Landed on Android as a solid floating pill. iOS uses `UITextView` + `UIGlassEffect`/`UIBlurEffect` overlay. | WidgetTester cannot screenshot the real UIKit composer. Expanded-card Agent/model footer from Capacitor is not cloned in Flutter. |
+| Scheduled | Large title, 任务/历史记录, 全部/已启用/已暂停, status glyphs, human schedule · countdown | Landed | Create-task `+` is chrome-only (no new editor). Overflow `...` runs the existing run-now API (same as the old play control). |
+| Assistant | Contact cards, not a settings toggle page; dock highlight follows 助理 | Landed | Official guide hero images are not bundled. Enable toggle still exists when the snapshot is on (needed by tests / official enable API). |
+| Settings | Large title, pill search, inset groups. Appearance = language + theme | Landed | Detail pages still use a compact back + title, not a collapsing large title. |
+| Connect | QR primary, inset grouped fields, no floating-label overlap | Landed | Manual section stays expanded by default so tests can fill URL/token. |
+| Tab dock | Four roots, selected glyph = theme primary | iOS: `UITabBarController` overlay. Android/tests: floating capsule with the same four ids and correct `selectedId`. | WidgetTester capsule is Material-elevation, not `UIGlassEffect`. |
+
+### Native APIs (always on — grep `apps/mobile_flutter/ios`)
+
+| API | Status |
+|---|---|
+| `UITabBar` / `UITabBarController` | Wired (`OpenChamberTabBarView.swift`) |
+| `UITextView` composer + `UIGlassEffect` runtime lookup | Wired (`OpenChamberComposerView.swift`) |
+| `ActivityKit` Live Activity | Wired (`OpenChamberLiveActivityManager.swift`) |
+| `UIImpactFeedbackGenerator` | Wired (haptics plugin + composer send/attach) |
+| `PHPickerViewController` | Wired (media plugin) |
+| `UIDocumentPickerViewController` | Wired (composer Files action) |
+| VisionKit QR on MainActor | Wired |
+| Keychain (`SecItem*`) | Wired |
+| Share Extension + App Group + NSE + Widget | Wired (existing targets) |
+| `UIScreenEdgePanGestureRecognizer` | **Not installed as a second recognizer.** Pushed pages use `CupertinoPageRoute`, which is Flutter's system edge-pan back. A second left-edge recognizer would fight that route. |
+
+### Android degradations (intentional)
+
+- Dock: Material floating capsule, not liquid glass.
+- Composer: solid pill + `viewInsets`, not `UIGlassEffect`.
+- No Live Activity / Dynamic Island / WidgetKit.
+- Photo picker: system Photo Picker (`ACTION_PICK_IMAGES`).
+- Haptics: `performHapticFeedback`.

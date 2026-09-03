@@ -80,7 +80,16 @@ final class OpenChamberComposerView: UIView, UITextViewDelegate {
     card.translatesAutoresizingMaskIntoConstraints = false
     attachButton.setImage(UIImage(systemName: "plus"), for: .normal)
     attachButton.accessibilityIdentifier = "composer-attach"
-    attachButton.addTarget(self, action: #selector(attachTapped), for: .touchUpInside)
+    let photos = UIAction(title: "Photos", image: UIImage(systemName: "photo.on.rectangle")) { [weak self] _ in
+      UIImpactFeedbackGenerator(style: .light).impactOccurred()
+      self?.onAttach?()
+    }
+    let files = UIAction(title: "Files", image: UIImage(systemName: "folder")) { [weak self] _ in
+      UIImpactFeedbackGenerator(style: .light).impactOccurred()
+      self?.presentDocumentPicker()
+    }
+    attachButton.menu = UIMenu(children: [photos, files])
+    attachButton.showsMenuAsPrimaryAction = true
     dictateButton.setImage(UIImage(systemName: "mic"), for: .normal)
     dictateButton.accessibilityIdentifier = "composer-dictate"
     dictateButton.addTarget(self, action: #selector(dictateTapped), for: .touchUpInside)
@@ -185,11 +194,42 @@ final class OpenChamberComposerView: UIView, UITextViewDelegate {
       onStop?()
       return
     }
+    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     onSend?(textView.text ?? "")
   }
 
   @objc private func attachTapped() {
+    UIImpactFeedbackGenerator(style: .light).impactOccurred()
     onAttach?()
+  }
+
+  private func presentDocumentPicker() {
+    guard let root = parentViewController() else {
+      onAttach?()
+      return
+    }
+    let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item], asCopy: true)
+    picker.allowsMultipleSelection = true
+    let host = OpenChamberDocumentPickerCoordinator { [weak self] names in
+      self?.onAttach?()
+      _ = names
+    }
+    picker.delegate = host
+    OpenChamberDocumentPickerCoordinator.retain(host)
+    root.present(picker, animated: true)
+  }
+
+  private func parentViewController() -> UIViewController? {
+    var responder: UIResponder? = self
+    while let next = responder?.next {
+      if let controller = next as? UIViewController { return controller }
+      responder = next
+    }
+    return UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap(\.windows)
+      .first(where: \.isKeyWindow)?
+      .rootViewController
   }
 
   @objc private func dictateTapped() {
@@ -290,5 +330,27 @@ final class OpenChamberGlassBackdrop: UIView {
     }
     blur.effect = UIBlurEffect(style: .systemUltraThinMaterial)
     backgroundColor = .clear
+  }
+}
+
+final class OpenChamberDocumentPickerCoordinator: NSObject, UIDocumentPickerDelegate {
+  private static var retained: OpenChamberDocumentPickerCoordinator?
+  private let onPicked: ([String]) -> Void
+
+  init(onPicked: @escaping ([String]) -> Void) {
+    self.onPicked = onPicked
+  }
+
+  static func retain(_ host: OpenChamberDocumentPickerCoordinator) {
+    retained = host
+  }
+
+  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    onPicked(urls.map(\.lastPathComponent))
+    Self.retained = nil
+  }
+
+  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    Self.retained = nil
   }
 }

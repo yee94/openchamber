@@ -1,12 +1,12 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/prompt_attachment.dart';
 import '../../l10n/app_strings.dart';
+import '../../theme/ios_chrome.dart';
 import 'composer_occupancy.dart';
 
-/// Native composer chrome. Android is Material 3 with solid IME viewInsets.
+/// Native composer chrome. Android is a floating pill with solid IME viewInsets.
 /// iOS uses the UIKit platform view (`IosComposerHost`) instead of this widget.
 class ComposerBar extends StatelessWidget {
   const ComposerBar({
@@ -20,6 +20,8 @@ class ComposerBar extends StatelessWidget {
     this.dictationLabel,
     this.attachments = const [],
     this.onRemoveAttachment,
+    this.showScrollToBottom = false,
+    this.onScrollToBottom,
   });
 
   final TextEditingController controller;
@@ -31,10 +33,11 @@ class ComposerBar extends StatelessWidget {
   final bool busy;
   final List<AttachmentDraft> attachments;
   final ValueChanged<int>? onRemoveAttachment;
+  final bool showScrollToBottom;
+  final VoidCallback? onScrollToBottom;
 
   @override
   Widget build(BuildContext context) {
-    final ios = defaultTargetPlatform == TargetPlatform.iOS;
     final suggestions = autocompleteStubFor(controller.text);
     final field = TextField(
       key: const Key('composer-field'),
@@ -46,94 +49,132 @@ class ComposerBar extends StatelessWidget {
       decoration: InputDecoration(
         hintText: t(context, 'chat.composer.placeholder'),
         border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        filled: false,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+        floatingLabelBehavior: FloatingLabelBehavior.never,
       ),
     );
 
-    final attach = IconButton(
-      key: const Key('composer-attach'),
-      tooltip: t(context, 'chat.composer.attach'),
-      onPressed: onAttach,
-      icon: Icon(ios ? CupertinoIcons.add : Icons.add),
-    );
-    final mic = IconButton(
-      key: const Key('composer-dictate'),
-      tooltip: t(context, 'chat.dictation.start'),
-      onPressed: onDictate,
-      icon: Icon(ios ? CupertinoIcons.mic : Icons.mic),
-    );
-    final send = IconButton(
-      key: const Key('composer-send'),
-      tooltip: t(context, busy ? 'chat.composer.stop' : 'chat.composer.send'),
-      onPressed: busy ? onStop : onSend,
-      icon: Icon(
-        busy
-            ? (ios ? CupertinoIcons.stop_circle_fill : Icons.stop_circle)
-            : (ios ? CupertinoIcons.arrow_up_circle_fill : Icons.send),
-      ),
-    );
-
-    return Material(
-      elevation: ios ? 0 : 2,
-      color: Theme.of(context).colorScheme.surface,
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (suggestions.isNotEmpty)
-              SizedBox(
-                height: 120,
-                child: ListView(
-                  key: const Key('composer-autocomplete'),
-                  children: [
-                    for (final item in suggestions)
-                      ListTile(
-                        dense: true,
-                        title: Text(item.label),
-                        onTap: () => controller.text = item.label,
-                      ),
-                  ],
-                ),
-              ),
-            if (attachments.isNotEmpty)
-              SizedBox(
-                height: 56,
-                child: ListView.separated(
-                  key: const Key('composer-attachments'),
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                  itemCount: attachments.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final item = attachments[index];
-                    return InputChip(
-                      key: Key('composer-attachment-${item.name}'),
-                      label: Text(item.name),
-                      avatar: Image.memory(item.bytes, width: 20, height: 20, fit: BoxFit.cover),
-                      onDeleted: onRemoveAttachment == null ? null : () => onRemoveAttachment!(index),
-                    );
-                  },
-                ),
-              ),
-            if (dictationLabel != null)
-              Padding(
-                key: const Key('composer-dictate-status'),
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                child: Text(dictationLabel!, style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
-              ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-              child: Row(
+    return SafeArea(
+      top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (suggestions.isNotEmpty)
+            SizedBox(
+              height: 120,
+              child: ListView(
+                key: const Key('composer-autocomplete'),
                 children: [
-                  attach,
-                  Expanded(child: field),
-                  mic,
-                  send,
+                  for (final item in suggestions)
+                    ListTile(
+                      dense: true,
+                      title: Text(item.label),
+                      onTap: () => controller.text = item.label,
+                    ),
                 ],
               ),
             ),
-          ],
-        ),
+          if (attachments.isNotEmpty)
+            SizedBox(
+              height: 56,
+              child: ListView.separated(
+                key: const Key('composer-attachments'),
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                itemCount: attachments.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final item = attachments[index];
+                  return InputChip(
+                    key: Key('composer-attachment-${item.name}'),
+                    label: Text(item.name),
+                    avatar: Image.memory(item.bytes, width: 20, height: 20, fit: BoxFit.cover),
+                    onDeleted: onRemoveAttachment == null ? null : () => onRemoveAttachment!(index),
+                  );
+                },
+              ),
+            ),
+          if (dictationLabel != null)
+            Padding(
+              key: const Key('composer-dictate-status'),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: Text(dictationLabel!, style: const TextStyle(fontSize: 12, color: OcChrome.secondary)),
+            ),
+          if (showScrollToBottom)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 22, bottom: 6),
+                child: Material(
+                  color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
+                  shape: const CircleBorder(),
+                  elevation: 2,
+                  child: InkWell(
+                    key: const Key('chat-scroll-to-bottom'),
+                    customBorder: const CircleBorder(),
+                    onTap: onScrollToBottom,
+                    child: const SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: Icon(CupertinoIcons.chevron_down, size: 18),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Material(
+              color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.96),
+              elevation: 8,
+              shadowColor: Colors.black.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(OcChrome.pillRadius),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+                child: Row(
+                  children: [
+                    IconButton(
+                      key: const Key('composer-attach'),
+                      tooltip: t(context, 'chat.composer.attach'),
+                      onPressed: onAttach,
+                      icon: const Icon(CupertinoIcons.add, size: 22),
+                    ),
+                    Expanded(child: field),
+                    if (onDictate != null)
+                      IconButton(
+                        key: const Key('composer-dictate'),
+                        tooltip: t(context, 'chat.dictation.start'),
+                        onPressed: onDictate,
+                        icon: const Icon(CupertinoIcons.mic, size: 20),
+                      ),
+                    Material(
+                      color: Colors.black,
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        key: const Key('composer-send'),
+                        customBorder: const CircleBorder(),
+                        onTap: busy ? onStop : onSend,
+                        child: SizedBox(
+                          width: 34,
+                          height: 34,
+                          child: Icon(
+                            busy ? CupertinoIcons.stop_fill : CupertinoIcons.square_fill,
+                            size: busy ? 14 : 10,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

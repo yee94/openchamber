@@ -2,13 +2,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
-import '../../l10n/app_strings.dart';
+import '../../theme/ios_chrome.dart';
 import '../assistant/assistant_tab_screen.dart';
 import '../chat/composer_occupancy.dart';
 import '../chat/ios_composer_host.dart';
 import '../projects/projects_home_screen.dart';
 import '../scheduled/scheduled_tab_screen.dart';
 import '../settings/settings_home_screen.dart';
+import 'floating_tab_bar.dart';
 import 'ios_tab_bar_host.dart';
 
 /// Official homepage dock: four roots only.
@@ -35,6 +36,11 @@ class _MobileTabScaffoldState extends State<MobileTabScaffold> {
     super.dispose();
   }
 
+  void _select(String id) {
+    final next = mobileTabIds.indexOf(id);
+    if (next >= 0 && next != _index) setState(() => _index = next);
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = <Widget>[
@@ -47,24 +53,27 @@ class _MobileTabScaffoldState extends State<MobileTabScaffold> {
       SettingsHomeScreen(controller: widget.controller),
     ];
 
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      final onProjects = _index == 0;
-      final bottomPad = MediaQuery.paddingOf(context).bottom + iosTabBarDockHeight;
-      return Stack(
-        key: const Key('mobile-tab-scaffold'),
-        children: [
-          Positioned.fill(
-            child: MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                padding: MediaQuery.paddingOf(context).copyWith(bottom: bottomPad),
-              ),
-              child: IndexedStack(index: _index, children: pages),
+    final ios = defaultTargetPlatform == TargetPlatform.iOS;
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    final dockReserve = ios ? iosTabBarDockHeight + safeBottom : OcChrome.tabBarHeight + safeBottom + 16;
+    final onProjects = _index == 0;
+
+    return Stack(
+      key: const Key('mobile-tab-scaffold'),
+      children: [
+        Positioned.fill(
+          child: MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              padding: MediaQuery.paddingOf(context).copyWith(bottom: dockReserve),
             ),
+            child: IndexedStack(index: _index, children: pages),
           ),
+        ),
+        if (ios)
           Positioned(
             left: 0,
             right: 0,
-            bottom: bottomPad,
+            bottom: dockReserve,
             height: onProjects ? collapsedComposerOccupancy : 0,
             child: IgnorePointer(
               ignoring: !onProjects,
@@ -82,36 +91,24 @@ class _MobileTabScaffoldState extends State<MobileTabScaffold> {
               ),
             ),
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: bottomPad,
-            child: IosTabBarHost(
-              selectedId: mobileTabIds[_index],
-              onSelect: (id) {
-                final next = mobileTabIds.indexOf(id);
-                if (next >= 0) setState(() => _index = next);
-              },
-            ),
-          ),
-        ],
-      );
-    }
-
-    return Scaffold(
-      key: const Key('mobile-tab-scaffold'),
-      body: IndexedStack(index: _index, children: pages),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (index) => setState(() => _index = index),
-        destinations: [
-          NavigationDestination(icon: const Icon(Icons.folder_open_outlined), label: t(context, 'tabs.projects')),
-          NavigationDestination(icon: const Icon(Icons.auto_awesome_outlined), label: t(context, 'tabs.assistant')),
-          NavigationDestination(icon: const Icon(Icons.calendar_month_outlined), label: t(context, 'tabs.scheduled')),
-          NavigationDestination(icon: const Icon(Icons.settings_outlined), label: t(context, 'tabs.settings')),
-        ],
-      ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: ios
+              ? SizedBox(
+                  height: dockReserve,
+                  child: IosTabBarHost(
+                    selectedId: mobileTabIds[_index],
+                    onSelect: _select,
+                  ),
+                )
+              : FloatingCapsuleTabBar(
+                  selectedId: mobileTabIds[_index],
+                  onSelect: _select,
+                ),
+        ),
+      ],
     );
   }
 }

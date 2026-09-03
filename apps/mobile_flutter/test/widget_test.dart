@@ -40,8 +40,11 @@ void main() {
     expect(find.text('Agent'), findsOneWidget);
     expect(find.text('Schedule'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
-    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
-    expect(bar.destinations.length, 4);
+    expect(find.byKey(const Key('tab-projects')), findsOneWidget);
+    expect(find.byKey(const Key('tab-assistant')), findsOneWidget);
+    expect(find.byKey(const Key('tab-scheduled')), findsOneWidget);
+    expect(find.byKey(const Key('tab-settings')), findsOneWidget);
+    expect(find.byKey(const Key('tab-chat'), skipOffstage: false), findsNothing);
   });
 
   testWidgets('chat is a pushed secondary page from Projects', (tester) async {
@@ -57,6 +60,8 @@ void main() {
 
   testWidgets('session search matches titles and hides non-matches', (tester) async {
     await pumpConnected(tester);
+    await tester.tap(find.byKey(const Key('projects-search-toggle')));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('projects-search')), 'Release');
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('home-session-sess-pinned')), findsOneWidget);
@@ -66,7 +71,7 @@ void main() {
 
   testWidgets('settings home lists every mobile slug and search filters', (tester) async {
     await pumpConnected(tester);
-    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Settings')));
+    await tester.tap(find.byKey(const Key('tab-settings')));
     await tester.pumpAndSettle();
 
     for (final slug in mobileSettingsPageSlugs) {
@@ -89,7 +94,7 @@ void main() {
 
   testWidgets('chat settings load official blob fields instead of a placeholder', (tester) async {
     await pumpConnected(tester);
-    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Settings')));
+    await tester.tap(find.byKey(const Key('tab-settings')));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const Key('settings-slug-chat')));
     await tester.tap(find.byKey(const Key('settings-slug-chat')));
@@ -101,7 +106,7 @@ void main() {
 
   testWidgets('providers settings lists catalog rows and failed fetch is not empty', (tester) async {
     await pumpConnected(tester);
-    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Settings')));
+    await tester.tap(find.byKey(const Key('tab-settings')));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const Key('settings-slug-providers')));
     await tester.tap(find.byKey(const Key('settings-slug-providers')));

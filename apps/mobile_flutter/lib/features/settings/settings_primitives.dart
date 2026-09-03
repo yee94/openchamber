@@ -1,7 +1,9 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_strings.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/ios_chrome.dart';
 
 class SettingsGroup extends StatelessWidget {
   const SettingsGroup({super.key, required this.label, required this.children});
@@ -12,7 +14,7 @@ class SettingsGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: OcTokens.sectionStackGap),
+      padding: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, OcTokens.sectionStackGap),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -28,7 +30,7 @@ class SettingsGroup extends StatelessWidget {
           ),
           Material(
             color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(OcTokens.groupRadius),
+            borderRadius: BorderRadius.circular(OcChrome.cardRadius),
             clipBehavior: Clip.antiAlias,
             child: Column(children: children),
           ),
@@ -58,7 +60,7 @@ class SettingsNavRow extends StatelessWidget {
       minVerticalPadding: 11,
       title: Text(label),
       subtitle: subtitle == null ? null : Text(subtitle!),
-      trailing: trailing ?? const Icon(Icons.chevron_right),
+      trailing: trailing ?? const Icon(CupertinoIcons.chevron_right, size: 16, color: OcChrome.secondary),
       onTap: onTap,
     );
   }
@@ -122,14 +124,32 @@ class SettingsPageScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        leading: BackButton(
-          key: const Key('settings-back'),
-          onPressed: () => Navigator.of(context).maybePop(),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 16, 8),
+              child: Row(
+                children: [
+                  CircularChromeButton(
+                    key: const Key('settings-back'),
+                    icon: CupertinoIcons.chevron_back,
+                    tooltip: t(context, 'settings.view.actions.back'),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(child: child),
+          ],
         ),
       ),
-      body: child,
     );
   }
 }

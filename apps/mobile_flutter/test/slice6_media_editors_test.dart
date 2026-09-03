@@ -129,12 +129,12 @@ void main() {
     await tester.pumpWidget(OpenChamberApp(controller: controller));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Agent')));
+    await tester.tap(find.byKey(const Key('tab-assistant')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('assistant-item-asst-1')), findsOneWidget);
     expect(find.text('Home'), findsWidgets);
 
-    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Schedule')));
+    await tester.tap(find.byKey(const Key('tab-scheduled')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('scheduled-task-cron-1')), findsOneWidget);
     await tester.tap(find.byKey(const Key('scheduled-task-cron-1')));
@@ -148,7 +148,7 @@ void main() {
     await controller.connect(url: 'http://192.168.1.74:2606', label: 'lan');
     await tester.pumpWidget(OpenChamberApp(controller: controller));
     await tester.pumpAndSettle();
-    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Settings')));
+    await tester.tap(find.byKey(const Key('tab-settings')));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const Key('settings-slug-providers')));
     await tester.tap(find.byKey(const Key('settings-slug-providers')));

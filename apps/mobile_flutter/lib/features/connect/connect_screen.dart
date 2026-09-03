@@ -1,9 +1,10 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
 import '../../data/instance_store.dart';
 import '../../l10n/app_strings.dart';
-import '../../theme/app_theme.dart';
+import '../../theme/ios_chrome.dart';
 
 /// Capacitor connection onboarding — not a local PIN / Face ID lock.
 class ConnectScreen extends StatefulWidget {
@@ -51,94 +52,140 @@ class _ConnectScreenState extends State<ConnectScreen> {
   Widget _welcomeView(BuildContext context) {
     final error = controller.connectErrorKey;
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
+          padding: const EdgeInsets.fromLTRB(0, 16, 0, 32),
           children: [
-            Text(t(context, 'connect.welcome.title'), style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 8),
-            Text(t(context, 'connect.welcome.description'), style: TextStyle(color: OcTokens.mutedLight)),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              key: const Key('connect-scan-qr'),
-              onPressed: controller.scanAndConnect,
-              icon: const Icon(Icons.qr_code_scanner),
-              label: Text(t(context, 'connect.scanQr')),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
+              child: Text(
+                t(context, 'connect.welcome.title'),
+                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w700, height: 1.15),
+              ),
             ),
             const SizedBox(height: 8),
-            Text(t(context, 'connect.scanHint'), style: Theme.of(context).textTheme.bodySmall),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
+              child: Text(
+                t(context, 'connect.welcome.description'),
+                style: const TextStyle(fontSize: 15, color: OcChrome.secondary, height: 1.35),
+              ),
+            ),
             const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
+              child: FilledButton.icon(
+                key: const Key('connect-scan-qr'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: controller.scanAndConnect,
+                icon: const Icon(CupertinoIcons.qrcode_viewfinder),
+                label: Text(t(context, 'connect.scanQr')),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
+              child: Text(t(context, 'connect.scanHint'), style: const TextStyle(fontSize: 13, color: OcChrome.secondary)),
+            ),
+            const SizedBox(height: 8),
             TextButton(
               key: const Key('connect-manual-toggle'),
               onPressed: () => setState(() => _manualOpen = !_manualOpen),
               child: Text(t(context, 'connect.manual.toggle')),
             ),
             if (_manualOpen) ...[
-              const SizedBox(height: 8),
-              Text(t(context, 'connect.address.divider')),
-              const SizedBox(height: 8),
-              TextField(
-                key: const Key('connect-url'),
-                controller: _url,
-                keyboardType: TextInputType.url,
-                autocorrect: false,
-                decoration: InputDecoration(
-                  labelText: t(context, 'connect.url.label'),
-                  hintText: t(context, 'connect.url.placeholder'),
-                ),
-              ),
-              TextField(
-                controller: _label,
-                decoration: InputDecoration(
-                  labelText: t(context, 'connect.label.label'),
-                  hintText: t(context, 'connect.label.placeholder'),
-                ),
-              ),
-              TextField(
-                key: const Key('connect-token'),
-                controller: _token,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: t(context, 'connect.token.label'),
-                  hintText: t(context, 'connect.token.placeholder'),
-                  helperText: t(context, 'connect.token.hint'),
-                ),
-              ),
-              TextField(
-                key: const Key('connect-pairing'),
-                controller: _pairing,
-                decoration: InputDecoration(
-                  labelText: t(context, 'connect.link.label'),
-                  hintText: t(context, 'connect.link.placeholder'),
-                ),
-              ),
-              const SizedBox(height: 8),
-              FilledButton(
-                key: const Key('connect-submit'),
-                onPressed: controller.connecting
-                    ? null
-                    : () => controller.connect(
-                          url: _url.text,
-                          label: _label.text,
-                          clientToken: _token.text,
-                          pairingLink: _pairing.text,
-                        ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 4, OcChrome.pageGutter, 8),
                 child: Text(
-                  controller.connecting ? t(context, 'connect.connecting') : t(context, 'connect.connectButton'),
+                  t(context, 'connect.address.divider'),
+                  style: const TextStyle(fontSize: 13, color: OcChrome.secondary, fontWeight: FontWeight.w500),
+                ),
+              ),
+              GroupedInsetCard(
+                child: Column(
+                  children: [
+                    InsetTextField(
+                      fieldKey: const Key('connect-url'),
+                      controller: _url,
+                      label: t(context, 'connect.url.label'),
+                      hint: t(context, 'connect.url.placeholder'),
+                      keyboardType: TextInputType.url,
+                    ),
+                    const Divider(height: 1, indent: 16),
+                    InsetTextField(
+                      controller: _label,
+                      label: t(context, 'connect.label.label'),
+                      hint: t(context, 'connect.label.placeholder'),
+                    ),
+                    const Divider(height: 1, indent: 16),
+                    InsetTextField(
+                      fieldKey: const Key('connect-token'),
+                      controller: _token,
+                      label: t(context, 'connect.token.label'),
+                      hint: t(context, 'connect.token.placeholder'),
+                      helper: t(context, 'connect.token.hint'),
+                      obscureText: true,
+                    ),
+                    const Divider(height: 1, indent: 16),
+                    InsetTextField(
+                      fieldKey: const Key('connect-pairing'),
+                      controller: _pairing,
+                      label: t(context, 'connect.link.label'),
+                      hint: t(context, 'connect.link.placeholder'),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
+                child: FilledButton(
+                  key: const Key('connect-submit'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(50),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  onPressed: controller.connecting
+                      ? null
+                      : () => controller.connect(
+                            url: _url.text,
+                            label: _label.text,
+                            clientToken: _token.text,
+                            pairingLink: _pairing.text,
+                          ),
+                  child: Text(
+                    controller.connecting ? t(context, 'connect.connecting') : t(context, 'connect.connectButton'),
+                  ),
                 ),
               ),
             ],
             if (error != null) ...[
               const SizedBox(height: 12),
-              Text(t(context, error), style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
+                child: Text(t(context, error), style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              ),
             ],
-            const SizedBox(height: 28),
-            Text(t(context, 'connect.saved.title'), style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
+              child: Text(t(context, 'connect.saved.title'), style: const TextStyle(fontSize: 13, color: OcChrome.secondary)),
+            ),
             const SizedBox(height: 8),
             if (controller.instances.isEmpty)
-              Text(t(context, 'connect.saved.empty'))
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
+                child: Text(t(context, 'connect.saved.empty'), style: const TextStyle(color: OcChrome.secondary)),
+              )
             else
-              ...controller.instances.map(_savedTile),
+              GroupedInsetCard(
+                child: Column(
+                  children: controller.instances.map(_savedTile).toList(),
+                ),
+              ),
           ],
         ),
       ),
@@ -148,36 +195,45 @@ class _ConnectScreenState extends State<ConnectScreen> {
   Widget _passwordView(BuildContext context) {
     final pending = controller.pendingUnlock;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(t(context, 'connect.password.label')),
-        leading: IconButton(
-          key: const Key('connect-cancel-password'),
-          tooltip: t(context, 'connect.cancelPassword'),
-          onPressed: controller.cancelPassword,
-          icon: const Icon(Icons.close),
-        ),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
           children: [
-            if (pending != null) Text(pending.displayLabel),
-            const SizedBox(height: 16),
-            TextField(
-              key: const Key('connect-password'),
-              controller: _password,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: t(context, 'connect.password.label'),
-                hintText: t(context, 'connect.password.placeholder'),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: CircularChromeButton(
+                  key: const Key('connect-cancel-password'),
+                  icon: CupertinoIcons.xmark,
+                  tooltip: t(context, 'connect.cancelPassword'),
+                  onPressed: controller.cancelPassword,
+                ),
               ),
             ),
-            const SizedBox(height: 16),
-            FilledButton(
-              key: const Key('connect-unlock'),
-              onPressed: () => controller.unlockWithPassword(_password.text),
-              child: Text(t(context, 'connect.unlockButton')),
+            LargeTitleHeader(title: t(context, 'connect.password.label')),
+            if (pending != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
+                child: Text(pending.displayLabel),
+              ),
+            GroupedInsetCard(
+              child: InsetTextField(
+                fieldKey: const Key('connect-password'),
+                controller: _password,
+                label: t(context, 'connect.password.label'),
+                hint: t(context, 'connect.password.placeholder'),
+                obscureText: true,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
+              child: FilledButton(
+                key: const Key('connect-unlock'),
+                onPressed: () => controller.unlockWithPassword(_password.text),
+                child: Text(t(context, 'connect.unlockButton')),
+              ),
             ),
             TextButton(
               onPressed: controller.cancelPassword,
@@ -198,7 +254,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
       trailing: IconButton(
         tooltip: t(context, 'connect.delete'),
         onPressed: () => controller.deleteInstance(instance.id),
-        icon: const Icon(Icons.delete_outline),
+        icon: const Icon(CupertinoIcons.delete),
       ),
     );
   }

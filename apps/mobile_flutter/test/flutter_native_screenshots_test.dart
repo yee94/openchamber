@@ -70,28 +70,32 @@ void main() {
     await _pumpFrames(tester);
 
     expect(find.byKey(const Key('unread-dot')), findsOneWidget);
-    expect(find.textContaining('openchamber ·'), findsWidgets);
+    expect(find.textContaining('openchamber'), findsWidgets);
+    expect(find.textContaining('个会话'), findsWidgets);
+    expect(find.byKey(const Key('tab-projects')), findsOneWidget);
     await tester.tap(find.byKey(const Key('projects-plus-menu')));
     await _pumpFrames(tester);
     expect(find.text('新建对话'), findsOneWidget);
-    await _writePng(tester, screenshotKey, '02-projects.png');
     await tester.tapAt(const Offset(48, 720));
     await _pumpFrames(tester);
+    await _writePng(tester, screenshotKey, '02-projects.png');
 
-    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('助理')));
+    await tester.tap(find.byKey(const Key('tab-assistant')));
     await _pumpUntil(tester, find.byKey(const Key('assistant-item-asst-1')));
     expect(find.byKey(const Key('assistant-item-asst-1')), findsOneWidget);
     expect(find.byKey(const Key('assistant-item-asst-2')), findsOneWidget);
+    expect(find.byKey(const Key('tab-assistant')), findsOneWidget);
     await _writePng(tester, screenshotKey, '03-assistant.png');
 
-    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('计划')));
+    await tester.tap(find.byKey(const Key('tab-scheduled')));
     await _pumpUntil(tester, find.byKey(const Key('scheduled-task-cron-1')));
     expect(find.byKey(const Key('scheduled-task-cron-1')), findsOneWidget);
-    expect(find.textContaining('已安排下次运行'), findsWidgets);
-    expect(find.textContaining('success'), findsWidgets);
+    expect(find.textContaining('每天'), findsWidgets);
+    expect(find.text('任务'), findsWidgets);
+    expect(find.text('历史记录'), findsWidgets);
     await _writePng(tester, screenshotKey, '04-scheduled.png');
 
-    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('设置')));
+    await tester.tap(find.byKey(const Key('tab-settings')));
     await _pumpFrames(tester);
     expect(find.byKey(const Key('settings-search')), findsOneWidget);
     expect(find.byKey(const Key('settings-slug-appearance')), findsOneWidget);
@@ -110,7 +114,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('settings-back')));
     await _pumpFrames(tester);
-    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('项目')));
+    await tester.tap(find.byKey(const Key('tab-projects')));
     await _pumpFrames(tester);
 
     await tester.tap(find.byKey(const Key('home-session-sess-pinned')));
@@ -270,7 +274,7 @@ MemoryOpenChamberTransport _seededTransport() {
               'directory': '/workspace/openchamber',
               'parentID': null,
               'project': {'name': 'openchamber'},
-              'time': {'updated': 1, 'pinned': '2026-09-01T00:00:00.000Z'},
+              'time': {'updated': 1756900740000, 'pinned': '2026-09-01T00:00:00.000Z'},
               'branch': 'work/flutter-native',
               'unread': true,
             },
@@ -280,7 +284,7 @@ MemoryOpenChamberTransport _seededTransport() {
               'directory': '/workspace/openchamber',
               'parentID': null,
               'project': {'name': 'openchamber'},
-              'time': {'updated': 2},
+              'time': {'updated': 1756899000000},
               'branch': 'feat/home',
             },
             {
@@ -289,7 +293,7 @@ MemoryOpenChamberTransport _seededTransport() {
               'directory': '/workspace/openchamber',
               'parentID': null,
               'project': {'name': 'openchamber'},
-              'time': {'updated': 3},
+              'time': {'updated': 1756895400000},
               'branch': 'main',
             },
           ],
@@ -304,7 +308,14 @@ MemoryOpenChamberTransport _seededTransport() {
         ],
       },
       {
-        'info': {'id': 'm-asst', 'role': 'assistant'},
+        'info': {
+          'id': 'm-asst',
+          'role': 'assistant',
+          'model': {'name': 'Grok 4.6'},
+          'agent': 'Orchestrator',
+          'time': {'created': 1756899000000, 'completed': 1756900740000},
+          'tokens': {'output': 44000},
+        },
         'parts': [
           {'type': 'text', 'text': '已改 primary，请确认这次 edit。'},
           {
@@ -378,7 +389,7 @@ MemoryOpenChamberTransport _seededTransport() {
             'updatedAt': 2,
             'lastStatus': 'success',
             'lastSessionId': 'sess-catalog',
-            'nextRunAt': 1893456000000,
+            'nextRunAt': 1756987200000,
             'lastError': null,
           },
         },

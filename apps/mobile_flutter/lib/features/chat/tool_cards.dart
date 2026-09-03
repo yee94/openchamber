@@ -6,6 +6,7 @@ import '../../data/generated_result.dart';
 import '../../data/skill_tool_grouping.dart';
 import '../../l10n/app_strings.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/ios_chrome.dart';
 
 class ChatTranscriptBody extends StatelessWidget {
   const ChatTranscriptBody({
@@ -32,6 +33,7 @@ class ChatTranscriptBody extends StatelessWidget {
     final defaultExpanded = activityActive ||
         (isLastAssistant && !messageHasConfirmedFinalBody(message));
     final children = <Widget>[
+      if (!message.isUser) _AssistantHeader(message: message, live: isTurnLive),
       if (hasActivityParts && !message.isUser)
         _ActivityDisclosure(
           messageId: message.id,
@@ -81,17 +83,15 @@ class ChatTranscriptBody extends StatelessWidget {
         ));
       }
     }
-    if (message.tokensPerSecond != null) {
-      out.add(
-        Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            message.tokensPerSecond!,
-            key: Key('chat-tps-${message.id}'),
-            style: TextStyle(color: OcTokens.mutedLight, fontSize: 12),
-          ),
-        ),
-      );
+    final diffs = message.parts.where((part) => part.kind == ChatPartKind.diff).toList();
+    if (diffs.isNotEmpty) {
+      out.add(Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: _FileChangeCard(parts: diffs),
+      ));
+    }
+    if (message.tokensPerSecond != null || message.processedLabel != null || message.completedClock != null) {
+      out.add(_MetricsRow(message: message));
     }
     if (!message.isUser && onSpeak != null && _hasSpeakableText) {
       out.add(
@@ -119,6 +119,159 @@ class ChatTranscriptBody extends StatelessWidget {
         .where((text) => text.isNotEmpty)
         .join('\n');
     return fromParts.isNotEmpty || message.body.trim().isNotEmpty;
+  }
+}
+
+class _AssistantHeader extends StatelessWidget {
+  const _AssistantHeader({required this.message, required this.live});
+
+  final ChatMessage message;
+  final bool live;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = message.modelName ?? t(context, 'app.name');
+    final role = message.agentRole;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.explore_outlined, size: 18, color: OcChrome.secondary),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              ),
+              if (role != null && role.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(role, style: const TextStyle(fontSize: 12, color: OcChrome.secondary)),
+                ),
+              ],
+            ],
+          ),
+          if (message.processedLabel != null || message.agentCount > 0) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                if (message.processedLabel != null)
+                  Text(
+                    '${t(context, live ? 'chat.activity.active' : 'chat.activity.completedStatus')} ${message.processedLabel}',
+                    style: const TextStyle(fontSize: 12, color: OcChrome.secondary),
+                  ),
+                const Spacer(),
+                if (message.agentCount > 0)
+                  Text(
+                    t(context, 'chat.agentsInvolved', {'count': '${message.agentCount}'}),
+                    style: const TextStyle(fontSize: 12, color: OcChrome.secondary),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _FileChangeCard extends StatelessWidget {
+  const _FileChangeCard({required this.parts});
+
+  final List<ChatPart> parts;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = parts.take(4).toList();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.insert_drive_file_outlined, size: 16, color: OcChrome.secondary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  t(context, 'chat.filesChanged', {'count': '${parts.length}'}),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ),
+              const Icon(Icons.chevron_right, size: 16, color: OcChrome.secondary),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final part in visible)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      part.path ?? part.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                  Text(
+                    '+${part.added.length}/-${part.removed.length}',
+                    style: const TextStyle(fontSize: 12, color: OcChrome.secondary),
+                  ),
+                ],
+              ),
+            ),
+          if (parts.length > visible.length)
+            Text(
+              t(context, 'chat.filesChanged.more', {'count': '${parts.length - visible.length}'}),
+              style: const TextStyle(fontSize: 13, color: OcChrome.secondary),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricsRow extends StatelessWidget {
+  const _MetricsRow({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          if (message.tokensPerSecond != null)
+            Text(
+              message.tokensPerSecond!,
+              key: Key('chat-tps-${message.id}'),
+              style: const TextStyle(fontSize: 12, color: OcChrome.secondary),
+            ),
+          if (message.processedLabel != null) ...[
+            const SizedBox(width: 10),
+            Text(message.processedLabel!, style: const TextStyle(fontSize: 12, color: OcChrome.secondary)),
+          ],
+          if (message.completedClock != null) ...[
+            const SizedBox(width: 10),
+            Text(message.completedClock!, style: const TextStyle(fontSize: 12, color: OcChrome.secondary)),
+          ],
+        ],
+      ),
+    );
   }
 }
 

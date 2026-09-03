@@ -21,6 +21,7 @@ class HomeSessionRow {
     this.branch,
     this.unread = false,
     this.directory,
+    this.updated = 0,
   });
 
   final String id;
@@ -30,6 +31,7 @@ class HomeSessionRow {
   final HomeSessionKind kind;
   final bool unread;
   final String? directory;
+  final num updated;
 
   String get subtitle => formatHomeSessionSubtitle(projectLabel, branch);
 }

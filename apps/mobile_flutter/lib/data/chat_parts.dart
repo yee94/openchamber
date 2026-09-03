@@ -41,12 +41,41 @@ List<ChatMessage> parseTurnPageMessages(Object? payload, {List<PermissionRequest
       parts: record['parts'],
     ));
     if (body.isEmpty && parts.isEmpty && role.isEmpty) continue;
+    final model = info['model'];
+    String? modelName;
+    if (model is Map) {
+      modelName = model['name']?.toString() ?? model['id']?.toString();
+    } else {
+      modelName = model?.toString() ?? info['modelID']?.toString();
+    }
+    if (modelName != null && modelName.isEmpty) modelName = null;
+    final agentRole = info['agent']?.toString() ?? info['mode']?.toString();
+    final created = _num(info['time'] is Map ? (info['time'] as Map)['created'] : info['createdAt']);
+    final completed = _num(info['time'] is Map ? (info['time'] as Map)['completed'] : info['completedAt']);
+    String? processed;
+    String? clock;
+    if (created != null && completed != null && completed > created) {
+      final seconds = ((completed - created) / 1000).round();
+      final minutes = seconds ~/ 60;
+      final remain = seconds % 60;
+      processed = minutes > 0 ? '${minutes}m ${remain}s' : '${remain}s';
+    }
+    if (completed != null && completed > 1e11) {
+      final time = DateTime.fromMillisecondsSinceEpoch(completed.round());
+      clock = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    }
+    final agentCount = parts.where((part) => part.kind == ChatPartKind.task).length;
     messages.add(ChatMessage(
       id: id,
       body: body,
       isUser: role == 'user',
       parts: parts,
       tokensPerSecond: tps,
+      modelName: modelName,
+      agentRole: agentRole == null || agentRole.isEmpty ? null : agentRole,
+      processedLabel: processed,
+      completedClock: clock,
+      agentCount: agentCount,
     ));
   }
   if (permissions.isEmpty || messages.isEmpty) return messages;

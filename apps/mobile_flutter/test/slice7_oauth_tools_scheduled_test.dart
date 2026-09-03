@@ -194,7 +194,7 @@ void main() {
     await tester.pumpWidget(OpenChamberApp(controller: controller));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Settings')));
+    await tester.tap(find.byKey(const Key('tab-settings')));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const Key('settings-slug-providers')));
     await tester.tap(find.byKey(const Key('settings-slug-providers')));
@@ -228,16 +228,16 @@ void main() {
 
     await tester.pageBack();
     await tester.pumpAndSettle();
-    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Schedule')));
+    await tester.tap(find.byKey(const Key('tab-scheduled')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('scheduled-task-cron-1')), findsOneWidget);
-    expect(find.textContaining('success'), findsWidgets);
-    expect(find.textContaining('daily'), findsWidgets);
+    expect(find.textContaining('Daily'), findsWidgets);
+    expect(find.textContaining('02:00'), findsWidgets);
     await tester.tap(find.byKey(const Key('scheduled-run-now-cron-1')));
     await tester.pumpAndSettle();
     expect(find.textContaining('running'), findsWidgets);
 
-    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Projects')));
+    await tester.tap(find.byKey(const Key('tab-projects')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('New Session'));
     await tester.pumpAndSettle();

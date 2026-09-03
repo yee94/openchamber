@@ -1,9 +1,11 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
 import '../../data/settings_catalog.dart';
 import '../../l10n/app_strings.dart';
 import '../../navigation/platform_route.dart';
+import '../../theme/ios_chrome.dart';
 import 'settings_pages.dart';
 import 'settings_primitives.dart';
 
@@ -28,57 +30,79 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
     final groups = groupMobileSettingsPages(matches);
 
     return Scaffold(
-      appBar: AppBar(title: Text(t(context, 'settings.home.title'))),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 32),
           children: [
-          TextField(
-            key: const Key('settings-search'),
-            decoration: InputDecoration(
-              hintText: t(context, 'settings.search.placeholder'),
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _query.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: t(context, 'settings.search.clear'),
-                      onPressed: () => setState(() => _query = ''),
-                      icon: const Icon(Icons.clear),
-                    ),
+            LargeTitleHeader(title: t(context, 'settings.home.title')),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 16),
+              child: TextField(
+                key: const Key('settings-search'),
+                onChanged: (value) => setState(() => _query = value),
+                decoration: InputDecoration(
+                  hintText: t(context, 'settings.search.placeholder'),
+                  prefixIcon: const Icon(CupertinoIcons.search, size: 18),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: t(context, 'settings.search.clear'),
+                          onPressed: () => setState(() => _query = ''),
+                          icon: const Icon(CupertinoIcons.xmark_circle_fill, size: 18),
+                        ),
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surface,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(OcChrome.pillRadius),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(OcChrome.pillRadius),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(OcChrome.pillRadius),
+                    borderSide: BorderSide.none,
+                  ),
+                  floatingLabelBehavior: FloatingLabelBehavior.never,
+                ),
+              ),
             ),
-            onChanged: (value) => setState(() => _query = value),
-          ),
-          const SizedBox(height: 20),
-          if (groups.isEmpty)
-            Text(t(context, 'settings.search.noResults'))
-          else
-            ...groups.map((group) {
-              return SettingsGroup(
-                label: groupLabel(context, group.group),
-                children: group.pages.map((page) {
-                  return SettingsNavRow(
-                    key: Key('settings-slug-${page.slug}'),
-                    label: t(context, page.titleKey),
-                    subtitle: page.descriptionKey == null ? null : t(context, page.descriptionKey!),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        platformPageRoute<void>(
-                          builder: (_) => AnimatedBuilder(
-                            animation: widget.controller,
-                            builder: (context, _) => SettingsDetailPage(
-                              controller: widget.controller,
-                              page: page,
+            if (groups.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
+                child: Text(t(context, 'settings.search.noResults')),
+              )
+            else
+              ...groups.map((group) {
+                return SettingsGroup(
+                  label: groupLabel(context, group.group),
+                  children: group.pages.map((page) {
+                    return SettingsNavRow(
+                      key: Key('settings-slug-${page.slug}'),
+                      label: t(context, page.titleKey),
+                      subtitle: page.descriptionKey == null ? null : t(context, page.descriptionKey!),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          platformPageRoute<void>(
+                            builder: (_) => AnimatedBuilder(
+                              animation: widget.controller,
+                              builder: (context, _) => SettingsDetailPage(
+                                controller: widget.controller,
+                                page: page,
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
-                  );
-                }).toList(),
-              );
-            }),
-        ],
+                        );
+                      },
+                    );
+                  }).toList(),
+                );
+              }),
+          ],
         ),
       ),
     );

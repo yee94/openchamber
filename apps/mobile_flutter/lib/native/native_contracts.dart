@@ -72,7 +72,7 @@ const List<NativeContract> flutterNativeContracts = [
   NativeContract(
     id: 'haptics',
     status: 'missing',
-    summary: 'TODO: light/medium/heavy impact (UIImpactFeedbackGenerator / performHapticFeedback).',
+    summary: 'light/medium/heavy impact (UIImpactFeedbackGenerator / performHapticFeedback). Always on.',
   ),
   NativeContract(
     id: 'native-back',

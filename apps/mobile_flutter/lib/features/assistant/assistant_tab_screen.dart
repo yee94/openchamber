@@ -1,11 +1,12 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
 import '../../data/assistant_scheduled.dart';
 import '../../data/openchamber_http.dart';
 import '../../l10n/app_strings.dart';
+import '../../theme/ios_chrome.dart';
 import '../chat/chat_screen.dart';
-import '../settings/settings_primitives.dart';
 
 class AssistantTabScreen extends StatefulWidget {
   const AssistantTabScreen({super.key, required this.controller});
@@ -64,34 +65,62 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
     final resource = widget.controller.assistantSnapshot;
     final snapshot = resource.value;
     return Scaffold(
-      appBar: AppBar(title: Text(t(context, 'tabs.assistant'))),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (_actionError != null)
-            ListTile(title: Text(t(context, _actionError!), style: TextStyle(color: Theme.of(context).colorScheme.error))),
-          if (resource.errorKey != null)
-            ListTile(key: const Key('assistant-error'), title: Text(t(context, resource.errorKey!)))
-          else if (resource.loading && snapshot == null)
-            const Center(child: CircularProgressIndicator())
-          else if (snapshot == null || snapshot.assistants.isEmpty)
-            SettingsGroup(
-              label: t(context, 'tabs.assistant'),
-              children: [
-                ListTile(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 24),
+          children: [
+            LargeTitleHeader(title: t(context, 'tabs.assistant')),
+            if (_actionError != null)
+              ListTile(title: Text(t(context, _actionError!), style: TextStyle(color: Theme.of(context).colorScheme.error))),
+            if (resource.errorKey != null)
+              ListTile(key: const Key('assistant-error'), title: Text(t(context, resource.errorKey!)))
+            else if (resource.loading && snapshot == null)
+              const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (snapshot == null || snapshot.assistants.isEmpty)
+              GroupedInsetCard(
+                child: ListTile(
                   key: const Key('assistant-empty'),
                   title: Text(t(context, 'assistant.empty.title')),
                   subtitle: Text(t(context, 'assistant.empty.description')),
                 ),
-              ],
-            )
-          else ...[
-            SettingsGroup(
-              label: t(context, 'tabs.assistant'),
-              children: [
-                SettingsToggleRow(
+              )
+            else ...[
+              if (!snapshot.enabled)
+                GroupedInsetCard(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(t(context, 'assistant.guide.title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 6),
+                        Text(t(context, 'assistant.guide.description'), style: const TextStyle(color: OcChrome.secondary)),
+                        const SizedBox(height: 14),
+                        FilledButton(
+                          key: const Key('assistant-enabled'),
+                          onPressed: () async {
+                            try {
+                              await widget.controller.setAssistantsFeatureEnabled(true);
+                            } on OpenChamberHttpException {
+                              if (mounted) setState(() => _actionError = 'settings.error.saveFailed');
+                            }
+                          },
+                          child: Text(t(context, 'assistant.guide.enable')),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                SwitchListTile(
                   key: const Key('assistant-enabled'),
-                  label: t(context, 'assistant.enabled'),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
+                  title: Text(t(context, 'assistant.enabled')),
                   value: snapshot.enabled,
                   onChanged: (value) async {
                     try {
@@ -101,22 +130,57 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
                     }
                   },
                 ),
-              ],
-            ),
-            SettingsGroup(
-              label: t(context, 'assistant.list'),
-              children: [
-                for (final item in snapshot.assistants)
-                  SettingsNavRow(
+              for (final item in snapshot.assistants)
+                GroupedInsetCard(
+                  child: InkWell(
                     key: Key('assistant-item-${item.id}'),
-                    label: item.name,
-                    subtitle: item.modelLabel,
                     onTap: () => _open(item.id),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 22,
+                            backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.14),
+                            child: Text(
+                              item.name.isEmpty ? '?' : item.name.substring(0, 1),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(item.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                                if (item.modelLabel != null) ...[
+                                  const SizedBox(height: 3),
+                                  Text(item.modelLabel!, style: const TextStyle(fontSize: 13, color: OcChrome.secondary)),
+                                ],
+                                if (item.workspacePath != null && item.workspacePath!.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    item.workspacePath!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 12, color: OcChrome.secondary),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const Icon(CupertinoIcons.ellipsis, color: OcChrome.secondary),
+                        ],
+                      ),
+                    ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
