@@ -119,10 +119,8 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  /// Official hit is `size-10` (40). Glyph is official `size-5` (20). The
-  /// painted plate sits 2px inside so WidgetTester frost does not read as a
-  /// larger coin than the live glass chip.
-  static const double headerDiscVisual = 38;
+  /// Official `Button` `mobileIcon` is 40. Glyph is `size-5` (20).
+  static const double headerDiscVisual = 40;
   static const double headerGlyph = 20;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
@@ -197,6 +195,8 @@ class OcOptical {
   /// Official scheduled status uses the project-shell glass disc, with a
   /// quieter `size-4` glyph so the row does not out-weigh the segment track.
   static const double scheduleStatus = leadingCircle;
+  /// Painted plate sits inside the 38 shell so WidgetTester frost is not a coin.
+  static const double scheduleStatusVisual = 32;
   /// Official non-tab scheduled glyph is `size-3.5`; shell disc stays 38.
   static const double scheduleStatusGlyph = 14;
 

@@ -454,6 +454,53 @@ class UserTurnToolbar extends StatelessWidget {
   }
 }
 
+String _fileTypeMark(String lower) {
+  if (lower.endsWith('.tsx') || lower.endsWith('.jsx')) return 'TX';
+  if (lower.endsWith('.ts') || lower.endsWith('.js')) return 'TS';
+  if (lower.endsWith('.dart')) return 'DT';
+  if (lower.endsWith('.md')) return 'MD';
+  return '';
+}
+
+/// Compact FileTypeIcon analogue — filled 12px brand tile, not a document outline.
+class _FileTypeSpritePainter extends CustomPainter {
+  const _FileTypeSpritePainter({required this.tint, required this.mark});
+
+  final Color tint;
+  final String mark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(size.width * 0.18),
+    );
+    canvas.drawRRect(r, Paint()..color = tint);
+    if (mark.isEmpty) return;
+    final tp = TextPainter(
+      text: TextSpan(
+        text: mark,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: size.width * 0.42,
+          fontWeight: FontWeight.w700,
+          height: 1,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: size.width);
+    tp.paint(
+      canvas,
+      Offset((size.width - tp.width) / 2, (size.height - tp.height) / 2),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _FileTypeSpritePainter oldDelegate) {
+    return oldDelegate.tint != tint || oldDelegate.mark != mark;
+  }
+}
+
 class _FileTypeMark extends StatelessWidget {
   const _FileTypeMark({required this.path});
 
@@ -475,11 +522,9 @@ class _FileTypeMark extends StatelessWidget {
     } else {
       tint = tokens.mutedForeground;
     }
-    return OcGlyph(
-      OcGlyphKind.file,
-      size: OcOptical.fileTypeSize,
-      strokeWidth: OcOptical.listGlyphStroke,
-      color: tint,
+    return CustomPaint(
+      size: const Size.square(OcOptical.fileTypeSize),
+      painter: _FileTypeSpritePainter(tint: tint, mark: _fileTypeMark(lower)),
     );
   }
 }

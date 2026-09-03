@@ -149,7 +149,7 @@ class OcTokens extends ThemeExtension<OcTokens> {
   /// Circular `mobileGlass` chips. Official fill is 0.68 + live blur;
   /// WidgetTester frost is weaker, so drop alpha so cream peeks through.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.22 : 0.24);
+      .withValues(alpha: isDark ? 0.28 : 0.30);
 
   /// Official dock plate is `--oc-mobile-float-background` (elevated 45%)
   /// plus glass blur — same token as [floatSurface], not glass-fill 0.68.
@@ -164,10 +164,16 @@ class OcTokens extends ThemeExtension<OcTokens> {
       foreground.withValues(alpha: isDark ? 0.122 : 0.086);
 
   /// Official selected-tab fill: `bg-interactive-selection/55`.
-  /// Tailwind `/55` mixes the already-alpha token with transparent, so the
-  /// stadium is a soft wash — not a gray disc and not a primary oval.
-  Color get selectedTabWash =>
-      interactiveSelection.withValues(alpha: interactiveSelection.a * 0.55);
+  /// Tailwind `/55` replaces the color's alpha with 0.55 (the RGB is the
+  /// muted selection ink, not primary). Multiplying the already-alpha token
+  /// (~0.086 × 0.55) made the full-cell pill vanish so selection read as an
+  /// orange rounded-rect.
+  Color get selectedTabWash => Color.from(
+        alpha: 0.55,
+        red: interactiveSelection.r,
+        green: interactiveSelection.g,
+        blue: interactiveSelection.b,
+      );
 
   /// `--oc-mobile-header-fade` = surface-background 85%.
   Color get headerFade => background.withValues(alpha: 0.85);

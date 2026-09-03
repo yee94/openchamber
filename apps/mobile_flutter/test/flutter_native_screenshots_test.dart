@@ -205,6 +205,10 @@ void main() {
     expect(find.byKey(const Key('dock-selected-scheduled')), findsOneWidget);
     expect(find.byKey(const Key('dock-selected-projects')), findsNothing);
     expect(find.byType(MobileTabPageHeader), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const Key('segment-0'))).dy,
+      greaterThan(tester.getBottomLeft(find.byKey(const Key('mobile-tab-page-title'))).dy),
+    );
     await _writePng(tester, screenshotKey, '04-scheduled.png');
 
     await tester.tap(find.byKey(const Key('tab-settings')));
@@ -241,6 +245,11 @@ void main() {
     await _writePng(tester, screenshotKey, '02-projects-dark.png');
 
     final chatSession = controller.sessions.firstWhere((row) => row.id == 'sess-extra');
+    transport.statusBySession = const {'sess-npm': 'busy'};
+    controller.sessionStatusById = {
+      ...controller.sessionStatusById,
+      'sess-extra': 'idle',
+    };
     SecondaryChrome.debugReset();
     await tester.pumpWidget(
       StringsScope(
@@ -261,12 +270,11 @@ void main() {
       ),
     );
     await _pumpUntil(tester, find.byKey(const Key('chat-tool-diff-edit-1')));
-    await _pumpUntil(tester, find.byKey(const Key('chat-busy')));
     await _pumpFrames(tester);
     expect(find.byKey(const Key('chat-back')), findsOneWidget);
     expect(tester.getSize(find.byType(PushedNavBar)).height, 47 + OcOptical.detailNavigationHeight);
     expect(tester.getSize(find.byKey(const Key('chat-back'))).height, OcOptical.headerDisc);
-    expect(find.byKey(const Key('chat-busy')), findsOneWidget);
+    expect(find.byKey(const Key('chat-busy')), findsNothing);
     expect(find.byKey(const Key('reverse-chat-list')), findsOneWidget);
     expect(find.byKey(const Key('composer-field')), findsOneWidget);
     expect(find.text('点击输入'), findsOneWidget);

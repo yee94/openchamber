@@ -118,6 +118,7 @@ class _TabSlot extends StatelessWidget {
       child: Pressable(
         key: Key('tab-$id'),
         haptic: HapticStrength.light,
+        highlight: false,
         onPressed: onTap,
         borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
         child: OcSelectedSpring(

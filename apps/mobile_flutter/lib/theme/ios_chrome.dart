@@ -240,25 +240,18 @@ class CircularChromeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.oc;
     final hit = size ?? (filled ? OcOptical.addButton : OcOptical.searchButton);
-    final disc = OcOptical.headerDiscVisual;
+    final disc = hit < OcOptical.headerDiscVisual ? hit : OcOptical.headerDiscVisual;
     final glyphWidget = OcGlyph(
       glyph,
-      size: OcOptical.headerGlyph,
+      size: ink ? OcOptical.leadingGlyphCompact : OcOptical.headerGlyph,
       strokeWidth: OcOptical.headerGlyphStroke,
-      color: !filled ? tokens.foreground : tokens.primaryForeground,
+      color: !filled && !ink ? tokens.foreground : tokens.primaryForeground,
     );
-    final plate = filled
+    final plate = filled || ink
         ? DecoratedBox(
             decoration: BoxDecoration(
               color: ink ? tokens.foreground : tokens.primary,
               shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: (ink ? tokens.foreground : tokens.primary).withValues(alpha: 0.22),
-                  blurRadius: 22,
-                  offset: const Offset(0, 10),
-                ),
-              ],
             ),
             child: SizedBox(
               width: disc,
@@ -746,7 +739,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: OcOptical.chatTitle,
-                            fontWeight: FontWeight.lerp(FontWeight.w600, FontWeight.w700, 0.5),
+                            fontWeight: FontWeight.w500,
                             letterSpacing: OcOptical.chatTitleTracking,
                             height: OcOptical.chatTitleHeight,
                             color: tokens.foreground,

@@ -83,6 +83,7 @@ class MobileTabPageScaffold extends StatefulWidget {
     this.trailing,
     this.onRefresh,
     this.bottomOccupancy = 0,
+    this.restPeek = OcOptical.headerRestPeek,
   });
 
   final String title;
@@ -91,6 +92,10 @@ class MobileTabPageScaffold extends StatefulWidget {
   final List<Widget> children;
   final Future<void> Function()? onRefresh;
   final double bottomOccupancy;
+
+  /// Projects peek catalog under the translucent title. Scheduled / assistant
+  /// / settings keep content below the large title (official stack).
+  final double restPeek;
 
   @override
   State<MobileTabPageScaffold> createState() => _MobileTabPageScaffoldState();
@@ -146,13 +151,13 @@ class _MobileTabPageScaffoldState extends State<MobileTabPageScaffold> {
             MobileTabPageHeader.layoutSlot(safeTop: safeTop),
             MobileTabPageHeader.expandShiftSpacer,
             Transform.translate(
-              offset: const Offset(0, -OcOptical.headerRestPeek),
+              offset: Offset(0, -widget.restPeek),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: widget.children,
               ),
             ),
-            const SizedBox(height: OcOptical.headerRestPeek),
+            SizedBox(height: widget.restPeek),
           ],
         ),
       ),

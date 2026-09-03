@@ -104,6 +104,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
     final filterId = widget.controller.scheduledFilterTaskId;
     return MobileTabPageScaffold(
       title: t(context, 'tabs.scheduled'),
+      restPeek: 0,
       children: [
             SegmentedPill(
               labels: [t(context, 'scheduled.views.tasks'), t(context, 'scheduled.views.history')],
@@ -123,8 +124,8 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                 trailing: CircularChromeButton(
                   key: const Key('scheduled-add'),
                   glyph: OcGlyphKind.plus,
-                  filled: true,
-                  size: OcOptical.addButton,
+                  ink: true,
+                  size: OcTokens.formControlHeight,
                   tooltip: t(context, 'scheduled.add'),
                   onPressed: () {},
                 ),
@@ -199,16 +200,22 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
               SizedBox(
                 width: OcOptical.scheduleStatus,
                 height: OcOptical.scheduleStatus,
-                child: ClipOval(
-                  child: OcFrosted(
-                    fill: context.oc.glassChipFill,
-                    child: Center(
-                      child: OcGlyph(
-                        paused ? OcGlyphKind.pause : OcGlyphKind.check,
-                        size: OcOptical.scheduleStatusGlyph,
-                        strokeWidth: OcOptical.listGlyphStroke,
-                        filled: false,
-                        color: paused ? context.oc.mutedForeground : context.oc.statusSuccess,
+                child: Center(
+                  child: SizedBox(
+                    width: OcOptical.scheduleStatusVisual,
+                    height: OcOptical.scheduleStatusVisual,
+                    child: ClipOval(
+                      child: OcFrosted(
+                        fill: context.oc.glassChipFill,
+                        child: Center(
+                          child: OcGlyph(
+                            paused ? OcGlyphKind.pause : OcGlyphKind.check,
+                            size: OcOptical.scheduleStatusGlyph,
+                            strokeWidth: OcOptical.listGlyphStroke,
+                            filled: false,
+                            color: paused ? context.oc.mutedForeground : context.oc.statusSuccess,
+                          ),
+                        ),
                       ),
                     ),
                   ),
