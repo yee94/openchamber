@@ -12,10 +12,9 @@ import '../theme/ios_chrome.dart';
 /// inner translateY, fade opacity). The 0.625rem spacer lives in
 /// [MobileTabPageScaffold], not here.
 ///
-/// iOS: this widget does **not** paint a Flutter blur/glass rectangle. Tab-bar
-/// translucency stays on the existing UIKit `UITabBar` overlay. The collapse
-/// fade is the official `--oc-mobile-header-fade` color-mix (WidgetTester and
-/// Android goldens are solid, not `UIVisualEffect`).
+/// WidgetTester / Android paint [OcFrosted] (`BackdropFilter` + glass fill)
+/// so scrolled content can peek through. Real iOS still keeps live glass on
+/// the UIKit `UITabBar` overlay — this is not a `UIGlassEffect` clone.
 class MobileTabPageHeader extends StatelessWidget {
   const MobileTabPageHeader({
     super.key,
@@ -71,7 +70,7 @@ class MobileTabPageHeader extends StatelessWidget {
     final tokens = context.oc;
     final safeTop = MediaQuery.paddingOf(context).top;
     final t = collapse.clamp(0.0, 1.0);
-    final fade = tokens.background.withValues(alpha: 0.85);
+    final fade = tokens.background.withValues(alpha: 0.72);
     final fadeH = fadeHeight(safeTop);
     final headerH = layoutHeight(safeTop);
 
@@ -87,19 +86,24 @@ class MobileTabPageHeader extends StatelessWidget {
             right: 0,
             height: fadeH,
             child: IgnorePointer(
-              child: Opacity(
-                opacity: t,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [fade, fade, fade.withValues(alpha: 0)],
-                      stops: [
-                        0,
-                        ((safeTop + fadeH * 0.35) / fadeH).clamp(0.0, 1.0),
-                        1,
-                      ],
+              child: ClipRect(
+                child: OcFrosted(
+                  fill: tokens.background.withValues(alpha: 0.42),
+                  child: Opacity(
+                    opacity: 0.55 + (0.45 * t),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [fade, fade, fade.withValues(alpha: 0)],
+                          stops: [
+                            0,
+                            ((safeTop + fadeH * 0.35) / fadeH).clamp(0.0, 1.0),
+                            1,
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),

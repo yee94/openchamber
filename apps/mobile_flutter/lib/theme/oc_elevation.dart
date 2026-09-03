@@ -34,7 +34,7 @@ class OcElevation {
 
   static List<BoxShadow> groupedFor(OcTokens tokens) => cardFor(tokens);
 
-  /// Dock capsule — same float-shadow family (no glass fill).
+  /// Dock capsule — same float-shadow family. Fill/blur live on [OcFrosted].
   static List<BoxShadow> dock(BuildContext context) => dockFor(OcTokens.of(context));
 
   static List<BoxShadow> dockFor(OcTokens tokens) => cardFor(tokens);

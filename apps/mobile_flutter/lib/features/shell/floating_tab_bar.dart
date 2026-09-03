@@ -11,9 +11,9 @@ import '../../theme/oc_glyphs.dart';
 
 /// Flutter-painted homepage dock for Android and WidgetTester.
 ///
-/// Official analogue: `MobileFloatingBottomBar` stadium dock. Selected chrome
-/// is a soft pill behind the **icon only** (README optical; official CSS
-/// washes the whole slot). Real iOS uses [IosTabBarHost] / UITabBarController.
+/// Official analogue: `MobileFloatingBottomBar` glass stadium +
+/// `.oc-mobile-tab-button` selected chrome covering the **full slot**
+/// (icon + label). Real iOS uses [IosTabBarHost] / UITabBarController.
 class FloatingCapsuleTabBar extends StatelessWidget {
   const FloatingCapsuleTabBar({
     super.key,
@@ -51,33 +51,35 @@ class FloatingCapsuleTabBar extends StatelessWidget {
           child: DecoratedBox(
             key: Key('dock-selected-$selectedId'),
             decoration: BoxDecoration(
-              color: tokens.dockFill,
               borderRadius: radius,
               border: Border.all(color: tokens.mobileBorder, width: 0.5),
               boxShadow: OcElevation.dock(context),
             ),
-            child: Material(
-              color: Colors.transparent,
+            child: ClipRRect(
               borderRadius: radius,
-              clipBehavior: Clip.antiAlias,
-              child: SizedBox(
-                key: const Key('dock-capsule'),
-                height: OcTokens.dockHeight,
-                child: Padding(
-                  padding: const EdgeInsets.all(OcOptical.dockInnerInset),
-                  child: Row(
-                    children: [
-                      for (final item in _items)
-                        Expanded(
-                          child: _TabSlot(
-                            id: item.id,
-                            glyph: item.glyph,
-                            label: t(context, item.labelKey),
-                            selected: selectedId == item.id,
-                            onTap: () => onSelect(item.id),
-                          ),
-                        ),
-                    ],
+              child: OcFrosted(
+                child: Material(
+                  color: Colors.transparent,
+                  child: SizedBox(
+                    key: const Key('dock-capsule'),
+                    height: OcTokens.dockHeight,
+                    child: Padding(
+                      padding: const EdgeInsets.all(OcOptical.dockInnerInset),
+                      child: Row(
+                        children: [
+                          for (final item in _items)
+                            Expanded(
+                              child: _TabSlot(
+                                id: item.id,
+                                glyph: item.glyph,
+                                label: t(context, item.labelKey),
+                                selected: selectedId == item.id,
+                                onTap: () => onSelect(item.id),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -116,53 +118,36 @@ class _TabSlot extends StatelessWidget {
         child: OcSelectedSpring(
           selected: selected,
           builder: (context, t) {
-            return Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Color.lerp(
-                      Colors.transparent,
-                      tokens.primary.withValues(alpha: OcOptical.dockIconWashAlpha),
-                      t,
-                    ),
-                    borderRadius: BorderRadius.circular(OcOptical.dockIconPillRadius),
-                    boxShadow: t <= 0
-                        ? const []
-                        : [
-                            BoxShadow(
-                              color: tokens.primary.withValues(alpha: OcOptical.dockIconGlowAlpha * t),
-                              blurRadius: OcOptical.dockIconGlowBlur,
-                            ),
-                          ],
-                  ),
-                  child: SizedBox(
-                    width: OcOptical.dockIconPillWidth,
-                    height: OcOptical.dockIconPillHeight,
-                    child: Center(
-                      child: OcGlyph(
-                        glyph,
-                        size: OcOptical.dockGlyph,
-                        color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
-                        strokeWidth: OcOptical.dockGlyphStroke,
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(height: OcOptical.dockLabelGap),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: OcOptical.dockLabel,
-                    letterSpacing: OcOptical.dockLabelTracking,
-                    height: 1.2,
-                    fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
+            return DecoratedBox(
+              decoration: BoxDecoration(
+                color: Color.lerp(Colors.transparent, tokens.interactiveSelection, t),
+                borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  OcGlyph(
+                    glyph,
+                    size: OcOptical.dockGlyph,
                     color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
+                    strokeWidth: OcOptical.dockGlyphStroke,
+                    filled: true,
                   ),
-                ),
-              ],
+                  SizedBox(height: OcOptical.dockLabelGap),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: OcOptical.dockLabel,
+                      letterSpacing: OcOptical.dockLabelTracking,
+                      height: 1.2,
+                      fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
+                      color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
+                    ),
+                  ),
+                ],
+              ),
             );
           },
         ),

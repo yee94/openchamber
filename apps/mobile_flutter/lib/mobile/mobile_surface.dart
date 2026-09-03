@@ -48,7 +48,8 @@ class MobileLabeledSurfaceGroup extends StatelessWidget {
 /// The scroll body keeps an in-flow [MobileTabPageHeader.layoutSlot] plus the
 /// official `0.625rem` expand-shift spacer. Children stay a built [Column]
 /// (not a lazy sliver) so settings slugs remain hittable via `ensureVisible`.
-/// iOS does not get a Flutter glass fill.
+/// WidgetTester / Android paint header frost via [MobileTabPageHeader].
+/// Real iOS still keeps live glass on the UIKit `UITabBar` overlay.
 class MobileTabPageScaffold extends StatefulWidget {
   const MobileTabPageScaffold({
     super.key,

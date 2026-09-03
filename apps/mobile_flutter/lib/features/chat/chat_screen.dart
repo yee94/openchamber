@@ -344,8 +344,13 @@ class _ChatScreenState extends State<ChatScreen> {
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
     final inset = MediaQuery.viewInsetsOf(context);
     final atLiveEdge = _atLiveEdge;
+    final navH = const PushedNavBar(title: '').preferredSize.height;
+    final safeTop = MediaQuery.paddingOf(context).top;
+    final composerReserve = collapsedComposerOccupancy + (ios ? MediaQuery.paddingOf(context).bottom : inset.bottom);
     return Scaffold(
+      extendBodyBehindAppBar: true,
       resizeToAvoidBottomInset: !ios,
+      backgroundColor: context.oc.background,
       appBar: PushedNavBar(
         title: widget.session.title,
         leadingKey: const Key('chat-back'),
@@ -354,32 +359,21 @@ class _ChatScreenState extends State<ChatScreen> {
           haptic: HapticStrength.light,
           highlight: false,
           onPressed: () {},
-          child: SizedBox(
-            width: 36,
-            height: 36,
-            child: Center(
-              child: OcGlyph(
-                OcGlyphKind.ellipsis,
-                size: OcOptical.overflow,
-                strokeWidth: OcOptical.headerGlyphStroke,
-                color: context.oc.foreground,
-              ),
+          child: OcGlassChip(
+            child: OcGlyph(
+              OcGlyphKind.ellipsis,
+              size: OcOptical.headerGlyph,
+              color: context.oc.foreground,
             ),
           ),
         ),
       ),
-      body: Column(
+      body: Stack(
         children: [
-          if (_errorKey != null)
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(t(context, _errorKey!), style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ),
-          Expanded(
-            child: ReverseChatList(
-              controller: _timeline,
-              scrollController: _scroll,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ReverseChatList(
+            controller: _timeline,
+            scrollController: _scroll,
+            padding: EdgeInsets.fromLTRB(12, safeTop + navH + 4, 12, composerReserve + 12),
               itemBuilder: (context, message, reverseIndex) {
                 final isLastAssistant = !message.isUser && _isNewestAssistant(reverseIndex);
                 if (message.isUser) {
@@ -436,41 +430,48 @@ class _ChatScreenState extends State<ChatScreen> {
                 );
               },
             ),
-          ),
-          if (ios)
-            SizedBox(
-              height: collapsedComposerOccupancy + MediaQuery.paddingOf(context).bottom,
-              child: IosComposerHost(
-                visible: true,
-                warm: false,
-                text: _composer.text,
-                canSend: _composer.text.trim().isNotEmpty || _attachments.isNotEmpty,
-                canAbort: _busy,
-                attachments: _attachments.map((item) => item.name).toList(),
-                onSend: _send,
-                onStop: _stop,
-                onAttach: _attach,
-                onDictate: _dictate,
-                onText: (value) => setState(() => _composer.text = value),
-              ),
-            )
-          else
-            Padding(
-              padding: EdgeInsets.only(bottom: inset.bottom),
-              child: ComposerBar(
-                controller: _composer,
-                busy: _busy,
-                attachments: _attachments,
-                dictationLabel: _dictationLabel,
-                showScrollToBottom: !atLiveEdge || _timeline.length >= 2,
-                onScrollToBottom: _jumpToLatest,
-                onSend: _send,
-                onStop: _stop,
-                onAttach: _attach,
-                onDictate: widget.appController?.dictation is UnavailableDictation ? null : _dictate,
-                onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
-              ),
+          if (_errorKey != null)
+            Positioned(
+              top: safeTop + navH,
+              left: 8,
+              right: 8,
+              child: Text(t(context, _errorKey!), style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: ios ? 0 : inset.bottom,
+            child: ios
+                ? SizedBox(
+                    height: collapsedComposerOccupancy + MediaQuery.paddingOf(context).bottom,
+                    child: IosComposerHost(
+                      visible: true,
+                      warm: false,
+                      text: _composer.text,
+                      canSend: _composer.text.trim().isNotEmpty || _attachments.isNotEmpty,
+                      canAbort: _busy,
+                      attachments: _attachments.map((item) => item.name).toList(),
+                      onSend: _send,
+                      onStop: _stop,
+                      onAttach: _attach,
+                      onDictate: _dictate,
+                      onText: (value) => setState(() => _composer.text = value),
+                    ),
+                  )
+                : ComposerBar(
+                    controller: _composer,
+                    busy: _busy,
+                    attachments: _attachments,
+                    dictationLabel: _dictationLabel,
+                    showScrollToBottom: !atLiveEdge || _timeline.length >= 2,
+                    onScrollToBottom: _jumpToLatest,
+                    onSend: _send,
+                    onStop: _stop,
+                    onAttach: _attach,
+                    onDictate: widget.appController?.dictation is UnavailableDictation ? null : _dictate,
+                    onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
+                  ),
+          ),
         ],
       ),
     );

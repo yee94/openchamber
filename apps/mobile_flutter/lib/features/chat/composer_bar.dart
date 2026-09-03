@@ -8,8 +8,8 @@ import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
 import 'composer_occupancy.dart';
 
-/// Native composer chrome. Android is a floating pill with solid IME viewInsets.
-/// iOS uses the UIKit platform view (`IosComposerHost`) instead of this widget.
+/// Native composer chrome. Android / WidgetTester paint a frosted pill
+/// (`BackdropFilter`). iOS uses the UIKit platform view (`IosComposerHost`).
 class ComposerBar extends StatelessWidget {
   const ComposerBar({
     super.key,
@@ -119,20 +119,29 @@ class ComposerBar extends StatelessWidget {
                 padding: const EdgeInsets.only(right: 22, bottom: 6),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: context.oc.card,
                     shape: BoxShape.circle,
                     boxShadow: OcElevation.control(context),
                   ),
-                  child: Pressable(
-                    key: const Key('chat-scroll-to-bottom'),
-                    haptic: HapticStrength.light,
-                    highlight: false,
-                    onPressed: onScrollToBottom,
-                    child: SizedBox(
-                      width: OcOptical.scrollFab,
-                      height: OcOptical.scrollFab,
-                      child: Center(
-                        child: OcGlyph(OcGlyphKind.chevronDown, size: OcOptical.scrollChevron, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.foreground),
+                  child: ClipOval(
+                    child: OcFrosted(
+                      fill: context.oc.glassChipFill,
+                      child: Pressable(
+                        key: const Key('chat-scroll-to-bottom'),
+                        haptic: HapticStrength.light,
+                        highlight: false,
+                        onPressed: onScrollToBottom,
+                        child: SizedBox(
+                          width: OcOptical.scrollFab,
+                          height: OcOptical.scrollFab,
+                          child: Center(
+                            child: OcGlyph(
+                              OcGlyphKind.chevronDown,
+                              size: OcOptical.scrollChevron,
+                              strokeWidth: OcOptical.scrollChevronStroke,
+                              color: context.oc.foreground,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -143,65 +152,82 @@ class ComposerBar extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(OcOptical.composerRadius),
                 boxShadow: OcElevation.composer(context),
               ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-                child: Row(
-                  children: [
-                    Tooltip(
-                      message: t(context, 'chat.composer.attach'),
-                      child: Pressable(
-                        key: const Key('composer-attach'),
-                        haptic: HapticStrength.medium,
-                        highlight: false,
-                        onPressed: onAttach,
-                        child: SizedBox(
-                          width: 32,
-                          height: 32,
-                          child: Center(
-                            child: OcGlyph(OcGlyphKind.plus, size: OcOptical.composerPlus, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.foreground),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(OcOptical.composerRadius),
+                child: OcFrosted(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                    child: Row(
+                      children: [
+                        Tooltip(
+                          message: t(context, 'chat.composer.attach'),
+                          child: Pressable(
+                            key: const Key('composer-attach'),
+                            haptic: HapticStrength.medium,
+                            highlight: false,
+                            onPressed: onAttach,
+                            child: SizedBox(
+                              width: 36,
+                              height: 36,
+                              child: Center(
+                                child: OcGlyph(
+                                  OcGlyphKind.plus,
+                                  size: OcOptical.composerPlus,
+                                  strokeWidth: OcOptical.composerPlusStroke,
+                                  color: context.oc.foreground,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                    Expanded(child: field),
-                    if (onDictate != null)
-                      IconButton(
-                        key: const Key('composer-dictate'),
-                        tooltip: t(context, 'chat.dictation.start'),
-                        visualDensity: VisualDensity.compact,
-                        onPressed: onDictate,
-                        icon: OcGlyph(OcGlyphKind.mic, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
-                      ),
-                    Pressable(
-                      key: const Key('composer-send'),
-                      haptic: HapticStrength.medium,
-                      highlight: false,
-                      onPressed: busy ? onStop : onSend,
-                      child: Container(
-                        width: OcOptical.sendRing,
-                        height: OcOptical.sendRing,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: context.oc.foreground, width: OcOptical.sendRingStroke),
+                        Expanded(child: field),
+                        if (onDictate != null)
+                          IconButton(
+                            key: const Key('composer-dictate'),
+                            tooltip: t(context, 'chat.dictation.start'),
+                            visualDensity: VisualDensity.compact,
+                            onPressed: onDictate,
+                            icon: OcGlyph(OcGlyphKind.mic, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
+                          ),
+                        Pressable(
+                          key: const Key('composer-send'),
+                          haptic: HapticStrength.medium,
+                          highlight: false,
+                          onPressed: busy ? onStop : onSend,
+                          child: Container(
+                            width: OcOptical.sendRing,
+                            height: OcOptical.sendRing,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: context.oc.foreground,
+                            ),
+                            child: busy
+                                ? Container(
+                                    width: OcOptical.sendStop,
+                                    height: OcOptical.sendStop,
+                                    decoration: BoxDecoration(
+                                      color: context.oc.background,
+                                      borderRadius: BorderRadius.circular(OcOptical.sendStop * 0.2),
+                                    ),
+                                  )
+                                : Transform.rotate(
+                                    angle: 3.141592653589793,
+                                    child: OcGlyph(
+                                      OcGlyphKind.chevronDown,
+                                      size: 16,
+                                      strokeWidth: OcOptical.composerPlusStroke,
+                                      color: context.oc.background,
+                                    ),
+                                  ),
+                          ),
                         ),
-                        child: busy
-                            ? Container(
-                                width: OcOptical.sendStop,
-                                height: OcOptical.sendStop,
-                                decoration: BoxDecoration(
-                                  color: context.oc.foreground,
-                                  borderRadius: BorderRadius.circular(1.5),
-                                ),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),

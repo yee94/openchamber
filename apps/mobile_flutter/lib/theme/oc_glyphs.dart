@@ -48,12 +48,16 @@ class OcGlyph extends StatelessWidget {
     this.size = 20,
     this.color,
     this.strokeWidth,
+    this.filled = false,
   });
 
   final OcGlyphKind kind;
   final double size;
   final Color? color;
   final double? strokeWidth;
+  /// Official Remix `weight="medium"` / fill sprites (dock folder-open,
+  /// sparkling, calendar-schedule, settings-3). Stroke stays for chrome.
+  final bool filled;
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +69,8 @@ class OcGlyph extends StatelessWidget {
         painter: _OcGlyphPainter(
           kind: kind,
           color: resolved,
-          strokeWidth: strokeWidth ?? (size < 16 ? 1.0 : 1.1),
+          strokeWidth: strokeWidth ?? (size >= 20 ? 1.75 : size >= 16 ? 1.45 : 1.2),
+          filled: filled,
         ),
       ),
     );
@@ -77,11 +82,13 @@ class _OcGlyphPainter extends CustomPainter {
     required this.kind,
     required this.color,
     required this.strokeWidth,
+    required this.filled,
   });
 
   final OcGlyphKind kind;
   final Color color;
   final double strokeWidth;
+  final bool filled;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -109,38 +116,53 @@ class _OcGlyphPainter extends CustomPainter {
         canvas.drawLine(Offset(w * 0.74, h * 0.26), Offset(w * 0.26, h * 0.74), stroke);
       case OcGlyphKind.folder:
         final folder = Path()
-          ..moveTo(w * 0.12, h * 0.38)
-          ..lineTo(w * 0.12, h * 0.82)
-          ..lineTo(w * 0.88, h * 0.82)
-          ..lineTo(w * 0.88, h * 0.42)
-          ..lineTo(w * 0.52, h * 0.42)
-          ..lineTo(w * 0.42, h * 0.28)
-          ..lineTo(w * 0.12, h * 0.28)
+          ..moveTo(w * 0.10, h * 0.34)
+          ..lineTo(w * 0.10, h * 0.84)
+          ..lineTo(w * 0.90, h * 0.84)
+          ..lineTo(w * 0.90, h * 0.40)
+          ..lineTo(w * 0.54, h * 0.40)
+          ..lineTo(w * 0.44, h * 0.24)
+          ..lineTo(w * 0.10, h * 0.24)
           ..close();
-        canvas.drawPath(folder, stroke);
+        canvas.drawPath(folder, filled ? fill : stroke);
       case OcGlyphKind.sparkles:
-        _sparkle(canvas, Offset(w * 0.38, h * 0.42), w * 0.26, stroke);
-        _sparkle(canvas, Offset(w * 0.72, h * 0.26), w * 0.12, stroke);
-        _sparkle(canvas, Offset(w * 0.70, h * 0.70), w * 0.10, stroke);
-      case OcGlyphKind.calendar:
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromLTWH(w * 0.14, h * 0.22, w * 0.72, h * 0.64),
-            Radius.circular(w * 0.08),
-          ),
-          stroke,
-        );
-        canvas.drawLine(Offset(w * 0.14, h * 0.40), Offset(w * 0.86, h * 0.40), stroke);
-        canvas.drawLine(Offset(w * 0.32, h * 0.12), Offset(w * 0.32, h * 0.30), stroke);
-        canvas.drawLine(Offset(w * 0.68, h * 0.12), Offset(w * 0.68, h * 0.30), stroke);
-      case OcGlyphKind.gear:
-        canvas.drawCircle(Offset(w * 0.5, h * 0.5), w * 0.16, stroke);
-        for (var i = 0; i < 8; i += 1) {
-          final a = (i / 8) * math.pi * 2;
-          final inner = Offset(w * 0.5 + math.cos(a) * w * 0.26, h * 0.5 + math.sin(a) * h * 0.26);
-          final outer = Offset(w * 0.5 + math.cos(a) * w * 0.40, h * 0.5 + math.sin(a) * h * 0.40);
-          canvas.drawLine(inner, outer, stroke);
+        if (filled) {
+          _sparkleFill(canvas, Offset(w * 0.46, h * 0.46), w * 0.34, fill);
+          canvas.drawCircle(Offset(w * 0.80, h * 0.22), w * 0.07, fill);
+        } else {
+          _sparkle(canvas, Offset(w * 0.42, h * 0.42), w * 0.28, stroke);
+          _sparkle(canvas, Offset(w * 0.74, h * 0.24), w * 0.12, stroke);
         }
+      case OcGlyphKind.calendar:
+        final body = RRect.fromRectAndRadius(
+          Rect.fromLTWH(w * 0.12, h * 0.20, w * 0.76, h * 0.68),
+          Radius.circular(w * 0.10),
+        );
+        canvas.drawRRect(body, filled ? fill : stroke);
+        canvas.drawLine(Offset(w * 0.30, h * 0.10), Offset(w * 0.30, h * 0.30), stroke);
+        canvas.drawLine(Offset(w * 0.70, h * 0.10), Offset(w * 0.70, h * 0.30), stroke);
+        if (filled) {
+          final hole = Paint()
+            ..blendMode = BlendMode.dstOut
+            ..style = PaintingStyle.fill;
+          canvas.saveLayer(Rect.fromLTWH(0, 0, w, h), Paint());
+          canvas.drawRRect(body, fill);
+          for (final x in [0.30, 0.50, 0.70]) {
+            for (final y in [0.52, 0.68]) {
+              canvas.drawCircle(Offset(w * x, h * y), w * 0.045, hole);
+            }
+          }
+          canvas.restore();
+        } else {
+          canvas.drawLine(Offset(w * 0.12, h * 0.40), Offset(w * 0.88, h * 0.40), stroke);
+          for (final x in [0.32, 0.50, 0.68]) {
+            for (final y in [0.54, 0.70]) {
+              canvas.drawCircle(Offset(w * x, h * y), w * 0.04, fill);
+            }
+          }
+        }
+      case OcGlyphKind.gear:
+        _gear(canvas, size, filled ? fill : stroke, filled);
       case OcGlyphKind.check:
         final check = Path()
           ..moveTo(w * 0.20, h * 0.52)
@@ -172,9 +194,9 @@ class _OcGlyphPainter extends CustomPainter {
         canvas.drawLine(Offset(w * 0.62, h * 0.22), Offset(w * 0.36, h * 0.50), stroke);
         canvas.drawLine(Offset(w * 0.36, h * 0.50), Offset(w * 0.62, h * 0.78), stroke);
       case OcGlyphKind.ellipsis:
-        canvas.drawCircle(Offset(w * 0.22, h * 0.5), w * 0.055, fill);
-        canvas.drawCircle(Offset(w * 0.50, h * 0.5), w * 0.055, fill);
-        canvas.drawCircle(Offset(w * 0.78, h * 0.5), w * 0.055, fill);
+        canvas.drawCircle(Offset(w * 0.20, h * 0.5), w * 0.10, fill);
+        canvas.drawCircle(Offset(w * 0.50, h * 0.5), w * 0.10, fill);
+        canvas.drawCircle(Offset(w * 0.80, h * 0.5), w * 0.10, fill);
       case OcGlyphKind.code:
         canvas.drawLine(Offset(w * 0.38, h * 0.22), Offset(w * 0.18, h * 0.50), stroke);
         canvas.drawLine(Offset(w * 0.18, h * 0.50), Offset(w * 0.38, h * 0.78), stroke);
@@ -364,8 +386,68 @@ class _OcGlyphPainter extends CustomPainter {
     canvas.drawLine(Offset(center.dx + diag, center.dy - diag), Offset(center.dx - diag, center.dy + diag), paint);
   }
 
+  void _sparkleFill(Canvas canvas, Offset center, double radius, Paint paint) {
+    final star = Path();
+    for (var i = 0; i < 8; i += 1) {
+      final a = (i / 8) * math.pi * 2 - math.pi / 2;
+      final r = i.isEven ? radius : radius * 0.38;
+      final point = Offset(center.dx + math.cos(a) * r, center.dy + math.sin(a) * r);
+      if (i == 0) {
+        star.moveTo(point.dx, point.dy);
+      } else {
+        star.lineTo(point.dx, point.dy);
+      }
+    }
+    star.close();
+    canvas.drawPath(star, paint);
+  }
+
+  void _gear(Canvas canvas, Size size, Paint paint, bool filled) {
+    final w = size.width;
+    final h = size.height;
+    final c = Offset(w * 0.5, h * 0.5);
+    final ring = Path()..fillType = PathFillType.evenOdd;
+    ring.addOval(Rect.fromCircle(center: c, radius: w * 0.30));
+    ring.addOval(Rect.fromCircle(center: c, radius: w * 0.14));
+    if (filled) {
+      canvas.drawPath(ring, paint);
+      for (var i = 0; i < 8; i += 1) {
+        canvas.save();
+        canvas.translate(c.dx, c.dy);
+        canvas.rotate(i * math.pi / 4);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(center: Offset(0, -w * 0.36), width: w * 0.13, height: w * 0.16),
+            Radius.circular(w * 0.03),
+          ),
+          paint,
+        );
+        canvas.restore();
+      }
+      return;
+    }
+    canvas.drawCircle(c, w * 0.16, paint);
+    canvas.drawCircle(c, w * 0.30, paint);
+    for (var i = 0; i < 8; i += 1) {
+      canvas.save();
+      canvas.translate(c.dx, c.dy);
+      canvas.rotate(i * math.pi / 4);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset(0, -w * 0.36), width: w * 0.12, height: w * 0.14),
+          Radius.circular(w * 0.025),
+        ),
+        paint,
+      );
+      canvas.restore();
+    }
+  }
+
   @override
   bool shouldRepaint(covariant _OcGlyphPainter oldDelegate) {
-    return oldDelegate.kind != kind || oldDelegate.color != color || oldDelegate.strokeWidth != strokeWidth;
+    return oldDelegate.kind != kind ||
+        oldDelegate.color != color ||
+        oldDelegate.strokeWidth != strokeWidth ||
+        oldDelegate.filled != filled;
   }
 }

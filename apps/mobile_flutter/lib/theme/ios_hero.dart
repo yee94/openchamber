@@ -6,11 +6,10 @@
 class OcOptical {
   const OcOptical._();
 
-  /// `--oc-mobile-root-title-size` is 32. README large titles are that size
-  /// with open CJK tracking (not the previous negative letter-spacing).
+  /// Official `.oc-mobile-root-page-title`: 2rem / 1.2 / −0.04em, semibold.
   static const double largeTitle = 32;
-  static const double largeTitleTracking = 1.6;
-  static const double largeTitleHeight = 1.28;
+  static const double largeTitleTracking = -1.28;
+  static const double largeTitleHeight = 1.2;
 
   /// Official `.oc-mobile-session-title` is 12 / 16 / −0.012em.
   /// Root `--oc-mobile-session-row-height` is 2.875rem (46). Projects home and
@@ -68,10 +67,10 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  static const double headerGlyph = 13;
-  static const double headerGlyphStroke = 0.42;
-  /// In-card / dock / footer strokes stay thinner than header, not hairline.
-  static const double listGlyphStroke = 0.32;
+  static const double headerGlyph = 20;
+  static const double headerGlyphStroke = 1.75;
+  /// In-card strokes stay thinner than header medium, not hairline.
+  static const double listGlyphStroke = 1.45;
 
   /// `--oc-mobile-collapsing-action-size` / expand-shift / collapse distance.
   static const double collapsingActionSize = 40;
@@ -80,17 +79,14 @@ class OcOptical {
   static const double titleCollapseDistance = 48;
   static const double titleCollapseScaleEnd = 0.625;
 
-  /// Official dock icon is `size-[23px]` medium. Stroke glyphs stay smaller
-  /// and lighter so they do not read heavier than the sprite. Selected
-  /// chrome is an icon-only wash — never a full-slot slab.
-  static const double dockGlyph = 10;
-  static const double dockGlyphStroke = 0.32;
-  static const double dockIconPillWidth = 26;
-  static const double dockIconPillHeight = 18;
-  static const double dockIconPillRadius = 9;
-  static const double dockIconWashAlpha = 0.10;
-  static const double dockIconGlowAlpha = 0.04;
-  static const double dockIconGlowBlur = 5;
+  /// Official dock `Icon` is `size-[23px]` medium. Selected chrome is the
+  /// full tab slot (icon + label), matching `.oc-mobile-tab-button`.
+  static const double dockGlyph = 23;
+  static const double dockGlyphStroke = 1.75;
+  static const bool dockSelectedFullSlot = true;
+  static const double dockIconWashAlpha = 0.55;
+  static const double dockIconGlowAlpha = 0.0;
+  static const double dockIconGlowBlur = 0;
 
   /// `.oc-mobile-project-shell` icon 2.375rem; in-card glyph stays thinner
   /// than the official 18px filled sprite.
@@ -100,11 +96,12 @@ class OcOptical {
   static const double leadingGlyphCompact = 7;
 
   static const double sessionBullet = 5;
-  static const double overflow = 8;
-  static const double chevron = 8;
+  static const double overflow = 16;
+  static const double chevron = 20;
+  static const double chatChip = 44;
 
-  static const double scheduleStatus = 38;
-  static const double scheduleStatusGlyph = 9;
+  static const double scheduleStatus = 44;
+  static const double scheduleStatusGlyph = 16;
 
   static const double fileTypeW = 11;
   static const double fileTypeH = 7;
@@ -112,13 +109,16 @@ class OcOptical {
   static const double fileRowPadV = 4;
 
   static const double composerRadius = 24;
-  static const double composerPlus = 10;
-  static const double sendRing = 28;
-  static const double sendRingStroke = 0.48;
-  static const double sendStop = 8;
-  static const double scrollFab = 26;
-  static const double scrollChevron = 9;
+  static const double composerPlus = 26;
+  static const double composerPlusStroke = 2.4;
+  static const double sendRing = 32;
+  static const double sendRingStroke = 0;
+  static const double sendStop = 12;
+  static const double scrollFab = 36;
+  static const double scrollChevron = 16;
+  static const double scrollChevronStroke = 2.4;
+  static const double glassBlur = 20;
 
-  static const double toolbarGlyph = 9;
-  static const double footerGlyph = 9;
+  static const double toolbarGlyph = 16;
+  static const double footerGlyph = 14;
 }

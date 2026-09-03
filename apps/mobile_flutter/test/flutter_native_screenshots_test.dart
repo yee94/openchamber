@@ -105,6 +105,15 @@ void main() {
     await _pumpFrames(tester);
     await _writePng(tester, screenshotKey, '02-projects.png');
 
+    final projectsScroll = tester.widget<SingleChildScrollView>(find.byType(SingleChildScrollView));
+    expect(projectsScroll.controller, isNotNull);
+    projectsScroll.controller!.jumpTo(240);
+    await tester.pump();
+    expect(projectsScroll.controller!.offset, closeTo(240, 0.5));
+    await _writePng(tester, screenshotKey, '02-projects-scrolled.png');
+    projectsScroll.controller!.jumpTo(0);
+    await tester.pump();
+
     await tester.tap(find.byKey(const Key('tab-assistant')));
     await _pumpUntil(tester, find.byKey(const Key('assistant-item-asst-1')));
     expect(find.byKey(const Key('assistant-item-asst-1')), findsOneWidget);
@@ -125,6 +134,11 @@ void main() {
     expect(find.text('任务'), findsWidgets);
     expect(find.text('历史记录'), findsWidgets);
     expect(find.text('已暂停'), findsWidgets);
+    final filterAll = tester.getSize(find.byKey(const Key('filter-0')));
+    final filterEnabled = tester.getSize(find.byKey(const Key('filter-1')));
+    final filterPaused = tester.getSize(find.byKey(const Key('filter-2')));
+    expect((filterAll.width - filterEnabled.width).abs(), lessThan(1));
+    expect((filterEnabled.width - filterPaused.width).abs(), lessThan(1));
     expect(find.byKey(const Key('dock-selected-scheduled')), findsOneWidget);
     expect(find.byKey(const Key('dock-selected-projects')), findsNothing);
     expect(find.byType(MobileTabPageHeader), findsOneWidget);

@@ -131,12 +131,19 @@ class OcTokens extends ThemeExtension<OcTokens> {
   /// `--form-row-divider`
   Color get formRowDivider => foreground.withValues(alpha: 0.06);
 
-  /// `--oc-mobile-field-background` (elevated 70%). Android composer/dock stay
-  /// opaque [surfaceElevated] — do not fake glass with this alpha.
+  /// `--oc-mobile-field-background` (elevated 70%).
   Color get fieldBackground => surfaceElevated.withValues(alpha: 0.70);
 
-  /// Opaque Android/test dock fill. Not `--oc-mobile-glass-fill`.
-  Color get dockFill => surfaceElevated;
+  /// Official `--oc-mobile-glass-fill`. Pair with [OcFrosted] /
+  /// `BackdropFilter` — not a `UIGlassEffect` clone.
+  Color get glassFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
+      .withValues(alpha: isDark ? 0.66 : 0.68);
+
+  /// Soft white plate for circular `mobileGlass` chips.
+  Color get glassChipFill => (isDark ? card : const Color(0xFFFFFFFF)).withValues(alpha: isDark ? 0.66 : 0.82);
+
+  /// Legacy alias. Floating chrome uses [glassFill] + blur instead.
+  Color get dockFill => glassFill;
 
   /// Official selected-tab wash: `bg-interactive-selection/55`.
   Color get interactiveSelection => primary.withValues(alpha: 0.55);

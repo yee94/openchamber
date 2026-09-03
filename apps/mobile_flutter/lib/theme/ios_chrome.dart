@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import '../l10n/app_strings.dart';
@@ -24,6 +26,64 @@ class OcChrome {
   static const double pageGutter = OcTokens.pageInlineInset;
   static const double tabBarHeight = OcOptical.dockCapsuleHeight;
   static const double headerButtonSize = OcTokens.headerButtonSize;
+}
+
+/// Official `--oc-mobile-glass-fill` + `--oc-mobile-glass-blur` (20).
+/// WidgetTester paints [BackdropFilter]; this is not a `UIGlassEffect` clone.
+class OcFrosted extends StatelessWidget {
+  const OcFrosted({
+    super.key,
+    required this.child,
+    this.fill,
+    this.sigma = OcOptical.glassBlur,
+  });
+
+  final Widget child;
+  final Color? fill;
+  final double sigma;
+
+  @override
+  Widget build(BuildContext context) {
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+      child: ColoredBox(
+        color: fill ?? context.oc.glassFill,
+        child: child,
+      ),
+    );
+  }
+}
+
+/// Official `Button` `mobileGlass` + `mobileIcon` circular chip.
+class OcGlassChip extends StatelessWidget {
+  const OcGlassChip({
+    super.key,
+    required this.child,
+    this.size = OcOptical.chatChip,
+  });
+
+  final Widget child;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: OcElevation.control(context),
+        ),
+        child: ClipOval(
+          child: OcFrosted(
+            fill: context.oc.glassChipFill,
+            child: Center(child: child),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class LargeTitleHeader extends StatelessWidget {
@@ -107,13 +167,26 @@ class CircularChromeButton extends StatelessWidget {
     final tokens = context.oc;
     final hit = size ?? (filled ? OcOptical.addButton : OcOptical.searchButton);
     final disc = hit < OcOptical.headerDisc ? hit : OcOptical.headerDisc;
-    // Search is official `mobileGlass`: a light plate on the cream page, not
-    // a bare glyph. Opaque stand-in for `--oc-mobile-glass-fill` (no blur).
-    final fill = !filled
-        ? Color.lerp(tokens.card, const Color(0xFFFFFFFF), tokens.isDark ? 0.08 : 0.55)!
-        : ink
-            ? tokens.foreground
-            : tokens.primary;
+    final glyphWidget = OcGlyph(
+      glyph,
+      size: OcOptical.headerGlyph,
+      strokeWidth: OcOptical.headerGlyphStroke,
+      color: !filled ? tokens.foreground : tokens.primaryForeground,
+    );
+    final plate = filled
+        ? DecoratedBox(
+            decoration: BoxDecoration(
+              color: ink ? tokens.foreground : tokens.primary,
+              shape: BoxShape.circle,
+              boxShadow: OcElevation.control(context),
+            ),
+            child: SizedBox(
+              width: disc,
+              height: disc,
+              child: Center(child: glyphWidget),
+            ),
+          )
+        : OcGlassChip(size: disc, child: glyphWidget);
     final child = SizedBox(
       width: hit,
       height: hit,
@@ -122,27 +195,7 @@ class CircularChromeButton extends StatelessWidget {
         haptic: haptic,
         highlight: false,
         borderRadius: BorderRadius.circular(hit),
-        child: Center(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: fill,
-              shape: BoxShape.circle,
-              boxShadow: OcElevation.control(context),
-            ),
-            child: SizedBox(
-              width: disc,
-              height: disc,
-              child: Center(
-                child: OcGlyph(
-                  glyph,
-                  size: OcOptical.headerGlyph,
-                  strokeWidth: OcOptical.headerGlyphStroke,
-                  color: !filled ? tokens.mutedForeground : tokens.primaryForeground,
-                ),
-              ),
-            ),
-          ),
-        ),
+        child: Center(child: plate),
       ),
     );
     return tooltip == null ? child : Tooltip(message: tooltip, child: child);
@@ -415,33 +468,39 @@ class FilterChipBar extends StatelessWidget {
               child: Row(
                 children: [
                   for (var i = 0; i < labels.length; i += 1)
-                    Pressable(
-                      key: Key('filter-$i'),
-                      haptic: HapticStrength.light,
-                      onPressed: () => onSelected(i),
-                      borderRadius: BorderRadius.circular(14),
-                      child: OcSelectedSpring(
-                        selected: selectedIndex == i,
-                        builder: (context, t) {
-                          final tokens = context.oc;
-                          return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Color.lerp(Colors.transparent, tokens.card.withValues(alpha: 0.92), t),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Text(
-                              labels[i],
-                              style: TextStyle(
-                                fontSize: 13,
-                                letterSpacing: 0.28,
-                                height: 1.2,
-                                fontWeight: t > 0.5 ? FontWeight.w500 : FontWeight.w400,
-                                color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
+                    Expanded(
+                      child: Pressable(
+                        key: Key('filter-$i'),
+                        haptic: HapticStrength.light,
+                        onPressed: () => onSelected(i),
+                        borderRadius: BorderRadius.circular(14),
+                        child: OcSelectedSpring(
+                          selected: selectedIndex == i,
+                          builder: (context, t) {
+                            final tokens = context.oc;
+                            return Container(
+                              alignment: Alignment.center,
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Color.lerp(Colors.transparent, tokens.card.withValues(alpha: 0.92), t),
+                                borderRadius: BorderRadius.circular(14),
                               ),
-                            ),
-                          );
-                        },
+                              child: Text(
+                                labels[i],
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  letterSpacing: 0.28,
+                                  height: 1.2,
+                                  fontWeight: t > 0.5 ? FontWeight.w500 : FontWeight.w400,
+                                  color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ),
                 ],
@@ -473,73 +532,73 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
   final bool busy;
 
   @override
-  Size get preferredSize => const Size.fromHeight(44);
+  Size get preferredSize => const Size.fromHeight(56);
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 2, 10, 4),
-      child: Row(
-        children: [
-          Tooltip(
-            message: t(context, 'chat.back'),
-            child: Pressable(
-              key: leadingKey,
-              haptic: HapticStrength.light,
-              highlight: false,
-              onPressed: () => Navigator.of(context).maybePop(),
-              child: SizedBox(
-                width: 36,
-                height: 36,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: OcGlyph(
-                    OcGlyphKind.chevronBack,
-                    size: OcOptical.chevron,
-                    strokeWidth: OcOptical.headerGlyphStroke,
-                    color: context.oc.foreground,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: OcOptical.chatTitle,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: OcOptical.chatTitleTracking,
-                      height: OcOptical.chatTitleHeight,
-                      color: context.oc.foreground,
+    final tokens = context.oc;
+    return ClipRect(
+      child: OcFrosted(
+        fill: tokens.background.withValues(alpha: 0.55),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+          child: Row(
+            children: [
+              Tooltip(
+                message: t(context, 'chat.back'),
+                child: Pressable(
+                  key: leadingKey,
+                  haptic: HapticStrength.light,
+                  highlight: false,
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  child: OcGlassChip(
+                    child: OcGlyph(
+                      OcGlyphKind.chevronBack,
+                      size: OcOptical.headerGlyph,
+                      strokeWidth: OcOptical.headerGlyphStroke,
+                      color: tokens.foreground,
                     ),
                   ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          if (busy)
-            Padding(
-              key: const Key('chat-busy'),
-              padding: const EdgeInsets.only(right: 8),
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.6,
-                  color: context.oc.mutedForeground,
                 ),
               ),
-            ),
-          if (trailing != null) trailing! else const SizedBox(width: OcOptical.chatHeaderButton),
-        ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  textAlign: TextAlign.left,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: OcOptical.chatTitle,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: OcOptical.chatTitleTracking,
+                    height: OcOptical.chatTitleHeight,
+                    color: tokens.foreground,
+                  ),
+                ),
+              ),
+              if (busy) ...[
+                const SizedBox(width: 8),
+                OcGlassChip(
+                  child: SizedBox(
+                    key: const Key('chat-busy'),
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: tokens.mutedForeground,
+                    ),
+                  ),
+                ),
+              ],
+              if (trailing != null) ...[
+                const SizedBox(width: 8),
+                trailing!,
+              ] else
+                const SizedBox(width: OcOptical.chatChip),
+            ],
+          ),
+        ),
       ),
     );
   }
