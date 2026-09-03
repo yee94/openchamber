@@ -147,10 +147,10 @@ class OcTokens extends ThemeExtension<OcTokens> {
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
   /// Circular `mobileGlass` chips. Official fill is 0.68 + live blur;
-  /// WidgetTester frost on a 40 disc reads as a coin, so keep a quieter
-  /// wash and let the page peek through. Not a `UIGlassEffect` clone.
+  /// WidgetTester frost on a small disc reads as a coin, so keep a 0.12
+  /// wash + inset highlight only. Not a `UIGlassEffect` clone.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.10 : 0.08);
+      .withValues(alpha: isDark ? 0.16 : 0.12);
 
   /// Official `--oc-mobile-glass-highlight` is white / 0.60. WidgetTester
   /// uses a quieter inset so the 1px rim is not a coin edge.

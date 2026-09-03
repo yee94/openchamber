@@ -13,11 +13,9 @@ class OcOptical {
   /// Official `.oc-mobile-session-title` is 0.75rem / 1rem / −0.012em.
   /// `.oc-mobile-project-shell` sets `--oc-mobile-session-row-height` to
   /// 2.5rem (40). 40 ≥ 36 touch min, so hit == visual.
-  /// CSS −0.012em is a Latin optical; Flutter applies letterSpacing to CJK
-  /// and packs the 16px strut. Official PingFang ignores that tracking —
-  /// keep 0 so the official line box can breathe. Do not grow the 40px box.
+  /// Ink is `font-size`; strut is `line-height`. Do not faux-bold CJK.
   static const double rowTitle = 12;
-  static const double rowTitleTracking = 0;
+  static const double rowTitleTracking = -0.144;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   static const double sessionRowVisualHeight = 40;
@@ -129,9 +127,9 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  /// Official painted plate is the 40 `mobileIcon` disc. Quieter wash +
-  /// inset highlight carry the glass; do not inset a 36 coin inside 40.
-  static const double headerDiscVisual = 40;
+  /// Official hit is 40 (`mobileIcon`). Painted plate is 36 so the 0.12
+  /// wash is not a 40 coin. Inset highlight only — no blur / umbra / + glow.
+  static const double headerDiscVisual = 36;
   static const double headerGlyph = 20;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
