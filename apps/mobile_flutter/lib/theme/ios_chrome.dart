@@ -119,7 +119,7 @@ class OcGlassChip extends StatelessWidget {
         ),
         child: ClipOval(
           child: OcFrosted(
-            fill: context.oc.glassFill,
+            fill: context.oc.glassChipFill,
             child: Center(child: child),
           ),
         ),
@@ -152,7 +152,7 @@ class OcGlassPill extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
         child: OcFrosted(
-          fill: context.oc.glassFill,
+          fill: context.oc.glassChipFill,
           child: Padding(padding: padding, child: child),
         ),
       ),
@@ -453,11 +453,12 @@ class SegmentedPill extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, OcTokens.pageGap),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(trackRadius),
-        boxShadow: OcElevation.control(context),
+        boxShadow: OcElevation.card(context),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(trackRadius),
         child: OcFrosted(
+          fill: context.oc.glassChipFill,
           child: Padding(
             padding: const EdgeInsets.all(pad),
             child: Row(
@@ -478,7 +479,7 @@ class SegmentedPill extends StatelessWidget {
                             height: itemHeight,
                             child: DecoratedBox(
                               decoration: BoxDecoration(
-                                color: Color.lerp(Colors.transparent, tokens.card, t),
+                                color: Color.lerp(Colors.transparent, tokens.interactiveSelection, t),
                                 borderRadius: BorderRadius.circular(itemRadius),
                                 boxShadow: t > 0.01
                                     ? [
@@ -557,11 +558,12 @@ class FilterChipBar extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(OcTokens.surfaceRadius),
-                boxShadow: OcElevation.control(context),
+                boxShadow: OcElevation.card(context),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(OcTokens.surfaceRadius),
                 child: OcFrosted(
+                  fill: context.oc.glassChipFill,
                   child: Padding(
                     padding: const EdgeInsets.all(4),
                     child: Row(
@@ -582,7 +584,7 @@ class FilterChipBar extends StatelessWidget {
                                     height: 40,
                                     child: DecoratedBox(
                                       decoration: BoxDecoration(
-                                        color: Color.lerp(Colors.transparent, tokens.card, t),
+                                        color: Color.lerp(Colors.transparent, tokens.interactiveSelection, t),
                                         borderRadius: BorderRadius.circular(20),
                                         boxShadow: t > 0.01
                                             ? [

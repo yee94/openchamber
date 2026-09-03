@@ -161,6 +161,7 @@ class ComposerBar extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(OcOptical.composerRadius),
                 child: OcFrosted(
+                  fill: context.oc.glassChipFill,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
                     child: Row(

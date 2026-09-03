@@ -124,47 +124,38 @@ class _TabSlot extends StatelessWidget {
           selected: selected,
           builder: (context, t) {
             return SizedBox.expand(
-              child: Align(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: OcOptical.dockSelectedPillMinWidth),
-                  child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Color.lerp(Colors.transparent, tokens.selectedTabWash, t),
-                    borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: OcOptical.dockSelectedPillPadH,
-                      vertical: OcOptical.dockSelectedPillPadV,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Color.lerp(Colors.transparent, tokens.selectedTabWash, t),
+                  borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    OcGlyph(
+                      glyph,
+                      size: OcOptical.dockGlyph,
+                      color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
+                      strokeWidth: OcOptical.dockGlyphStroke,
+                      // Official `Icon` is `fill="none"` + medium stroke 2.
+                      // Filling calendar-schedule's open body paints a primary
+                      // square that replaces the glyph.
+                      filled: false,
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        OcGlyph(
-                          glyph,
-                          size: OcOptical.dockGlyph,
-                          color: Color.lerp(tokens.foreground.withValues(alpha: 0.72), tokens.primary, t),
-                          strokeWidth: OcOptical.dockGlyphStroke,
-                          filled: true,
-                        ),
-                        const SizedBox(height: OcOptical.dockLabelGap),
-                        Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: OcOptical.dockLabel,
-                            letterSpacing: OcOptical.dockLabelTracking,
-                            height: OcOptical.dockLabelHeight,
-                            fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w500,
-                            color: Color.lerp(tokens.foreground.withValues(alpha: 0.72), tokens.primary, t),
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: OcOptical.dockLabelGap),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: OcOptical.dockLabel,
+                        letterSpacing: OcOptical.dockLabelTracking,
+                        height: OcOptical.dockLabelHeight,
+                        fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w500,
+                        color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
+                      ),
                     ),
-                  ),
-                  ),
+                  ],
                 ),
               ),
             );

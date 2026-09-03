@@ -114,15 +114,13 @@ class OcOptical {
   static const double dockBottomPad = 20;
   static const double dockMaxWidth = 416;
 
-  /// Official `Button` `mobileIcon` is the 40 hit. Search is `mobileGlass`,
-  /// `+` is primary. WidgetTester glass reads heavier than live blur, so the
-  /// painted disc/glyph sit one step inside the hit (`size-9` / `size-4.5`)
-  /// while the tap target stays 40.
+  /// Official `Button` `mobileIcon` is the disc (40). Search is `mobileGlass`,
+  /// `+` is primary. Glyph is `size-5` (20).
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  static const double headerDiscVisual = 36;
-  static const double headerGlyph = 18;
+  static const double headerDiscVisual = 40;
+  static const double headerGlyph = 20;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
@@ -151,17 +149,13 @@ class OcOptical {
   static double rootTitleTracking(double collapse) =>
       largeTitle * (-0.04 + 0.02 * collapse.clamp(0.0, 1.0));
 
-  /// Official dock `Icon` is `size-[23px]` medium. Selected chrome is a
-  /// compact stadium around the icon+label stack — not a circular icon wash
-  /// and not a full-slot gray disc.
+  /// Official dock `Icon` is `size-[23px]` medium. Selected chrome is the
+  /// full tab slot (58 tall, radius 29) with `bg-interactive-selection/55`.
+  /// Glyph stays visible — wash never replaces it with a primary square.
   static const double dockGlyph = 23;
   /// Official dock `Icon weight="medium"` (`ICON_STROKE_WIDTH_MEDIUM` = 2).
   static const double dockGlyphStroke = 2;
   static const bool dockSelectedFullSlot = true;
-  static const double dockSelectedPillPadH = 16;
-  static const double dockSelectedPillPadV = 4;
-  /// Wider than the icon+label stack so the wash reads as a stadium, not a disc.
-  static const double dockSelectedPillMinWidth = 64;
   static const double dockIconWashAlpha = 0.55;
   static const double dockIconGlowAlpha = 0.0;
   static const double dockIconGlowBlur = 0;

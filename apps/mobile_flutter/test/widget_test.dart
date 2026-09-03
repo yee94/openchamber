@@ -8,6 +8,7 @@ import 'package:openchamber/features/shell/secondary_chrome.dart';
 import 'package:openchamber/features/shell/tab_scaffold.dart';
 import 'package:openchamber/theme/app_theme.dart';
 import 'package:openchamber/theme/ios_chrome.dart';
+import 'package:openchamber/theme/oc_glyphs.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -53,6 +54,15 @@ void main() {
     expect(find.byKey(const Key('dock-capsule')), findsOneWidget);
     final capsule = tester.getSize(find.byKey(const Key('dock-capsule')));
     expect(capsule.height, OcTokens.dockHeight);
+    final dockGlyphs = tester.widgetList<OcGlyph>(
+      find.descendant(of: find.byKey(const Key('dock-capsule')), matching: find.byType(OcGlyph)),
+    );
+    expect(dockGlyphs.length, 4);
+    for (final glyph in dockGlyphs) {
+      expect(glyph.size, OcOptical.dockGlyph);
+      expect(glyph.strokeWidth, OcOptical.dockGlyphStroke);
+      expect(glyph.filled, isFalse);
+    }
     expect(capsule.width, lessThan(tester.view.physicalSize.width / tester.view.devicePixelRatio));
   });
 

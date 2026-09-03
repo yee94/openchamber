@@ -58,9 +58,8 @@ class OcGlyph extends StatelessWidget {
   final double size;
   final Color? color;
   final double? strokeWidth;
-  /// Official Remix `weight="medium"` plus a conservative fill so dock
-  /// folder-open / sparkling / calendar-schedule / settings-3 read solid
-  /// without becoming a hot oval. Stroke stays for chrome.
+  /// Official Remix `weight="medium"` is stroke 2 / `fill="none"`.
+  /// Do not fill open calendar-schedule paths — that paints a primary square.
   final bool filled;
 
   @override
@@ -97,14 +96,7 @@ class _OcGlyphPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final official = officialSpriteFor(kind.name);
-    // Dock roles use the filled-role painters below when [filled] — official
-    // stroke paths filled as-is only thicken the outline ribbon.
-    final filledRole = filled &&
-        (kind == OcGlyphKind.folder ||
-            kind == OcGlyphKind.sparkles ||
-            kind == OcGlyphKind.calendar ||
-            kind == OcGlyphKind.gear);
-    if (official != null && !filledRole) {
+    if (official != null) {
       paintOfficialSprite(
         canvas: canvas,
         size: size,

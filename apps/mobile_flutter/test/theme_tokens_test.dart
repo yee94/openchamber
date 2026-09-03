@@ -27,7 +27,7 @@ void main() {
     expect(OcTokens.dark.pageBackground, isNot(OcTokens.light.pageBackground));
     expect(OcTokens.light.floatSurface.a, lessThan(1));
     expect(OcTokens.dark.floatSurface, OcTokens.dark.card);
-    expect(OcTokens.light.glassChipFill, OcTokens.light.glassFill);
+    expect(OcTokens.light.glassChipFill.a, lessThan(OcTokens.light.glassFill.a));
     expect(OcTokens.light.selectedTabWash.a, closeTo(0.086, 0.01));
     expect(
       (OcTokens.light.selectedTabWash.r - OcTokens.light.primary.r).abs(),
@@ -121,9 +121,8 @@ void main() {
     expect(OcOptical.searchButton, 40);
     expect(OcOptical.addButton, 40);
     expect(OcOptical.headerDisc, OcOptical.searchButton);
-    expect(OcOptical.headerDiscVisual, 36);
-    expect(OcOptical.headerDiscVisual, lessThan(OcOptical.headerDisc));
-    expect(OcOptical.headerGlyph, 18);
+    expect(OcOptical.headerDiscVisual, OcOptical.headerDisc);
+    expect(OcOptical.headerGlyph, 20);
     expect(OcOptical.headerGlyphStroke, 1.5);
     expect(OcOptical.collapsingActionSize, 40);
     expect(OcOptical.collapsingTitleCompactSize, 20);
@@ -181,9 +180,7 @@ void main() {
     expect(OcOptical.sessionMoreHit, 36);
     expect(OcOptical.sessionMoreEdge, 8);
     expect(OcOptical.sessionTimeGap, 8);
-    expect(OcOptical.dockSelectedPillPadH, 16);
-    expect(OcOptical.dockSelectedPillPadV, 4);
-    expect(OcOptical.dockSelectedPillMinWidth, 64);
+    expect(OcOptical.dockSelectedFullSlot, isTrue);
     expect(OcOptical.scrollFab, 36);
     expect(OcOptical.glassBlur, 20);
     expect(OcOptical.dockCapsuleHeight, OcTokens.dockHeight);
@@ -208,6 +205,7 @@ void main() {
     );
     expect(OcElevation.groupedFor(OcTokens.light), OcElevation.cardFor(OcTokens.light));
     expect(OcElevation.composerFor(OcTokens.light), OcElevation.cardFor(OcTokens.light));
+    expect(OcElevation.dockFor(OcTokens.light), OcElevation.controlFor(OcTokens.light));
     expect(OcElevation.controlFor(OcTokens.light), isNotEmpty);
     expect(OcElevation.cardFor(OcTokens.dark), isEmpty);
     expect(OcElevation.dockFor(OcTokens.dark), isEmpty);

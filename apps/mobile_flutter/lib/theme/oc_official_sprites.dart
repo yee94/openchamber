@@ -98,10 +98,9 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
 }
 
 /// Paint a 24×24 official sprite into [size]. [strokeWidth] is the viewBox
-/// stroke (1.5 regular / 2 medium), matching `Icon.tsx`.
-/// [filled] paints fill then the official medium stroke so dock roles read
-/// as Remix medium sprites, not thin outlines or solid orange blobs.
-/// Rects stay stroke-only so a calendar body never becomes a filled square.
+/// stroke (1.5 regular / 2 medium), matching `Icon.tsx` (`fill="none"`).
+/// Paths and rects stay stroke-only so calendar-schedule never becomes a
+/// filled square. [filled] only inks small accent dots (r ≤ 2.6).
 void paintOfficialSprite({
   required Canvas canvas,
   required Size size,
@@ -123,9 +122,7 @@ void paintOfficialSprite({
     ..color = color
     ..style = PaintingStyle.fill;
   for (final d in sprite.paths) {
-    final path = parseSvgPath(d);
-    if (filled) canvas.drawPath(path, fill);
-    canvas.drawPath(path, stroke);
+    canvas.drawPath(parseSvgPath(d), stroke);
   }
   for (final rect in sprite.rects) {
     final rrect = RRect.fromRectAndRadius(
@@ -136,7 +133,7 @@ void paintOfficialSprite({
   }
   for (final circle in sprite.circles) {
     final center = Offset(circle.$1, circle.$2);
-    if (filled) canvas.drawCircle(center, circle.$3, fill);
+    if (filled && circle.$3 <= 2.6) canvas.drawCircle(center, circle.$3, fill);
     canvas.drawCircle(center, circle.$3, stroke);
   }
   canvas.restore();

@@ -34,4 +34,10 @@ void main() {
     final path = parseSvgPath('m14.5 4-5 16');
     expect(path.getBounds().height, greaterThan(10));
   });
+
+  test('dock calendar-schedule has no fillable body rect', () {
+    final calendar = officialSpriteFor('calendar')!;
+    expect(calendar.rects, isEmpty);
+    expect(calendar.circles.single.$3, greaterThan(2.6));
+  });
 }

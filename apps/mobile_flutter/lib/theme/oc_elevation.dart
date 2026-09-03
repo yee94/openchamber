@@ -55,10 +55,11 @@ class OcElevation {
 
   static List<BoxShadow> groupedFor(OcTokens tokens) => cardFor(tokens);
 
-  /// Dock capsule — same float-shadow family. Fill/blur live on [OcFrosted].
+  /// Dock capsule — official `--oc-mobile-glass-shadow` (control-scale),
+  /// not the softer card `--oc-mobile-float-shadow`.
   static List<BoxShadow> dock(BuildContext context) => dockFor(OcTokens.of(context));
 
-  static List<BoxShadow> dockFor(OcTokens tokens) => cardFor(tokens);
+  static List<BoxShadow> dockFor(OcTokens tokens) => controlFor(tokens);
 
   /// Search / + discs — `--oc-mobile-shadow-control`.
   static List<BoxShadow> control(BuildContext context) => controlFor(OcTokens.of(context));

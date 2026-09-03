@@ -201,7 +201,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                 height: OcOptical.scheduleStatus,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: context.oc.glassFill,
+                  color: context.oc.glassChipFill,
                   border: Border.all(color: context.oc.mobileBorder, width: 0.5),
                 ),
                 alignment: Alignment.center,
@@ -209,6 +209,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   paused ? OcGlyphKind.pause : OcGlyphKind.check,
                   size: OcOptical.scheduleStatusGlyph,
                   strokeWidth: OcOptical.listGlyphStroke,
+                  filled: false,
                   color: paused ? context.oc.mutedForeground : context.oc.statusSuccess,
                 ),
               ),
