@@ -266,7 +266,7 @@ class AppController extends ChangeNotifier {
           connectErrorKey = 'connect.error.redeemFailed';
           return false;
         }
-        return _activate(
+        return await _activate(
           SavedInstance(
             id: _newId(),
             url: redeem.serverUrl ?? resolvedUrl,
@@ -287,7 +287,7 @@ class AppController extends ChangeNotifier {
           connectErrorKey = 'connect.error.authRequired';
           return false;
         }
-        return _activate(
+        return await _activate(
           SavedInstance(
             id: _newId(),
             url: resolvedUrl,
@@ -302,7 +302,7 @@ class AppController extends ChangeNotifier {
 
       final session = await _api.getAuthSession(base);
       if (session.disabled || session.authenticated) {
-        return _activate(
+        return await _activate(
           SavedInstance(
             id: _newId(),
             url: resolvedUrl,
@@ -366,7 +366,7 @@ class AppController extends ChangeNotifier {
         connectErrorKey = 'connect.error.passwordFailed';
         return false;
       }
-      return _activate(pending.copyWith(clientToken: unlocked.clientToken, needsPassword: false));
+      return await _activate(pending.copyWith(clientToken: unlocked.clientToken, needsPassword: false));
     } on OpenChamberHttpException {
       connectErrorKey = 'connect.error.passwordFailed';
       return false;
@@ -574,7 +574,7 @@ class AppController extends ChangeNotifier {
           return false;
         }
       }
-      return _activate(instance, existing: existing);
+      return await _activate(instance, existing: existing);
     } on OpenChamberHttpException {
       connectErrorKey = 'connect.error.unreachable';
       return false;

@@ -169,7 +169,7 @@ Capacitor pipelines on `main` are unchanged (`mobile-ci.yml`, `mobile-release.ym
 
 | Workflow | Trigger | What |
 |---|---|---|
-| `.github/workflows/flutter-mobile-ci.yml` | **push to `work/flutter-native` only** + `workflow_dispatch` | Parallel `analyze-test` / `android-debug` / `ios-simulator`. No `pull_request` (PR #5 was starting a second run that cancelled the first). `cursor/flutter-native-8ab3` stays in git sync but is not a second CI trigger. **Actions green is not claimed from this VM.** |
+| `.github/workflows/flutter-mobile-ci.yml` | **push to `work/flutter-native` only** + `workflow_dispatch` | Parallel `analyze-test` / `android-debug` / `ios-simulator`. Flutter **3.32.8** pinned (CI `stable` had drifted to 3.47.2 and failed on `unawaited_return_in_try_block`). No `pull_request`. `cursor/flutter-native-8ab3` is not a second trigger. **Actions green is not claimed from this VM.** |
 | `.github/workflows/flutter-mobile-release.yml` | `workflow_dispatch` only | Decode **existing** Android keystore + iOS p12 / four profiles; signed Android APK/AAB; iOS archive/export + TestFlight gated by `build_ios` (default **false**) |
 
 Secret names reused (do not invent new ones; do not print values):
