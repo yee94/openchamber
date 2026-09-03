@@ -66,6 +66,13 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
         circles: [(12, 12, 1), (19, 12, 1), (5, 12, 1)],
       ),
     'arrowUp' => const OcOfficialSprite(paths: ['m5 12 7-7 7 7', 'M12 19V5']),
+    // Official idle composer `send-plane-2` (stroke-only inside the pill).
+    'sendPlane' => const OcOfficialSprite(
+        paths: [
+          'M3.714 3.048a.498.498 0 0 0-.683.627l2.843 7.627a2 2 0 0 1 0 1.396l-2.842 7.627a.498.498 0 0 0 .682.627l18-8.5a.5.5 0 0 0 0-.904z',
+          'M6 12h16',
+        ],
+      ),
     'chevronDown' => const OcOfficialSprite(paths: ['m6 9 6 6 6-6']),
     'chevronRight' => const OcOfficialSprite(paths: ['m9 6 6 6-6 6']),
     'chevronBack' => const OcOfficialSprite(paths: ['m15 18-6-6 6-6']),

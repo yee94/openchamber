@@ -11,9 +11,9 @@ class HighlightedText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final needle = query.trim();
-    final paint = _cssInk(style);
+    final paint = ocCssInk(style);
     if (needle.isEmpty) {
-      return Text(text, style: paint, strutStyle: _cssLineBox(style));
+      return Text(text, style: paint, strutStyle: ocCssLineBox(style));
     }
     final lower = text.toLowerCase();
     final match = needle.toLowerCase();
@@ -36,14 +36,14 @@ class HighlightedText extends StatelessWidget {
     }
     return Text.rich(
       TextSpan(style: paint, children: spans),
-      strutStyle: _cssLineBox(style),
+      strutStyle: ocCssLineBox(style),
     );
   }
 }
 
-/// CSS `font-size` ink. Line-height lives on the strut, not a Flutter
-/// `height` multiplier — that inflated CJK metrics and packed the 40px row.
-TextStyle? _cssInk(TextStyle? style) {
+/// CSS `font-size` is ink. Official `line-height` is the strut — do not
+/// also multiply Flutter `TextStyle.height` or CJK packs the 40px box.
+TextStyle? ocCssInk(TextStyle? style) {
   if (style == null) return null;
   return style.copyWith(
     height: 1.0,
@@ -51,8 +51,8 @@ TextStyle? _cssInk(TextStyle? style) {
   );
 }
 
-/// Official CSS `line-height` boxes (title 16, subtitle/time 12).
-StrutStyle? _cssLineBox(TextStyle? style) {
+/// Official CSS `line-height` boxes (session title 16, subtitle/time 12).
+StrutStyle? ocCssLineBox(TextStyle? style) {
   if (style?.fontSize == null || style?.height == null) return null;
   return StrutStyle(
     fontSize: style!.fontSize,

@@ -241,7 +241,7 @@ class CircularChromeButton extends StatelessWidget {
     final glyphWidget = OcGlyph(
       glyph,
       size: ink ? OcOptical.leadingGlyphCompact : OcOptical.headerGlyph,
-      strokeWidth: OcOptical.headerGlyphStroke,
+      strokeWidth: OcOptical.headerGlyphStrokeVisual,
       color: !filled && !ink ? tokens.foreground : tokens.primaryForeground,
     );
     final plate = filled || ink
@@ -700,7 +700,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                           child: OcGlyph(
                             OcGlyphKind.chevronBack,
                             size: OcOptical.headerGlyph,
-                            strokeWidth: OcOptical.headerGlyphStroke,
+                            strokeWidth: OcOptical.headerGlyphStrokeVisual,
                             color: tokens.foreground,
                           ),
                         ),

@@ -147,10 +147,10 @@ class OcTokens extends ThemeExtension<OcTokens> {
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
   /// Circular `mobileGlass` chips. Official fill is 0.68 + live blur;
-  /// WidgetTester frost on a small disc reads as a coin, so keep a thin
+  /// WidgetTester frost on a 40 disc reads as a coin, so keep a quieter
   /// wash and let the page peek through. Not a `UIGlassEffect` clone.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.16 : 0.12);
+      .withValues(alpha: isDark ? 0.10 : 0.08);
 
   /// Official `--oc-mobile-glass-highlight` is white / 0.60. WidgetTester
   /// uses a quieter inset so the 1px rim is not a coin edge.
@@ -170,15 +170,11 @@ class OcTokens extends ThemeExtension<OcTokens> {
       foreground.withValues(alpha: isDark ? 0.122 : 0.086);
 
   /// Official selected-tab fill: `bg-interactive-selection/55`.
-  /// Tailwind `/55` replaces the color's alpha with 0.55 (the RGB is the
-  /// muted selection ink, not primary). Multiplying the already-alpha token
-  /// (~0.086 × 0.55) made the full-cell pill vanish so selection read as an
-  /// orange rounded-rect.
-  Color get selectedTabWash => Color.from(
-        alpha: 0.55,
-        red: interactiveSelection.r,
-        green: interactiveSelection.g,
-        blue: interactiveSelection.b,
+  /// That is `color-mix(in srgb, var(--interactive-selection) 55%, transparent)`
+  /// — 55% of the already-alpha selection token, not RGB @ 0.55 (a brown
+  /// capsule) and not primary. Soft wash on glass; glyph stays visible.
+  Color get selectedTabWash => interactiveSelection.withValues(
+        alpha: interactiveSelection.a * 0.55,
       );
 
   /// `--oc-mobile-header-fade` = surface-background 85%.

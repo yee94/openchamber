@@ -44,6 +44,8 @@ class MobileProjectCard extends StatelessWidget {
       height: OcOptical.metaHeight,
       color: context.oc.mutedForeground,
     );
+    final metaInk = ocCssInk(metaStyle)!;
+    final metaBox = ocCssLineBox(metaStyle);
     return Pressable(
       haptic: HapticStrength.light,
       onPressed: onToggle,
@@ -98,24 +100,34 @@ class MobileProjectCard extends StatelessWidget {
                           count == 1
                               ? t(context, 'projects.sessionsCount.one')
                               : t(context, 'projects.sessionsCount', {'count': '$count'}),
-                          style: metaStyle,
+                          style: metaInk,
+                          strutStyle: metaBox,
                         ),
                         if (activity != null && activity!.isNotEmpty) ...[
                           const SizedBox(width: OcOptical.entityMetaGap),
-                          Text('·', style: metaStyle.copyWith(color: context.oc.mutedForeground.withValues(alpha: 0.5))),
+                          Text(
+                            '·',
+                            style: metaInk.copyWith(color: context.oc.mutedForeground.withValues(alpha: 0.5)),
+                            strutStyle: metaBox,
+                          ),
                           const SizedBox(width: OcOptical.entityMetaGap),
-                          Text(activity!, style: metaStyle),
+                          Text(activity!, style: metaInk, strutStyle: metaBox),
                         ],
                         if (pathHint != null && pathHint!.isNotEmpty) ...[
                           const SizedBox(width: OcOptical.entityMetaGap),
-                          Text('·', style: metaStyle.copyWith(color: context.oc.mutedForeground.withValues(alpha: 0.5))),
+                          Text(
+                            '·',
+                            style: metaInk.copyWith(color: context.oc.mutedForeground.withValues(alpha: 0.5)),
+                            strutStyle: metaBox,
+                          ),
                           const SizedBox(width: OcOptical.entityMetaGap),
                           Expanded(
                             child: Text(
                               pathHint!,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: metaStyle,
+                              style: metaInk,
+                              strutStyle: metaBox,
                             ),
                           ),
                         ],

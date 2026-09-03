@@ -16,6 +16,7 @@ import '../../mobile/mobile_surface.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
 import '../chat/chat_screen.dart';
+import 'highlighted_text.dart';
 import 'project_groups.dart';
 
 class ProjectsHomeScreen extends StatefulWidget {
@@ -115,7 +116,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                             child: OcGlyph(
                               OcGlyphKind.plus,
                               size: OcOptical.headerGlyph,
-                              strokeWidth: OcOptical.headerGlyphStroke,
+                              strokeWidth: OcOptical.headerGlyphStrokeVisual,
                               color: context.oc.primaryForeground,
                             ),
                           ),
@@ -324,23 +325,32 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                 tree.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+                style: ocCssInk(TextStyle(
                   fontSize: OcOptical.rowTitle,
                   fontWeight: FontWeight.w600,
                   letterSpacing: OcOptical.rowTitleTracking,
                   height: OcOptical.rowTitleHeight,
                   color: context.oc.foreground,
-                ),
+                )),
+                strutStyle: ocCssLineBox(const TextStyle(
+                  fontSize: OcOptical.rowTitle,
+                  height: OcOptical.rowTitleHeight,
+                )),
               ),
             ),
             Text(
               tree.sessionCount == 1
                   ? t(context, 'projects.sessionsCount.one')
                   : t(context, 'projects.sessionsCount', {'count': '${tree.sessionCount}'}),
-              style: TextStyle(
+              style: ocCssInk(TextStyle(
                 fontSize: OcOptical.meta,
+                height: OcOptical.metaHeight,
                 color: context.oc.mutedForeground,
-              ),
+              )),
+              strutStyle: ocCssLineBox(const TextStyle(
+                fontSize: OcOptical.meta,
+                height: OcOptical.metaHeight,
+              )),
             ),
             const SizedBox(width: 6),
             OcGlyph(

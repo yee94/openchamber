@@ -13,6 +13,7 @@ void main() {
       'code',
       'branch',
       'ellipsis',
+      'sendPlane',
       'chevronDown',
       'chevronRight',
       'chevronBack',

@@ -196,44 +196,57 @@ class ComposerBar extends StatelessWidget {
                             onPressed: onDictate,
                             icon: OcGlyph(OcGlyphKind.mic, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
                           ),
-                        Pressable(
-                          key: const Key('composer-send'),
-                          haptic: HapticStrength.medium,
-                          highlight: false,
-                          onPressed: busy ? onStop : onSend,
-                          child: SizedBox(
-                            width: OcOptical.sendRing,
-                            height: OcOptical.sendRing,
-                            child: Center(
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: context.oc.foreground,
-                                ),
-                                child: SizedBox(
-                                  width: OcOptical.sendRingDisc,
-                                  height: OcOptical.sendRingDisc,
-                                  child: Center(
-                                    child: busy
-                                        ? Container(
-                                            width: OcOptical.sendStop,
-                                            height: OcOptical.sendStop,
-                                            decoration: BoxDecoration(
-                                              color: context.oc.background,
-                                              borderRadius: BorderRadius.circular(OcOptical.sendStop * 0.2),
-                                            ),
-                                          )
-                                        : OcGlyph(
-                                            OcGlyphKind.arrowUp,
-                                            size: OcOptical.sendArrow,
-                                            strokeWidth: OcOptical.dockGlyphStroke,
-                                            color: context.oc.background,
+                        ListenableBuilder(
+                          listenable: controller,
+                          builder: (context, _) {
+                            final hasContent = controller.text.trim().isNotEmpty;
+                            return Pressable(
+                              key: const Key('composer-send'),
+                              haptic: HapticStrength.medium,
+                              highlight: false,
+                              onPressed: busy ? onStop : onSend,
+                              child: SizedBox(
+                                width: OcOptical.sendRing,
+                                height: OcOptical.sendRing,
+                                child: Center(
+                                  child: busy || hasContent
+                                      ? DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: context.oc.foreground,
                                           ),
-                                  ),
+                                          child: SizedBox(
+                                            width: OcOptical.sendRingDisc,
+                                            height: OcOptical.sendRingDisc,
+                                            child: Center(
+                                              child: busy
+                                                  ? Container(
+                                                      width: OcOptical.sendStop,
+                                                      height: OcOptical.sendStop,
+                                                      decoration: BoxDecoration(
+                                                        color: context.oc.background,
+                                                        borderRadius: BorderRadius.circular(OcOptical.sendStop * 0.2),
+                                                      ),
+                                                    )
+                                                  : OcGlyph(
+                                                      OcGlyphKind.arrowUp,
+                                                      size: OcOptical.sendArrow,
+                                                      strokeWidth: OcOptical.dockGlyphStroke,
+                                                      color: context.oc.background,
+                                                    ),
+                                            ),
+                                          ),
+                                        )
+                                      : OcGlyph(
+                                          OcGlyphKind.sendPlane,
+                                          size: OcOptical.sendPlane,
+                                          strokeWidth: OcOptical.headerGlyphStrokeVisual,
+                                          color: context.oc.primary,
+                                        ),
                                 ),
                               ),
-                            ),
-                          ),
+                            );
+                          },
                         ),
                       ],
                     ),

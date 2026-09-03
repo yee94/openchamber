@@ -25,6 +25,7 @@ enum OcGlyphKind {
   branch,
   file,
   sendSquare,
+  sendPlane,
   xmark,
   clock,
   mic,
@@ -398,6 +399,13 @@ class _OcGlyphPainter extends CustomPainter {
         canvas.drawArc(Rect.fromLTWH(w * 0.12, h * 0.30, w * 0.40, h * 0.40), 1.2, 4.0, false, stroke);
         canvas.drawArc(Rect.fromLTWH(w * 0.48, h * 0.30, w * 0.40, h * 0.40), 4.3, 4.0, false, stroke);
         canvas.drawLine(Offset(w * 0.38, h * 0.50), Offset(w * 0.62, h * 0.50), stroke);
+      case OcGlyphKind.sendPlane:
+        // Official sprite paints first; fallback is a thin paper-plane outline.
+        canvas.drawLine(Offset(w * 0.18, h * 0.22), Offset(w * 0.86, h * 0.50), stroke);
+        canvas.drawLine(Offset(w * 0.86, h * 0.50), Offset(w * 0.18, h * 0.78), stroke);
+        canvas.drawLine(Offset(w * 0.18, h * 0.22), Offset(w * 0.38, h * 0.50), stroke);
+        canvas.drawLine(Offset(w * 0.18, h * 0.78), Offset(w * 0.38, h * 0.50), stroke);
+        canvas.drawLine(Offset(w * 0.38, h * 0.50), Offset(w * 0.86, h * 0.50), stroke);
       case OcGlyphKind.robot:
         canvas.drawRRect(
           RRect.fromRectAndRadius(

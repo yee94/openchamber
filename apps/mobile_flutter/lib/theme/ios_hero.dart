@@ -13,8 +13,11 @@ class OcOptical {
   /// Official `.oc-mobile-session-title` is 0.75rem / 1rem / −0.012em.
   /// `.oc-mobile-project-shell` sets `--oc-mobile-session-row-height` to
   /// 2.5rem (40). 40 ≥ 36 touch min, so hit == visual.
+  /// CSS −0.012em is a Latin optical; Flutter applies letterSpacing to CJK
+  /// and packs the 16px strut. Official PingFang ignores that tracking —
+  /// keep 0 so the official line box can breathe. Do not grow the 40px box.
   static const double rowTitle = 12;
-  static const double rowTitleTracking = -0.144;
+  static const double rowTitleTracking = 0;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   static const double sessionRowVisualHeight = 40;
@@ -126,13 +129,15 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  /// Official hit is 40. Painted plate sits inside so WidgetTester frost
-  /// does not read as a heavy coin. No glow on `+`. 36 keeps the glyph
-  /// `size-5` readable without a 38px opaque disc.
-  static const double headerDiscVisual = 36;
+  /// Official painted plate is the 40 `mobileIcon` disc. Quieter wash +
+  /// inset highlight carry the glass; do not inset a 36 coin inside 40.
+  static const double headerDiscVisual = 40;
   static const double headerGlyph = 20;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
+  /// Flutter round-cap bloom at dpr 3; paint under official 1.5 so 20px
+  /// header glyphs stay thin, not a filled coin stroke.
+  static const double headerGlyphStrokeVisual = 1.25;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
   static const double listGlyphStroke = 1.5;
   /// Search-field prefix `Icon name="search" className="size-4"`.
@@ -220,10 +225,12 @@ class OcOptical {
   /// Official composer attach `Icon name="attachment-2" className="size-5"`.
   static const double composerPlus = 20;
   static const double composerPlusStroke = 1.5;
-  /// Official send/stop: `size-8` hit, `size-6` filled circle (the ring).
+  /// Official send/stop: `size-8` hit. Idle empty is `send-plane-2` `size-4`
+  /// inside the pill (no filled disc). Ready is `SendCircleIcon` `size-6`.
   static const double sendRing = 32;
   static const double sendRingDisc = 24;
   static const double sendRingStroke = 0;
+  static const double sendPlane = 16;
   /// Official stop square is 38% of the disc with 20% radius.
   static const double sendStop = 9;
   static const double sendArrow = 13;

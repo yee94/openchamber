@@ -19,13 +19,12 @@ class OcElevation {
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
     if (tokens.isDark) return const [];
     // Official `--oc-mobile-float-shadow`:
-    // 0 0 2px / 0.04, 0 0 12px / 0.05, 0 10px 24px -6px / 0.10.
-    // Cream WidgetTester over-reads the 0.10 far wash — keep the same
-    // three-stop family, quieter than official so cards stay soft contact.
+    // 0 0 2px / 0.04, 0 0 12px / 0.05, 0 10px 24px -6px / 0.10 + inset.
+    // The far 10/24/-6 stop reads as a contact umbra on cream WidgetTester
+    // plates. Keep the official near pair only (same family as dock 2+12).
     return const [
-      BoxShadow(color: Color(0x06000000), blurRadius: 2),
-      BoxShadow(color: Color(0x08000000), blurRadius: 12),
-      BoxShadow(color: Color(0x0A000000), blurRadius: 16, spreadRadius: -6, offset: Offset(0, 6)),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 12),
     ];
   }
 
