@@ -15,7 +15,9 @@ class OcOptical {
   /// 2.5rem (40). 40 ≥ 36 touch min, so hit == visual.
   /// Ink is `font-size`; strut is `line-height`. Do not faux-bold CJK.
   static const double rowTitle = 12;
-  static const double rowTitleTracking = -0.144;
+  /// Official CSS is −0.012em. Flutter letterSpacing packs CJK tighter than
+  /// the WebView, so paint 0 and keep the 16/12 strut + 40px box.
+  static const double rowTitleTracking = 0;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   static const double sessionRowVisualHeight = 40;
@@ -127,8 +129,8 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  /// Official hit is 40 (`mobileIcon`). Painted plate is 36 so the 0.12
-  /// wash is not a 40 coin. Inset highlight only — no blur / umbra / + glow.
+  /// Official hit is 40 (`mobileIcon`). Painted plate is 36 so the wash
+  /// is not a 40 coin. Inset highlight only — no blur / umbra / + glow.
   static const double headerDiscVisual = 36;
   static const double headerGlyph = 20;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.

@@ -294,10 +294,7 @@ class GroupedInsetCard extends StatelessWidget {
       margin: margin ?? const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 12),
       decoration: BoxDecoration(
         borderRadius: radius,
-        boxShadow: [
-          ...OcElevation.card(context, tight: tight),
-          ...OcElevation.highlight(context),
-        ],
+        boxShadow: OcElevation.card(context, tight: tight),
       ),
       child: ClipRRect(
         borderRadius: radius,

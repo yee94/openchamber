@@ -43,12 +43,12 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
         paths: ['M8 2v4', 'M16 2v4', 'M3 10h18'],
         rects: [(3, 4, 18, 18, 2)],
         circles: [
-          (8, 14, 1.1),
-          (12, 14, 1.1),
-          (16, 14, 1.1),
-          (8, 18, 1.1),
-          (12, 18, 1.1),
-          (16, 18, 1.1),
+          (8, 14, 0.8),
+          (12, 14, 0.8),
+          (16, 14, 0.8),
+          (8, 18, 0.8),
+          (12, 18, 0.8),
+          (16, 18, 0.8),
         ],
       ),
     // `gear` is painted by OcGlyph `_gear` (six teeth + hollow hub).
@@ -105,11 +105,11 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
 /// Paint a 24×24 official sprite into [size]. [strokeWidth] is the viewBox
 /// stroke (1.5 regular / 2 medium).
 ///
-/// [filled] is the dock mass pass: fill path/rect *bodies* (folder-open-fill,
-/// sparkling star, calendar plate). Small circles on a filled rect are
-/// punched holes so the calendar stays a grid, not a solid square. Other
-/// small circles (sparkle) ink as accents. Open line paths (hangers, plus)
-/// have no fill area. Do not use this on calendar-schedule / settings-3.
+/// [filled] is the dock mass pass: fill path/rect *bodies* only (no extra
+/// stroke halo — that reads as an outline at 23px). Small circles on a
+/// filled rect are punched holes so the calendar stays a grid. Other small
+/// circles (sparkle) ink as accents. Open line paths (hangers, plus) stay
+/// stroke. Do not use this on calendar-schedule / settings-3.
 void paintOfficialSprite({
   required Canvas canvas,
   required Size size,
@@ -136,16 +136,23 @@ void paintOfficialSprite({
   }
   for (final d in sprite.paths) {
     final path = parseSvgPath(d);
-    if (filled) canvas.drawPath(path, fill);
-    canvas.drawPath(path, stroke);
+    if (filled && _pathHasFillBody(path)) {
+      path.fillType = PathFillType.nonZero;
+      canvas.drawPath(path, fill);
+    } else {
+      canvas.drawPath(path, stroke);
+    }
   }
   for (final rect in sprite.rects) {
     final rrect = RRect.fromRectAndRadius(
       Rect.fromLTWH(rect.$1, rect.$2, rect.$3, rect.$4),
       Radius.circular(rect.$5),
     );
-    if (filled) canvas.drawRRect(rrect, fill);
-    canvas.drawRRect(rrect, stroke);
+    if (filled) {
+      canvas.drawRRect(rrect, fill);
+    } else {
+      canvas.drawRRect(rrect, stroke);
+    }
   }
   for (final circle in sprite.circles) {
     final center = Offset(circle.$1, circle.$2);
@@ -167,6 +174,11 @@ void paintOfficialSprite({
   }
   if (punchHoles) canvas.restore();
   canvas.restore();
+}
+
+bool _pathHasFillBody(Path path) {
+  final bounds = path.getBounds();
+  return bounds.width > 3 && bounds.height > 3;
 }
 
 Path parseSvgPath(String d) {

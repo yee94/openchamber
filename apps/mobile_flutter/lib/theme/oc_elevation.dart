@@ -23,8 +23,8 @@ class OcElevation {
     // small schedule plates and the project shell — drop it so both
     // share the same near-shadowless family.
     return const [
-      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0D000000), blurRadius: 12),
+      BoxShadow(color: Color(0x06000000), blurRadius: 2),
+      BoxShadow(color: Color(0x08000000), blurRadius: 12),
     ];
   }
 

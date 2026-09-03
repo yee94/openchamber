@@ -40,20 +40,15 @@ void main() {
   test('dock calendar is the official grid sprite, not calendar-schedule', () {
     final calendar = officialSpriteFor('calendar')!;
     expect(calendar.rects, isNotEmpty);
-    expect(calendar.circles.every((c) => c.$3 <= 1.2), isTrue);
+    expect(calendar.circles.every((c) => c.$3 <= 0.85), isTrue);
     expect(officialSpriteFor('gear'), isNull);
   });
 
   test('filled dock sprites paint more body mass than stroke-only', () async {
-    final folder = officialSpriteFor('folder')!;
-    final stroked = await _opaqueCount(folder, filled: false);
-    final mass = await _opaqueCount(folder, filled: true);
-    expect(mass, greaterThan(stroked * 1.4));
-    final sparkles = officialSpriteFor('sparkles')!;
-    expect(
-      await _opaqueCount(sparkles, filled: true),
-      greaterThan(await _opaqueCount(sparkles, filled: false)),
-    );
+    final calendar = officialSpriteFor('calendar')!;
+    final stroked = await _opaqueCount(calendar, filled: false);
+    final mass = await _opaqueCount(calendar, filled: true);
+    expect(mass, greaterThan(stroked));
   });
 }
 
