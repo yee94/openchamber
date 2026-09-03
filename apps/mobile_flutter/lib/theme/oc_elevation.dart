@@ -18,14 +18,13 @@ class OcElevation {
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
     if (tokens.isDark) return const [];
-    // One `--oc-mobile-float-shadow` family
-    // (`0 0 2px / 0.04`, `0 0 12px / 0.05`, `0 10px 24px -6px / 0.1`).
-    // Far wash is a hair under CSS 0.10 so opaque WidgetTester cards lift
-    // without a Material umbra. `tight` no longer splits elevation.
+    // One `--oc-mobile-float-shadow` family. Far wash stays under CSS 0.10
+    // and under the previous 0.086 lift so opaque cards integrate instead
+    // of sitting on a separated umbra. `tight` no longer splits elevation.
     return const [
-      BoxShadow(color: Color(0x0A000000), blurRadius: 3),
-      BoxShadow(color: Color(0x0D000000), blurRadius: 12),
-      BoxShadow(color: Color(0x16000000), blurRadius: 24, spreadRadius: -6, offset: Offset(0, 10)),
+      BoxShadow(color: Color(0x08000000), blurRadius: 3),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 12),
+      BoxShadow(color: Color(0x0E000000), blurRadius: 24, spreadRadius: -8, offset: Offset(0, 6)),
     ];
   }
 
@@ -45,8 +44,8 @@ class OcElevation {
   static List<BoxShadow> controlFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0E000000), blurRadius: 8, offset: Offset(0, 2)),
+      BoxShadow(color: Color(0x06000000), blurRadius: 2),
+      BoxShadow(color: Color(0x08000000), blurRadius: 5, offset: Offset(0, 1)),
     ];
   }
 
