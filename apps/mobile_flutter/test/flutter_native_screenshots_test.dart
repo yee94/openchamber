@@ -919,7 +919,7 @@ Future<void> _writePng(WidgetTester tester, Key screenshotKey, String name) asyn
         // Cloud artifact mount is best-effort; docs/ is the committed golden.
         continue;
       }
-      throw error;
+      rethrow;
     }
   }
 }
