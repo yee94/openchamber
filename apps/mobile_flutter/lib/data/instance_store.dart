@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'connection_candidates.dart';
 import 'pairing_payload.dart';
 import 'secure_store.dart';
 
@@ -14,6 +15,7 @@ class SavedInstance {
   const SavedInstance({
     required this.id,
     required this.url,
+    this.candidates = const [],
     this.label = '',
     this.clientToken = '',
     this.relayUrl,
@@ -28,6 +30,8 @@ class SavedInstance {
 
   final String id;
   final String url;
+  /// Full pairing v2 set (LAN + relay). Empty means migrate from [url] + relay fields.
+  final List<TransportCandidate> candidates;
   final String label;
   final String clientToken;
   final String? relayUrl;
@@ -41,12 +45,26 @@ class SavedInstance {
   final String? grant;
   final int lastUsedAt;
 
+  /// Ordered transports actually probed on connect / reload.
+  List<TransportCandidate> get transportCandidates {
+    if (candidates.isNotEmpty) return candidates;
+    return legacyCandidatesFromFields(
+      url: url,
+      relayUrl: relayUrl,
+      serverId: serverId,
+      hostEncPubJwk: hostEncPubJwk,
+      grant: grant,
+    );
+  }
+
   String get displayLabel {
     final trimmed = label.trim();
     return trimmed.isEmpty ? url : trimmed;
   }
 
   SavedInstance copyWith({
+    String? url,
+    List<TransportCandidate>? candidates,
     String? label,
     String? clientToken,
     String? relayUrl,
@@ -60,7 +78,8 @@ class SavedInstance {
   }) {
     return SavedInstance(
       id: id,
-      url: url,
+      url: url ?? this.url,
+      candidates: candidates ?? this.candidates,
       label: label ?? this.label,
       clientToken: clientToken ?? this.clientToken,
       relayUrl: relayUrl ?? this.relayUrl,
@@ -74,24 +93,24 @@ class SavedInstance {
     );
   }
 
-  PairingRelayCandidate? get relayCandidate {
-    final url = relayUrl?.trim();
-    final sid = serverId?.trim();
-    final jwk = hostEncPubJwk;
-    if (url == null || url.isEmpty || sid == null || sid.isEmpty || jwk == null) {
-      return null;
-    }
-    return PairingRelayCandidate(
-      relayUrl: url,
-      serverId: sid,
-      hostEncPubJwk: jwk,
-      grant: grant,
+  PairingRelayCandidate? get relayCandidate => relayCandidateOf(transportCandidates)?.relay;
+
+  SavedInstance withCandidates(List<TransportCandidate> next) {
+    final relay = relayCandidateOf(next)?.relay;
+    return copyWith(
+      url: connectionDisplayUrl(next),
+      candidates: next,
+      relayUrl: relay?.relayUrl,
+      serverId: relay?.serverId,
+      hostEncPubJwk: relay?.hostEncPubJwk,
+      grant: relay?.grant,
     );
   }
 
   Map<String, Object?> toJson() => {
         'id': id,
         'url': url,
+        'candidates': serializeTransportCandidates(transportCandidates),
         'label': label,
         'relayUrl': relayUrl,
         'pairingId': pairingId,
@@ -104,9 +123,11 @@ class SavedInstance {
       };
 
   static SavedInstance fromJson(Map<String, Object?> json) {
+    final parsed = parseTransportCandidates(json['candidates']);
     return SavedInstance(
       id: json['id'] as String? ?? '',
       url: json['url'] as String? ?? '',
+      candidates: parsed,
       label: json['label'] as String? ?? '',
       clientToken: json['clientToken'] as String? ?? '',
       relayUrl: json['relayUrl'] as String?,
@@ -222,14 +243,14 @@ class InstanceRepository {
     for (final item in decoded) {
       if (item is Map<String, dynamic>) {
         final instance = SavedInstance.fromJson(item.cast<String, Object?>());
-        if (instance.id.isNotEmpty && instance.url.isNotEmpty) {
+        if (instance.id.isNotEmpty && (instance.url.isNotEmpty || instance.transportCandidates.isNotEmpty)) {
           instances.add(instance);
         }
       } else if (item is Map) {
         final instance = SavedInstance.fromJson(
           item.map((key, value) => MapEntry(key.toString(), value)),
         );
-        if (instance.id.isNotEmpty && instance.url.isNotEmpty) {
+        if (instance.id.isNotEmpty && (instance.url.isNotEmpty || instance.transportCandidates.isNotEmpty)) {
           instances.add(instance);
         }
       }

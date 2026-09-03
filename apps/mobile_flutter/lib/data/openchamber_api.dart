@@ -141,6 +141,17 @@ class OpenChamberApi {
     );
   }
 
+  /// Official `GET /api/client-auth/connection/candidates`. Fetch failure is
+  /// `null` (skip) — never an authoritative empty LAN list.
+  Future<Map<String, Object?>?> loadConnectionCandidates(Uri base, {String? bearer}) async {
+    final response = await transport.send(
+      base,
+      OpenChamberRequest(method: 'GET', path: OpenChamberPaths.connectionCandidates, bearer: bearer),
+    );
+    if (!response.ok) return null;
+    return response.map;
+  }
+
   Future<SessionIndexSnapshot?> loadSessionIndex(Uri base, {required String bearer}) async {
     final response = await transport.send(
       base,
@@ -988,6 +999,11 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   Map<String, String> statusBySession;
   String? unlockPassword;
   int healthStatus = 200;
+  Duration healthDelay = Duration.zero;
+  final Map<String, int> healthStatusByHost = {};
+  final Map<String, Duration> healthDelayByHost = {};
+  Map<String, Object?>? connectionCandidates;
+  int connectionCandidatesStatus = 200;
   int authStatus = 200;
   int unlockStatus = 200;
   int redeemStatus = 200;
@@ -1458,7 +1474,14 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
     calls.add(request);
     switch (request.path) {
       case OpenChamberPaths.health:
-        return OpenChamberResponse(status: healthStatus, body: health);
+        final delay = healthDelayByHost[base.host] ?? healthDelay;
+        if (delay > Duration.zero) await Future<void>.delayed(delay);
+        return OpenChamberResponse(status: healthStatusByHost[base.host] ?? healthStatus, body: health);
+      case OpenChamberPaths.connectionCandidates:
+        if (connectionCandidates == null) {
+          return const OpenChamberResponse(status: 404, body: {'error': 'not_found'});
+        }
+        return OpenChamberResponse(status: connectionCandidatesStatus, body: connectionCandidates);
       case OpenChamberPaths.authSession:
         if (request.method == 'POST') {
           final password = request.body?['password']?.toString() ?? '';

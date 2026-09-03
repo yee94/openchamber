@@ -62,6 +62,8 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>OpenChamber connects to OpenChamber servers on your local network.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

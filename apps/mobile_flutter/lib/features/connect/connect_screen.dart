@@ -245,11 +245,19 @@ class _ConnectScreenState extends State<ConnectScreen> {
     );
   }
 
+  String _savedSubtitle(SavedInstance instance) {
+    final active = controller.activeInstance?.id == instance.id;
+    if (active) {
+      return t(context, controller.activeConnectionStatusKey ?? 'mobile.instances.status.connectedDirect');
+    }
+    return instance.url;
+  }
+
   Widget _savedTile(SavedInstance instance) {
     return ListTile(
       key: Key('saved-instance-${instance.id}'),
       title: Text(instance.displayLabel),
-      subtitle: Text(instance.relayUrl == null ? instance.url : t(context, 'connect.relay.badge')),
+      subtitle: Text(_savedSubtitle(instance)),
       onTap: () => controller.activateExisting(instance.id),
       trailing: IconButton(
         tooltip: t(context, 'connect.delete'),

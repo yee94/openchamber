@@ -120,8 +120,8 @@ Native contracts / shell
 
 | Contract | Status | Main source | Notes |
 |---|---|---|---|
-| Connection onboarding | landed | `MobileApp.tsx`, HANDOFF | Live `GET /health`, `GET/POST /auth/session`, pairing redeem. Auto-connect last token. Delete-active → connect |
-| QR pairing | landed | `mobileQrScan.ts`, `connectionPayload.ts` | Persist payload + `relayUrl` + `hostEncPubJwk` + grant. Redeems `POST /api/client-auth/pairing/redeem` on the first reachable transport (LAN, then official E2EE tunnel) |
+| Connection onboarding | landed | `MobileApp.tsx`, HANDOFF, `mobileConnections.ts` | Live `GET /health`, `GET/POST /auth/session`, pairing redeem. Persist **full** lan+relay candidate set. 1.5s LAN headstart then relay race. Auto-connect last token. Delete-active → connect. Badge `已连接 · 局域网` / `已连接 · 中继`. |
+| QR pairing | landed | `mobileQrScan.ts`, `connectionPayload.ts` | Persist full v2 candidates (`lan` + `relayUrl` + `hostEncPubJwk` + grant + `serverId`). Redeem on the first reachable transport (LAN race, then official E2EE tunnel). Reload must not drop relay. |
 | iOS composer | landed | `OpenChamberComposer` | UIKit platform view, always on |
 | Android composer | landed | IME viewInsets | Material + solid inset surface. ImeSync analogue still later |
 | iOS liquid-glass dock | landed | `OpenChamberTabBar` | iOS 26 `UIGlassEffect`; older: system translucent bar |
@@ -235,7 +235,7 @@ flutter build apk --release
 | Surface | Status | Notes |
 |---|---|---|
 | Live HTTP connect | landed | `GET /health`, `GET/POST /auth/session` (`issueClientToken`, `dedupeKey`). Tokens in SecureStore key `openchamber.mobile.token.${encodeURIComponent(connectionKey)}`. Never logged |
-| Pairing redeem | landed | `POST /api/client-auth/pairing/redeem` on first reachable candidate. LAN first, then official E2EE tunnel (`packages/ui/src/lib/relay/*`). Relay-only persists `relay://$serverId` + `hostEncPubJwk` + grant |
+| Pairing redeem | landed | `POST /api/client-auth/pairing/redeem` on the winning transport. Persist the **full** candidate list (every LAN + relay). LAN headstart ~1.5s, then race relay. Relay-only still persists `relay://$serverId` + `hostEncPubJwk` + grant |
 | Session index home | landed | `GET /api/openchamber/session-index`. Failure ≠ empty. Search + highlight (1.19.3-beta.1). Pinned/in-progress subtitle `项目 · 分支`. Works through the tunnel after a successful relay redeem (unit-tested on a memory wire; no live `wss://` from this VM) |
 | Chat transcript + Send/Stop | landed | `GET /api/openchamber/sessions/:id/messages?turns=6`. Send `POST /api/session/:id/prompt_async`. Stop `POST /api/session/:id/abort`. Live `GET /api/global/event` SSE; 2s/4s poll is reconnect fallback only |
 | New session | landed | Projects plus-menu `POST /api/session?directory=` using a directory from the loaded index. Honest error if no directory — not a snackbar-only stub |
@@ -327,11 +327,12 @@ Read on main (do not invent): skill grouping is `isSkillGroupTool` + `SkillToolG
 
 ## Remaining gaps
 
-1. Device-only checks (do not invent another slice): live hosted-provider / MCP OAuth in a real system browser; a relay-paired **phone** on a live `wss://` host; live microphone PCM on a real device. Memory-wire proves redeem, session-index, tunneled dictation, and tunneled event-ws.
+1. Device-only checks (do not invent another slice): live hosted-provider / MCP OAuth in a real system browser; a relay-paired **phone** on a live `wss://` host (home LAN ↔ away relay hot-switch); live microphone PCM on a real device; the iOS Local Network prompt on a real iPhone. Memory/fake transport proves the 1.5s LAN/relay race, full-candidate persist+reload, and candidates-refresh hot-switch. **Not 真机过.**
 2. Android launcher badge — official Push Relay (`packages/relay-server/src/push/schema.js`) rejects `platform === 'android'` and only builds APNs `aps.badge`. There is no FCM send path to hang `NotificationCompat.setNumber` on. Do not invent ShortcutBadger. iOS badge is local `attentionCount` + `aps.badge`.
 3. Capgo / plan / notes / Todo / Chat dock tab / `iosNativeUi` — will not port.
 4. Pierre `@pierre/diffs` / `beautiful-mermaid` SVG — will not add packages.
 5. Experimental session-list fallback when index returns 501 — not a 1.19 mobile happy path.
+6. Official nearby is LAN / home network (`mobileConnections.ts`). There is **no** 「附近」 string and **no** Bonjour/mDNS/NWBrowser/NSD — do not add a scanner UI.
 
 ## Tenth-slice status
 
@@ -460,3 +461,16 @@ Motion only. Sibling chrome owns color / type / radii / shadows. Chat stays a pu
 | 任务/历史记录 + filter chips | Flutter press + selected CASpring (not an instant snap) | Same |
 
 Feel it on a device: `apps/mobile_flutter/README.md` § Feel press / spring / back. WidgetTester covers press scale, drag-out cancel, selected spring, and that the iOS route refuses a Flutter pop gesture.
+
+## Fifteenth-slice status (official 附近 / LAN connect)
+
+Official nearby is **LAN / home network**, not Bonjour. Source of truth: `packages/ui/src/apps/mobileConnections.ts`, `connectionPayload.ts`, Capacitor `Info.plist` `NSLocalNetworkUsageDescription`, zh-CN `已连接 · 局域网` / `已连接 · 中继`.
+
+| Surface | Status | Notes |
+|---|---|---|
+| iOS Local Network usage string | landed (plist) | Copied official English `NSLocalNetworkUsageDescription`. Kept camera/mic strings and ATS `NSAllowsLocalNetworking` + `NSAllowsArbitraryLoads`. **Device-only:** the iOS prompt was not shown on a real phone. |
+| Persist full v2 candidates | landed | `lan` + `relayUrl` + `hostEncPubJwk` + grant + `serverId`. Reload keeps relay; does not collapse to a single LAN URL. Legacy `{url, relayUrl}` migrates. |
+| `probeConnectionCandidates` race | landed (memory) | LAN headstart 1.5s, then race relay. LAN win → `mobile.instances.status.connectedDirect`. Relay-only / LAN timeout → `connectedRelay`. Tunnel-open failure stays on connect. |
+| Candidate refresh + hot-switch | landed (memory) | `GET /api/client-auth/connection/candidates`. Fresh LAN replaces http LAN-class directs; https + relay preserved. Empty / failed fetch is skip, not wipe. Reprobe after update when on relay (home). Resume reprobe is production-only. |
+| Bonjour / 「附近」 scanner | **will not add** | Official product has neither. |
+| Live phone home ↔ away | **device-only** | Not claimed. Memory/fake transport only. |

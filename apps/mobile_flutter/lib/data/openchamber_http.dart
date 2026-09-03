@@ -9,6 +9,7 @@ abstract final class OpenChamberPaths {
   static const health = '/health';
   static const authSession = '/auth/session';
   static const pairingRedeem = '/api/client-auth/pairing/redeem';
+  static const connectionCandidates = '/api/client-auth/connection/candidates';
   static const sessionIndex = '/api/openchamber/session-index';
   static const sessionIndexSync = '/api/openchamber/session-index/sync';
   static String sessionMessages(String sessionId) =>

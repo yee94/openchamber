@@ -160,7 +160,11 @@ class InstancesSettingsPage extends StatelessWidget {
                   final active = controller.activeInstance?.id == instance.id;
                   return ListTile(
                     title: Text(instance.displayLabel),
-                    subtitle: Text(instance.url),
+                    subtitle: Text(
+                      active
+                          ? t(context, controller.activeConnectionStatusKey ?? 'mobile.instances.status.connectedDirect')
+                          : instance.url,
+                    ),
                     trailing: active ? const Icon(Icons.check) : null,
                     onTap: () => controller.activateExisting(instance.id),
                   );

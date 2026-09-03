@@ -74,6 +74,7 @@ void main() {
     expect(controller.activeInstance?.url, 'http://192.168.1.20:4096');
     expect(controller.activeInstance?.relayUrl, 'wss://relay.example/ws');
     expect(controller.activeInstance?.hostEncPubJwk, hostEncPubJwk);
+    expect(controller.activeInstance?.transportCandidates, hasLength(2));
     expect(controller.activeInstance?.pairingId, 'pair_persist');
     expect(controller.activeInstance?.label, 'Studio');
     expect(controller.activeInstance?.clientToken, 'oc_client_pair');
