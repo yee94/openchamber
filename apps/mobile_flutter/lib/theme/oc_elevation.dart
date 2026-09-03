@@ -10,10 +10,9 @@ import 'oc_tokens.dart';
 class OcElevation {
   const OcElevation._();
 
-  /// Shared `--oc-mobile-float-shadow` without the inset highlight
-  /// (`0 0 2px / 0.04`, `0 0 12px / 0.05`, `0 10px 24px -6px / 0.1`).
-  /// Far wash is a hair quieter than the CSS 0.10 so opaque WidgetTester
-  /// cards do not read as Material elevation.
+  /// Shared `--oc-mobile-float-shadow` without the inset highlight.
+  /// Layers stay outside-only and more diffused than a 2px hairline ring so
+  /// opaque WidgetTester cards read as soft lift, not a hard umbra.
   static List<BoxShadow> card(BuildContext context, {bool tight = false}) =>
       cardFor(OcTokens.of(context), tight: tight);
 
