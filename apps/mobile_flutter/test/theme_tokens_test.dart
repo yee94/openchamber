@@ -165,10 +165,9 @@ void main() {
     expect(OcOptical.rootTitleTracking(1), closeTo(-0.64, 0.01));
     expect(OcOptical.dockGlyph, 23);
     expect(OcOptical.dockGlyphVisual, OcOptical.dockGlyph);
-    expect(OcOptical.dockGlyphStrokeVisual, lessThan(OcOptical.dockGlyphStroke));
-    expect(OcOptical.dockGlyphStrokeVisual, closeTo(1.75, 0.01));
-    expect(OcOptical.dockGlyphStrokeVisual, greaterThan(1.4));
-    expect(OcOptical.dockGlyphFillBodies, isFalse);
+    expect(OcOptical.dockGlyphStrokeVisual, OcOptical.dockGlyphStroke);
+    expect(OcOptical.dockGlyphStrokeVisual, 2);
+    expect(OcOptical.dockGlyphFillBodies, isTrue);
     expect(OcOptical.dockTabHeight, 58);
     expect(OcOptical.dockTabRadius, 29);
     expect(OcOptical.dockLabel, 12);
@@ -242,13 +241,13 @@ void main() {
     expect(OcElevation.composerFor(OcTokens.light), OcElevation.cardFor(OcTokens.light));
     expect(OcElevation.dockFor(OcTokens.light).length, 2);
     expect(OcElevation.dockFor(OcTokens.light).last.blurRadius, lessThanOrEqualTo(12));
-    expect(OcElevation.controlFor(OcTokens.light), hasLength(3));
-    expect(OcElevation.controlFor(OcTokens.light).last.blurRadius, 20);
-    expect(OcElevation.controlFor(OcTokens.light).last.offset.dy, 8);
-    expect(OcElevation.controlFor(OcTokens.light).last.spreadRadius, -6);
+    expect(OcElevation.controlFor(OcTokens.light), hasLength(2));
+    expect(OcElevation.controlFor(OcTokens.light).first.blurRadius, 2);
+    expect(OcElevation.controlFor(OcTokens.light).last.blurRadius, 12);
+    expect(OcElevation.controlFor(OcTokens.light).last.offset.dy, 0);
     expect(
       (OcElevation.controlFor(OcTokens.light).last.color.a * 255).round(),
-      lessThanOrEqualTo(0x1F),
+      lessThanOrEqualTo(0x10),
     );
     expect(OcElevation.cardFor(OcTokens.dark), isEmpty);
     expect(OcElevation.dockFor(OcTokens.dark), isEmpty);

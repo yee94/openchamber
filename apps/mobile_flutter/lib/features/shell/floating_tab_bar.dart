@@ -133,8 +133,8 @@ class _TabSlot extends StatelessWidget {
                   size: OcOptical.dockGlyphVisual,
                   color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
                   strokeWidth: OcOptical.dockGlyphStrokeVisual,
-                  // Official 23px stroke-medium. Not filled blobs, not
-                  // hairlines, not calendar-clock.
+                  // Compact filled-medium. Calendar grid + thin header;
+                  // holed gear. Not hairlines, not heavy blocks.
                   filled: OcOptical.dockGlyphFillBodies,
                 ),
                 const SizedBox(height: OcOptical.dockLabelGap),
@@ -155,17 +155,14 @@ class _TabSlot extends StatelessWidget {
             return SizedBox(
               height: OcOptical.dockTabHeight,
               width: double.infinity,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
-                // Official `bg-interactive-selection/55` frost over the
-                // cell — not a solid cream/orange recolor. Fill is the
-                // 55% mix only; WidgetTester cannot mint UIKit glass.
-                child: t <= 0
-                    ? column
-                    : OcFrosted(
-                        fill: wash,
-                        child: column,
-                      ),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: wash,
+                  borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
+                ),
+                // 55% mix on the already-frosted dock. A second OcFrosted
+                // here is a solid cream capsule.
+                child: column,
               ),
             );
           },

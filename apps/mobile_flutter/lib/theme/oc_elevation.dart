@@ -80,8 +80,9 @@ class OcElevation {
     ];
   }
 
-  /// Search / + discs — official `--oc-mobile-glass-shadow` (near pair
-  /// + 8/20/-6 umbra). No primary 10/22 glow.
+  /// Search / + discs — official `--oc-mobile-glass-shadow` near pair
+  /// (0 0 2px / 0.05, 0 0 12px / 0.06). Surface-elevated fill lifts the
+  /// 36 disc off cream. No 8px umbra, no primary 10/22 glow.
   static List<BoxShadow> control(BuildContext context) => controlFor(OcTokens.of(context));
 
   static List<BoxShadow> controlFor(OcTokens tokens) {
@@ -89,12 +90,6 @@ class OcElevation {
     return const [
       BoxShadow(color: Color(0x0D000000), blurRadius: 2),
       BoxShadow(color: Color(0x0F000000), blurRadius: 12),
-      BoxShadow(
-        color: Color(0x1F000000),
-        offset: Offset(0, 8),
-        blurRadius: 20,
-        spreadRadius: -6,
-      ),
     ];
   }
 
