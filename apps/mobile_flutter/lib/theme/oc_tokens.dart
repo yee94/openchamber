@@ -147,11 +147,11 @@ class OcTokens extends ThemeExtension<OcTokens> {
   Color get glassFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
-  /// Official `--oc-mobile-glass-fill` 0.68 / 0.08 / 0.04 still a
-  /// WidgetTester white plate. Bias quieter so page cream shows through
-  /// official blur + saturate. Keep inset highlight. `+` stays primary.
+  /// Any white wash (0.02–0.68) lifts WidgetTester L into a cream disc.
+  /// Fill is fully clear so official blur + saturate frost page through.
+  /// Contact only — no inset sheen, no umbra. `+` stays primary.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.02 : 0.02);
+      .withValues(alpha: 0);
 
   /// Official `--oc-mobile-glass-highlight` is white / 0.60
   /// (dark 0.18). Inset sheen on the elevated plate.

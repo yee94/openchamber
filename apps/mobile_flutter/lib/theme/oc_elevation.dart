@@ -106,7 +106,7 @@ class OcElevation {
   static List<BoxShadow> chipFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x0D000000), blurRadius: 2),
+      BoxShadow(color: Color(0x05000000), blurRadius: 2),
     ];
   }
 

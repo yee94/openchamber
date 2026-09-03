@@ -21,10 +21,10 @@ class OcOptical {
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   static const double sessionRowVisualHeight = 40;
-  /// `.oc-mobile-session-row-main` padding-block 0.3125rem.
-  /// Official `gap-0.5` (2) still reads cramped in Flutter CJK; gap 3
-  /// + padV 4.5 keeps the 40 box. Do not grow icons.
-  static const double sessionRowPadV = 4.5;
+  /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
+  /// 5 + 16 + 2 + 12 + 5 keeps the 40 box with official `gap-0.5`.
+  /// Air lives in [sessionLineLeading]. Do not grow icons.
+  static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
   static const double groupHeaderPadV = 10;
   static const double groupHeaderPadVCompact = 8;
@@ -37,11 +37,11 @@ class OcOptical {
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
-  /// Official title/subtitle column is `gap-0.5` (2). A touch more air
-  /// (3) in the 40 box; leading stays inside the 16/12 struts.
+  /// Official title/subtitle column is `gap-0.5` (2). Do not invent 3.
+  /// Air lives in [sessionLineLeading] inside the 16/12 struts.
   /// Official title is `font-medium` / unread `font-semibold`. The review
   /// CJK face is Regular-only, so paint Regular — do not faux-bold.
-  static const double sessionTitleSubtitleGap = 3;
+  static const double sessionTitleSubtitleGap = 2;
   /// Fraction of the CSS line-height moved into strut `leading` so CJK
   /// glyphs do not fill the 16/12 boxes. Total box stays official —
   /// [ocCssLineBox] must not floor `height` at 1.0 or leading grows the

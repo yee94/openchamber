@@ -136,13 +136,10 @@ class OcGlassChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          // Official glass-shadow language: 2px contact + inset highlight.
-          // No 8/20 umbra. Fill is biased quiet so content bleeds.
-          // WidgetTester is not live UIGlassEffect.
-          boxShadow: [
-            ...OcElevation.chip(context),
-            ...OcElevation.glassHighlight(context),
-          ],
+          // Through-frost: clear fill + official blur. Contact only —
+          // no inset sheen ring, no umbra coin. WidgetTester is not
+          // live UIGlassEffect.
+          boxShadow: OcElevation.chip(context),
         ),
         child: ClipOval(
           child: OcFrosted(
