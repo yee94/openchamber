@@ -349,6 +349,7 @@ class _ChatScreenState extends State<ChatScreen> {
       resizeToAvoidBottomInset: !ios,
       appBar: PushedNavBar(
         title: widget.session.title,
+        subtitle: widget.session.subtitle,
         leadingKey: const Key('chat-back'),
         busy: _busy,
         trailing: CircularChromeButton(
@@ -373,20 +374,28 @@ class _ChatScreenState extends State<ChatScreen> {
                 if (message.isUser) {
                   return Align(
                     alignment: Alignment.centerRight,
-                    child: Container(
+                    child: ConstrainedBox(
                       key: Key('chat-message-${message.id}'),
-                      margin: const EdgeInsets.symmetric(vertical: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       constraints: const BoxConstraints(maxWidth: 300),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: ChatTranscriptBody(
-                        message: message,
-                        isLastAssistant: isLastAssistant,
-                        isTurnLive: _busy && isLastAssistant && messageHasRunningTool(message),
-                        isSpeaking: _speakingMessageId == message.id,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Container(
+                            margin: const EdgeInsets.only(top: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: ChatTranscriptBody(
+                              message: message,
+                              isLastAssistant: isLastAssistant,
+                              isTurnLive: _busy && isLastAssistant && messageHasRunningTool(message),
+                              isSpeaking: _speakingMessageId == message.id,
+                            ),
+                          ),
+                          UserTurnToolbar(message: message),
+                        ],
                       ),
                     ),
                   );
@@ -433,7 +442,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 busy: _busy,
                 attachments: _attachments,
                 dictationLabel: _dictationLabel,
-                showScrollToBottom: !atLiveEdge || _timeline.length > 2,
+                showScrollToBottom: !atLiveEdge || _timeline.length >= 2,
                 onScrollToBottom: _jumpToLatest,
                 onSend: _send,
                 onStop: _stop,

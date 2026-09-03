@@ -60,8 +60,9 @@ List<ChatMessage> parseTurnPageMessages(Object? payload, {List<PermissionRequest
       final remain = seconds % 60;
       processed = minutes > 0 ? '${minutes}m ${remain}s' : '${remain}s';
     }
-    if (completed != null && completed > 1e11) {
-      final time = DateTime.fromMillisecondsSinceEpoch(completed.round());
+    final clockSource = completed ?? (role == 'user' ? created : null);
+    if (clockSource != null && clockSource > 1e11) {
+      final time = DateTime.fromMillisecondsSinceEpoch(clockSource.round());
       clock = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
     }
     final agentCount = parts.where((part) => part.kind == ChatPartKind.task).length;

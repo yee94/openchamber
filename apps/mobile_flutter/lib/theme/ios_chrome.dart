@@ -89,22 +89,29 @@ class CircularChromeButton extends StatelessWidget {
     required this.glyph,
     required this.onPressed,
     this.filled = false,
+    this.ink = false,
     this.tooltip,
   });
 
   final OcGlyphKind glyph;
   final VoidCallback onPressed;
   final bool filled;
+  final bool ink;
   final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
+    final fill = !filled
+        ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.92)
+        : ink
+            ? OcChrome.title
+            : primary;
     final child = Material(
-      color: filled ? primary : Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
+      color: fill,
       shape: const CircleBorder(),
-      elevation: filled ? 2 : 0,
-      shadowColor: filled ? primary.withValues(alpha: 0.28) : Colors.transparent,
+      elevation: filled ? 1.5 : 0,
+      shadowColor: filled ? Colors.black.withValues(alpha: 0.22) : Colors.transparent,
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onPressed,
@@ -136,7 +143,7 @@ class GroupedInsetCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: margin ?? const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 16),
+      margin: margin ?? const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 10),
       padding: padding,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
@@ -394,21 +401,33 @@ class FilterChipBar extends StatelessWidget {
 }
 
 class StatusAttentionStrip extends StatelessWidget {
-  const StatusAttentionStrip({super.key, required this.label});
+  const StatusAttentionStrip({super.key, required this.label, this.moreLabel});
 
   final String label;
+  final String? moreLabel;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      key: const Key('projects-attention-strip'),
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter, vertical: 8),
-      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500),
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.86),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w500),
+            ),
+          ),
+          if (moreLabel != null) ...[
+            Text(moreLabel!, style: const TextStyle(fontSize: 13, color: OcChrome.secondary)),
+            const OcGlyph(OcGlyphKind.chevronRight, size: 13, color: OcChrome.secondary),
+          ],
+        ],
       ),
     );
   }
@@ -418,18 +437,20 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
   const PushedNavBar({
     super.key,
     required this.title,
+    this.subtitle,
     this.leadingKey,
     this.trailing,
     this.busy = false,
   });
 
   final String title;
+  final String? subtitle;
   final Key? leadingKey;
   final Widget? trailing;
   final bool busy;
 
   @override
-  Size get preferredSize => const Size.fromHeight(56);
+  Size get preferredSize => Size.fromHeight(subtitle == null || subtitle!.isEmpty ? 56 : 72);
 
   @override
   Widget build(BuildContext context) {
@@ -445,12 +466,26 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                title,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                  ),
+                  if (subtitle != null && subtitle!.isNotEmpty)
+                    Text(
+                      subtitle!,
+                      key: const Key('chat-header-subtitle'),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, color: OcChrome.secondary),
+                    ),
+                ],
               ),
             ),
             const SizedBox(width: 10),

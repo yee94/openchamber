@@ -35,6 +35,9 @@ enum OcGlyphKind {
   bolt,
   hourglass,
   layers,
+  undo,
+  edit,
+  link,
 }
 
 class OcGlyph extends StatelessWidget {
@@ -318,6 +321,24 @@ class _OcGlyphPainter extends CustomPainter {
           RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.22, h * 0.58, w * 0.56, h * 0.22), Radius.circular(w * 0.06)),
           stroke,
         );
+      case OcGlyphKind.undo:
+        canvas.drawArc(Rect.fromLTWH(w * 0.22, h * 0.28, w * 0.56, h * 0.48), 0.2, 4.2, false, stroke);
+        canvas.drawLine(Offset(w * 0.22, h * 0.28), Offset(w * 0.22, h * 0.48), stroke);
+        canvas.drawLine(Offset(w * 0.22, h * 0.28), Offset(w * 0.40, h * 0.30), stroke);
+      case OcGlyphKind.edit:
+        canvas.drawLine(Offset(w * 0.22, h * 0.78), Offset(w * 0.78, h * 0.78), stroke);
+        final pencil = Path()
+          ..moveTo(w * 0.70, h * 0.22)
+          ..lineTo(w * 0.78, h * 0.30)
+          ..lineTo(w * 0.38, h * 0.70)
+          ..lineTo(w * 0.26, h * 0.72)
+          ..lineTo(w * 0.28, h * 0.60)
+          ..close();
+        canvas.drawPath(pencil, stroke);
+      case OcGlyphKind.link:
+        canvas.drawArc(Rect.fromLTWH(w * 0.12, h * 0.30, w * 0.40, h * 0.40), 1.2, 4.0, false, stroke);
+        canvas.drawArc(Rect.fromLTWH(w * 0.48, h * 0.30, w * 0.40, h * 0.40), 4.3, 4.0, false, stroke);
+        canvas.drawLine(Offset(w * 0.38, h * 0.50), Offset(w * 0.62, h * 0.50), stroke);
     }
   }
 

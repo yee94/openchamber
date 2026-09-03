@@ -56,6 +56,10 @@ class ChatTranscriptBody extends StatelessWidget {
 
   List<Widget> _alwaysVisible(BuildContext context) {
     final out = <Widget>[];
+    final textParts = message.parts
+        .where((part) => part.kind == ChatPartKind.text && (part.body ?? '').trim().isNotEmpty)
+        .toList();
+    var textIndex = 0;
     for (final part in message.parts) {
       if (part.kind == ChatPartKind.text && (part.body ?? '').trim().isNotEmpty) {
         final generated = parseGeneratedJsonResult(part.body!.trim());
@@ -64,9 +68,12 @@ class ChatTranscriptBody extends StatelessWidget {
             padding: const EdgeInsets.only(top: 8),
             child: _GeneratedResultCard(result: generated, partId: part.id),
           ));
+        } else if (message.isUser && textParts.length > 1 && textIndex == 0) {
+          out.add(_UserMentionRow(label: part.body!.trim()));
         } else {
           out.add(Text(part.body!.trim()));
         }
+        textIndex += 1;
       } else if (part.kind == ChatPartKind.mermaid) {
         out.add(Padding(
           padding: const EdgeInsets.only(top: 8),
@@ -104,8 +111,6 @@ class ChatTranscriptBody extends StatelessWidget {
         onSpeak: onSpeak,
         canSpeak: onSpeak != null && _hasSpeakableText,
       ));
-    } else if (message.tokensPerSecond != null || message.processedLabel != null || message.completedClock != null) {
-      out.add(_MetricsRow(message: message));
     }
     return out;
   }
@@ -312,31 +317,78 @@ class _FileChangeCard extends StatelessWidget {
   }
 }
 
-class _MetricsRow extends StatelessWidget {
-  const _MetricsRow({required this.message});
+class UserTurnToolbar extends StatelessWidget {
+  const UserTurnToolbar({super.key, required this.message});
 
   final ChatMessage message;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.only(top: 4),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          if (message.tokensPerSecond != null)
-            Text(
-              message.tokensPerSecond!,
-              key: Key('chat-tps-${message.id}'),
-              style: const TextStyle(fontSize: 12, color: OcChrome.secondary),
-            ),
-          if (message.processedLabel != null) ...[
-            const SizedBox(width: 10),
-            Text(message.processedLabel!, style: const TextStyle(fontSize: 12, color: OcChrome.secondary)),
-          ],
           if (message.completedClock != null) ...[
-            const SizedBox(width: 10),
+            const OcGlyph(OcGlyphKind.clock, size: 12, color: OcChrome.secondary),
+            const SizedBox(width: 3),
             Text(message.completedClock!, style: const TextStyle(fontSize: 12, color: OcChrome.secondary)),
+            const SizedBox(width: 4),
           ],
+          _icon(context, key: const Key('chat-action-revert'), glyph: OcGlyphKind.undo, tooltip: t(context, 'chat.messageBody.actions.revert')),
+          _icon(context, key: const Key('chat-action-edit'), glyph: OcGlyphKind.edit, tooltip: t(context, 'chat.messageBody.actions.edit')),
+          _icon(context, key: const Key('chat-action-fork'), glyph: OcGlyphKind.branch, tooltip: t(context, 'chat.messageBody.actions.fork')),
+          _icon(context, key: const Key('chat-action-link'), glyph: OcGlyphKind.link, tooltip: t(context, 'chat.messageBody.actions.copyMessage')),
+          _icon(context, key: const Key('chat-action-copy-user'), glyph: OcGlyphKind.copy, tooltip: t(context, 'chat.messageBody.actions.copyMessage')),
+        ],
+      ),
+    );
+  }
+
+  Widget _icon(
+    BuildContext context, {
+    required Key key,
+    required OcGlyphKind glyph,
+    required String tooltip,
+  }) {
+    return IconButton(
+      key: key,
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+      padding: const EdgeInsets.all(2),
+      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+      onPressed: () {},
+      icon: OcGlyph(glyph, size: 14, color: OcChrome.secondary),
+    );
+  }
+}
+
+class _UserMentionRow extends StatelessWidget {
+  const _UserMentionRow({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const OcGlyph(OcGlyphKind.link, size: 13, color: OcChrome.secondary),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -371,8 +423,6 @@ class _TurnFooter extends StatelessWidget {
             children: [
               _footerIcon(context, key: const Key('chat-action-copy'), glyph: OcGlyphKind.copy, tooltip: t(context, 'chat.messageBody.actions.copyAnswer')),
               _footerIcon(context, key: const Key('chat-action-share'), glyph: OcGlyphKind.share, tooltip: t(context, 'chat.messageBody.actions.shareAnswer')),
-              _footerIcon(context, key: const Key('chat-action-up'), glyph: OcGlyphKind.thumbUp, tooltip: t(context, 'chat.messageBody.actions.goodResponse')),
-              _footerIcon(context, key: const Key('chat-action-down'), glyph: OcGlyphKind.thumbDown, tooltip: t(context, 'chat.messageBody.actions.badResponse')),
               if (canSpeak)
                 _footerIcon(
                   context,

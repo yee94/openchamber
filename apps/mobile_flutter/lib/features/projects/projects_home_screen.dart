@@ -35,11 +35,12 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
   final Set<String> _collapsed = {};
   final Set<String> _expandedMore = {};
   final Set<String> _expandedWorktrees = {};
+  final Set<String> _worktreeToggled = {};
   final _haptics = NativeHaptics();
 
   AppController get controller => widget.controller;
 
-  static const _visibleSlice = 4;
+  static const _visibleSlice = 3;
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +50,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         final groups = groupSessionsByProject(controller.sessions.where((row) {
           return sessionMatchesQuery(row, _query);
         }).toList());
+        final inProgress = controller.sessions.where((row) => row.kind == HomeSessionKind.inProgress).toList();
 
         return Scaffold(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -59,6 +61,11 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
               child: ListView(
                 padding: EdgeInsets.fromLTRB(0, 0, 0, 24 + widget.bottomOccupancy),
                 children: [
+                  if (inProgress.isNotEmpty)
+                    StatusAttentionStrip(
+                      label: inProgress.first.title,
+                      moreLabel: t(context, 'projects.showMore'),
+                    ),
                   LargeTitleHeader(
                     title: t(context, 'tabs.projects'),
                     trailing: Row(
@@ -204,13 +211,15 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                               tree.sessions.fold<num>(0, (latest, row) => row.updated > latest ? row.updated : latest),
                             ),
                             pathHint: null,
-                            expanded: _expandedWorktrees.contains('${group.id}::${tree.name}'),
+                            expanded: _isWorktreeExpanded('${group.id}::${tree.name}', tree.sessionCount),
                             onToggle: () => setState(() {
                               final key = '${group.id}::${tree.name}';
-                              if (_expandedWorktrees.contains(key)) {
-                                _expandedWorktrees.remove(key);
-                              } else {
+                              final next = !_isWorktreeExpanded(key, tree.sessionCount);
+                              _worktreeToggled.add(key);
+                              if (next) {
                                 _expandedWorktrees.add(key);
+                              } else {
+                                _expandedWorktrees.remove(key);
                               }
                             }),
                             sessions: tree.sessions,
@@ -225,6 +234,11 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         );
       },
     );
+  }
+
+  bool _isWorktreeExpanded(String id, int count) {
+    if (_worktreeToggled.contains(id)) return _expandedWorktrees.contains(id);
+    return count >= 3;
   }
 
   List<HomeSessionRow> _projectSessions(ProjectHomeGroup group) {
@@ -261,7 +275,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
           InkWell(
             onTap: onToggle,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 8, 14),
+              padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
               child: Row(
                 children: [
                   Container(
@@ -361,7 +375,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         _openChat(context, row);
       },
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 10, 8, 10),
+        padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
         child: Row(
           children: [
             Container(

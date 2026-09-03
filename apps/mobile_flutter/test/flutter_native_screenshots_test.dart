@@ -82,6 +82,10 @@ void main() {
     expect(find.textContaining('个会话'), findsWidgets);
     expect(find.textContaining('更多'), findsWidgets);
     expect(find.textContaining('feat/opencode2up'), findsWidgets);
+    expect(find.textContaining('feat/remove-ctx', skipOffstage: false), findsWidgets);
+    expect(find.textContaining('ios-native', skipOffstage: false), findsWidgets);
+    expect(find.textContaining('NPM 全 package fix'), findsWidgets);
+    expect(find.byKey(const Key('projects-attention-strip')), findsOneWidget);
     expect(find.textContaining('置顶'), findsNothing);
     expect(find.byKey(const Key('tab-projects')), findsOneWidget);
     await tester.tap(find.byKey(const Key('projects-plus-menu')));
@@ -105,6 +109,8 @@ void main() {
     expect(find.byKey(const Key('scheduled-task-cron-1')), findsOneWidget);
     expect(find.textContaining('每天'), findsWidgets);
     expect(find.textContaining('后'), findsWidgets);
+    expect(find.textContaining('每日AI会话日报'), findsOneWidget);
+    expect(find.textContaining('weekly-architecture-review'), findsOneWidget);
     expect(find.text('任务'), findsWidgets);
     expect(find.text('历史记录'), findsWidgets);
     expect(find.text('已暂停'), findsWidgets);
@@ -168,11 +174,15 @@ void main() {
     expect(find.text('Grok 4.6'), findsWidgets);
     expect(find.byKey(const Key('chat-role-badge')), findsWidgets);
     expect(find.text('Orchestrator'), findsWidgets);
+    expect(find.byKey(const Key('chat-header-subtitle')), findsOneWidget);
     expect(find.byKey(const Key('chat-agent-count')), findsOneWidget);
     expect(find.byKey(const Key('chat-action-copy')), findsWidgets);
     expect(find.byKey(const Key('chat-action-share')), findsWidgets);
-    expect(find.byKey(const Key('chat-action-up')), findsWidgets);
-    expect(find.byKey(const Key('chat-action-down')), findsWidgets);
+    expect(find.byKey(const Key('chat-action-up')), findsNothing);
+    expect(find.byKey(const Key('chat-action-down')), findsNothing);
+    expect(find.byKey(const Key('chat-action-revert')), findsWidgets);
+    expect(find.byKey(const Key('chat-action-edit')), findsWidgets);
+    expect(find.textContaining('绘画的内容在这里写'), findsOneWidget);
     expect(find.textContaining('已处理'), findsWidgets);
     expect(find.textContaining('Agent 参与'), findsOneWidget);
     expect(find.byKey(const Key('chat-tool-diff-edit-1')), findsOneWidget);
@@ -376,6 +386,25 @@ MemoryOpenChamberTransport _seededTransport() {
               'branch': 'main',
             },
             {
+              'id': 'sess-npm',
+              'title': 'NPM 全 package fix 版本发布',
+              'directory': '/workspace/Code/github/openchamber',
+              'parentID': null,
+              'project': {'name': 'openchamber'},
+              'time': {'updated': now - 4 * 60000},
+              'branch': 'main',
+            },
+            for (var i = 1; i <= 6; i += 1)
+              {
+                'id': 'sess-more-$i',
+                'title': '目录会话 $i',
+                'directory': '/workspace/Code/github/openchamber',
+                'parentID': null,
+                'project': {'name': 'openchamber'},
+                'time': {'updated': now - (24 + i) * 3600000},
+                'branch': 'main',
+              },
+            {
               'id': 'sess-wt-1',
               'title': 'OpenCode 升级',
               'directory': '/workspace/Code/github/openchamber',
@@ -393,27 +422,74 @@ MemoryOpenChamberTransport _seededTransport() {
               'time': {'updated': now - 20 * 3600000},
               'branch': 'feat/opencode2up',
             },
+            {
+              'id': 'sess-ctx-1',
+              'title': '合并上下文窗口',
+              'directory': '/workspace/Code/github/openchamber',
+              'parentID': null,
+              'project': {'name': 'openchamber'},
+              'time': {'updated': now - 4 * 86400000},
+              'branch': 'feat/remove-ctx',
+            },
+            {
+              'id': 'sess-ctx-2',
+              'title': 'Halo greeting',
+              'directory': '/workspace/Code/github/openchamber',
+              'parentID': null,
+              'project': {'name': 'openchamber'},
+              'time': {'updated': now - 6 * 86400000},
+              'branch': 'feat/remove-ctx',
+            },
+            {
+              'id': 'sess-ctx-3',
+              'title': '去掉多余上下文',
+              'directory': '/workspace/Code/github/openchamber',
+              'parentID': null,
+              'project': {'name': 'openchamber'},
+              'time': {'updated': now - 7 * 86400000},
+              'branch': 'feat/remove-ctx',
+            },
+            {
+              'id': 'sess-ios-1',
+              'title': 'Composer UIKit overlay',
+              'directory': '/workspace/Code/github/openchamber',
+              'parentID': null,
+              'project': {'name': 'openchamber'},
+              'time': {'updated': now - 5 * 60000},
+              'branch': 'ios-native',
+            },
+            {
+              'id': 'sess-ios-2',
+              'title': 'Live Activity 状态',
+              'directory': '/workspace/Code/github/openchamber',
+              'parentID': null,
+              'project': {'name': 'openchamber'},
+              'time': {'updated': now - 2 * 86400000},
+              'branch': 'ios-native',
+            },
+            {
+              'id': 'sess-ios-3',
+              'title': 'Tab bar 玻璃',
+              'directory': '/workspace/Code/github/openchamber',
+              'parentID': null,
+              'project': {'name': 'openchamber'},
+              'time': {'updated': now - 3 * 86400000},
+              'branch': 'ios-native',
+            },
           ],
         },
       ],
     },
     transcript: [
       {
-        'info': {'id': 'm-old-user', 'role': 'user'},
+        'info': {
+          'id': 'm-user',
+          'role': 'user',
+          'time': {'created': DateTime(2026, 9, 3, 23, 24).millisecondsSinceEpoch},
+        },
         'parts': [
-          {'type': 'text', 'text': '先对齐路径匹配，再补 ToolPart 和 DiffView 的回归。'},
-        ],
-      },
-      {
-        'info': {'id': 'm-old-asst', 'role': 'assistant', 'model': {'name': 'Grok 4.6'}, 'agent': 'Orchestrator'},
-        'parts': [
-          {'type': 'text', 'text': '目录前缀已经对齐。接下来会把文件变更卡和速度指标补到这条回复下面。'},
-        ],
-      },
-      {
-        'info': {'id': 'm-user', 'role': 'user'},
-        'parts': [
-          {'type': 'text', 'text': '把主题色改到 lib/theme/app_theme.dart。'},
+          {'type': 'text', 'text': '写入类型无法点开查看 diff 参考这个'},
+          {'type': 'text', 'text': '绘画的内容在这里写'},
         ],
       },
       {
@@ -548,7 +624,7 @@ MemoryOpenChamberTransport _seededTransport() {
     ],
   );
   transport.permissions = const [];
-  transport.statusBySession = const {'sess-extra': 'busy'};
+  transport.statusBySession = const {'sess-extra': 'busy', 'sess-npm': 'busy'};
   transport.assistants = {
     'revision': 1,
     'enabled': true,
@@ -581,54 +657,80 @@ MemoryOpenChamberTransport _seededTransport() {
   };
   transport.scheduledTasks = {
     'tasks': [
-      {
-        'projectId': 'proj-1',
-        'task': {
-          'id': 'cron-1',
-          'name': '夜间审查',
-          'enabled': true,
-          'schedule': {'kind': 'daily', 'time': '23:30'},
-          'execution': {
-            'prompt': 'Review the diff',
-            'providerID': 'anthropic',
-            'modelID': 'claude-sonnet-4',
-          },
-          'state': {
-            'createdAt': 1,
-            'updatedAt': 2,
-            'lastStatus': 'success',
-            'lastSessionId': 'sess-catalog',
-            'nextRunAt': now + const Duration(hours: 23, minutes: 31).inMilliseconds,
-            'lastError': null,
-          },
-        },
-      },
-      {
-        'projectId': 'proj-1',
-        'task': {
-          'id': 'cron-2',
-          'name': '每周备份',
-          'enabled': false,
-          'schedule': {'kind': 'weekly', 'time': '09:00'},
-          'execution': {
-            'prompt': 'Backup notes',
-            'providerID': 'openai',
-            'modelID': 'gpt-5',
-          },
-          'state': {
-            'createdAt': 1,
-            'updatedAt': 3,
-            'lastStatus': 'idle',
-            'lastSessionId': null,
-            'nextRunAt': null,
-            'lastError': null,
-          },
-        },
-      },
+      _reviewTask(
+        id: 'cron-1',
+        name: '每日AI会话日报',
+        enabled: true,
+        kind: 'daily',
+        time: '23:30',
+        nextRunAt: now + const Duration(hours: 23, minutes: 31).inMilliseconds,
+      ),
+      _reviewTask(
+        id: 'cron-3',
+        name: '月度笔记回顾',
+        enabled: true,
+        kind: 'cron',
+        time: '0 9 1 * *',
+        nextRunAt: now + const Duration(days: 12).inMilliseconds,
+      ),
+      _reviewTask(
+        id: 'cron-4',
+        name: '周度笔记回顾',
+        enabled: true,
+        kind: 'cron',
+        time: '0 9 * * 1',
+        nextRunAt: now + const Duration(days: 3).inMilliseconds,
+      ),
+      _reviewTask(
+        id: 'cron-2',
+        name: 'Langfuse 前一日小程序 AI 场景分析',
+        enabled: false,
+        kind: 'daily',
+        time: '08:00',
+      ),
+      _reviewTask(
+        id: 'cron-5',
+        name: 'weekly-architecture-review',
+        enabled: false,
+        kind: 'weekly',
+        time: '09:00',
+      ),
     ],
     'failedProjectIds': <Object?>[],
   };
   return transport;
+}
+
+Map<String, Object?> _reviewTask({
+  required String id,
+  required String name,
+  required bool enabled,
+  required String kind,
+  required String time,
+  int? nextRunAt,
+}) {
+  return {
+    'projectId': 'proj-1',
+    'task': {
+      'id': id,
+      'name': name,
+      'enabled': enabled,
+      'schedule': {'kind': kind, 'time': time},
+      'execution': {
+        'prompt': 'Review the diff',
+        'providerID': 'anthropic',
+        'modelID': 'claude-sonnet-4',
+      },
+      'state': {
+        'createdAt': 1,
+        'updatedAt': 2,
+        'lastStatus': enabled ? 'success' : 'idle',
+        'lastSessionId': enabled ? 'sess-catalog' : null,
+        'nextRunAt': nextRunAt,
+        'lastError': null,
+      },
+    },
+  };
 }
 
 Future<void> _writePng(WidgetTester tester, Key screenshotKey, String name) async {

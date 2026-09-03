@@ -125,6 +125,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   key: const Key('scheduled-add'),
                   glyph: OcGlyphKind.plus,
                   filled: true,
+                  ink: true,
                   tooltip: t(context, 'scheduled.add'),
                   onPressed: () {},
                 ),
@@ -184,8 +185,8 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
   }
 
   Widget _taskCard(BuildContext context, ScheduledTaskRecord task) {
-    final enabled = task.enabled && !task.isRunning;
-    return GroupedInsetCard(
+    final paused = !task.enabled;
+    final card = GroupedInsetCard(
       child: InkWell(
         key: Key('scheduled-task-${task.id}'),
         onTap: () => _openTask(task.projectId, task.id),
@@ -198,12 +199,12 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                 height: 28,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: enabled ? OcChrome.success : OcChrome.pauseAccent,
+                  color: paused ? OcChrome.secondary.withValues(alpha: 0.35) : OcChrome.success,
                 ),
                 child: OcGlyph(
-                  enabled ? OcGlyphKind.check : OcGlyphKind.pause,
+                  paused ? OcGlyphKind.pause : OcGlyphKind.check,
                   size: 14,
-                  color: Colors.white,
+                  color: paused ? OcChrome.secondary : Colors.white,
                 ),
               ),
               const SizedBox(width: 12),
@@ -216,12 +217,14 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: enabled ? Theme.of(context).colorScheme.onSurface : OcChrome.secondary,
+                        color: paused ? OcChrome.secondary : Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      _taskSubtitle(context, task),
+                      paused
+                          ? [_humanSchedule(context, task), '—'].join(' · ')
+                          : _taskSubtitle(context, task),
                       style: const TextStyle(fontSize: 13, color: OcChrome.secondary),
                     ),
                   ],
@@ -241,5 +244,6 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
         ),
       ),
     );
+    return paused ? Opacity(opacity: 0.62, child: card) : card;
   }
 }
