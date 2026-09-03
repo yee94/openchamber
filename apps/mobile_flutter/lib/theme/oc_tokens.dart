@@ -150,7 +150,12 @@ class OcTokens extends ThemeExtension<OcTokens> {
   /// WidgetTester frost on a small disc reads as a coin, so keep a thin
   /// wash and let the page peek through. Not a `UIGlassEffect` clone.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.20 : 0.18);
+      .withValues(alpha: isDark ? 0.16 : 0.12);
+
+  /// Official `--oc-mobile-glass-highlight` is white / 0.60. WidgetTester
+  /// uses a quieter inset so the 1px rim is not a coin edge.
+  Color get glassHighlight => const Color(0xFFFFFFFF)
+      .withValues(alpha: isDark ? 0.16 : 0.35);
 
   /// Official dock plate is `--oc-mobile-float-background` (elevated 45%)
   /// plus glass blur — same token as [floatSurface], not glass-fill 0.68.

@@ -82,7 +82,10 @@ class MobileSessionRow extends StatelessWidget {
                             query: highlightQuery,
                             style: TextStyle(
                               fontSize: OcOptical.rowTitle,
-                              fontWeight: row.unread ? FontWeight.w600 : FontWeight.w500,
+                              // Official `font-medium` / `font-semibold`.
+                              // Review CJK is a Regular-only cut — w500/w600
+                              // synthesize a bold blob that fills the 16px box.
+                              fontWeight: row.unread ? FontWeight.w500 : FontWeight.w400,
                               letterSpacing: OcOptical.rowTitleTracking,
                               height: OcOptical.rowTitleHeight,
                             ),

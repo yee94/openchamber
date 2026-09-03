@@ -28,7 +28,9 @@ void main() {
     expect(OcTokens.light.floatSurface.a, closeTo(0.45, 0.01));
     expect(OcTokens.dark.floatSurface.a, closeTo(0.45, 0.01));
     expect(OcTokens.light.dockPlate.a, closeTo(0.45, 0.01));
-    expect(OcTokens.light.glassChipFill.a, closeTo(0.18, 0.01));
+    expect(OcTokens.light.glassChipFill.a, closeTo(0.12, 0.01));
+    expect(OcTokens.light.glassHighlight.a, closeTo(0.35, 0.01));
+    expect(OcTokens.light.glassHighlight.a, lessThan(OcTokens.light.floatHighlight.a));
     expect(OcTokens.light.glassChipFill.a, lessThan(OcTokens.light.glassFill.a));
     expect(OcTokens.light.dockPlate.a, lessThan(OcTokens.light.glassFill.a));
     expect(OcTokens.light.selectedTabWash.a, closeTo(0.55, 0.01));

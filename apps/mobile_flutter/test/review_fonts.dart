@@ -9,10 +9,16 @@ import 'package:flutter/services.dart';
 /// and Chinese copy from turning into tofu.
 Future<void> loadReviewFonts() async {
   final flutterRoot = Platform.environment['FLUTTER_ROOT'] ?? '/home/ubuntu/flutter';
-  await _loadFamily('ReviewSans', [
-    '$flutterRoot/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
-    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-    '/home/ubuntu/development/flutter/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
+  await _loadFaces('ReviewSans', [
+    [
+      '$flutterRoot/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
+      '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+      '/home/ubuntu/development/flutter/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
+    ],
+    [
+      '$flutterRoot/bin/cache/artifacts/material_fonts/Roboto-Medium.ttf',
+      '/home/ubuntu/development/flutter/bin/cache/artifacts/material_fonts/Roboto-Medium.ttf',
+    ],
   ]);
   await _loadFamily('ReviewCjk', [
     '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
@@ -49,6 +55,23 @@ Future<void> _loadFamily(String family, List<String> candidates) async {
   final bytes = _firstBytes(candidates);
   if (bytes == null) return;
   await _loadBytes(family, bytes);
+}
+
+/// One family with Regular + Medium so official `font-medium` is a real cut,
+/// not a synthesized bold that packs session titles.
+Future<void> _loadFaces(String family, List<List<String>> faces) async {
+  final loader = FontLoader(family);
+  var any = false;
+  for (final candidates in faces) {
+    final bytes = _firstBytes(candidates);
+    if (bytes == null) continue;
+    loader.addFont(Future<ByteData>.value(bytes));
+    any = true;
+  }
+  if (!any) return;
+  try {
+    await loader.load();
+  } catch (_) {}
 }
 
 ByteData? _firstBytes(List<String> candidates) {

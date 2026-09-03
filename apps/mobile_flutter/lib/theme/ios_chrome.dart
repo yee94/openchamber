@@ -116,8 +116,8 @@ class OcGlassChip extends StatelessWidget {
           color: context.oc.glassChipFill,
           // Official `.oc-mobile-floating-action` is borderless glass.
           // WidgetTester blur on a small disc reads as a coin — wash +
-          // inset highlight only. Not a `UIGlassEffect` clone.
-          boxShadow: OcElevation.highlight(context),
+          // glass inset highlight only. Not a `UIGlassEffect` clone.
+          boxShadow: OcElevation.glassHighlight(context),
         ),
         child: Center(child: child),
       ),

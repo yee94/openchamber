@@ -36,6 +36,8 @@ class OcOptical {
   /// + 12 + 5 the visual row is exactly 40. Do not add extra gap.
   /// CSS `font-size` is the ink; `line-height` is the strut. Do not also
   /// multiply Flutter `TextStyle.height` — that packs CJK into the box.
+  /// Official title is `font-medium` / unread `font-semibold`. The review
+  /// CJK face is Regular-only, so paint Regular / Medium — do not faux-bold.
   static const double sessionTitleSubtitleGap = 2;
   /// `.oc-mobile-session-status` 0.75rem; `.oc-mobile-session-row-main` gap 0.5rem.
   static const double sessionStatus = 12;

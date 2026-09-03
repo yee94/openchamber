@@ -23,9 +23,23 @@ class OcElevation {
     // Cream WidgetTester over-reads the 0.10 far wash — keep the same
     // three-stop family, quieter than official so cards stay soft contact.
     return const [
-      BoxShadow(color: Color(0x08000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0A000000), blurRadius: 12),
-      BoxShadow(color: Color(0x0E000000), blurRadius: 20, spreadRadius: -6, offset: Offset(0, 8)),
+      BoxShadow(color: Color(0x06000000), blurRadius: 2),
+      BoxShadow(color: Color(0x08000000), blurRadius: 12),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 16, spreadRadius: -6, offset: Offset(0, 6)),
+    ];
+  }
+
+  /// Official `inset 0 1px 0 var(--oc-mobile-glass-highlight)` for chips.
+  static List<BoxShadow> glassHighlight(BuildContext context) =>
+      glassHighlightFor(OcTokens.of(context));
+
+  static List<BoxShadow> glassHighlightFor(OcTokens tokens) {
+    return [
+      BoxShadow(
+        color: tokens.glassHighlight,
+        offset: const Offset(0, 1),
+        blurStyle: BlurStyle.inner,
+      ),
     ];
   }
 

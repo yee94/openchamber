@@ -66,7 +66,7 @@ class MobileProjectCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: context.oc.glassChipFill,
                   shape: BoxShape.circle,
-                  boxShadow: OcElevation.highlight(context),
+                  boxShadow: OcElevation.glassHighlight(context),
                 ),
                 alignment: Alignment.center,
                 child: OcGlyph(
