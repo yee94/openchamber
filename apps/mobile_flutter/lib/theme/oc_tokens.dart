@@ -146,19 +146,17 @@ class OcTokens extends ThemeExtension<OcTokens> {
   Color get glassFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
-  /// Circular `Button` `mobileGlass` chips. Official
-  /// `--oc-mobile-glass-fill` is white / 0.68 (dark 0.66) + live blur.
-  /// Under-filling to 0.58 still composites to page cream. Header search
-  /// uses [glassFill] so the disc is a white/glass plate against the
-  /// page, not cream paint. Composer / pill tracks keep this quieter
-  /// mix so content can still read through. 40 hit / 36 visual.
+  /// Circular `Button` `mobileGlass` chips. Official fill is 0.68 + live
+  /// blur. WidgetTester 0.68/0.82 paint is a coin. Quieter 0.48 + the
+  /// official glass near-pair (no disc blur / 8px umbra) is the chip.
+  /// 40 hit / 36 visual.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.42 : 0.58);
+      .withValues(alpha: isDark ? 0.32 : 0.48);
 
-  /// Official `--oc-mobile-glass-highlight` is white / 0.60
-  /// (dark 0.18). Inset sheen on the glass plate — not a painted rim.
+  /// Official `--oc-mobile-glass-highlight` is white / 0.60. Quiet
+  /// inset on the chip — 0.60 reads as a coin rim in WidgetTester.
   Color get glassHighlight => const Color(0xFFFFFFFF)
-      .withValues(alpha: isDark ? 0.18 : 0.60);
+      .withValues(alpha: isDark ? 0.08 : 0.12);
 
   /// Official dock plate is `--oc-mobile-float-background` (elevated 45%)
   /// plus glass blur — same token as [floatSurface], not glass-fill 0.68.

@@ -134,8 +134,8 @@ class OcOptical {
   static const double addButton = 40;
   static const double headerDisc = 40;
   /// Official hit is 40 (`mobileIcon`). Painted plate is 36. Search is
-  /// official reduced-transparency `mobileGlass` (surface-elevated +
-  /// glass-shadow umbra) so the disc sits on the page. No primary + glow.
+  /// quieter glassChipFill + official near-pair. No disc blur, no 8px
+  /// umbra, no primary + glow.
   static const double headerDiscVisual = 36;
   static const double headerGlyph = 20;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
@@ -177,13 +177,12 @@ class OcOptical {
   /// 23px sprite, not a 21px stand-in.
   static const double dockGlyphVisual = 23;
   /// Official dock `Icon weight="medium"` (`ICON_STROKE_WIDTH_MEDIUM` = 2).
-  /// Flutter round-cap bloom at dpr 3 reads heavier than WebView medium;
-  /// paint just under 2 so mass stays delicate, not a 10px hairline.
+  /// Mass comes from filled bodies, not a stroke nudge past 2.
   static const double dockGlyphStroke = 2;
-  static const double dockGlyphStrokeVisual = 1.75;
-  /// Official tab icons are stroke medium, not filled-mass blobs.
-  /// Calendar stays the grid sprite (not calendar-clock).
-  static const bool dockGlyphFillBodies = false;
+  static const double dockGlyphStrokeVisual = 2;
+  /// Official 23px filled-medium: folder/star bodies, calendar grid +
+  /// thin header, holed gear. Not stroke-only outlines.
+  static const bool dockGlyphFillBodies = true;
   static const bool dockSelectedFullSlot = true;
   static const double dockIconWashAlpha = 0.55;
   static const double dockIconGlowAlpha = 0.0;

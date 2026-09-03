@@ -80,9 +80,9 @@ class OcElevation {
     ];
   }
 
-  /// Search / + discs — official `--oc-mobile-glass-shadow` outside
-  /// pair + far umbra. The 8/20/-6 layer is what lifts the white
-  /// glass plate off the cream page. No primary 10/22 glow.
+  /// Search / + discs — official `--oc-mobile-glass-shadow` near pair
+  /// only (0 0 2px / 0.05, 0 0 12px / 0.06). No 8px umbra, no primary
+  /// 10/22 glow — those mint coins.
   static List<BoxShadow> control(BuildContext context) => controlFor(OcTokens.of(context));
 
   static List<BoxShadow> controlFor(OcTokens tokens) {
@@ -90,12 +90,6 @@ class OcElevation {
     return const [
       BoxShadow(color: Color(0x0D000000), blurRadius: 2),
       BoxShadow(color: Color(0x0F000000), blurRadius: 12),
-      BoxShadow(
-        color: Color(0x1F000000),
-        offset: Offset(0, 8),
-        blurRadius: 20,
-        spreadRadius: -6,
-      ),
     ];
   }
 
