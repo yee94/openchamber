@@ -66,7 +66,20 @@ jobs:
 
       - name: Build Android debug APK
         working-directory: apps/mobile_flutter
-        run: flutter build apk --debug
+        run: |
+          # Maven Central 429s have cancelled a green analyze+iOS run. Flutter
+          # already retries assembleDebug once; wrap the whole build so a
+          # rate-limit does not drop the sideload APK.
+          for attempt in 1 2 3; do
+            if flutter build apk --debug; then
+              exit 0
+            fi
+            echo "flutter build apk --debug failed (attempt ${attempt}/3)"
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 30))
+          done
 
       - name: Name side-by-side debug APK
         id: apk

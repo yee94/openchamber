@@ -214,7 +214,7 @@ What still keys off the **base** id / class namespace (not broken by the suffix)
 
 1. Open the Flutter Mobile CI run for this commit (Actions → **Flutter Mobile CI** on `work/flutter-native`, or **Run workflow**).
 2. Wait until **Android debug APK** is green. Heavy concurrency **cancels** older runs on a newer push — if cancelled, re-dispatch instead of installing an older artifact.
-3. Artifacts → `openchamber-flutter-android-debug-apk-<shortsha>` (zip, 14-day retention, not a GitHub Release).
+3. Artifacts → `openchamber-flutter-android-debug-apk-<shortsha>` (zip, 14-day retention, not a GitHub Release). **#21** `d13c8f4ac` ([run 33768888525](https://github.com/yee94/openchambery/actions/runs/33768888525)) was cancelled by the next visual push. **#22** `38dba5042` ([run 33769081194](https://github.com/yee94/openchambery/actions/runs/33769081194)) analyze + iOS green; Android debug APK failed on Maven Central **429** (not the new applicationId). Re-dispatch / retry the Android job — do not install from a cancelled or red run.
 4. Unzip. Install `openchamber-v2-debug-<shortsha>.apk` (unknown-sources / adb). Official **OpenChamber** stays installed.
 5. Pair with an **Anywhere** / relay (`wss`) payload. Do not require a `192.168.x` host.
 
