@@ -116,7 +116,7 @@ void main() {
     expect(OcOptical.dockSelectedFullSlot, isTrue);
     expect(OcOptical.dockIconWashAlpha, 0.55);
     expect(OcOptical.dockGlyphStroke, 1.75);
-    expect(OcOptical.listGlyphStroke, lessThan(OcOptical.headerGlyphStroke));
+    expect(OcOptical.listGlyphStroke, OcOptical.headerGlyphStroke);
     expect(OcOptical.leadingCircle, 38);
     expect(OcOptical.leadingGlyph, 18);
     expect(OcOptical.leadingGlyphCompact, 14);

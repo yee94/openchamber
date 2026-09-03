@@ -134,7 +134,7 @@ class _TabSlot extends StatelessWidget {
                       size: OcOptical.dockGlyph,
                       color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
                       strokeWidth: OcOptical.dockGlyphStroke,
-                      filled: true,
+                      filled: false,
                     ),
                     const SizedBox(height: OcOptical.dockLabelGap),
                     Text(

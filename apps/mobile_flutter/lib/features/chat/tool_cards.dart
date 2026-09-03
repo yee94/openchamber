@@ -35,12 +35,14 @@ class ChatTranscriptBody extends StatelessWidget {
     final defaultExpanded = activityActive ||
         (isLastAssistant && !messageHasConfirmedFinalBody(message));
     final children = <Widget>[
-      if (!message.isUser) _AssistantHeader(message: message, live: isTurnLive),
+      if (!message.isUser) _AssistantHeader(message: message),
       if (hasActivityParts && !message.isUser)
         _ActivityDisclosure(
           messageId: message.id,
           active: activityActive,
           initiallyExpanded: defaultExpanded,
+          processedLabel: message.processedLabel,
+          agentCount: message.agentCount,
           child: _ActivityItems(
             parts: message.parts,
             isTurnLive: isTurnLive,
@@ -135,10 +137,9 @@ class ChatTranscriptBody extends StatelessWidget {
 }
 
 class _AssistantHeader extends StatelessWidget {
-  const _AssistantHeader({required this.message, required this.live});
+  const _AssistantHeader({required this.message});
 
   final ChatMessage message;
-  final bool live;
 
   @override
   Widget build(BuildContext context) {
@@ -195,58 +196,41 @@ class _AssistantHeader extends StatelessWidget {
               ],
             ],
           ),
-          if (message.processedLabel != null || message.agentCount > 0) ...[
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                if (message.processedLabel != null)
-                  Expanded(
-                    child: Row(
-                      children: [
-                        OcGlyph(OcGlyphKind.layers, size: 13, color: OcTokens.of(context).mutedForeground),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            '${t(context, live ? 'chat.activity.active' : 'chat.activity.completedStatus')} ${message.processedLabel}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: OcOptical.meta,
-                              letterSpacing: OcOptical.metaTracking,
-                              height: OcOptical.metaHeight,
-                              color: OcTokens.of(context).mutedForeground,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  const Spacer(),
-                if (message.agentCount > 0)
-                  Container(
-                    key: const Key('chat-agent-count'),
-                    padding: const EdgeInsets.fromLTRB(6, 2, 4, 2),
-                    decoration: BoxDecoration(
-                      color: OcChrome.agentAccent.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const OcGlyph(OcGlyphKind.sparkles, size: 8, strokeWidth: 1.1, color: OcChrome.agentAccent),
-                        const SizedBox(width: 3),
-                        Text(
-                          t(context, 'chat.agentsInvolved', {'count': '${message.agentCount}'}),
-                          style: const TextStyle(fontSize: 10, color: OcChrome.agentAccent, fontWeight: FontWeight.w500, height: 1.1),
-                        ),
-                        const OcGlyph(OcGlyphKind.chevronRight, size: 9, color: OcChrome.agentAccent),
-                      ],
-                    ),
-                  ),
-              ],
+          if (message.agentCount > 0 && message.processedLabel == null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: _AgentCountChip(count: message.agentCount),
             ),
-          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AgentCountChip extends StatelessWidget {
+  const _AgentCountChip({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('chat-agent-count'),
+      padding: const EdgeInsets.fromLTRB(6, 2, 4, 2),
+      decoration: BoxDecoration(
+        color: context.oc.muted.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          OcGlyph(OcGlyphKind.sparkles, size: 8, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
+          const SizedBox(width: 3),
+          Text(
+            t(context, 'chat.agentsInvolved', {'count': '$count'}),
+            style: TextStyle(fontSize: 10, color: context.oc.foreground, fontWeight: FontWeight.w500, height: 1.1),
+          ),
+          OcGlyph(OcGlyphKind.chevronRight, size: 9, color: context.oc.mutedForeground),
         ],
       ),
     );
@@ -332,7 +316,7 @@ class _FileChangeCard extends StatelessWidget {
                             text: '+${part.added.length}',
                             style: TextStyle(color: OcTokens.of(context).statusSuccess),
                           ),
-                          const TextSpan(text: ' '),
+                          const TextSpan(text: '/'),
                           TextSpan(
                             text: '-${part.removed.length}',
                             style: TextStyle(color: OcTokens.of(context).destructive),
@@ -661,12 +645,16 @@ class _ActivityDisclosure extends StatefulWidget {
     required this.active,
     required this.initiallyExpanded,
     required this.child,
+    this.processedLabel,
+    this.agentCount = 0,
   });
 
   final String messageId;
   final bool active;
   final bool initiallyExpanded;
   final Widget child;
+  final String? processedLabel;
+  final int agentCount;
 
   @override
   State<_ActivityDisclosure> createState() => _ActivityDisclosureState();
@@ -705,7 +693,9 @@ class _ActivityDisclosureState extends State<_ActivityDisclosure> {
                 Icon(Icons.layers_outlined, size: 16, color: OcTokens.of(context).mutedForeground),
                 const SizedBox(width: 6),
                 Text(
-                  status,
+                  widget.processedLabel == null
+                      ? status
+                      : '$status ${widget.processedLabel}',
                   key: Key('chat-activity-status-${widget.messageId}'),
                   style: TextStyle(
                     fontSize: 12,
@@ -714,6 +704,7 @@ class _ActivityDisclosureState extends State<_ActivityDisclosure> {
                   ),
                 ),
                 const Spacer(),
+                if (widget.agentCount > 0) _AgentCountChip(count: widget.agentCount),
                 if (!lockedOpen)
                   Icon(
                     open ? Icons.expand_less : Icons.expand_more,

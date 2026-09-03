@@ -69,7 +69,7 @@ class OcGlyph extends StatelessWidget {
         painter: _OcGlyphPainter(
           kind: kind,
           color: resolved,
-          strokeWidth: strokeWidth ?? (size >= 20 ? 1.75 : size >= 16 ? 1.45 : 1.2),
+          strokeWidth: strokeWidth ?? (size >= 16 ? 1.75 : 1.45),
           filled: filled,
         ),
       ),
@@ -416,28 +416,25 @@ class _OcGlyphPainter extends CustomPainter {
   }
 
   void _gear(Canvas canvas, Size size, Paint paint, bool filled) {
-    // Remix `settings-3`: six rounded lobes + inner hole, not sun rays.
+    // Remix `settings-3`: six rounded lobes + hollow hub. Medium is stroke.
     final w = size.width;
     final h = size.height;
     final c = Offset(w * 0.5, h * 0.5);
-    final body = Path()..fillType = PathFillType.evenOdd;
+    canvas.drawCircle(c, w * 0.28, paint);
+    canvas.drawCircle(c, w * 0.12, paint);
     for (var i = 0; i < 6; i += 1) {
-      final a = i * math.pi / 3 - math.pi / 2;
-      body.addOval(
-        Rect.fromCircle(
-          center: Offset(c.dx + math.cos(a) * w * 0.28, c.dy + math.sin(a) * h * 0.28),
-          radius: w * 0.195,
+      canvas.save();
+      canvas.translate(c.dx, c.dy);
+      canvas.rotate(i * math.pi / 3);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset(0, -w * 0.38), width: w * 0.16, height: w * 0.14),
+          Radius.circular(w * 0.04),
         ),
+        filled ? (Paint()..color = paint.color..style = PaintingStyle.fill) : paint,
       );
+      canvas.restore();
     }
-    body.addOval(Rect.fromCircle(center: c, radius: w * 0.22));
-    body.addOval(Rect.fromCircle(center: c, radius: w * 0.125));
-    if (filled) {
-      canvas.drawPath(body, paint);
-      return;
-    }
-    canvas.drawPath(body, paint);
-    canvas.drawCircle(c, w * 0.125, paint);
   }
 
   @override

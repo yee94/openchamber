@@ -81,7 +81,8 @@ class OcOptical {
   static const double headerGlyph = 20;
   static const double headerGlyphStroke = 1.75;
   /// In-card strokes stay thinner than header medium, not hairline.
-  static const double listGlyphStroke = 1.45;
+  /// Official Remix `weight="medium"` stroke, same as header discs.
+  static const double listGlyphStroke = 1.75;
 
   /// Official `.oc-mobile-collapsing-header` — exact rem tokens, not optical guesses.
   static const double collapsingActionSize = 40;

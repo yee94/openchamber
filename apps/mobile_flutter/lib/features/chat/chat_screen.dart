@@ -365,7 +365,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     alignment: Alignment.centerRight,
                     child: ConstrainedBox(
                       key: Key('chat-message-${message.id}'),
-                      constraints: const BoxConstraints(maxWidth: 300),
+                      constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width - 36),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [

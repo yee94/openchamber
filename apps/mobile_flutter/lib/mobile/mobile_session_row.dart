@@ -51,9 +51,9 @@ class MobileSessionRow extends StatelessWidget {
                 child: HighlightedText(
                   row.title,
                   query: highlightQuery,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: OcOptical.rowTitle,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: row.unread ? FontWeight.w600 : FontWeight.w500,
                     letterSpacing: OcOptical.rowTitleTracking,
                     height: OcOptical.rowTitleHeight,
                   ),
