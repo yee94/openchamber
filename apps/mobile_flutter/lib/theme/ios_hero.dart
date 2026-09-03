@@ -179,13 +179,13 @@ class OcOptical {
   /// 23px sprite, not a 21px stand-in.
   static const double dockGlyphVisual = 23;
   /// Official dock `Icon weight="medium"` (`ICON_STROKE_WIDTH_MEDIUM` = 2).
-  /// Flutter round-cap bloom at dpr 3; paint 1.75 on stroke frames so
-  /// filled-medium 23px stays delicate — not compact bricks, not hairlines.
+  /// Flutter round-cap bloom at dpr 3; 1.75 still read massy on the
+  /// 8a1b8285 goldens. Paint 1.55 — delicate medium, not hairline.
   static const double dockGlyphStroke = 2;
-  static const double dockGlyphStrokeVisual = 1.75;
-  /// Filled-medium dock bodies (slim folder well, holed gear, calendar
-  /// grid). Not stroke-only outlines and not 90271 solid bricks.
-  static const bool dockGlyphFillBodies = true;
+  static const double dockGlyphStrokeVisual = 1.55;
+  /// Official tab icons are stroke medium. Filled bodies add mass.
+  /// Calendar stays the grid sprite; gear stays holed.
+  static const bool dockGlyphFillBodies = false;
   static const bool dockSelectedFullSlot = true;
   static const double dockIconWashAlpha = 0.55;
   static const double dockIconGlowAlpha = 0.0;
