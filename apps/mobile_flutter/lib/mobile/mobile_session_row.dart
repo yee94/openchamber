@@ -31,7 +31,7 @@ class MobileSessionRow extends StatelessWidget {
       haptic: HapticStrength.light,
       onPressed: onSelect,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: OcOptical.sessionRowHeight),
+        constraints: const BoxConstraints(minHeight: OcOptical.sessionRowVisualHeight),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, OcOptical.sessionRowPadV, 12, OcOptical.sessionRowPadV),
           child: Row(

@@ -18,14 +18,15 @@ class OcElevation {
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
     if (tokens.isDark) return const [];
-    // Official CSS is 0.04 / 0.05 / 0.10. Opaque cream over-reads that as a
-    // separated umbra — keep far wash under 0.04 with a wider, softer pool
-    // (less negative spread) so lift reads without a tight halo. One shared
-    // path for cards, dock, and composer. Keep the 3-stop stack.
+    // Official `--oc-mobile-float-shadow` geometry:
+    //   0 0 2px / 0.04, 0 0 12px / 0.05, 0 10px 24px -6px / 0.10
+    // First two stops stay 0-offset so the stack is one wide wash, not three
+    // stepped umbras. Far alpha stays under official 0.10 on opaque cream.
+    // Same path for cards, dock, and composer.
     return const [
-      BoxShadow(color: Color(0x03000000), blurRadius: 5),
-      BoxShadow(color: Color(0x05000000), blurRadius: 18),
-      BoxShadow(color: Color(0x09000000), blurRadius: 28, spreadRadius: -10, offset: Offset(0, 8)),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0C000000), blurRadius: 12),
+      BoxShadow(color: Color(0x0F000000), blurRadius: 24, spreadRadius: -6, offset: Offset(0, 10)),
     ];
   }
 
@@ -46,9 +47,9 @@ class OcElevation {
     if (tokens.isDark) return const [];
     // Search / + discs still need a visible plate, but must not out-lift cards.
     return const [
-      BoxShadow(color: Color(0x04000000), blurRadius: 3),
-      BoxShadow(color: Color(0x06000000), blurRadius: 10),
-      BoxShadow(color: Color(0x0A000000), blurRadius: 14, spreadRadius: -8, offset: Offset(0, 4)),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0C000000), blurRadius: 8),
+      BoxShadow(color: Color(0x10000000), blurRadius: 14, spreadRadius: -6, offset: Offset(0, 4)),
     ];
   }
 

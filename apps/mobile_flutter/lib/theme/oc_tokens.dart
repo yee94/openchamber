@@ -298,7 +298,8 @@ class OcTokens extends ThemeExtension<OcTokens> {
   /// `--oc-mobile-project-action-size` = 2.25rem
   static const double projectActionSize = 36;
 
-  /// `--oc-mobile-session-row-height` = 2.875rem
+  /// Root `--oc-mobile-session-row-height` = 2.875rem. Project-shell home
+  /// lists use [OcOptical.sessionRowVisualHeight] (2.5rem = 40).
   static const double sessionRowHeight = 46;
 
   static const double groupRadius = surfaceRadius;

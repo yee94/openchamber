@@ -220,10 +220,10 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                     Text(
                       task.name.isEmpty ? task.id : task.name,
                       style: TextStyle(
-                        fontSize: OcOptical.entityTitle,
+                        fontSize: OcOptical.projectTitle,
                         fontWeight: FontWeight.w500,
-                        letterSpacing: OcOptical.entityTitleTracking,
-                        height: OcOptical.entityTitleHeight,
+                        letterSpacing: OcOptical.projectTitleTracking,
+                        height: OcOptical.projectTitleHeight,
                         color: paused ? context.oc.mutedForeground : context.oc.foreground,
                       ),
                     ),
