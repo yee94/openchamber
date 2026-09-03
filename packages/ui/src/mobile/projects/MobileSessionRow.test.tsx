@@ -103,6 +103,7 @@ describe('Mobile project group chrome', () => {
     );
     expect(mobileStyles).toMatch(
       /\.oc-mobile-session-actions\s*\{[^}]*overflow:\s*hidden;[^}]*border-start-end-radius:\s*var\(--oc-mobile-session-radius-start-end\);[^}]*border-end-end-radius:\s*var\(--oc-mobile-session-radius-end-end\);/s,
+    );
   });
 });
 
