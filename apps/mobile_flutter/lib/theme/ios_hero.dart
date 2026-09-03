@@ -188,8 +188,8 @@ class OcOptical {
   /// Not 90271 bricks and not stroke-only outlines.
   static const bool dockGlyphFillBodies = true;
   static const bool dockSelectedFullSlot = true;
-  /// Official selected is `bg-interactive-selection/55` on already-
-  /// frosted dock glass. Geometry stays the full 58×r29 slot.
+  /// Official selected class is `bg-interactive-selection/55`. The
+  /// authored token already carries that alpha — see [OcTokens.selectedTabWash].
   static const double dockIconWashAlpha = 0.55;
   /// Official selected tab is `bg-interactive-selection/55` on already-
   /// frosted dock glass — no second BackdropFilter. Nested sigma painted

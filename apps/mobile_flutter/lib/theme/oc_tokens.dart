@@ -171,10 +171,11 @@ class OcTokens extends ThemeExtension<OcTokens> {
       foreground.withValues(alpha: isDark ? 0.122 : 0.086);
 
   /// Official selected-tab fill is `bg-interactive-selection/55`.
-  /// Mix the authored token at [OcOptical.dockIconWashAlpha]. Do not use
-  /// RGB@0.55 (brown capsule) or a second frost plate.
-  Color get selectedTabWash =>
-      interactiveSelection.withValues(alpha: interactiveSelection.a * OcOptical.dockIconWashAlpha);
+  /// Authored `#16121016` already *is* that 55% glass mix. Multiplying
+  /// alpha again (0.086×0.55) vanishes on WidgetTester cream (sel−uns
+  /// dL≈−3). Paint the authored token, mix-only — no RGB@0.55 brown
+  /// capsule and no second frost plate (wake-0710).
+  Color get selectedTabWash => interactiveSelection;
 
   /// `--oc-mobile-header-fade` = surface-background 85%.
   Color get headerFade => background.withValues(alpha: 0.85);
