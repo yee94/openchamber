@@ -249,30 +249,28 @@ class _FileChangeCard extends StatelessWidget {
     final visible = parts.take(5).toList();
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: context.oc.floatSurface,
-        borderRadius: BorderRadius.circular(OcTokens.surfaceRadius),
-        border: Border.all(color: context.oc.mobileBorder, width: 0.5),
-        boxShadow: OcElevation.grouped(context),
+        color: context.oc.muted.withValues(alpha: 0.20),
+        borderRadius: BorderRadius.circular(OcTokens.radius),
+        border: Border.all(color: context.oc.foreground.withValues(alpha: 0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              OcGlyph(OcGlyphKind.file, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.listGlyphStroke, color: OcTokens.of(context).mutedForeground),
-              const SizedBox(width: 6),
+              OcGlyph(OcGlyphKind.file, size: OcOptical.fileTypeSize, strokeWidth: OcOptical.listGlyphStroke, color: OcTokens.of(context).mutedForeground),
+              const SizedBox(width: 4),
               Flexible(
                 child: Text(
                   t(context, 'chat.filesChanged.title'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: OcOptical.meta,
+                    fontSize: OcOptical.fileChrome,
                     fontWeight: FontWeight.w600,
-                    letterSpacing: OcOptical.metaTracking,
-                    height: OcOptical.metaHeight,
+                    height: 1,
                   ),
                 ),
               ),
@@ -280,61 +278,60 @@ class _FileChangeCard extends StatelessWidget {
               Text(
                 t(context, 'chat.filesChanged.count', {'count': '${parts.length}'}),
                 style: TextStyle(
-                  fontSize: OcOptical.meta,
-                  letterSpacing: OcOptical.metaTracking,
-                  height: OcOptical.metaHeight,
+                  fontSize: OcOptical.fileChrome,
+                  height: 1,
                   color: OcTokens.of(context).mutedForeground,
                 ),
               ),
               const SizedBox(width: 2),
-              OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.chevron, color: OcTokens.of(context).mutedForeground.withValues(alpha: 0.6)),
+              OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.fileTypeSize, color: OcTokens.of(context).mutedForeground.withValues(alpha: 0.6)),
             ],
           ),
-          const SizedBox(height: 8),
           for (final part in visible)
             Pressable(
               key: keyRows ? Key('chat-tool-diff-${part.id}') : null,
               haptic: HapticStrength.light,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: OcOptical.fileRowPadV),
-                child: Row(
-                  children: [
-                    _FileTypeMark(path: part.path ?? part.title),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        part.path ?? part.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: OcOptical.rowTitle,
-                          letterSpacing: OcOptical.rowTitleTracking,
-                          height: OcOptical.rowTitleHeight,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: OcOptical.fileRowHeight),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: OcOptical.fileRowPadV),
+                  child: Row(
+                    children: [
+                      _FileTypeMark(path: part.path ?? part.title),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          part.path ?? part.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: OcOptical.fileChrome,
+                            height: 1,
+                          ),
                         ),
                       ),
-                    ),
-                    Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: '+${part.added.length}',
-                            style: TextStyle(color: OcTokens.of(context).statusSuccess),
-                          ),
-                          const TextSpan(text: '/'),
-                          TextSpan(
-                            text: '-${part.removed.length}',
-                            style: TextStyle(color: OcTokens.of(context).destructive),
-                          ),
-                        ],
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: '+${part.added.length}',
+                              style: TextStyle(color: OcTokens.of(context).statusSuccess),
+                            ),
+                            const TextSpan(text: '/'),
+                            TextSpan(
+                              text: '-${part.removed.length}',
+                              style: TextStyle(color: OcTokens.of(context).destructive),
+                            ),
+                          ],
+                        ),
+                        key: Key('chat-file-slash-${part.id}'),
+                        style: const TextStyle(
+                          fontSize: OcOptical.fileChrome,
+                          height: 1,
+                        ),
                       ),
-                      key: Key('chat-file-slash-${part.id}'),
-                      style: const TextStyle(
-                        fontSize: OcOptical.meta,
-                        letterSpacing: OcOptical.metaTracking,
-                        height: OcOptical.metaHeight,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -346,13 +343,12 @@ class _FileChangeCard extends StatelessWidget {
                   Text(
                     t(context, 'chat.filesChanged.more', {'count': '${parts.length - visible.length}'}),
                     style: TextStyle(
-                      fontSize: OcOptical.rowTitle,
-                      letterSpacing: OcOptical.rowTitleTracking,
-                      height: OcOptical.rowTitleHeight,
+                      fontSize: OcOptical.fileChrome,
+                      height: 1,
                       color: OcTokens.of(context).mutedForeground,
                     ),
                   ),
-                  OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.chevron, strokeWidth: OcOptical.listGlyphStroke, color: OcTokens.of(context).mutedForeground),
+                  OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.fileTypeSize, strokeWidth: OcOptical.listGlyphStroke, color: OcTokens.of(context).mutedForeground),
                 ],
               ),
             ),
@@ -375,7 +371,7 @@ class UserTurnToolbar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (message.completedClock != null) ...[
-            OcGlyph(OcGlyphKind.clock, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
+            OcGlyph(OcGlyphKind.clock, size: OcOptical.footerGlyph, strokeWidth: OcOptical.footerGlyphStroke, color: context.oc.mutedForeground),
             const SizedBox(width: 3),
             Text(
               message.completedClock!,
@@ -412,7 +408,7 @@ class UserTurnToolbar extends StatelessWidget {
         onTap: () {},
         child: Padding(
           padding: const EdgeInsets.all(3),
-          child: OcGlyph(glyph, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
+          child: OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.footerGlyphStroke, color: context.oc.mutedForeground),
         ),
       ),
     );

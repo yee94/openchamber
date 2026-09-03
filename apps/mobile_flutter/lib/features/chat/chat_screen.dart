@@ -381,8 +381,6 @@ class _ChatScreenState extends State<ChatScreen> {
                             decoration: BoxDecoration(
                               color: Color.lerp(context.oc.card, context.oc.primary, 0.10),
                               borderRadius: BorderRadius.circular(18),
-                              border: Border.all(color: context.oc.mobileBorder, width: 0.5),
-                              boxShadow: OcElevation.card(context),
                             ),
                             child: DefaultTextStyle.merge(
                               style: TextStyle(
@@ -435,6 +433,7 @@ class _ChatScreenState extends State<ChatScreen> {
             right: 0,
             child: PushedNavBar(
               title: widget.session.title,
+              subtitle: widget.session.subtitle,
               leadingKey: const Key('chat-back'),
               busy: _busy,
               trailing: Pressable(

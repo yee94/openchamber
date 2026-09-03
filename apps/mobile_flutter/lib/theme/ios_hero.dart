@@ -47,7 +47,8 @@ class OcOptical {
   static const double sessionTimeHeight = 1.2;
 
   static const double scheduleCardPadV = 10;
-  static const double scheduleTitleMetaGap = 5;
+  /// Official scheduled meta `mt-1` (4).
+  static const double scheduleTitleMetaGap = 4;
 
   /// Official `.oc-mobile-detail-title` 0.9375rem / line-height 1.4 / weight 650.
   static const double chatTitle = 15;
@@ -137,13 +138,16 @@ class OcOptical {
   /// Official `Button` `mobileIcon` = `size-10` (40). Same disc as header actions.
   static const double chatChip = 40;
 
-  static const double scheduleStatus = 28;
-  static const double scheduleStatusGlyph = 12;
+  /// Official scheduled status is the project-shell glass disc, not a 28 ring.
+  static const double scheduleStatus = leadingCircle;
+  static const double scheduleStatusGlyph = leadingGlyph;
 
   /// Official `FileTypeIcon` mobile size `h-3 w-3` (12px).
-  static const double fileTypeSize = 16;
-  static const double fileTypeMark = 8;
-  static const double fileRowPadV = 4;
+  static const double fileTypeSize = 12;
+  static const double fileTypeMark = 7;
+  static const double fileRowPadV = 3;
+  static const double fileRowHeight = 24;
+  static const double fileChrome = 11;
 
   static const double composerRadius = 24;
   /// Official composer attach `Icon name="attachment-2" className="size-5"`.
