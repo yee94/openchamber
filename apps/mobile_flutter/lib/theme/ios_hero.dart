@@ -137,8 +137,8 @@ class OcOptical {
   static const double addButton = 40;
   static const double headerDisc = 40;
   /// Official hit is 40 (`mobileIcon`). Painted plate is 36. Search is
-  /// page-bleed with no contact/inset/umbra (not a raised coin).
-  /// `+` stays primary. No disc frost, no primary + glow.
+  /// page-bleed + contact-only (no inset, no umbra, no disc frost).
+  /// `+` stays primary. No primary + glow.
   static const double headerDiscVisual = 36;
   static const double headerGlyph = 20;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
