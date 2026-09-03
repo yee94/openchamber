@@ -18,13 +18,13 @@ class OcElevation {
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
     if (tokens.isDark) return const [];
-    // Official `--oc-mobile-float-shadow` outside-only layers (no inset
-    // highlight — WidgetTester cannot paint glass). Soft contact, not flat
-    // and not a hard umbra.
+    // Official CSS is 0.04 / 0.05 / 0.10. Opaque cream cards paint that as a
+    // heavier umbra than glass, so far wash sits under 0.08 with more
+    // negative spread. Not flat, not a hard drop.
     return const [
-      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0D000000), blurRadius: 12),
-      BoxShadow(color: Color(0x1A000000), blurRadius: 24, spreadRadius: -6, offset: Offset(0, 10)),
+      BoxShadow(color: Color(0x08000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 12),
+      BoxShadow(color: Color(0x14000000), blurRadius: 22, spreadRadius: -8, offset: Offset(0, 8)),
     ];
   }
 
@@ -43,12 +43,12 @@ class OcElevation {
 
   static List<BoxShadow> controlFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
-    // Official `--oc-mobile-glass-shadow` without the inset highlight —
-    // search / + discs need outside lift so the light plate reads as a disc.
+    // Search / + discs still need a visible plate. Softer than glass-shadow
+    // 0.12 so they do not out-lift the cards.
     return const [
-      BoxShadow(color: Color(0x0D000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0F000000), blurRadius: 12),
-      BoxShadow(color: Color(0x1F000000), blurRadius: 20, spreadRadius: -6, offset: Offset(0, 8)),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0C000000), blurRadius: 10),
+      BoxShadow(color: Color(0x16000000), blurRadius: 16, spreadRadius: -6, offset: Offset(0, 6)),
     ];
   }
 

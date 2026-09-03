@@ -75,19 +75,19 @@ void main() {
     expect(OcOptical.collapsingActionSize, 40);
     expect(OcOptical.titleCollapseDistance, 48);
     expect(OcOptical.titleCollapseScaleEnd, 0.625);
-    expect(OcOptical.dockGlyph, 18);
-    expect(OcOptical.dockIconPillWidth, 34);
-    expect(OcOptical.dockIconPillHeight, 26);
+    expect(OcOptical.dockGlyph, 15);
+    expect(OcOptical.dockIconPillWidth, 30);
+    expect(OcOptical.dockIconPillHeight, 22);
     expect(OcOptical.dockIconPillHeight, lessThan(OcOptical.dockIconPillWidth));
     expect(OcOptical.dockIconPillWidth, lessThan(OcOptical.dockCapsuleHeight * 0.6));
-    expect(OcOptical.dockIconWashAlpha, lessThan(0.10));
-    expect(OcOptical.dockGlyphStroke, lessThan(1.2));
+    expect(OcOptical.dockIconWashAlpha, lessThan(0.08));
+    expect(OcOptical.dockGlyphStroke, lessThan(0.85));
     expect(OcOptical.listGlyphStroke, lessThan(OcOptical.headerGlyphStroke));
     expect(OcOptical.leadingCircle, 38);
-    expect(OcOptical.footerGlyph, 14);
+    expect(OcOptical.footerGlyph, 11);
     expect(OcOptical.scheduleStatus, 38);
     expect(OcOptical.sessionBullet, 5);
-    expect(OcOptical.fileTypeW, 12);
+    expect(OcOptical.fileTypeW, 11);
     expect(OcOptical.fileRowPadV, 6);
     expect(OcOptical.composerRadius, 24);
     expect(OcOptical.sendRing, 28);
@@ -101,8 +101,12 @@ void main() {
   test('OcElevation is layered in light and empty in dark', () {
     expect(OcElevation.cardFor(OcTokens.light), hasLength(3));
     expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, greaterThanOrEqualTo(2));
-    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, lessThanOrEqualTo(24));
-    expect(OcElevation.cardFor(OcTokens.light).last.offset.dy, lessThanOrEqualTo(10));
+    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, lessThanOrEqualTo(22));
+    expect(OcElevation.cardFor(OcTokens.light).last.offset.dy, lessThanOrEqualTo(8));
+    expect(
+      (OcElevation.cardFor(OcTokens.light).last.color.a * 255).round(),
+      lessThan(0x1A),
+    );
     expect(
       OcElevation.cardFor(OcTokens.light, tight: true),
       OcElevation.cardFor(OcTokens.light),

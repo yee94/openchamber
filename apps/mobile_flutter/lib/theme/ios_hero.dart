@@ -66,9 +66,9 @@ class OcOptical {
   static const double addButton = 40;
   static const double headerDisc = 40;
   static const double headerGlyph = 18;
-  static const double headerGlyphStroke = 1.05;
-  /// In-card / footer strokes stay a hair under header weight.
-  static const double listGlyphStroke = 0.95;
+  static const double headerGlyphStroke = 0.85;
+  /// In-card / dock / footer strokes stay thinner than header.
+  static const double listGlyphStroke = 0.70;
 
   /// `--oc-mobile-collapsing-action-size` / expand-shift / collapse distance.
   static const double collapsingActionSize = 40;
@@ -77,44 +77,45 @@ class OcOptical {
   static const double titleCollapseDistance = 48;
   static const double titleCollapseScaleEnd = 0.625;
 
-  /// Official dock icon is `size-[23px]` medium. Stroke glyphs sit a step
-  /// under that so they do not read as filled Material. Selected chrome is
-  /// an icon-only wash — never a full-slot slab.
-  static const double dockGlyph = 18;
-  static const double dockGlyphStroke = 1.05;
-  static const double dockIconPillWidth = 34;
-  static const double dockIconPillHeight = 26;
-  static const double dockIconPillRadius = 13;
-  static const double dockIconWashAlpha = 0.08;
-  static const double dockIconGlowAlpha = 0.05;
-  static const double dockIconGlowBlur = 10;
+  /// Official dock icon is `size-[23px]` medium. Stroke glyphs stay smaller
+  /// and lighter so they do not read heavier than the sprite. Selected
+  /// chrome is an icon-only wash — never a full-slot slab.
+  static const double dockGlyph = 15;
+  static const double dockGlyphStroke = 0.72;
+  static const double dockIconPillWidth = 30;
+  static const double dockIconPillHeight = 22;
+  static const double dockIconPillRadius = 11;
+  static const double dockIconWashAlpha = 0.06;
+  static const double dockIconGlowAlpha = 0.035;
+  static const double dockIconGlowBlur = 8;
 
-  /// `.oc-mobile-project-shell` icon 2.375rem / glyph 1.125rem.
+  /// `.oc-mobile-project-shell` icon 2.375rem; in-card glyph stays thinner
+  /// than the official 18px filled sprite.
   static const double leadingCircle = 38;
   static const double leadingCircleCompact = 28;
-  static const double leadingGlyph = 16;
-  static const double leadingGlyphCompact = 12;
+  static const double leadingGlyph = 13;
+  static const double leadingGlyphCompact = 10;
 
   static const double sessionBullet = 5;
-  static const double overflow = 14;
-  static const double chevron = 14;
+  static const double overflow = 11;
+  static const double chevron = 11;
 
   static const double scheduleStatus = 38;
-  static const double scheduleStatusGlyph = 16;
+  static const double scheduleStatusGlyph = 13;
 
-  static const double fileTypeW = 12;
-  static const double fileTypeH = 8;
-  static const double fileTypeMark = 4;
+  static const double fileTypeW = 11;
+  static const double fileTypeH = 7;
+  static const double fileTypeMark = 3.5;
   static const double fileRowPadV = 6;
 
   static const double composerRadius = 24;
-  static const double composerPlus = 14;
+  static const double composerPlus = 12;
   static const double sendRing = 28;
-  static const double sendRingStroke = 1.15;
+  static const double sendRingStroke = 0.90;
   static const double sendStop = 8;
-  static const double scrollFab = 28;
-  static const double scrollChevron = 10;
+  static const double scrollFab = 26;
+  static const double scrollChevron = 9;
 
-  static const double toolbarGlyph = 14;
-  static const double footerGlyph = 14;
+  static const double toolbarGlyph = 11;
+  static const double footerGlyph = 11;
 }
