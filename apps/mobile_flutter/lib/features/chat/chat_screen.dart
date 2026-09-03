@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../data/app_controller.dart';
 import '../../data/chat_timeline.dart';
 import '../../data/dictation.dart';
+import '../../data/context_tool_grouping.dart';
 import '../../data/home_session.dart';
 import '../../data/message_id.dart';
 import '../../data/openchamber_http.dart';
@@ -372,7 +373,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: ChatTranscriptBody(
                         message: message,
                         isLastAssistant: isLastAssistant,
-                        isTurnLive: _busy && isLastAssistant,
+                        isTurnLive: _busy && isLastAssistant && messageHasRunningTool(message),
                         isSpeaking: _speakingMessageId == message.id,
                       ),
                     ),
@@ -384,7 +385,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: ChatTranscriptBody(
                     message: message,
                     isLastAssistant: isLastAssistant,
-                    isTurnLive: _busy && isLastAssistant,
+                    isTurnLive: _busy && isLastAssistant && messageHasRunningTool(message),
                     isSpeaking: _speakingMessageId == message.id,
                     onSpeak: widget.appController == null ? null : () => _speak(message),
                     onPermission: widget.appController == null

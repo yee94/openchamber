@@ -175,9 +175,19 @@ class _AssistantHeader extends StatelessWidget {
                   ),
                 const Spacer(),
                 if (message.agentCount > 0)
-                  Text(
-                    t(context, 'chat.agentsInvolved', {'count': '${message.agentCount}'}),
-                    style: const TextStyle(fontSize: 12, color: OcChrome.secondary),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        t(context, 'chat.agentsInvolved', {'count': '${message.agentCount}'}),
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary),
+                      ),
+                      OcGlyph(
+                        OcGlyphKind.chevronRight,
+                        size: 12,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ],
                   ),
               ],
             ),
@@ -196,7 +206,7 @@ class _FileChangeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visible = parts.take(4).toList();
+    final visible = parts.take(5).toList();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),

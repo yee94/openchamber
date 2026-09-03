@@ -18,5 +18,5 @@ No PIN / Face ID. No `iosNativeUi`. Chat is a pushed page.
 | `04-scheduled.png` | 「计划」, 任务/历史记录, filters, check vs pause, schedule · countdown. Dock selected pill is **only** 计划. |
 | `05-settings.png` | Large title, pill search, inset groups. |
 | `06-settings-appearance.png` | Language + theme. Latin labels must render. No `iosNativeUi`. |
-| `07-chat.png` | Isolated pushed Chat page only: back chevron, truncated session title, overflow, transcript, file-change card, tok/s, collapsed pill (+ / 点击输入 / send). No Projects chrome and no homepage dock. Captured as `MaterialApp` home so the PNG cannot include a mid-route overlay. |
+| `07-chat.png` | Isolated pushed Chat page only: back, truncated title, busy spinner, overflow, Grok / Orchestrator, agent count, 「已更改文件」 (5 + more), tok/s, collapsed pill. No Projects chrome and no homepage dock. |
 | `08-permission.png` | Permission card only. |

@@ -154,8 +154,10 @@ void main() {
       ),
     );
     await _pumpUntil(tester, find.byKey(const Key('chat-tool-diff-edit-1')));
+    await _pumpUntil(tester, find.byKey(const Key('chat-busy')));
     await _pumpFrames(tester);
     expect(find.byKey(const Key('chat-back')), findsOneWidget);
+    expect(find.byKey(const Key('chat-busy')), findsOneWidget);
     expect(find.byKey(const Key('reverse-chat-list')), findsOneWidget);
     expect(find.byKey(const Key('composer-field')), findsOneWidget);
     expect(find.text('点击输入'), findsOneWidget);
@@ -169,6 +171,7 @@ void main() {
     expect(find.byKey(const Key('chat-tool-diff-edit-1')), findsOneWidget);
     expect(find.textContaining('已更改文件'), findsOneWidget);
     expect(find.textContaining('个文件'), findsWidgets);
+    expect(find.textContaining('+5 个文件'), findsOneWidget);
     expect(find.textContaining('tok/s'), findsOneWidget);
     expect(find.textContaining('需要权限'), findsNothing);
     expect(find.byKey(const Key('tab-projects')), findsNothing);
@@ -235,6 +238,7 @@ void main() {
     expect(find.text('拒绝'), findsOneWidget);
     expect(find.byKey(const Key('chat-permission-once')), findsOneWidget);
     await _writePng(tester, screenshotKey, '08-permission.png');
+    await tester.pump(const Duration(seconds: 6));
   });
 }
 
@@ -356,7 +360,7 @@ MemoryOpenChamberTransport _seededTransport() {
             },
             {
               'id': 'sess-extra',
-              'title': '工具 diff 点开看不到的路径',
+              'title': '写入工具 diff 点开看不到的路径',
               'directory': '/workspace/openchamber',
               'parentID': null,
               'project': {'name': 'openchamber'},
@@ -404,7 +408,7 @@ MemoryOpenChamberTransport _seededTransport() {
         'parts': [
           {
             'type': 'text',
-            'text': '已跑: ToolPart / toolDiffUtils / DiffView 相关测试，58 过。',
+            'text': '路径匹配已经按目录前缀对齐。已跑: ToolPart / toolDiffUtils / DiffView 相关测试，58 过。',
           },
           {
             'id': 'task-1',
@@ -524,6 +528,7 @@ MemoryOpenChamberTransport _seededTransport() {
     ],
   );
   transport.permissions = const [];
+  transport.statusBySession = const {'sess-extra': 'busy'};
   transport.assistants = {
     'revision': 1,
     'enabled': true,

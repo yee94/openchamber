@@ -452,6 +452,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
             const SizedBox(width: 10),
             if (busy)
               const Padding(
+                key: Key('chat-busy'),
                 padding: EdgeInsets.only(right: 8),
                 child: SizedBox(
                   width: OcChrome.headerButtonSize,
