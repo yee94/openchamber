@@ -32,10 +32,9 @@ class OcOptical {
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
-  /// Official title/subtitle column is `gap-0.5` (2). WidgetTester CJK
-  /// fills the 16/12 line box, so keep the CSS gap plus the unused leading
-  /// CSS already budgets (2 + 2).
-  static const double sessionTitleSubtitleGap = 4;
+  /// Official title/subtitle column is `gap-0.5` (2). With padV 5 + 16 + 2
+  /// + 12 + 5 the visual row is exactly 40. Do not add extra gap.
+  static const double sessionTitleSubtitleGap = 2;
   /// `.oc-mobile-session-status` 0.75rem; `.oc-mobile-session-row-main` gap 0.5rem.
   static const double sessionStatus = 12;
   static const double sessionRowMainGap = 8;

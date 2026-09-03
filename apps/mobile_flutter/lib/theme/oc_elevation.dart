@@ -68,18 +68,11 @@ class OcElevation {
     ];
   }
 
-  /// Search / + discs — `--oc-mobile-shadow-control`.
+  /// Search / project discs — glass-shadow contact + halo only.
+  /// The official 8px umbra reads as a Material coin in WidgetTester.
   static List<BoxShadow> control(BuildContext context) => controlFor(OcTokens.of(context));
 
-  static List<BoxShadow> controlFor(OcTokens tokens) {
-    if (tokens.isDark) return const [];
-    // Official `--oc-mobile-glass-shadow` without the inset highlight.
-    return const [
-      BoxShadow(color: Color(0x0D000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0F000000), blurRadius: 12),
-      BoxShadow(color: Color(0x14000000), blurRadius: 20, spreadRadius: -6, offset: Offset(0, 8)),
-    ];
-  }
+  static List<BoxShadow> controlFor(OcTokens tokens) => dockFor(tokens);
 
   /// Composer pill — same `--oc-mobile-float-shadow` as cards (not flatter).
   static List<BoxShadow> composer(BuildContext context) => composerFor(OcTokens.of(context));

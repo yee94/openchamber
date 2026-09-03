@@ -98,7 +98,14 @@ void main() {
     expect(OcOptical.projectTriggerGap, 7);
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
-    expect(OcOptical.sessionTitleSubtitleGap, 4);
+    expect(OcOptical.sessionTitleSubtitleGap, 2);
+    expect(
+      OcOptical.sessionRowPadV * 2 +
+          OcOptical.rowTitle * OcOptical.rowTitleHeight +
+          OcOptical.sessionTitleSubtitleGap +
+          OcOptical.sessionSubtitle * OcOptical.sessionSubtitleHeight,
+      OcOptical.sessionRowVisualHeight,
+    );
     expect(OcOptical.sessionStatus, 12);
     expect(OcOptical.sessionRowMainGap, 8);
     expect(OcOptical.projectHeaderHeight, 74);
@@ -217,8 +224,8 @@ void main() {
     expect(OcElevation.composerFor(OcTokens.light), OcElevation.cardFor(OcTokens.light));
     expect(OcElevation.dockFor(OcTokens.light).length, 2);
     expect(OcElevation.dockFor(OcTokens.light).last.blurRadius, lessThanOrEqualTo(12));
-    expect(OcElevation.dockFor(OcTokens.light), isNot(OcElevation.controlFor(OcTokens.light)));
-    expect(OcElevation.controlFor(OcTokens.light), isNotEmpty);
+    expect(OcElevation.controlFor(OcTokens.light), OcElevation.dockFor(OcTokens.light));
+    expect(OcElevation.controlFor(OcTokens.light).last.offset.dy, 0);
     expect(OcElevation.cardFor(OcTokens.dark), isEmpty);
     expect(OcElevation.dockFor(OcTokens.dark), isEmpty);
     expect(OcElevation.controlFor(OcTokens.dark), isEmpty);
