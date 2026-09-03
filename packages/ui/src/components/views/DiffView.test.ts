@@ -7,6 +7,10 @@ import {
   createToolPatchTurnDiffs,
   getFirstChangedModifiedLineFromPatch,
 } from './diffPatchUtils';
+import {
+  buildDiffNavigationAlignKey,
+  shouldAlignDiffNavigation,
+} from './diffNavigationAlign';
 import { projectTurnDiffStats } from '../chat/lib/turns/projectTurnSummary';
 import type { ChatMessageEntry } from '../chat/lib/turns/types';
 
@@ -131,6 +135,10 @@ describe('DiffView staged turn changes queries', () => {
     expect(diffViewSource).toContain('const visibleDiffLoadError = diffData');
   });
 
+  test('single-file tool patch views mount the only visible file without intersection sync', () => {
+    expect(diffViewSource).toContain('|| (singleFileView && visibleDiffFiles.length === 1)');
+  });
+
   test('short-circuits tool patches and protects turn scope from expand-all fanout', () => {
     expect(diffViewSource).toContain('if (usesToolPatches) return selectedToolTurnDiffs;');
     expect(diffViewSource).toContain("stackedDefaultCollapsedAll || (activeDiffScope === 'turn' && !usesToolPatches)");
@@ -163,6 +171,46 @@ describe('DiffView per-file row action contract', () => {
     // Dedicated mobile routes through the mobile file sheet; desktop validates then opens.
     expect(diffViewSource).toContain('mobileActions.openFile({ path: absolutePath })');
     expect(diffViewSource).toContain('openContextFile(effectiveDirectory, absolutePath)');
+  });
+});
+
+describe('DiffView navigation align', () => {
+  test('pins once per navigation identity, not on later file-list refreshes', () => {
+    const key = buildDiffNavigationAlignKey({
+      scope: 'turn',
+      navigationRequestKey: 12,
+      targetFilePath: 'src/a.ts',
+      targetLine: 40,
+    });
+    expect(shouldAlignDiffNavigation(null, key, true)).toBe(true);
+    expect(shouldAlignDiffNavigation(key, key, true)).toBe(false);
+    expect(shouldAlignDiffNavigation(key, key, false)).toBe(false);
+    expect(shouldAlignDiffNavigation(
+      key,
+      buildDiffNavigationAlignKey({
+        scope: 'turn',
+        navigationRequestKey: 13,
+        targetFilePath: 'src/a.ts',
+        targetLine: 40,
+      }),
+      true,
+    )).toBe(true);
+  });
+
+  test('waits for the target row before the first pin', () => {
+    const key = buildDiffNavigationAlignKey({
+      scope: 'working',
+      navigationRequestKey: 1,
+      targetFilePath: 'src/a.ts',
+    });
+    expect(shouldAlignDiffNavigation(null, key, false)).toBe(false);
+    expect(shouldAlignDiffNavigation(null, key, true)).toBe(true);
+  });
+
+  test('keeps a rendered git snapshot while status refreshes', () => {
+    expect(diffViewSource).toContain('const keepVisibleSnapshot = Boolean(diffData && diffDataMatchesContextMode)');
+    expect(diffViewSource).toContain('lastAlignedNavigationKeyRef');
+    expect(diffViewSource).not.toContain('setLocalDiffData(null)');
   });
 });
 

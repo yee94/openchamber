@@ -480,7 +480,7 @@ textarea[data-chat-input="true"]:focus-visible {
 /* Safari/WebKit fixes for buttons and SVG icons */
 /* Remixicon puts fill="currentColor" on root SVG which WebKit renders as background */
 /* Only stroke-sprite roots need fill:none — do NOT blanket all button svg
-   (that hides filled custom glyphs like StopIcon / brand marks). */
+   (that hides filled custom glyphs like brand marks). */
 button svg.oc-icon,
 [role="button"] svg.oc-icon,
 button svg.remixicon,
@@ -639,6 +639,10 @@ svg.animate-spin {
   color-scheme: dark;
   --oc-scrollbar-thumb: oklch(0.6 0.02 80 / 0.3);
   --oc-scrollbar-thumb-hover: oklch(0.6 0.02 80 / 0.5);
+}
+
+[data-scrollbar="chat"] {
+  overflow-anchor: none;
 }
 
 [data-scrollbar="chat"]::-webkit-scrollbar-thumb {

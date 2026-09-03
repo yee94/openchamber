@@ -631,16 +631,18 @@ describe('activity tool flicker regression (Trace-20260804T171706)', () => {
     });
   });
 
-  test('8. the streaming tail is mounted unconditionally', () => {
-    // Structural guard: gating the tail on a non-empty entry list destroys the
-    // whole streaming subtree on any empty frame, which no pure unit test can
-    // observe. Keep the JSX unconditional so the fiber, its useSessionParts
-    // subscription and its DOM survive.
+  test('8. the streaming turn is in the virtualizer count and the tail host stays mounted', () => {
+    // Structural guard: gating the tail host on a non-empty entry list drops
+    // useSessionParts on empty projection frames. The streaming DOM must live
+    // in the virtualizer last row — not a sibling sizer TanStack cannot see.
     const source = readFileSync(
       path.join(path.dirname(fileURLToPath(import.meta.url)), 'MessageList.tsx'),
       'utf8',
     );
     expect(source).not.toContain('hasTrailingStreamingEntries ? (');
     expect(source).toContain('<StreamingTailContent');
+    expect(source).toContain('resolveVirtualizerTimelineEntries(historyEntries, overlaidTrailingEntries)');
+    expect(source).toContain('resolveTimelineVirtualized(virtualizerEntries.length)');
+    expect(source).toContain('entries={virtualizerEntries}');
   });
 });

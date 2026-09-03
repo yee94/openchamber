@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test, vi } from 'vitest';
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 
@@ -9,6 +9,12 @@ import {
   type MobileProjectHomeItem,
   type MobileProjectsHomeProps,
 } from './MobileProjectsHome';
+
+vi.mock('@/sync/sync-context', () => ({
+  useLiveSessionStatus: () => undefined,
+  useSessionPermissions: () => [],
+  useSessionQuestions: () => [],
+}));
 
 const noop = () => undefined;
 
@@ -71,8 +77,69 @@ describe('MobileProjectsHome workspace groups', () => {
     expect(html).toContain('OpenChamber');
     expect(html).toContain('oc-mobile-project-shell');
     expect(html.indexOf('Global pinned session')).toBeLessThan(html.indexOf('Main session'));
-    expect(html.match(/aria-label="Pinned"/g)).toHaveLength(1);
+    expect(html.match(/aria-label="Pinned \/ In progress"/g)).toHaveLength(1);
     expect(html).toContain('oc-mobile-project-card');
+  });
+
+  test('groups pinned sessions above in-progress sessions without extra labels', () => {
+    const html = renderToString(
+      <I18nProvider>
+        <MobileProjectsHome
+          {...props}
+          inProgressSessions={[{
+            id: 'running-session',
+            kind: 'pagination',
+            title: 'Running session',
+            subtitle: 'OpenChamber',
+          }]}
+        />
+      </I18nProvider>,
+    );
+
+    expect(html.indexOf('Global pinned session')).toBeLessThan(html.indexOf('Running session'));
+    expect(html.indexOf('Running session')).toBeLessThan(html.indexOf('Main session'));
+  });
+
+  test('renders unread attention sessions with the ordinary unread row chrome', () => {
+    const html = renderToString(
+      <I18nProvider>
+        <MobileProjectsHome
+          {...props}
+          pinnedSessions={[]}
+          inProgressSessions={[{
+            id: 'unread-session',
+            title: 'Unread session',
+            unread: true,
+          }]}
+          projects={[{
+            id: 'project-with-unread',
+            name: 'Unread project',
+            path: '/code/unread-project',
+            sessionCount: 1,
+            expanded: true,
+            worktrees: [{
+              id: 'main',
+              name: 'Main workspace',
+              path: '/code/unread-project',
+              kind: 'main',
+              sessionCount: 1,
+              sessions: [{
+                id: 'ordinary-unread-session',
+                title: 'Ordinary unread session',
+                unread: true,
+              }],
+            }],
+          }]}
+        />
+      </I18nProvider>,
+    );
+
+    expect(html).toContain('Unread session');
+    expect(html).toContain('aria-label="Pinned / In progress"');
+    expect(html.match(/data-session-status="completed-unread"/g)).toHaveLength(2);
+    expect(html.match(/bg-\[var\(--status-info\)\]/g)).toHaveLength(2);
+    expect(html).toMatch(/data-session-status="completed-unread"[\s\S]*oc-mobile-session-title truncate font-semibold[^>]*>Unread session/);
+    expect(html).toMatch(/data-session-status="completed-unread"[\s\S]*oc-mobile-session-title truncate font-semibold[^>]*>Ordinary unread session/);
   });
 
   test('renders main sessions directly and keeps linked worktree headers', () => {

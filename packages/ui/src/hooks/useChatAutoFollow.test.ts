@@ -5,7 +5,10 @@ import { fileURLToPath } from 'node:url';
 
 import {
     isWithinSessionOpenPinGrace,
+    resolveAutoFollowPinnedFromDistance,
+    resolveChatScrollPhysics,
     SESSION_OPEN_PIN_GRACE_MS,
+    shouldWriteAutoFollowScrollTop,
 } from './useChatAutoFollow';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -23,5 +26,36 @@ describe('session-open pin grace', () => {
         expect(source).toContain('forceBottomDefeatingMomentum()');
         expect(source).toContain('isWithinSessionOpenPinGrace(now(), sessionOpenPinGraceUntilRef.current)');
         expect(SESSION_OPEN_PIN_GRACE_MS).toBeGreaterThan(0);
+    });
+});
+
+describe('tanstack scroll physics', () => {
+    test('does not assign scrollTop when tanstack owns the scroller', () => {
+        expect(shouldWriteAutoFollowScrollTop('tanstack')).toBe(false);
+        expect(shouldWriteAutoFollowScrollTop('dom')).toBe(true);
+        expect(resolveChatScrollPhysics(() => 'tanstack')).toBe('tanstack');
+        expect(resolveChatScrollPhysics(undefined)).toBe('dom');
+        expect(resolveAutoFollowPinnedFromDistance(80)).toBe(true);
+        expect(resolveAutoFollowPinnedFromDistance(81)).toBe(false);
+        expect(resolveAutoFollowPinnedFromDistance(null)).toBe(false);
+
+        const source = readFileSync(join(here, 'useChatAutoFollow.ts'), 'utf8');
+        expect(source).toContain('if (!ownsScrollTop())');
+        expect(source).toContain("resolvePhysics() === 'tanstack'");
+        expect(source).toContain('jumpToLatestOwned()');
+        expect(source).not.toContain('use-stick-to-bottom');
+    });
+
+    test('tanstack content resize and chunk handlers skip scrollTop writes', () => {
+        const source = readFileSync(join(here, 'useChatAutoFollow.ts'), 'utf8');
+        const resizeStart = source.indexOf('const handleContentResize = useEvent(');
+        const resizeEnd = source.indexOf('const canObserveResize', resizeStart);
+        const resize = source.slice(resizeStart, resizeEnd);
+        expect(resize).toContain('if (!ownsScrollTop())');
+        expect(resize).not.toMatch(/if \(!ownsScrollTop\(\)\)[\s\S]*el\.scrollTop\s*=/);
+
+        const kickStart = source.indexOf('const kick = () =>');
+        const kickEnd = source.indexOf('const handlers: AnimationHandlers', kickStart);
+        expect(source.slice(kickStart, kickEnd)).toContain('ownsScrollTop()');
     });
 });

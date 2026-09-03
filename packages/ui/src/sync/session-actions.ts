@@ -15,6 +15,7 @@ import { mergeSessionDirectoryMetadata, useGlobalSessionsStore } from "@/stores/
 import { useConfigStore } from "@/stores/useConfigStore"
 import { registerSessionDirectory } from "./sync-refs"
 import { isSyntheticPart } from "@/lib/messages/synthetic"
+import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
 import { getAllSyncSessionMap } from "./sync-refs"
 import { sessionDraftKey, type DraftKey } from "./input-draft-types"
 import {
@@ -1450,8 +1451,10 @@ export function beginOptimisticSend(input: BeginOptimisticSendInput): Optimistic
     input.onMessageID?.(messageID)
 
     // Mark pending send before the optimistic user row so the assistant status
-    // can show "sending message" for every runtime while the request is in flight.
+    // can show "sending message" for every runtime while the request is in flight,
+    // and so MessageList can latch `anchoring-new-turn` on that same insert.
     useSessionUIStore.getState().markMessageSending?.(input.sessionId, messageID)
+    markPendingUserSendAnimation(input.sessionId)
 
     // Paint the user bubble + busy status immediately. Connection recovery may
     // take up to CONNECTION_GRACE_MS; the list must not wait on that.
@@ -2991,7 +2994,11 @@ export async function unrevertSession(sessionId: string, directoryOverride?: str
  * 1. Extract text from the message for input restoration
  * 2. Call the runtime fork endpoint
  * 3. Insert the new session into the child store (so sidebar updates immediately)
- * 4. Switch to new session and set pending input text
+ * 4. As soon as OpenCode returns the forked session id, bind the loading
+ *    shell to that session and switch the route. Transcript reset/load
+ *    continues on the new conversation; the source stays operable if the
+ *    user navigates back.
+ * 5. Restore pending input only while still viewing the fork
  */
 export async function forkSession(sessionId: string, operationId: number, messageId?: string, directoryOverride?: string): Promise<boolean> {
   const forkRuntimeKey = getRuntimeKey()
@@ -3093,6 +3100,25 @@ export async function forkSession(sessionId: string, operationId: number, messag
       if (activeForkCopy?.operationId === operationId) activeForkCopy = null
       return false
     }
+
+    // Sidebar + route first: the loading shell binds to this id so the source
+    // chat is operable again if the user navigates back during reset/load.
+    const current = store.getState()
+    const sessions = [...current.session]
+    const searchResult = Binary.search(sessions, forkedSession.id, (s) => s.id)
+    if (!searchResult.found) {
+      sessions.splice(searchResult.index, 0, forkedSession)
+      store.setState({ session: sessions })
+    }
+    setForkTransitionTarget(operationId, forkedSession.id)
+    const viewingSessionId = useSessionUIStore.getState().currentSessionId
+    const shouldFollowFork =
+      viewingSessionId === sessionId || viewingSessionId === forkedSession.id
+    if (shouldFollowFork) {
+      useSessionUIStore.getState().setCurrentSession(forkedSession.id, directory, {
+        skipMessageFetch: true,
+      })
+    }
     await setForkTransitionStage(operationId, "opening")
     try {
       forkedSession = await markForkSessionAsLatest(forkedSession, directory)
@@ -3105,15 +3131,6 @@ export async function forkSession(sessionId: string, operationId: number, messag
   }
 
   try {
-    // Insert new session into child store so sidebar updates immediately
-    const current = store.getState()
-    const sessions = [...current.session]
-    const searchResult = Binary.search(sessions, forkedSession.id, (s) => s.id)
-    if (!searchResult.found) {
-      sessions.splice(searchResult.index, 0, forkedSession)
-      store.setState({ session: sessions })
-    }
-
     // Fork emits every cloned message and part over SSE. Discard any target
     // transcript that raced into Query so selection follows the regular
     // bounded tail load. Prefer Query destructiveReset (purge+ensure); fall
@@ -3130,23 +3147,12 @@ export async function forkSession(sessionId: string, operationId: number, messag
       applyTranscriptCommand(forkTargetScope, { type: "reset" })
     }
 
-    // Switch immediately once OpenCode reveals the real ID, then keep the
-    // transition visible until the bounded initial page is available.
-    setForkTransitionTarget(operationId, forkedSession.id)
-    // Only follow into the fork when the user is still on the source (or
-    // already on the target). Switching away must not yank global selection.
-    const viewingSessionId = useSessionUIStore.getState().currentSessionId
-    const shouldFollowFork =
-      viewingSessionId === sessionId || viewingSessionId === forkedSession.id
-    if (shouldFollowFork) {
-      useSessionUIStore.getState().setCurrentSession(forkedSession.id, directory)
-    }
     await setForkTransitionStage(operationId, "loading")
     console.info("[session-fork] loading the forked session", {
       operationId,
       sessionId,
       forkedSessionId: forkedSession.id,
-      followed: shouldFollowFork,
+      followed: useSessionUIStore.getState().currentSessionId === forkedSession.id,
     })
     // When destructiveReset already ensured a tail, skip redundant initial fetch
     // unless the repository still reports unknown / error.
@@ -3171,7 +3177,8 @@ export async function forkSession(sessionId: string, operationId: number, messag
 
     // Restore forked message text and file attachments to input (user messages only).
     // Skip when the user left the fork path — pendingInput is a global one-shot.
-    if (shouldFollowFork && shouldRestoreComposer && messageText) {
+    const viewingForkedSession = useSessionUIStore.getState().currentSessionId === forkedSession.id
+    if (viewingForkedSession && shouldRestoreComposer && messageText) {
       useInputStore.setState({
         pendingInputText: messageText,
         pendingInputMode: "replace" as const,
@@ -3179,7 +3186,7 @@ export async function forkSession(sessionId: string, operationId: number, messag
     }
     // A selected message owns its attachment restoration snapshot. A current-session
     // fork preserves the composer's existing resources.
-    if (shouldFollowFork && shouldRestoreComposer && messageId) restoreFilePartsToInput(fileParts)
+    if (viewingForkedSession && shouldRestoreComposer && messageId) restoreFilePartsToInput(fileParts)
   } finally {
     if (activeForkCopy?.operationId === operationId) activeForkCopy = null
   }

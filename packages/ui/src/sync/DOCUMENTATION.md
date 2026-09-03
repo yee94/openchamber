@@ -58,7 +58,7 @@ So:
 
 | Layer / Store | Owns | Scope |
 |---|---|---|
-| child directory stores in `sync-context.tsx` | `session`, `permission`, `question`, `session_status`, etc. — non-transcript domains only | One directory |
+| child directory stores in `sync-context.tsx` | `session`, `permission`, `question`, `session_status`, `session_error_at`, etc. — non-transcript domains only | One directory |
 | `scoped-blocking-requests.ts` | Blocking-request scope (`useScopedBlockingQuestions` / `useScopedBlockingPermissions`): catalog `parentID` subtree plus live task dispatch edges read from running `task` tool parts (`state.metadata.parentSessionId`/`sessionId`). Fork + task_id reuse can leave a reused subagent session's catalog `parentID` on the pre-fork lineage, so the dispatch edge is what keeps a running subagent's pending question reachable from the dispatching session; terminal tasks contribute no edge | One directory |
 | QueryCache / TranscriptRepository | Production sole authority for transcript message/part/pagination boundary, request lifecycle, optimistic rows, SSE transcript merge, reconnect compensation | Transport + generation + directory + session |
 | `session-ui-store.ts` | Session selection, draft lifecycle, abort prompts, worktree metadata, SDK-facing action entrypoints | App UI state |
@@ -167,6 +167,8 @@ an ordinarily evicted session all leave pagination clean — a later visit reads
 Renderable messages and session identity are independent completeness signals. Missing session identity keeps `session.get` eligible even when the repository transcript is already resolved, blocks prompt submission while preserving the mounted primary Composer and its editable draft, and receives a bounded current-view retry. The subagent read-only prompt banner requires a confirmed child `parentID` before first paint; loading, missing, cached cross-directory, root, and generic read-only states never display it. Once that child identity is confirmed for the current chat view, `resolveSubagentReadOnlyBannerLatch` keeps the parent target and last-known agent/provider/model through temporary live-list gaps (`session.updated` hides subagents from the directory list; recovery may reinsert the row) and resets when the view identity changes. Parent navigation derives its target identity from the authoritative child `parentID`; a cached parent entity enriches its title and directory. Cover the latch in `components/chat/chatPromptAvailability.test.ts`.
 
 `scoped-session-status.ts` owns exact `(directory, sessionID)` status reads and subscriptions. A missing child-store snapshot reads as `unknown`; a successful directory status snapshot with no matching entry reads as `idle`. Its registry subscription rebinds when a requested directory store appears, and status listeners ignore parts plus other session IDs.
+
+`session_error_at` is a live per-session timestamp written only from `session.error` with `callbacks.now`. It is not persisted history and is not invented from ordinary `session.idle` / `session.status` idle. The next authoritative `busy` or `retry` (`session.status`, or a directory status snapshot applying busy/retry) clears that session's entry. `useSessionErrorAt(sessionID, directory)` is read-only (`bootstrap: false`) and notifies only when that session's `session_error_at` value changes.
 
 Imperative cross-directory session lookups use the cached ID index from `getAllSyncSessionMap()`. The index is rebuilt only when a child store's `state.session` reference changes; permission lineage checks must reuse it instead of rebuilding a full session map per call.
 
@@ -399,8 +401,8 @@ Modules:
   `useSessionMessagesResolved` / `useSessionTranscriptPagination` /
   `useSessionMessageRecords` / `useSessionMaterializationStatus` /
   `useEnsureSessionMessages` / `useUserMessageHistory` facades in
-  `sync-context.tsx`. Chat, Context Panel, timeline, activity, session-assist
-  last-message, queue auto-send completion/turn, and RevertedMessageDock
+  `sync-context.tsx`. Chat, Context Panel, timeline, activity, queue auto-send
+  completion/turn, and RevertedMessageDock
   consume repository projections only (session.revert metadata may still come
   from the directory session list). Message-record snapshots and materialization
   status are built from repository TranscriptData + catalog `session.revert`;
@@ -1354,7 +1356,7 @@ Rules:
 2. If an action targets a session by ID, resolve the **session's own directory**. Do not assume the current directory is correct.
 3. Scope-sensitive session actions use `getAuthoritativeDirectoryForSession()`, which resolves worktree metadata, session attachments, sync metadata, and global session metadata.
 4. `session-ui-store.ts` should delegate to `session-actions.ts` for these mutations instead of duplicating SDK calls.
-5. `setCurrentSession()` announces a monotonic session-switch intent before directory resolution or store publication. Delayed visual/transition callbacks must validate that intent and silently discard stale work.
+5. `setCurrentSession()` announces a monotonic session-switch intent before directory resolution or store publication. Delayed visual/transition callbacks must validate that intent and silently discard stale work. Optional `skipMessageFetch` skips the same-tick transcript fetch for callers that own the subsequent load (fork).
 6. On a real session id change, `setCurrentSession()` also calls `useUIStore.syncWorkspacePanelsForSessionSwitch()` so right-side workspace panels (context/subagent chat, file preview, git changes sidebar) hide when leaving a session and restore when returning. `openNewSessionDraft()` must call the same helper when clearing a real session for Welcome/draft, because it does not go through `setCurrentSession()`. Tab content remains directory-cached; only open/active visibility is session-scoped.
 7. Edit staging restores the composer from the visible user-message snapshot captured at click time. Primary send keeps `messageEditCommitting` painted, aborts any still-busy turn, waits for idle, deletes the edited target and its old forward tail, then dispatches the replacement. OpenCode rejects `deleteMessage` while the session is busy, so the wait is required. Each local row drops only as its remote delete lands. Submit paints the target as "editing" instead of hiding it. A failed abort/wait/delete leaves the old tail and staged edit intact; a failed send after a successful delete keeps the composer draft for retry. Leaving the session disarms `stagedMessageEdit`.
 8. Sidebar previous/next navigation follows the rendered sidebar order. `SessionSidebar` publishes pinned rows plus logically visible project rows to `session-navigation.ts`; keyboard and native-menu actions share that registry and update the explicit session Focus before committing current-session authority. Adjacent navigation concatenates those rings (pinned first) and wraps across both sections, never falling through to hidden project rows.
@@ -1390,8 +1392,15 @@ transcript (or any residual pure draft surface) as an unscoped full dump.
   before forking. Missing directory is a hard failure with user-visible toast.
 - Suppress copied message/part events for the target session while the request
   is active.
-- When the real session ID arrives, select it and load the normal bounded tail
-  page through `fetchMessagesForSession()`.
+- When the real session ID arrives, bind the loading shell to that session and
+  select it immediately (`setCurrentSession` with `skipMessageFetch`, which
+  writes the path route). Do not wait for `markForkSessionAsLatest`, transcript
+  reset, or the bounded tail load. After the target is bound, navigating back
+  to the source session stays fully interactive; the overlay follows the target
+  only. The caller then owns `destructiveReset` + `fetchMessagesForSession()`.
+- Restore composer text/attachments only while the user is still viewing the
+  forked session. Leaving the fork path must not dump pending input onto the
+  source conversation.
 - Keep a short message-ID cutoff after the response so transport-buffered copy
   events cannot refill the complete history. Newer user/assistant events pass
   through normally.
@@ -1687,7 +1696,7 @@ Keep this in sync with `handleDirectoryEvent` in `sync-context.tsx`:
 |---|---|
 | `session.created/updated/deleted` | `session`, `permission`, `todo`, `part` |
 | `session.diff` | `session_diff` (preview summary only: file/status/additions/deletions; no patch bodies — full patches load on demand via `GET /session/{id}/diff`) |
-| `session.status/session.idle/session.error` | `session_status` |
+| `session.status/session.idle/session.error` | `session_status`, `session_status_observed_at`; `session.error` also writes `session_error_at`; `session.status` busy/retry may clear `session_error_at` |
 | `todo.updated` | `todo` |
 | `message.updated` | `message`, `part` when a loaded session observes a new assistant before its first part |
 | `message.removed` | `message`, `part` |

@@ -39,7 +39,7 @@ import { isValidCronExpression, getNextRuns, CRON_EXAMPLES } from '@/lib/cron';
 
 const WEEKDAY_INDEXES = [0, 1, 2, 3, 4, 5, 6] as const;
 
-const FORM_CONTROL_CLASS = '!h-9 !min-h-9 w-full min-w-0 rounded-full border-0 bg-[var(--surface-elevated)] px-3 py-1 ring-1 ring-inset ring-border/60 transition-[background-color,box-shadow,transform] duration-150 ease-out hover:[&:not(:focus)]:bg-[var(--surface-subtle)] hover:[&:not(:focus)]:ring-transparent active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] data-[popup-open]:bg-[var(--surface-subtle)] data-[popup-open]:shadow-sm motion-reduce:transition-none';
+const FORM_CONTROL_CLASS = '!h-9 !min-h-9 w-full min-w-0 rounded-full border-0 bg-[var(--surface-elevated)] px-3 py-1 ring-1 ring-inset ring-border/60 transition-[background-color,box-shadow] duration-150 ease-out hover:[&:not(:focus)]:bg-[var(--surface-subtle)] hover:[&:not(:focus)]:ring-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] data-[popup-open]:bg-[var(--surface-subtle)] data-[popup-open]:shadow-sm motion-reduce:transition-none';
 const PANEL_CONTROL_CLASS = 'oc-settings-inline-value';
 const PANEL_ROW_CLASS = `oc-settings-split-row ${groupedCardRowClassName}`;
 const MOBILE_PANEL_CONTROL_CLASS = PANEL_CONTROL_CLASS;
@@ -726,6 +726,7 @@ export function ScheduledTaskEditorDialog(props: {
   presentation?: 'dialog' | 'panel' | 'mobile-panel' | 'mobile-tab';
   onDirtyChange?: (dirty: boolean) => void;
   onRun?: (task: ScheduledTask) => Promise<void>;
+  onOpenTaskHistory?: (task: ScheduledTask) => void;
   onDelete?: (task: ScheduledTask) => Promise<void>;
   onToggleEnabled?: (task: ScheduledTask, enabled: boolean) => Promise<void>;
   actionBusy?: boolean;
@@ -741,6 +742,7 @@ export function ScheduledTaskEditorDialog(props: {
     presentation = 'dialog',
     onDirtyChange,
     onRun,
+    onOpenTaskHistory,
     onDelete,
     onToggleEnabled,
     actionBusy = false,
@@ -1807,6 +1809,52 @@ export function ScheduledTaskEditorDialog(props: {
     </div>
   );
 
+  const canOpenTaskHistory = Boolean(task && onOpenTaskHistory);
+  const editorOverflowMenu = task && onDelete && onRun ? (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant={mobileTab ? 'mobileGlass' : 'ghost'}
+          size={mobileTab ? 'mobileIcon' : 'icon'}
+          className={cn(!mobileTab && 'rounded-lg', !mobileTab && (isMobile ? 'size-11' : 'size-8'))}
+          disabled={saving || actionBusy}
+          aria-label={t('sessions.scheduledTasks.dialog.actions.moreAria', { taskName: task.name })}
+        >
+          <Icon name="more-2" className={mobileTab ? 'size-5' : 'size-4'} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-40 motion-reduce:transition-none">
+        <DropdownMenuItem className={cn(mobileTab && 'min-h-11')} onSelect={() => void onRun(task)}>
+          <Icon name="play" className="size-4" />
+          {t('sessions.scheduledTasks.dialog.actions.runNow')}
+        </DropdownMenuItem>
+        {canOpenTaskHistory ? (
+          <DropdownMenuItem className={cn(mobileTab && 'min-h-11')} onSelect={() => onOpenTaskHistory?.(task)}>
+            <Icon name="history" className="size-4" />
+            {t('sessions.scheduledTasks.workspace.views.history')}
+          </DropdownMenuItem>
+        ) : null}
+        {onToggleEnabled ? (
+          <DropdownMenuItem className={cn(mobileTab && 'min-h-11')} onSelect={() => void onToggleEnabled(task, !task.enabled)}>
+            <Icon name={task.enabled ? 'pause' : 'play'} className="size-4" />
+            {task.enabled
+              ? t('sessions.scheduledTasks.dialog.taskToggle.pauseAria', { taskName: task.name })
+              : t('sessions.scheduledTasks.dialog.taskToggle.enableAria', { taskName: task.name })}
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuItem
+          variant="destructive"
+          className={cn(mobileTab && 'min-h-11')}
+          onSelect={() => void onDelete(task)}
+        >
+          <Icon name="delete-bin" className="size-4" />
+          {t('sessions.scheduledTasks.dialog.actions.delete')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ) : null;
+
   if (presentation === 'panel') {
     if (!open) {
       return null;
@@ -1826,60 +1874,27 @@ export function ScheduledTaskEditorDialog(props: {
                 : title}
             </span>
             <div className="flex items-center gap-1">
-              {task && onDelete && onRun ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className={cn('rounded-lg transition-transform duration-150 active:scale-90 motion-reduce:transition-none', isMobile ? 'size-11' : 'size-8')}
-                      disabled={saving || actionBusy}
-                      aria-label={t('sessions.scheduledTasks.dialog.actions.moreAria', { taskName: task.name })}
-                    >
-                      <Icon name="more-2" className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="min-w-40 motion-reduce:transition-none">
-                    <DropdownMenuItem onSelect={() => void onRun(task)}>
-                      <Icon name="play" className="size-4" />
-                      {t('sessions.scheduledTasks.dialog.actions.runNow')}
-                    </DropdownMenuItem>
-                    {onToggleEnabled ? (
-                      <DropdownMenuItem onSelect={() => void onToggleEnabled(task, !task.enabled)}>
-                        <Icon name={task.enabled ? 'pause' : 'play'} className="size-4" />
-                        {task.enabled
-                          ? t('sessions.scheduledTasks.dialog.taskToggle.pauseAria', { taskName: task.name })
-                          : t('sessions.scheduledTasks.dialog.taskToggle.enableAria', { taskName: task.name })}
-                      </DropdownMenuItem>
-                    ) : null}
-                    <DropdownMenuItem variant="destructive" onSelect={() => void onDelete(task)}>
-                      <Icon name="delete-bin" className="size-4" />
-                      {t('sessions.scheduledTasks.dialog.actions.delete')}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
+              {editorOverflowMenu}
               {task && onToggleEnabled ? (
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className={cn('group rounded-lg transition-transform duration-150 active:scale-90 motion-reduce:transition-none', isMobile ? 'size-11' : 'size-8')}
+                  className={cn('rounded-lg', isMobile ? 'size-11' : 'size-8')}
                   disabled={saving || actionBusy}
                   onClick={() => void onToggleEnabled(task, !task.enabled)}
                   aria-label={task.enabled
                     ? t('sessions.scheduledTasks.dialog.taskToggle.pauseAria', { taskName: task.name })
                     : t('sessions.scheduledTasks.dialog.taskToggle.enableAria', { taskName: task.name })}
                 >
-                  <Icon name={task.enabled ? 'pause' : 'play'} className="size-4 transition-transform duration-150 group-active:scale-75 motion-reduce:transition-none" />
+                  <Icon name={task.enabled ? 'pause' : 'play'} className="size-4" />
                 </Button>
               ) : null}
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className={cn('rounded-lg transition-transform duration-150 active:scale-90 motion-reduce:transition-none', isMobile ? 'size-11' : 'size-8')}
+                className={cn('rounded-lg', isMobile ? 'size-11' : 'size-8')}
                 onClick={() => onOpenChange(false)}
                 aria-label={t('sessions.scheduledTasks.editor.actions.cancel')}
               >
@@ -1935,6 +1950,7 @@ export function ScheduledTaskEditorDialog(props: {
           backAriaLabel={t('header.actions.backAria')}
           onBack={() => onOpenChange(false)}
           backDisabled={saving}
+          trailing={editorOverflowMenu}
         />
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-[var(--oc-mobile-page-inline-inset)] pb-[calc(var(--oc-mobile-dock-height)+2.5rem+var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px)))] pt-4">
           <Input

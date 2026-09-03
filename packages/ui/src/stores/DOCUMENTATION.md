@@ -40,7 +40,6 @@ state. Its keys include transport, normalized path scope, resource, and behavior
 options. `MobileFilesSurface` uses this baseline while retaining navigation,
 route, drafts, raw asset auth, and mutations locally.
 `DiagramView` keeps initial diagram reads in the content Query while retaining XML editing and its serial save queue locally.
-`planQueries.ts` owns resolved plan reads. Its aggregate Query resolves target paths or the ordered session repo/home candidates using the authoritative optional-read `exists` contract. `PlanView` owns the editable draft and serial save queue; successful saves update the matching file-content and plan aggregate snapshots.
 
 `agentQueries.ts` and `commandQueries.ts` own their official SDK catalogs, then
 resolve OpenChamber-owned scope metadata with one bounded batched runtime request.
@@ -95,6 +94,11 @@ Examples:
 - `useSidebarBrandStore.ts`
 
 These stores coordinate visible app state, navigation, selected tabs, dialogs, and lightweight feature flags.
+
+`useFeatureFlagsStore.legendTimelineEnabled` is **false by default** on this
+branch. The runtime chat list is TanStack Virtual. Main's LegendList /
+TimelineList path stays opt-in only (`localStorage.oc:legend-timeline=1`).
+LegendList, StickToBottom, and Virtua are not the default engine.
 
 `useSidebarBrandStore` persists the sidebar wordmark. Packaged Electron multi-window
 shares one UI origin while each window may bind a different API host, so the store
@@ -260,7 +264,13 @@ session data.
 
 `useGlobalSessionsStore.ts` distinguishes bounded display snapshots from the full
 retention catalog. Sidebar active/archived loads are directory-keyed, capped, and
-deduplicated. `isVisibleGlobalSession` (shared with live aggregate and event
+deduplicated. Catalog snapshots still fetch OpenCode `session.list({ archived })`
+pages, but membership is re-cut by `time.archived` before they enter
+`activeSessions` / `archivedSessions`: a session is archived only when that
+timestamp is truthy (`0` and missing stay active). Duplicate ids collapse to one
+row. Directory active/archived refreshes and live upserts share the same field.
+List labels are a fetch hint, not the archive contract; this does not add
+requests. `isVisibleGlobalSession` (shared with live aggregate and event
 reducers) excludes SmartFetch temporary titles, any session with a non-empty
 `parentID` (subagents never belong in the root catalog; they load only on
   parent expand), and system-owned sessions whose metadata carries a non-empty

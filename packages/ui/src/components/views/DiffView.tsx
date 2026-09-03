@@ -20,6 +20,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
+import { TruncatedPath } from '@/components/ui/truncated-path';
 import { toast } from '@/components/ui';
 
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -47,6 +48,10 @@ import {
     getFirstChangedModifiedLineFromPatch,
     type ToolPatchFile,
 } from './diffPatchUtils';
+import {
+    buildDiffNavigationAlignKey,
+    shouldAlignDiffNavigation,
+} from './diffNavigationAlign';
 import {
     useSessionTurnChangeFileQuery,
 } from '@/queries/sessionTurnChangesQueries';
@@ -164,7 +169,7 @@ const toAbsolutePath = (directory: string, filePath: string): string => {
 };
 
 const normalizePath = (value?: string | null): string =>
-    (value || '').replace(/\\/g, '/').replace(/\/+$/, '');
+  (value || '').replace(/\\/g, '/').replace(/\/+$/, '');
 
 const getFirstChangedModifiedLine = (original: string, modified: string): number => {
     const originalLines = original.split('\n');
@@ -363,13 +368,12 @@ const FileList = React.memo<FileListProps>(({
                                 >
                                     {descriptor.code}
                                 </span>
-                                <span
-                                    className="min-w-0 flex-1 truncate typography-code"
-                                    style={{ direction: 'rtl', textAlign: 'left', unicodeBidi: 'plaintext' }}
-                                    title={file.path}
-                                >
-                                    {file.path}
-                                </span>
+                                <TruncatedPath
+                                    path={file.path}
+                                    className="min-w-0 flex-1 typography-code"
+                                    dirClassName={isActive ? 'text-interactive-selection-foreground' : 'text-muted-foreground'}
+                                    nameClassName={isActive ? 'text-interactive-selection-foreground' : 'text-foreground'}
+                                />
                                 {formatDiffTotals(file.insertions, file.deletions)}
                             </button>
                         </li>
@@ -731,24 +735,13 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
     }, [file.path, onSelect]);
 
     React.useEffect(() => {
-        if (!staged) {
-            setLocalDiffData(null);
-        } else {
-            setStagedDiffData(null);
-        }
-
-        setDiffLoadError(null);
-        lastDiffRequestRef.current = null;
-    }, [fileStatusKey, staged]);
-
-    React.useEffect(() => {
         if (!isExpanded || !isMounted) return;
         if (disableGitFetch) {
             lastDiffRequestRef.current = null;
             setIsLoading(false);
             return;
         }
-        if (!directory || initialDiffData || (diffData && diffDataMatchesContextMode)) {
+        if (!directory || initialDiffData) {
             lastDiffRequestRef.current = null;
             setIsLoading(false);
             return;
@@ -758,9 +751,15 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
         if (lastDiffRequestRef.current === requestKey) {
             return;
         }
+
+        // Keep an already-rendered snapshot on screen while git status refreshes.
+        // Clearing it unmounts Pierre and jumps the preview back to the top.
+        const keepVisibleSnapshot = Boolean(diffData && diffDataMatchesContextMode);
         lastDiffRequestRef.current = requestKey;
         setDiffLoadError(null);
-        setIsLoading(true);
+        if (!keepVisibleSnapshot) {
+            setIsLoading(true);
+        }
 
         let cancelled = false;
         const contextLines = loadFullFiles ? FULL_CONTEXT_DIFF_LINES : DEFAULT_CONTEXT_DIFF_LINES;
@@ -894,37 +893,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                         >
                             <span className="flex min-w-0 items-center gap-1.5">
                                 <FileTypeIcon filePath={file.path} className="size-3 flex-shrink-0 align-middle" />
-                                {(() => {
-                                    const lastSlash = file.path.lastIndexOf('/');
-                                    if (lastSlash === -1) {
-                                        return (
-                                            <span
-                                                className="block min-w-0 truncate typography-code text-foreground"
-                                                style={{ direction: 'rtl', textAlign: 'left', unicodeBidi: 'plaintext' }}
-                                            >
-                                                {file.path}
-                                            </span>
-                                        );
-                                    }
-
-                                    const dir = file.path.slice(0, lastSlash);
-                                    const name = file.path.slice(lastSlash + 1);
-
-                                    return (
-                                        <span className="flex min-w-0 items-baseline overflow-hidden">
-                                            <span
-                                                className="min-w-0 truncate typography-code text-muted-foreground"
-                                                style={{ direction: 'rtl', textAlign: 'left', unicodeBidi: 'plaintext' }}
-                                            >
-                                                {dir}
-                                            </span>
-                                            <span className="flex-shrink-0 typography-code">
-                                                <span className="text-muted-foreground">/</span>
-                                                <span className="text-foreground">{name}</span>
-                                            </span>
-                                        </span>
-                                    );
-                                })()}
+                                <TruncatedPath path={file.path} className="min-w-0 flex-1 typography-code" />
                             </span>
                         </span>
                     </div>
@@ -1165,6 +1134,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const visibleSyncFrameRef = React.useRef<number | null>(null);
     const stackedStateScopeRef = React.useRef<string | null>(null);
     const stackedToolPatchesRef = React.useRef<readonly ToolPatchFile[] | null>(null);
+    const lastAlignedNavigationKeyRef = React.useRef<string | null>(null);
 
     const cancelPendingScrollAlignment = React.useCallback(() => {
         pendingScrollTargetRef.current = null;
@@ -1513,12 +1483,21 @@ export const DiffView: React.FC<DiffViewProps> = ({
         setDisplayFileStaged(activeDiffScope === 'staged');
         setDisplayFocusLine(targetLine);
 
-        // Wait until the file row exists in the list (turn L2 / git status) before
-        // scrolling/pinning — otherwise rAF retries exhaust before the DOM mounts.
-        if (!changedFiles.some((file) => file.path === normalizedTarget)) {
+        // Wait until the file row exists, then pin once per navigation identity.
+        // `changedFiles` refreshes on every edit/git status tick; re-pinning that
+        // would yank the preview back to the file header.
+        const navigationAlignKey = buildDiffNavigationAlignKey({
+            scope: activeDiffScope,
+            navigationRequestKey,
+            targetFilePath: normalizedTarget,
+            targetLine,
+        });
+        const targetExists = changedFiles.some((file) => file.path === normalizedTarget);
+        if (!shouldAlignDiffNavigation(lastAlignedNavigationKeyRef.current, navigationAlignKey, targetExists)) {
             return;
         }
 
+        lastAlignedNavigationKeyRef.current = navigationAlignKey;
         shouldPinAfterAlignRef.current = true;
         pendingScrollTargetRef.current = normalizedTarget;
         setScrollRequestNonce((value) => value + 1);
@@ -1854,7 +1833,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                                     wrapLines={diffWrapLines}
                                     isSelected={false}
                                     isExpanded={expandedFiles.has(file.path)}
-                                    isMounted={mountedStackedFiles.has(file.path) || file.path === pinnedStackedTarget}
+                                    isMounted={mountedStackedFiles.has(file.path) || file.path === pinnedStackedTarget || (singleFileView && visibleDiffFiles.length === 1)}
                                     onSelect={handleSelectFile}
                                     onExpandedChange={handleStackedEntryExpandedChange}
                                     registerSectionRef={registerSectionRef}

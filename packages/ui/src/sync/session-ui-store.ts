@@ -492,6 +492,12 @@ type SetCurrentSessionOptions = {
    * Default false — the active project follows the selected session.
    */
   preserveActiveProject?: boolean
+  /**
+   * Skip the same-tick `fetchMessagesForSession` kickoff. Fork uses this so
+   * route selection can happen as soon as OpenCode returns the id, while the
+   * caller owns the later destructiveReset + bounded tail load.
+   */
+  skipMessageFetch?: boolean
 }
 
 export type ViewportAnchor = {
@@ -533,10 +539,6 @@ export type SessionUIState = {
   abortControllers: Map<string, AbortController>
   isLoading: boolean
   lastLoadedDirectory: string | null
-  // Plan mode - per-session plan file availability (set when plan_enter tool creates a plan)
-  sessionPlanAvailable: Map<string, boolean>
-  markSessionPlanAvailable: (sessionId: string) => void
-  isSessionPlanAvailable: (sessionId: string) => boolean
 
   // Non-Git mode: dismissed signature hash per session, hides bar until new turn arrives
   pendingChangesBarDismissed: Map<string, string>
@@ -1321,7 +1323,6 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   abortControllers: new Map(),
   isLoading: false,
   lastLoadedDirectory: null,
-  sessionPlanAvailable: new Map(),
   pendingChangesBarDismissed: new Map(),
   stagedMessageEdit: null,
   messageEditCommitting: null,
@@ -1447,7 +1448,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     // Kick off the message fetch on the same tick, before React commits the
     // state change and fires ChatContainer.useEffect. The fetch is
     // fire-and-forget — any transient failure gets retried by the reactive path.
-    if (id) {
+    // Fork skips this so it can select the new session immediately and then
+    // own destructiveReset + the bounded tail load without racing this fetch.
+    if (id && options?.skipMessageFetch !== true) {
       void fetchMessagesForSession(id, resolvedDir)
     }
 
@@ -2207,7 +2210,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const currentSessionDirectory = targetSessionId
       ? normalizePath(options?.directoryHint) ?? normalizePath(get().getDirectoryForSession(targetSessionId))
       : null
-    if (targetSessionId) {
+    if (targetSessionId && !options?.ticket) {
       markPendingUserSendAnimation(targetSessionId)
     }
 
@@ -2722,23 +2725,6 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     }
   },
 
-  // ---------------------------------------------------------------------------
-  // Plan mode availability tracking
-  // ---------------------------------------------------------------------------
-  markSessionPlanAvailable: (sessionId) => {
-    set((state) => {
-      if (state.sessionPlanAvailable.get(sessionId) === true) {
-        return state
-      }
-      const next = new Map(state.sessionPlanAvailable)
-      next.set(sessionId, true)
-      return { sessionPlanAvailable: next }
-    })
-  },
-
-  isSessionPlanAvailable: (sessionId) => {
-    return get().sessionPlanAvailable.get(sessionId) ?? false
-  },
 }))
 
 setSessionOpener((sessionID, directory) => {

@@ -6,6 +6,8 @@ import {
     markdownHeightCacheSize,
     recallMarkdownHeight,
     rememberMarkdownHeight,
+    rememberEntryHeight,
+    recallEntryHeight,
 } from './markdownHeightCache';
 
 const key = (content: string, variant = 'assistant') => markdownHeightCacheKey(content, variant);
@@ -79,5 +81,18 @@ describe('markdown height cache', () => {
 
     test('distinguishes same-length content that differs in body', () => {
         expect(key('abcd')).not.toBe(key('abce'));
+    });
+
+    test('recalls a timeline entry height independently of the content-hash key', () => {
+        rememberEntryHeight('turn:abc', 412.4, 800);
+        expect(recallEntryHeight('turn:abc')).toBe(412);
+        expect(recallMarkdownHeight(key('# hello'))).toBeUndefined();
+    });
+
+    test('drops entry heights when the column width changes', () => {
+        rememberEntryHeight('turn:abc', 400, 800);
+        rememberMarkdownHeight(key('# hello'), 220, 640);
+        expect(recallEntryHeight('turn:abc')).toBeUndefined();
+        expect(recallMarkdownHeight(key('# hello'))).toBe(220);
     });
 });

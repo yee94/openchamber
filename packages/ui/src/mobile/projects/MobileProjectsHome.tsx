@@ -14,6 +14,7 @@ import {
   type MobileLongPressController,
 } from '@/components/ui/mobileLongPress';
 import { Input } from '@/components/ui/input';
+import { renderHighlightedText } from '@/components/session/sidebar/utils';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import {
@@ -75,6 +76,11 @@ export type MobileWorktreeGroup = {
   /** Total top-level sessions in this bucket (not the visible slice). */
   sessionCount: number;
   sessions: MobileSessionTreeNode[];
+  /**
+   * Unpaginated top-level sessions for keyword search. Display `sessions` stay
+   * the compact Show-more slice; search must not be limited to that slice.
+   */
+  catalogSessions?: MobileSessionTreeNode[];
 };
 
 export type MobileProjectHomeItem = MobileProjectCardModel & {
@@ -85,6 +91,7 @@ export type MobileProjectHomeItem = MobileProjectCardModel & {
 export type MobileProjectsHomeProps = {
   projects: MobileProjectHomeItem[];
   pinnedSessions: MobileSessionTreeNode[];
+  inProgressSessions?: MobileSessionTreeNode[];
   onAddProject: () => void;
   onNewSession: () => void;
   onScanQr?: () => void;
@@ -113,6 +120,7 @@ type SessionListProps = Pick<
   | 'onOpenSessionActions'
 > & {
   sessions: MobileSessionTreeNode[];
+  highlightQuery?: string;
 };
 
 function MobileLiveSessionRow(props: MobileSessionRowProps) {
@@ -146,6 +154,7 @@ function SessionList({
   onPinSession,
   onArchiveSession,
   onOpenSessionActions,
+  highlightQuery,
 }: SessionListProps) {
   return (
     <>
@@ -158,6 +167,7 @@ function SessionList({
             key={session.id}
             session={session}
             paginationContinues={isFollowedByPagination}
+            highlightQuery={highlightQuery}
             onSelect={onSelectSession}
             onPin={onPinSession}
             onArchive={onArchiveSession}
@@ -181,6 +191,7 @@ function MobileWorktreeGroupLabel({
   onNewSession,
   onOpenActions,
   onDelete,
+  highlightQuery,
 }: {
   project: MobileProjectHomeItem;
   worktree: MobileWorktreeGroup;
@@ -189,6 +200,7 @@ function MobileWorktreeGroupLabel({
   onNewSession?: (project: MobileProjectHomeItem, worktree: MobileWorktreeGroup) => void;
   onOpenActions?: (project: MobileProjectHomeItem, worktree: MobileWorktreeGroup) => void;
   onDelete?: (project: MobileProjectHomeItem, worktree: MobileWorktreeGroup) => void;
+  highlightQuery?: string;
 }) {
   const { t } = useI18n();
   const rowKey = `${project.id}::${worktree.id}`;
@@ -358,7 +370,7 @@ function MobileWorktreeGroupLabel({
         <Icon name="git-branch" className="size-3.5" />
       </span>
       <span className="min-w-0 flex-1 truncate text-left oc-mobile-entity-title font-semibold text-foreground">
-        {worktree.name}
+        {highlightQuery ? renderHighlightedText(worktree.name, highlightQuery) : worktree.name}
       </span>
       <span className="typography-small text-muted-foreground tabular-nums">
         {worktree.sessionCount === 1
@@ -477,6 +489,7 @@ function MobileWorktreeGroupLabel({
 export function MobileProjectsHome({
   projects,
   pinnedSessions,
+  inProgressSessions = [],
   onAddProject,
   onNewSession,
   onScanQr,
@@ -635,7 +648,7 @@ export function MobileProjectsHome({
         </div>
       ) : null}
 
-      {!searching && pinnedSessions.length > 0 ? (
+      {!searching && (pinnedSessions.length > 0 || inProgressSessions.length > 0) ? (
         <MobileFloatingSurface asChild>
           <section className="oc-mobile-project-shell" aria-label={t('mobile.sessions.section.pinned')}>
             <MobileProjectCard
@@ -644,7 +657,7 @@ export function MobileProjectsHome({
                 name: t('mobile.sessions.section.pinned'),
                 path: '',
                 icon: 'pushpin',
-                sessionCount: pinnedSessions.length,
+                sessionCount: pinnedSessions.length + inProgressSessions.length,
               }}
               expanded={pinnedExpanded}
               embedded
@@ -652,15 +665,28 @@ export function MobileProjectsHome({
             />
             {pinnedExpanded ? (
               <div className="oc-mobile-project-groups" role="group">
-                <div className="oc-mobile-labeled-surface-group">
-                  <SessionList
-                    sessions={pinnedSessions}
-                    onSelectSession={onSelectSession}
-                    onPinSession={onPinSession}
-                    onArchiveSession={onArchiveSession}
-                    onOpenSessionActions={onOpenSessionActions}
-                  />
-                </div>
+                {pinnedSessions.length > 0 ? (
+                  <div className="oc-mobile-labeled-surface-group">
+                    <SessionList
+                      sessions={pinnedSessions}
+                      onSelectSession={onSelectSession}
+                      onPinSession={onPinSession}
+                      onArchiveSession={onArchiveSession}
+                      onOpenSessionActions={onOpenSessionActions}
+                    />
+                  </div>
+                ) : null}
+                {inProgressSessions.length > 0 ? (
+                  <div className="oc-mobile-labeled-surface-group">
+                    <SessionList
+                      sessions={inProgressSessions}
+                      onSelectSession={onSelectSession}
+                      onPinSession={onPinSession}
+                      onArchiveSession={onArchiveSession}
+                      onOpenSessionActions={onOpenSessionActions}
+                    />
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </section>
@@ -702,6 +728,7 @@ export function MobileProjectsHome({
                 project={project}
                 expanded={projectExpanded}
                 embedded
+                highlightQuery={searching ? normalizedSearchQuery : undefined}
                 onToggle={() => searching
                   ? handleSearchProjectOpen(project)
                   : onToggleProject(project)}
@@ -715,6 +742,7 @@ export function MobileProjectsHome({
                     <div className="oc-mobile-labeled-surface-group">
                       <SessionList
                         sessions={mainSessions}
+                        highlightQuery={searching ? normalizedSearchQuery : undefined}
                         onSelectSession={searching ? handleSelectSearchSession : onSelectSession}
                         onPinSession={onPinSession}
                         onArchiveSession={onArchiveSession}
@@ -736,6 +764,7 @@ export function MobileProjectsHome({
                             project={project}
                             worktree={worktree}
                             expanded={worktreeExpanded}
+                            highlightQuery={searching ? normalizedSearchQuery : undefined}
                             onToggle={() => searching
                               ? handleSearchWorktreeOpen(project, worktree)
                               : onToggleWorktree(project, worktree)}
@@ -748,6 +777,7 @@ export function MobileProjectsHome({
                         {worktreeExpanded && worktree.sessions.length > 0 ? (
                           <SessionList
                             sessions={worktree.sessions}
+                            highlightQuery={searching ? normalizedSearchQuery : undefined}
                             onSelectSession={searching ? handleSelectSearchSession : onSelectSession}
                             onPinSession={onPinSession}
                             onArchiveSession={onArchiveSession}

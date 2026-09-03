@@ -144,6 +144,7 @@ describe('Assistant UI product contract', () => {
     expect(navigation.indexOf('selectAssistant(assistantID)')).toBeLessThan(navigation.indexOf("set({ secondary: { kind: 'assistant' } })"));
     expect(view).toContain('onMobileBack?: () => void');
     expect(view).toContain('<MobileDetailNavigation');
+    expect(view).toContain('overlay');
     expect(view).not.toContain('<MobileOverlayPanel');
     expect(view).not.toContain('mobileSelectorOpen');
   });
@@ -293,7 +294,8 @@ describe('Assistant UI product contract', () => {
     expect(host).toContain('composerSurface: ChatInputSurface');
     expect(chatContainer).toContain('if (props.host)');
     expect(chatContainer).toContain('HostedChatContainer');
-    expect(chatContainer).toContain('<ChatInput surface={composerSurface}');
+    expect(chatContainer).toContain('<ChatInput');
+    expect(chatContainer).toContain('surface={composerSurface}');
     expect(chatContainer).toContain('resolveSessionIdentityPending');
     expect(chatContainer).toContain("composerSurfaceKind: composerSurface?.kind");
     expect(chatContainer).toContain('<MessageList');
@@ -311,7 +313,7 @@ describe('Assistant UI product contract', () => {
     expect(chatInput).not.toContain('<ChatPromptTextarea');
     expect(chatInput).not.toContain('<ChatPromptFooter');
     expect(chatInput).toContain('inputHeader={composerInputHeader}');
-    expect(chatInput).toContain('attachmentContent={isMobile && mobileComposerChrome !== \'full\' ? undefined : composerAttachmentContent}');
+    expect(chatInput).toContain('attachmentContent={composerAttachmentContent}');
     expect(chatInput).toContain('footerContent={composerFooterContent}');
     expect(chatInput).not.toContain('<Textarea');
     expect(promptComposer).toContain('<Textarea');
@@ -398,6 +400,21 @@ describe('Assistant UI product contract', () => {
     expect(view).toContain("...(part.synthetic === true ? { synthetic: true as const } : {})");
     expect(view).toContain('...(parts ?? []).flatMap');
     expect(conversation).toContain('PRIMARY_SESSION_SURFACE_CAPABILITIES');
+    expect(conversation).toContain('navigateSession');
+    expect(conversation).not.toContain('navigateNestedSession: false');
+    expect(conversation).toContain('openContextPanelTab');
+    expect(conversation).toContain("mode === 'session'");
+    expect(view).toContain('<ContextPanel directory={directory || null} />');
+  });
+
+  test('keeps nested subagent navigation on archived assistant history rows', async () => {
+    const messageList = await read('../chat/MessageList.tsx');
+    const historySurface = messageList.slice(
+      messageList.indexOf('const messageSurface = message.sourceSessionID'),
+      messageList.indexOf('const chatMessage = ('),
+    );
+    expect(historySurface).toContain('compose: false');
+    expect(historySurface).not.toContain('navigateNestedSession: false');
   });
 
   test('disables edit/revert for stateless Assistants and opens source sessions in their own workspace', async () => {
@@ -415,7 +432,8 @@ describe('Assistant UI product contract', () => {
     expect(conversation).toContain("notifySessionOpenFailed(targetSessionID, 'missing-directory')");
     // Phone shell = dedicated MobileApp context (Capacitor + hosted H5), not Capacitor alone.
     expect(conversation).toContain('useMobileAppActions');
-    expect(conversation).toContain('phoneShell: Boolean(mobileActions && !isIPadApp())');
+    expect(conversation).toContain('const isPhoneShell = Boolean(mobileActions && !isIPadApp())');
+    expect(conversation).toContain('phoneShell: isPhoneShell');
     expect(conversation).not.toContain('isCapacitorApp() && !isIPadApp()');
     expect(conversation).toContain("targetSessionID === sessionID");
     expect(conversation).toContain('historyDirectories.get(targetSessionID)');
@@ -533,6 +551,10 @@ describe('Assistant UI product contract', () => {
     expect(mobileStyles).toContain('var(--oc-mobile-detail-action-edge-inset, 1rem)');
     expect(mobileStyles).toContain('var(--oc-safe-area-top, 0px) +');
     expect(mobileStyles).toContain('calc(var(--oc-safe-area-top, 0px) + 35%)');
+    expect(view).toContain('overlay');
+    expect(mobileStyles).toContain('--oc-mobile-header-fade');
+    expect(mobileStyles).toContain('var(--surface-background) 85%');
+    expect(mobileStyles.match(/var\(--oc-mobile-header-fade\)/g)?.length).toBeGreaterThanOrEqual(4);
   });
 
   test('shows the native share welcome once when a supported Assistant is opened', async () => {
@@ -583,6 +605,7 @@ describe('Assistant UI product contract', () => {
     expect(chatContainer).toContain('activeStreamingPhase={activeStreamingPhase}');
     expect(chatContainer).toContain('<StatusRowContainer');
     expect(statusRow).toContain('useAssistantStatus(currentSessionId, currentSessionDirectory)');
+    expect(statusRow).toContain('isTurnSettled={working.isTurnSettled}');
     expect(statusRow).toContain('surface.sessionId ?? primarySessionId');
     expect(view).toContain('if (active && assistantID && !sessionID) void ensureAssistantSession(assistantID)');
     // Active binding with a sessionID force-materializes via refreshBinding (TranscriptRepository).
