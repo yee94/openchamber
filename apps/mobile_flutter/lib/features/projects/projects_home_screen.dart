@@ -108,6 +108,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                         decoration: BoxDecoration(
                           color: context.oc.primary,
                           shape: BoxShape.circle,
+                          boxShadow: OcElevation.control(context),
                         ),
                         child: SizedBox(
                           width: OcOptical.headerDiscVisual,

@@ -86,9 +86,12 @@ class OcElevation {
 
   static List<BoxShadow> controlFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
+    // Official `--oc-mobile-glass-shadow` near pair only
+    // (0 0 2px / 0.05, 0 0 12px / 0.06). Drop the 8px / 20px umbra
+    // and the primary 10/22 glow — those mint coins.
     return const [
-      BoxShadow(color: Color(0x10000000), blurRadius: 2),
-      BoxShadow(color: Color(0x08000000), blurRadius: 8),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0F000000), blurRadius: 12),
     ];
   }
 

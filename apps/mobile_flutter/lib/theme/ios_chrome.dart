@@ -114,9 +114,12 @@ class OcGlassChip extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: context.oc.glassChipFill,
-          // Quiet inset wash only. Outer contact/halo + 0.82 plate
-          // read as coins on the 36 disc. No blur / umbra / + glow.
-          boxShadow: OcElevation.glassHighlight(context),
+          // Official glass near-pair + quiet inset. No disc blur,
+          // no 8px umbra, no + glow.
+          boxShadow: [
+            ...OcElevation.control(context),
+            ...OcElevation.glassHighlight(context),
+          ],
         ),
         child: Center(child: child),
       ),
@@ -248,6 +251,7 @@ class CircularChromeButton extends StatelessWidget {
             decoration: BoxDecoration(
               color: ink ? tokens.foreground : tokens.primary,
               shape: BoxShape.circle,
+              boxShadow: OcElevation.control(context),
             ),
             child: SizedBox(
               width: disc,
