@@ -911,8 +911,16 @@ Future<void> _writePng(WidgetTester tester, Key screenshotKey, String name) asyn
   expect(png[1], 0x50, reason: name);
 
   for (final dir in _outputDirs()) {
-    dir.createSync(recursive: true);
-    File('${dir.path}/$name').writeAsBytesSync(png);
+    try {
+      dir.createSync(recursive: true);
+      File('${dir.path}/$name').writeAsBytesSync(png);
+    } on FileSystemException catch (error) {
+      if (dir.path.startsWith('/opt/cursor/artifacts/')) {
+        // Cloud artifact mount is best-effort; docs/ is the committed golden.
+        continue;
+      }
+      throw error;
+    }
   }
 }
 
