@@ -60,7 +60,7 @@ void main() {
     for (final glyph in dockGlyphs) {
       expect(glyph.size, OcOptical.dockGlyphVisual);
       expect(glyph.strokeWidth, OcOptical.dockGlyphStrokeVisual);
-      expect(glyph.filled, isTrue);
+      expect(glyph.filled, OcOptical.dockGlyphFillBodies);
     }
     expect(capsule.width, lessThan(tester.view.physicalSize.width / tester.view.devicePixelRatio));
   });
