@@ -87,8 +87,8 @@ class OcElevation {
   static List<BoxShadow> controlFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-      BoxShadow(color: Color(0x06000000), blurRadius: 8),
+      BoxShadow(color: Color(0x10000000), blurRadius: 2),
+      BoxShadow(color: Color(0x08000000), blurRadius: 8),
     ];
   }
 
