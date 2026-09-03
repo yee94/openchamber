@@ -16,8 +16,8 @@ class OcOptical {
   /// tracking and leading (README air), not official CSS `-0.024em`.
   /// Glyph sizes stay small; colors stay on [OcTokens].
   static const double rowTitle = 15;
-  static const double rowTitleTracking = 0.75;
-  static const double rowTitleHeight = 1.42;
+  static const double rowTitleTracking = 0.9;
+  static const double rowTitleHeight = 1.46;
   static const double sessionRowPadV = 7;
   static const double moreLinkPadV = 6;
   static const double groupHeaderPadV = 12;
@@ -25,15 +25,15 @@ class OcOptical {
   static const double groupTitleMetaGap = 8;
 
   static const double entityTitle = 16;
-  static const double entityTitleTracking = 1.0;
-  static const double entityTitleHeight = 1.42;
+  static const double entityTitleTracking = 1.15;
+  static const double entityTitleHeight = 1.46;
 
   static const double meta = 13;
-  static const double metaTracking = 0.8;
-  static const double metaHeight = 1.65;
+  static const double metaTracking = 0.9;
+  static const double metaHeight = 1.7;
 
   static const double scheduleCardPadV = 14;
-  static const double scheduleTitleMetaGap = 10;
+  static const double scheduleTitleMetaGap = 11;
 
   static const double chatTitle = 15;
   static const double chatTitleTracking = 0.6;
@@ -52,15 +52,15 @@ class OcOptical {
   static const double dockBottomPad = 20;
   static const double dockMaxWidth = 416;
 
-  /// Official `Button size="mobileIcon"` is 2.5rem (40). Search and + share
-  /// that circle so the glass disc is not a tiny sibling of an oversized +.
-  /// Glyphs follow official `size-5` (20). Nested list/dock glyphs stay small.
+  /// Hit target stays official 2.5rem (40). Painted disc and glyph are
+  /// smaller so search / + do not read as heavy glass plates.
   static const double searchButton = 40;
   static const double addButton = 40;
-  static const double headerGlyph = 20;
-  static const double headerGlyphStroke = 0.75;
-  /// In-card / dock / footer glyphs — thinner than the 20px header strokes.
-  static const double listGlyphStroke = 0.65;
+  static const double headerDisc = 32;
+  static const double headerGlyph = 16;
+  static const double headerGlyphStroke = 0.65;
+  /// In-card / dock / footer glyphs — thinner than header strokes.
+  static const double listGlyphStroke = 0.55;
 
   /// `--oc-mobile-collapsing-action-size` / expand-shift / collapse distance.
   static const double collapsingActionSize = 40;
@@ -69,8 +69,11 @@ class OcOptical {
   static const double titleCollapseDistance = 48;
   static const double titleCollapseScaleEnd = 0.625;
 
-  static const double dockGlyph = 8;
-  static const double dockGlyphStroke = 0.65;
+  static const double dockGlyph = 7;
+  static const double dockGlyphStroke = 0.55;
+  /// Soft selected wash behind the dock **icon only** — not the whole slot.
+  static const double dockIconPill = 24;
+  static const double dockIconPillRadius = 12;
 
   static const double leadingCircle = 11;
   static const double leadingCircleCompact = 9;

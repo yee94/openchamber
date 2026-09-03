@@ -96,24 +96,30 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                   PopupMenuItem(value: 'scan', child: Text(t(context, 'projects.menu.scanQr'))),
                   PopupMenuItem(value: 'switch', child: Text(t(context, 'projects.menu.switchInstance'))),
                 ],
-                child: Pressable(
-                  haptic: HapticStrength.light,
-                  highlight: false,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: context.oc.primary,
-                      shape: BoxShape.circle,
-                      boxShadow: OcElevation.control(context),
-                    ),
-                    child: SizedBox(
-                      width: OcOptical.addButton,
-                      height: OcOptical.addButton,
-                      child: Center(
-                        child: OcGlyph(
-                          OcGlyphKind.plus,
-                          size: OcOptical.headerGlyph,
-                          strokeWidth: OcOptical.headerGlyphStroke,
-                          color: context.oc.primaryForeground,
+                child: SizedBox(
+                  width: OcOptical.addButton,
+                  height: OcOptical.addButton,
+                  child: Pressable(
+                    haptic: HapticStrength.light,
+                    highlight: false,
+                    child: Center(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: context.oc.primary,
+                          shape: BoxShape.circle,
+                          boxShadow: OcElevation.control(context),
+                        ),
+                        child: SizedBox(
+                          width: OcOptical.headerDisc,
+                          height: OcOptical.headerDisc,
+                          child: Center(
+                            child: OcGlyph(
+                              OcGlyphKind.plus,
+                              size: OcOptical.headerGlyph,
+                              strokeWidth: OcOptical.headerGlyphStroke,
+                              color: context.oc.primaryForeground,
+                            ),
+                          ),
                         ),
                       ),
                     ),

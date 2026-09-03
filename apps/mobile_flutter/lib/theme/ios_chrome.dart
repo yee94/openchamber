@@ -105,32 +105,39 @@ class CircularChromeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.oc;
-    final diameter = size ?? (filled ? OcOptical.addButton : OcOptical.searchButton);
+    final hit = size ?? (filled ? OcOptical.addButton : OcOptical.searchButton);
+    final disc = hit < OcOptical.headerDisc ? hit : OcOptical.headerDisc;
     final fill = !filled
         ? tokens.card
         : ink
             ? tokens.foreground
             : tokens.primary;
-    final child = DecoratedBox(
-      decoration: BoxDecoration(
-        color: fill,
-        shape: BoxShape.circle,
-        boxShadow: OcElevation.control(context),
-      ),
+    final child = SizedBox(
+      width: hit,
+      height: hit,
       child: Pressable(
         onPressed: onPressed,
         haptic: haptic,
         highlight: false,
-        borderRadius: BorderRadius.circular(diameter),
-        child: SizedBox(
-          width: diameter,
-          height: diameter,
-          child: Center(
-            child: OcGlyph(
-              glyph,
-              size: OcOptical.headerGlyph,
-              strokeWidth: OcOptical.headerGlyphStroke,
-              color: !filled ? tokens.mutedForeground : tokens.primaryForeground,
+        borderRadius: BorderRadius.circular(hit),
+        child: Center(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: fill,
+              shape: BoxShape.circle,
+              boxShadow: OcElevation.control(context),
+            ),
+            child: SizedBox(
+              width: disc,
+              height: disc,
+              child: Center(
+                child: OcGlyph(
+                  glyph,
+                  size: OcOptical.headerGlyph,
+                  strokeWidth: OcOptical.headerGlyphStroke,
+                  color: !filled ? tokens.mutedForeground : tokens.primaryForeground,
+                ),
+              ),
             ),
           ),
         ),

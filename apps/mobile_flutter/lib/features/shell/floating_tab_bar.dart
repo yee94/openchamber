@@ -11,9 +11,9 @@ import '../../theme/oc_glyphs.dart';
 
 /// Flutter-painted homepage dock for Android and WidgetTester.
 ///
-/// Official analogue: `MobileFloatingBottomBar` + `MobileTabBar` selected
-/// `bg-interactive-selection/55` on the **whole** tab slot. Real iOS uses
-/// [IosTabBarHost] / UITabBarController — this is not a glass clone.
+/// Official analogue: `MobileFloatingBottomBar` stadium dock. Selected chrome
+/// is a soft pill behind the **icon only** (README optical; official CSS
+/// washes the whole slot). Real iOS uses [IosTabBarHost] / UITabBarController.
 class FloatingCapsuleTabBar extends StatelessWidget {
   const FloatingCapsuleTabBar({
     super.key,
@@ -107,45 +107,50 @@ class _TabSlot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.oc;
-    final tabRadius = BorderRadius.circular(OcOptical.dockTabRadius);
     return SizedBox.expand(
       child: Pressable(
         key: Key('tab-$id'),
         haptic: HapticStrength.light,
         onPressed: onTap,
-        borderRadius: tabRadius,
+        borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
         child: OcSelectedSpring(
           selected: selected,
           builder: (context, t) {
-            return DecoratedBox(
-              decoration: BoxDecoration(
-                color: Color.lerp(Colors.transparent, tokens.interactiveSelection, t),
-                borderRadius: tabRadius,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  OcGlyph(
-                    glyph,
-                    size: OcOptical.dockGlyph,
-                    color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
-                    strokeWidth: OcOptical.dockGlyphStroke,
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Color.lerp(Colors.transparent, tokens.interactiveSelection, t),
+                    borderRadius: BorderRadius.circular(OcOptical.dockIconPillRadius),
                   ),
-                  SizedBox(height: OcOptical.dockLabelGap),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: OcOptical.dockLabel,
-                      letterSpacing: OcOptical.dockLabelTracking,
-                      height: 1.2,
-                      fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
-                      color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
+                  child: SizedBox(
+                    width: OcOptical.dockIconPill,
+                    height: OcOptical.dockIconPill,
+                    child: Center(
+                      child: OcGlyph(
+                        glyph,
+                        size: OcOptical.dockGlyph,
+                        color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
+                        strokeWidth: OcOptical.dockGlyphStroke,
+                      ),
                     ),
                   ),
-                ],
-              ),
+                ),
+                SizedBox(height: OcOptical.dockLabelGap),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: OcOptical.dockLabel,
+                    letterSpacing: OcOptical.dockLabelTracking,
+                    height: 1.2,
+                    fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
+                    color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
+                  ),
+                ),
+              ],
             );
           },
         ),

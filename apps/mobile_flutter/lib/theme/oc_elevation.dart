@@ -28,8 +28,8 @@ class OcElevation {
     }
     return const [
       BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0D000000), blurRadius: 10),
-      BoxShadow(color: Color(0x14000000), blurRadius: 20, spreadRadius: -6, offset: Offset(0, 8)),
+      BoxShadow(color: Color(0x0C000000), blurRadius: 10),
+      BoxShadow(color: Color(0x11000000), blurRadius: 18, spreadRadius: -6, offset: Offset(0, 7)),
     ];
   }
 
