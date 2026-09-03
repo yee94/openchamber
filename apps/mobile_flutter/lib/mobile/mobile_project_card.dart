@@ -41,10 +41,10 @@ class MobileProjectCard extends StatelessWidget {
       onPressed: onToggle,
       child: Padding(
         padding: EdgeInsets.fromLTRB(
-          14,
-          compact ? OcOptical.groupHeaderPadVCompact : OcOptical.groupHeaderPadV,
-          10,
-          compact ? OcOptical.groupHeaderPadVCompact : OcOptical.groupHeaderPadV,
+          OcOptical.projectTriggerPad,
+          compact ? OcOptical.groupHeaderPadVCompact : OcOptical.projectTriggerPad,
+          OcOptical.projectTriggerPad,
+          compact ? OcOptical.groupHeaderPadVCompact : OcOptical.projectTriggerPad,
         ),
         child: Row(
           children: [
@@ -52,8 +52,9 @@ class MobileProjectCard extends StatelessWidget {
               width: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
               height: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
               decoration: BoxDecoration(
-                color: context.oc.isDark ? context.oc.card : const Color(0xFFFFFFFF),
+                color: context.oc.glassChipFill,
                 shape: BoxShape.circle,
+                border: Border.all(color: context.oc.mobileBorder, width: 0.5),
                 boxShadow: OcElevation.control(context),
               ),
               alignment: Alignment.center,
@@ -64,7 +65,7 @@ class MobileProjectCard extends StatelessWidget {
                 color: context.oc.mutedForeground,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: OcOptical.projectTriggerGap),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

@@ -114,6 +114,7 @@ class _MobileTabPageScaffoldState extends State<MobileTabPageScaffold> {
     final view = MediaQuery.viewPaddingOf(context);
     final safeTop = view.top;
     Widget scroll = SingleChildScrollView(
+      key: const Key('mobile-tab-page-scroll'),
       controller: _scroll,
       clipBehavior: Clip.none,
       physics: const AlwaysScrollableScrollPhysics(),

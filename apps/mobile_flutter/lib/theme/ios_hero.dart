@@ -24,7 +24,12 @@ class OcOptical {
   static const double moreLinkPadV = 8;
   static const double groupHeaderPadV = 10;
   static const double groupHeaderPadVCompact = 8;
-  static const double groupTitleMetaGap = 5;
+  /// Official project-shell `.oc-mobile-project-trigger` padding / gap.
+  static const double projectTriggerPad = 10;
+  static const double projectTriggerGap = 7;
+  /// Official title column `gap-1` (4). Meta chips use 0.3125rem horizontally.
+  static const double groupTitleMetaGap = 4;
+  static const double sessionRowPadH = 12;
 
   /// Root `--oc-mobile-entity-title` 16 / 20. Project-shell tightens to 14 / 18.
   static const double entityTitle = 16;

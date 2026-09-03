@@ -46,7 +46,12 @@ class MobileSessionRow extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: OcOptical.sessionRowVisualHeight),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, OcOptical.sessionRowPadV, 12, OcOptical.sessionRowPadV),
+            padding: const EdgeInsets.fromLTRB(
+              OcOptical.sessionRowPadH,
+              OcOptical.sessionRowPadV,
+              8,
+              OcOptical.sessionRowPadV,
+            ),
             child: Row(
             children: [
               Container(

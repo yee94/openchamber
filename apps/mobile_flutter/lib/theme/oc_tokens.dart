@@ -116,6 +116,11 @@ class OcTokens extends ThemeExtension<OcTokens> {
   /// `--oc-mobile-page-background`: muted 18% over background
   Color get pageBackground => Color.lerp(background, muted, 0.18)!;
 
+  /// `--oc-mobile-float-background` analogue. Official is elevated 45% over
+  /// transparent; WidgetTester has no live blur, so keep a high-alpha plate
+  /// plus [mobileBorder] instead of an opaque Material slab.
+  Color get floatSurface => isDark ? card : card.withValues(alpha: 0.94);
+
   /// `--oc-mobile-border` (light 6% / dark 3% of foreground)
   Color get mobileBorder => foreground.withValues(alpha: isDark ? 0.03 : 0.06);
 

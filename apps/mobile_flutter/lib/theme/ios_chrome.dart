@@ -258,7 +258,6 @@ class GroupedInsetCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(OcChrome.cardRadius);
-    final dark = context.oc.isDark;
     return Container(
       margin: margin ?? const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 12),
       decoration: BoxDecoration(
@@ -268,10 +267,10 @@ class GroupedInsetCard extends StatelessWidget {
       child: ClipRRect(
         borderRadius: radius,
         child: ColoredBox(
-          color: context.oc.card,
+          color: context.oc.floatSurface,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              border: dark ? Border.all(color: context.oc.mobileBorder, width: 0.5) : null,
+              border: Border.all(color: context.oc.mobileBorder, width: 0.5),
             ),
             child: padding == null ? child : Padding(padding: padding!, child: child),
           ),

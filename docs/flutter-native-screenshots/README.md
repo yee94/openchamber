@@ -19,7 +19,7 @@ Recapture after restoring Yee-open type (tracking + line-height) on top of the s
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |
 | `02-projects.png` | Light: catalog sand/orange. Overlay collapsing header. One project surface with main rows + linked worktree insets. Selected dock folder is filled. |
-| `02-projects-scrolled.png` | Same Projects list jumped to mid-scroll so session rows peek through the frosted header **and** dock. |
+| `02-projects-scrolled.png` | Same Projects list jumped just past the official 48px collapse. Title is compact; the project surface stays continuously visible under the translucent header (not an emptied mid-scroll). |
 | `02-projects-dark.png` | Same Projects surface after Appearance → Dark (catalog `OcTokens`, not a photo recolor). |
 | `03-assistant.png` | Contact cards (name / mode / summary). No 「启用助理」 toggle. |
 | `04-scheduled.png` | Light: catalog tokens. Thin-ring schedule status. Soft float cards. Dock 计划 filled calendar grid. |

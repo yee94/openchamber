@@ -25,6 +25,8 @@ void main() {
     expect(OcTokens.light.surfaceBackground, OcTokens.light.background);
     expect(OcTokens.light.surfaceMuted, OcTokens.light.muted);
     expect(OcTokens.dark.pageBackground, isNot(OcTokens.light.pageBackground));
+    expect(OcTokens.light.floatSurface.a, lessThan(1));
+    expect(OcTokens.dark.floatSurface, OcTokens.dark.card);
   });
 
   test('mobile geometry rides official rem tokens', () {
@@ -82,6 +84,10 @@ void main() {
     expect(OcOptical.sessionRowPadV, 5);
     expect(OcOptical.metaHeight, 1.25);
     expect(OcOptical.entityTitleHeight, 1.25);
+    expect(OcOptical.groupTitleMetaGap, 4);
+    expect(OcOptical.projectTriggerPad, 10);
+    expect(OcOptical.projectTriggerGap, 7);
+    expect(OcOptical.sessionRowPadH, 12);
     expect(OcOptical.scheduleTitleMetaGap, 5);
     expect(OcOptical.chatBodyHeight, lessThan(1.50));
     expect(OcOptical.chatTitle, 15);

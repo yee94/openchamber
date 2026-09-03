@@ -120,11 +120,44 @@ void main() {
     expect(find.textContaining('Composer UIKit overlay'), findsOneWidget);
     await _writePng(tester, screenshotKey, '02-projects.png');
 
-    final projectsScroll = tester.widget<SingleChildScrollView>(find.byType(SingleChildScrollView));
+    final projectsScroll = tester.widget<SingleChildScrollView>(
+      find.byKey(const Key('mobile-tab-page-scroll')),
+    );
     expect(projectsScroll.controller, isNotNull);
-    projectsScroll.controller!.jumpTo(240);
+    // Official collapse distance is 48px. Jump just past it so the title is
+    // compact while the same project list stays in the viewport — 240px
+    // emptied a short catalog and only left header ghosts.
+    const scrolledOffset = OcOptical.titleCollapseDistance +
+        OcOptical.collapsingExpandShift +
+        OcOptical.collapsingTopPad;
+    projectsScroll.controller!.jumpTo(scrolledOffset);
     await tester.pump();
-    expect(projectsScroll.controller!.offset, closeTo(240, 0.5));
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(projectsScroll.controller!.offset, closeTo(scrolledOffset, 0.5));
+    final collapsedHeader = tester.widget<MobileTabPageHeader>(find.byType(MobileTabPageHeader));
+    expect(collapsedHeader.collapse, closeTo(1, 0.02));
+    final titleCollapsed = tester.widget<Transform>(find.byKey(const Key('mobile-tab-page-title')));
+    expect(titleCollapsed.transform.storage[0], closeTo(OcOptical.titleCollapseScaleEnd, 0.02));
+    expect(find.textContaining('openchamber'), findsWidgets);
+    expect(find.text('发布说明'), findsOneWidget);
+    final headerBottom = tester.getRect(find.byType(MobileTabPageHeader)).bottom;
+    final dockTop = tester.getRect(find.byKey(const Key('dock-capsule'))).top;
+    bool listLabelVisible(String text) {
+      final finder = find.textContaining(text);
+      if (finder.evaluate().isEmpty) return false;
+      final rect = tester.getRect(finder.first);
+      return rect.bottom > headerBottom + 2 && rect.top < dockTop - 2;
+    }
+    expect(
+      [
+        listLabelVisible('openchamber'),
+        listLabelVisible('发布说明'),
+        listLabelVisible('NPM'),
+        listLabelVisible('feat-opencode2up'),
+        listLabelVisible('ios-native'),
+      ].where((visible) => visible).length,
+      greaterThanOrEqualTo(3),
+    );
     await _writePng(tester, screenshotKey, '02-projects-scrolled.png');
     projectsScroll.controller!.jumpTo(0);
     await tester.pump();

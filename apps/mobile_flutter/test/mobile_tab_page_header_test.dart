@@ -54,7 +54,7 @@ void main() {
     final titleAtRest = tester.widget<Transform>(find.byKey(const Key('mobile-tab-page-title')));
     expect(titleAtRest.transform.storage[0], closeTo(1, 0.001));
 
-    final view = tester.widget<SingleChildScrollView>(find.byType(SingleChildScrollView));
+    final view = tester.widget<SingleChildScrollView>(find.byKey(const Key('mobile-tab-page-scroll')));
     view.controller!.jumpTo(80);
     await tester.pump();
 

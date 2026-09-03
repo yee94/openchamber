@@ -249,11 +249,12 @@ class _FileChangeCard extends StatelessWidget {
     final visible = parts.take(5).toList();
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
-        color: Color.lerp(context.oc.background, context.oc.muted, 0.20),
+        color: context.oc.floatSurface,
         borderRadius: BorderRadius.circular(OcTokens.surfaceRadius),
-        border: Border.all(color: context.oc.foreground.withValues(alpha: 0.15)),
+        border: Border.all(color: context.oc.mobileBorder, width: 0.5),
+        boxShadow: OcElevation.grouped(context),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

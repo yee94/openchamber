@@ -357,7 +357,7 @@ class _ChatScreenState extends State<ChatScreen> {
       extendBody: true,
       extendBodyBehindAppBar: true,
       resizeToAvoidBottomInset: !ios,
-      backgroundColor: context.oc.background,
+      backgroundColor: context.oc.pageBackground,
       body: Stack(
         children: [
           ReverseChatList(
@@ -381,6 +381,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             decoration: BoxDecoration(
                               color: Color.lerp(context.oc.card, context.oc.primary, 0.10),
                               borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: context.oc.mobileBorder, width: 0.5),
+                              boxShadow: OcElevation.card(context),
                             ),
                             child: DefaultTextStyle.merge(
                               style: TextStyle(
