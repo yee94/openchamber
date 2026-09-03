@@ -149,7 +149,7 @@ void paintOfficialSprite({
     if (filled) {
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(rect.$1, rect.$2, rect.$3, 3.25),
+          Rect.fromLTWH(rect.$1, rect.$2, rect.$3, 2.75),
           Radius.circular(rect.$5),
         ),
         fill,
