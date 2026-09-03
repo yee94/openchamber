@@ -199,6 +199,10 @@ class OcOptical {
   /// ClipOval + quiet [OcTokens.glassChipFill] so content behind frosts
   /// instead of a painted plate.
   static const double chipBlur = 20;
+  /// Official `.oc-mobile-floating-surface` `blur(22px) saturate(1.35)`.
+  /// Distinct from control-scale [chipBlur] / [glassSaturate].
+  static const double floatBlur = 22;
+  static const double floatSaturate = 1.35;
   static const double dockIconGlowAlpha = 0.0;
   static const double dockIconGlowBlur = 0;
 

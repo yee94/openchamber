@@ -136,10 +136,13 @@ class OcGlassChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          // Through-frost: clear fill + official blur. Contact only —
-          // inset sheen lifted a cream disc on WidgetTester. No umbra.
+          // Through-frost: clear fill + official blur. Contact + inset
+          // highlight (official glass-shadow language). No 8/20 umbra.
           // WidgetTester is not live UIGlassEffect.
-          boxShadow: OcElevation.chip(context),
+          boxShadow: [
+            ...OcElevation.chip(context),
+            ...OcElevation.glassHighlight(context),
+          ],
         ),
         child: ClipOval(
           child: OcFrosted(
@@ -329,9 +332,16 @@ class GroupedInsetCard extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: radius,
-        child: OcFrosted(
-          fill: context.oc.floatSurface,
-          child: padding == null ? child : Padding(padding: padding!, child: child),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            boxShadow: OcElevation.highlight(context),
+          ),
+          child: OcFrosted(
+            fill: context.oc.floatSurface,
+            sigma: OcOptical.floatBlur,
+            saturate: OcOptical.floatSaturate,
+            child: padding == null ? child : Padding(padding: padding!, child: child),
+          ),
         ),
       ),
     );

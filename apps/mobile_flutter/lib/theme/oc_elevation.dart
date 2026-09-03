@@ -4,25 +4,41 @@ import 'oc_tokens.dart';
 
 /// Official `--oc-mobile-float-shadow` / `--oc-mobile-glass-shadow` layers.
 ///
-/// Light: soft outside-only lift. Dark: no drop shadow — hairline borders on
-/// the owning widget. Not Material 3 elevation. Not a Flutter glass clone
-/// (no blur / inset highlight — iOS glass stays on UIKit overlays).
+/// Light and dark both paint the CSS outer trio. Inset highlight lives on
+/// the clipped fill. Not Material 3 elevation. Not a Flutter glass clone.
 class OcElevation {
   const OcElevation._();
 
-  /// Shared `--oc-mobile-float-shadow` without the inset highlight.
-  /// Contact + tiny halo only — not a lifted plate and not a hairline ring.
+  /// Official `--oc-mobile-float-shadow` outer layers. Inset highlight
+  /// stays on the clipped fill via [highlight] so ClipRRect does not
+  /// eat the drop. Header discs never use this (see [chip]).
   static List<BoxShadow> card(BuildContext context, {bool tight = false}) =>
       cardFor(OcTokens.of(context), tight: tight);
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
-    if (tokens.isDark) return const [];
-    // Official `--oc-mobile-float-shadow` near pair without the far
-    // 10/24/-6 umbra. Prefer contact + a tiny halo over lift: a 12px
-    // 0x08 wash still floated the project shell off the cream page.
+    // Light: 0 0 2px 4%, 0 0 12px 5%, 0 10px 24px -6px 10%.
+    // Dark: 0 0 2px 26%, 0 0 12px 24%, 0 10px 24px -6px 34%.
+    if (tokens.isDark) {
+      return const [
+        BoxShadow(color: Color(0x42000000), blurRadius: 2),
+        BoxShadow(color: Color(0x3D000000), blurRadius: 12),
+        BoxShadow(
+          color: Color(0x57000000),
+          offset: Offset(0, 10),
+          blurRadius: 24,
+          spreadRadius: -6,
+        ),
+      ];
+    }
     return const [
-      BoxShadow(color: Color(0x08000000), blurRadius: 2),
-      BoxShadow(color: Color(0x04000000), blurRadius: 8),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 12),
+      BoxShadow(
+        color: Color(0x1A000000),
+        offset: Offset(0, 10),
+        blurRadius: 24,
+        spreadRadius: -6,
+      ),
     ];
   }
 
