@@ -18,13 +18,13 @@ class OcElevation {
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
     if (tokens.isDark) return const [];
-    // One `--oc-mobile-float-shadow` family. Far wash stays under CSS 0.10
-    // and under the previous 0.086 lift so opaque cards integrate instead
-    // of sitting on a separated umbra. `tight` no longer splits elevation.
+    // Official `--oc-mobile-float-shadow` outside-only layers (no inset
+    // highlight — WidgetTester cannot paint glass). Soft contact, not flat
+    // and not a hard umbra.
     return const [
-      BoxShadow(color: Color(0x08000000), blurRadius: 3),
-      BoxShadow(color: Color(0x0A000000), blurRadius: 12),
-      BoxShadow(color: Color(0x0E000000), blurRadius: 24, spreadRadius: -8, offset: Offset(0, 6)),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 12),
+      BoxShadow(color: Color(0x1A000000), blurRadius: 24, spreadRadius: -6, offset: Offset(0, 10)),
     ];
   }
 
@@ -43,9 +43,12 @@ class OcElevation {
 
   static List<BoxShadow> controlFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
+    // Official `--oc-mobile-glass-shadow` without the inset highlight —
+    // search / + discs need outside lift so the light plate reads as a disc.
     return const [
-      BoxShadow(color: Color(0x06000000), blurRadius: 2),
-      BoxShadow(color: Color(0x08000000), blurRadius: 5, offset: Offset(0, 1)),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0F000000), blurRadius: 12),
+      BoxShadow(color: Color(0x1F000000), blurRadius: 20, spreadRadius: -6, offset: Offset(0, 8)),
     ];
   }
 

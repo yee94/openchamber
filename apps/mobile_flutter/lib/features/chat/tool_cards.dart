@@ -264,7 +264,7 @@ class _FileChangeCard extends StatelessWidget {
     final visible = parts.take(5).toList();
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
         color: context.oc.card,
         borderRadius: BorderRadius.circular(16),

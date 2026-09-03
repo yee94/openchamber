@@ -107,8 +107,10 @@ class CircularChromeButton extends StatelessWidget {
     final tokens = context.oc;
     final hit = size ?? (filled ? OcOptical.addButton : OcOptical.searchButton);
     final disc = hit < OcOptical.headerDisc ? hit : OcOptical.headerDisc;
+    // Search is official `mobileGlass`: a light plate on the cream page, not
+    // a bare glyph. Opaque stand-in for `--oc-mobile-glass-fill` (no blur).
     final fill = !filled
-        ? tokens.card
+        ? Color.lerp(tokens.card, const Color(0xFFFFFFFF), tokens.isDark ? 0.08 : 0.55)!
         : ink
             ? tokens.foreground
             : tokens.primary;

@@ -52,8 +52,9 @@ class MobileProjectCard extends StatelessWidget {
               width: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
               height: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
               decoration: BoxDecoration(
-                color: context.oc.muted,
+                color: Color.lerp(context.oc.card, const Color(0xFFFFFFFF), context.oc.isDark ? 0.08 : 0.45),
                 shape: BoxShape.circle,
+                boxShadow: OcElevation.control(context),
               ),
               child: OcGlyph(
                 glyph,
@@ -71,10 +72,10 @@ class MobileProjectCard extends StatelessWidget {
                     name,
                     query: highlightQuery,
                     style: TextStyle(
-                      fontSize: compact ? OcOptical.rowTitle : OcOptical.entityTitle,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: compact ? OcOptical.rowTitleTracking : OcOptical.entityTitleTracking,
-                      height: compact ? OcOptical.rowTitleHeight : OcOptical.entityTitleHeight,
+                      fontSize: compact ? OcOptical.rowTitle : OcOptical.projectTitle,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: compact ? OcOptical.rowTitleTracking : OcOptical.projectTitleTracking,
+                      height: compact ? OcOptical.rowTitleHeight : OcOptical.projectTitleHeight,
                     ),
                   ),
                   const SizedBox(height: OcOptical.groupTitleMetaGap),

@@ -140,7 +140,7 @@ class ComposerBar extends StatelessWidget {
               ),
             ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 4),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
@@ -148,7 +148,7 @@ class ComposerBar extends StatelessWidget {
                 boxShadow: OcElevation.composer(context),
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(6, 2, 6, 2),
+                padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
                 child: Row(
                   children: [
                     Tooltip(

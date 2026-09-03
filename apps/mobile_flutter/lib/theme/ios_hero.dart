@@ -12,39 +12,47 @@ class OcOptical {
   static const double largeTitleTracking = 1.6;
   static const double largeTitleHeight = 1.28;
 
-  /// Official `.oc-mobile-session-title` is 12 / 16 / −0.012em in a 46px
-  /// row. CJK keeps a little positive tracking; pad fills toward 46 without
-  /// ballooning 15pt type.
-  static const double rowTitle = 13;
-  static const double rowTitleTracking = 0.55;
-  static const double rowTitleHeight = 1.38;
-  static const double sessionRowPadV = 11;
+  /// Official `.oc-mobile-session-title` is 12 / 16 / −0.012em in
+  /// `--oc-mobile-session-row-height` (2.875rem = 46). CJK keeps a little
+  /// positive tracking; pad is official 5px and min-height fills the slot.
+  static const double rowTitle = 12;
+  static const double rowTitleTracking = 0.2;
+  static const double rowTitleHeight = 1.333;
+  static const double sessionRowHeight = 46;
+  static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
-  static const double groupHeaderPadV = 12;
+  static const double groupHeaderPadV = 10;
   static const double groupHeaderPadVCompact = 10;
-  static const double groupTitleMetaGap = 6;
+  static const double groupTitleMetaGap = 4;
 
+  /// Root `--oc-mobile-entity-title` 16 / 20. Project-shell tightens to 14 / 18.
   static const double entityTitle = 16;
-  static const double entityTitleTracking = 0.35;
-  static const double entityTitleHeight = 1.28;
+  static const double entityTitleTracking = 0.2;
+  static const double entityTitleHeight = 1.25;
+  static const double projectTitle = 14;
+  static const double projectTitleTracking = 0.2;
+  static const double projectTitleHeight = 1.286;
 
-  static const double meta = 11;
-  static const double metaTracking = 0.4;
-  static const double metaHeight = 1.45;
+  static const double meta = 13;
+  static const double metaTracking = 0.15;
+  static const double metaHeight = 1.23;
+  static const double sessionTime = 10;
+  static const double sessionTimeTracking = 0.15;
+  static const double sessionTimeHeight = 1.2;
 
-  static const double scheduleCardPadV = 14;
-  static const double scheduleTitleMetaGap = 8;
+  static const double scheduleCardPadV = 12;
+  static const double scheduleTitleMetaGap = 4;
 
   static const double chatTitle = 15;
-  static const double chatTitleTracking = 0.7;
-  static const double chatTitleHeight = 1.46;
-  static const double chatHeaderButton = 24;
+  static const double chatTitleTracking = 0.4;
+  static const double chatTitleHeight = 1.33;
+  static const double chatHeaderButton = 28;
   static const double chatBodyHeight = 1.56;
-  static const double chatBodyTracking = 0.5;
+  static const double chatBodyTracking = 0.35;
 
-  static const double dockLabel = 10;
-  static const double dockLabelTracking = 0.55;
-  static const double dockLabelGap = 4;
+  static const double dockLabel = 12;
+  static const double dockLabelTracking = 0.2;
+  static const double dockLabelGap = 3;
   static const double dockCapsuleHeight = 68;
   static const double dockCapsuleRadius = 34;
   static const double dockInnerInset = 5;
@@ -52,15 +60,15 @@ class OcOptical {
   static const double dockBottomPad = 20;
   static const double dockMaxWidth = 416;
 
-  /// Hit target stays official 2.5rem (40). Painted disc stays thinner than
-  /// the 26/32 plates that read as Material.
+  /// Official `Button` `mobileIcon` is the disc (40). Search is `mobileGlass`
+  /// (light plate + outside shadow), `+` is primary round. Glyph is `size-5`.
   static const double searchButton = 40;
   static const double addButton = 40;
-  static const double headerDisc = 24;
-  static const double headerGlyph = 11;
-  static const double headerGlyphStroke = 0.42;
-  /// In-card / dock / footer glyphs — thinner than header strokes.
-  static const double listGlyphStroke = 0.34;
+  static const double headerDisc = 40;
+  static const double headerGlyph = 18;
+  static const double headerGlyphStroke = 1.05;
+  /// In-card / footer strokes stay a hair under header weight.
+  static const double listGlyphStroke = 0.95;
 
   /// `--oc-mobile-collapsing-action-size` / expand-shift / collapse distance.
   static const double collapsingActionSize = 40;
@@ -69,42 +77,44 @@ class OcOptical {
   static const double titleCollapseDistance = 48;
   static const double titleCollapseScaleEnd = 0.625;
 
-  static const double dockGlyph = 6;
-  static const double dockGlyphStroke = 0.34;
-  /// Soft selected wash behind the dock **icon only** — faint stadium +
-  /// feathered glow, not a coarse peach disc and not a full-slot wash.
-  static const double dockIconPillWidth = 30;
-  static const double dockIconPillHeight = 18;
-  static const double dockIconPillRadius = 9;
-  static const double dockIconWashAlpha = 0.07;
-  static const double dockIconGlowAlpha = 0.04;
-  static const double dockIconGlowBlur = 8;
+  /// Official dock icon is `size-[23px]` medium. Stroke glyphs sit a step
+  /// under that so they do not read as filled Material. Selected chrome is
+  /// an icon-only wash — never a full-slot slab.
+  static const double dockGlyph = 18;
+  static const double dockGlyphStroke = 1.05;
+  static const double dockIconPillWidth = 34;
+  static const double dockIconPillHeight = 26;
+  static const double dockIconPillRadius = 13;
+  static const double dockIconWashAlpha = 0.08;
+  static const double dockIconGlowAlpha = 0.05;
+  static const double dockIconGlowBlur = 10;
 
-  static const double leadingCircle = 9;
-  static const double leadingCircleCompact = 8;
-  static const double leadingGlyph = 4;
-  static const double leadingGlyphCompact = 3.5;
+  /// `.oc-mobile-project-shell` icon 2.375rem / glyph 1.125rem.
+  static const double leadingCircle = 38;
+  static const double leadingCircleCompact = 28;
+  static const double leadingGlyph = 16;
+  static const double leadingGlyphCompact = 12;
 
-  static const double sessionBullet = 2;
-  static const double overflow = 5;
-  static const double chevron = 6;
+  static const double sessionBullet = 5;
+  static const double overflow = 14;
+  static const double chevron = 14;
 
-  static const double scheduleStatus = 9;
-  static const double scheduleStatusGlyph = 3.5;
+  static const double scheduleStatus = 38;
+  static const double scheduleStatusGlyph = 16;
 
-  static const double fileTypeW = 8;
-  static const double fileTypeH = 5;
-  static const double fileTypeMark = 2.75;
-  static const double fileRowPadV = 5;
+  static const double fileTypeW = 12;
+  static const double fileTypeH = 8;
+  static const double fileTypeMark = 4;
+  static const double fileRowPadV = 6;
 
-  static const double composerRadius = 26;
-  static const double composerPlus = 6;
-  static const double sendRing = 17;
-  static const double sendRingStroke = 0.50;
-  static const double sendStop = 4;
-  static const double scrollFab = 15;
-  static const double scrollChevron = 6;
+  static const double composerRadius = 24;
+  static const double composerPlus = 14;
+  static const double sendRing = 28;
+  static const double sendRingStroke = 1.15;
+  static const double sendStop = 8;
+  static const double scrollFab = 28;
+  static const double scrollChevron = 10;
 
-  static const double toolbarGlyph = 6;
-  static const double footerGlyph = 6;
+  static const double toolbarGlyph = 14;
+  static const double footerGlyph = 14;
 }
