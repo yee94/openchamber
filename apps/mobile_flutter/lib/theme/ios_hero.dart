@@ -36,12 +36,16 @@ class OcOptical {
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
   /// Official title/subtitle column is `gap-0.5` (2). With padV 5 + 16 + 2
-  /// + 12 + 5 the visual row is exactly 40. Do not add extra gap.
+  /// + 12 + 5 the visual row is exactly 40. Do not add extra gap or grow
+  /// icons. Air inside the box comes from [sessionLineLeading] on the strut.
   /// CSS `font-size` is the ink; `line-height` is the strut. Do not also
   /// multiply Flutter `TextStyle.height` — that packs CJK into the box.
   /// Official title is `font-medium` / unread `font-semibold`. The review
   /// CJK face is Regular-only, so paint Regular / Medium — do not faux-bold.
   static const double sessionTitleSubtitleGap = 2;
+  /// Fraction of the CSS line-height moved into strut `leading` so CJK
+  /// glyphs do not fill the 16/12 boxes. Total box stays official.
+  static const double sessionLineLeading = 0.16;
   /// `.oc-mobile-session-status` 0.75rem; `.oc-mobile-session-row-main` gap 0.5rem.
   static const double sessionStatus = 12;
   static const double sessionRowMainGap = 8;
@@ -130,7 +134,8 @@ class OcOptical {
   static const double addButton = 40;
   static const double headerDisc = 40;
   /// Official hit is 40 (`mobileIcon`). Painted plate is 36 so the wash
-  /// is not a 40 coin. Inset highlight only — no blur / umbra / + glow.
+  /// is not a 40 coin. Readable glassChip + quiet inset + contact halo.
+  /// No disc blur, no 8px umbra, no + glow.
   static const double headerDiscVisual = 36;
   static const double headerGlyph = 20;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.

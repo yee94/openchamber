@@ -75,6 +75,8 @@ class MobileSessionRow extends StatelessWidget {
                     const SizedBox(width: OcOptical.sessionRowMainGap),
                     Expanded(
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           HighlightedText(

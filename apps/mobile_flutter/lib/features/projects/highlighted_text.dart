@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/ios_hero.dart';
+
 /// 1.19.3-beta.1 keyword highlight for home session search.
 class HighlightedText extends StatelessWidget {
   const HighlightedText(this.text, {super.key, required this.query, this.style});
@@ -52,12 +54,16 @@ TextStyle? ocCssInk(TextStyle? style) {
 }
 
 /// Official CSS `line-height` boxes (session title 16, subtitle/time 12).
+/// Move [OcOptical.sessionLineLeading] of that box into strut leading so
+/// CJK ink sits with official single-line air. Total height is unchanged.
 StrutStyle? ocCssLineBox(TextStyle? style) {
   if (style?.fontSize == null || style?.height == null) return null;
+  final box = style!.height!;
+  const lead = OcOptical.sessionLineLeading;
   return StrutStyle(
-    fontSize: style!.fontSize,
-    height: style.height,
-    leading: 0,
+    fontSize: style.fontSize,
+    height: (box - lead).clamp(1.0, box),
+    leading: lead,
     forceStrutHeight: true,
     leadingDistribution: TextLeadingDistribution.even,
   );

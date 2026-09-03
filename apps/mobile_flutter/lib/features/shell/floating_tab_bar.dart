@@ -124,41 +124,44 @@ class _TabSlot extends StatelessWidget {
         child: OcSelectedSpring(
           selected: selected,
           builder: (context, t) {
+            final wash = Color.lerp(Colors.transparent, tokens.selectedTabWash, t)!;
+            final column = Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                OcGlyph(
+                  glyph,
+                  size: OcOptical.dockGlyphVisual,
+                  color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
+                  strokeWidth: OcOptical.dockGlyphStrokeVisual,
+                  // Official 23px filled-medium sprites. Bodies fill
+                  // without a stroke halo; date cells / hub stay holes.
+                  filled: OcOptical.dockGlyphFillBodies,
+                ),
+                const SizedBox(height: OcOptical.dockLabelGap),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: OcOptical.dockLabel,
+                    letterSpacing: OcOptical.dockLabelTracking,
+                    height: OcOptical.dockLabelHeight,
+                    fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w500,
+                    color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
+                  ),
+                ),
+              ],
+            );
             return SizedBox(
               height: OcOptical.dockTabHeight,
               width: double.infinity,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Color.lerp(Colors.transparent, tokens.selectedTabWash, t),
-                  borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    OcGlyph(
-                      glyph,
-                      size: OcOptical.dockGlyphVisual,
-                      color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
-                      strokeWidth: OcOptical.dockGlyphStrokeVisual,
-                      // Official 23px filled-mass sprites. Bodies fill
-                      // without a stroke halo; date cells / hub stay holes.
-                      filled: OcOptical.dockGlyphFillBodies,
-                    ),
-                    const SizedBox(height: OcOptical.dockLabelGap),
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: OcOptical.dockLabel,
-                        letterSpacing: OcOptical.dockLabelTracking,
-                        height: OcOptical.dockLabelHeight,
-                        fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w500,
-                        color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
-                      ),
-                    ),
-                  ],
-                ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
+                // 55% mix over WidgetTester frost — not a flat cream slab
+                // and not a Flutter UIKit glass clone.
+                child: t > 0
+                    ? OcFrosted(fill: wash, child: column)
+                    : column,
               ),
             );
           },

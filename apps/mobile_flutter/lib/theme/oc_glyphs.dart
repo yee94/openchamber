@@ -452,28 +452,28 @@ class _OcGlyphPainter extends CustomPainter {
 
   void _folderFill(Canvas canvas, Size size, Color color) {
     // Official `folder-open` is a stroke silhouette — filling that path
-    // does not enclose a body. Closed tab + flap keeps the open-folder
-    // shape with solid mass.
+    // does not enclose a body. A closed tab + lip is the drawer at 23px
+    // filled-medium optical: solid, not a heavy filing-cabinet blob.
     final w = size.width;
     final h = size.height;
     final fill = Paint()
       ..color = color
       ..style = PaintingStyle.fill;
     final back = Path()
-      ..moveTo(w * 0.10, h * 0.22)
-      ..lineTo(w * 0.10, h * 0.76)
-      ..lineTo(w * 0.36, h * 0.76)
-      ..lineTo(w * 0.36, h * 0.40)
-      ..lineTo(w * 0.70, h * 0.40)
-      ..lineTo(w * 0.70, h * 0.32)
-      ..lineTo(w * 0.46, h * 0.32)
-      ..lineTo(w * 0.38, h * 0.22)
+      ..moveTo(w * 0.12, h * 0.24)
+      ..lineTo(w * 0.12, h * 0.70)
+      ..lineTo(w * 0.40, h * 0.70)
+      ..lineTo(w * 0.40, h * 0.40)
+      ..lineTo(w * 0.72, h * 0.40)
+      ..lineTo(w * 0.72, h * 0.34)
+      ..lineTo(w * 0.48, h * 0.34)
+      ..lineTo(w * 0.40, h * 0.24)
       ..close();
     final flap = Path()
-      ..moveTo(w * 0.20, h * 0.54)
-      ..lineTo(w * 0.92, h * 0.54)
-      ..lineTo(w * 0.80, h * 0.88)
-      ..lineTo(w * 0.10, h * 0.88)
+      ..moveTo(w * 0.18, h * 0.56)
+      ..lineTo(w * 0.90, h * 0.56)
+      ..lineTo(w * 0.80, h * 0.84)
+      ..lineTo(w * 0.12, h * 0.84)
       ..close();
     canvas.drawPath(back, fill);
     canvas.drawPath(flap, fill);
@@ -495,12 +495,12 @@ class _OcGlyphPainter extends CustomPainter {
       ..color = paint.color
       ..style = PaintingStyle.fill;
     final tooth = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(0, -w * 0.36), width: w * 0.20, height: w * 0.16),
-      Radius.circular(w * 0.04),
+      Rect.fromCenter(center: Offset(0, -w * 0.34), width: w * 0.18, height: w * 0.14),
+      Radius.circular(w * 0.035),
     );
     if (filled) {
       canvas.saveLayer(Rect.fromLTWH(0, 0, w, h), Paint());
-      canvas.drawCircle(c, w * 0.30, fill);
+      canvas.drawCircle(c, w * 0.28, fill);
       for (var i = 0; i < 6; i += 1) {
         canvas.save();
         canvas.translate(c.dx, c.dy);
@@ -510,7 +510,7 @@ class _OcGlyphPainter extends CustomPainter {
       }
       canvas.drawCircle(
         c,
-        w * 0.09,
+        w * 0.10,
         Paint()
           ..blendMode = BlendMode.dstOut
           ..style = PaintingStyle.fill,
