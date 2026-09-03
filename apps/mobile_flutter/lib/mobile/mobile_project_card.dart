@@ -58,7 +58,7 @@ class MobileProjectCard extends StatelessWidget {
               child: OcGlyph(
                 glyph,
                 size: compact ? OcOptical.leadingGlyphCompact : OcOptical.leadingGlyph,
-                strokeWidth: OcOptical.headerGlyphStroke,
+                strokeWidth: OcOptical.listGlyphStroke,
                 color: context.oc.mutedForeground,
               ),
             ),
@@ -102,12 +102,12 @@ class MobileProjectCard extends StatelessWidget {
             OcGlyph(
               expanded ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
               size: OcOptical.chevron,
-              strokeWidth: OcOptical.headerGlyphStroke,
+              strokeWidth: OcOptical.listGlyphStroke,
               color: context.oc.mutedForeground,
             ),
             Padding(
               padding: const EdgeInsets.only(left: 2, right: 6),
-              child: OcGlyph(OcGlyphKind.ellipsis, size: OcOptical.overflow, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
+              child: OcGlyph(OcGlyphKind.ellipsis, size: OcOptical.overflow, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
             ),
           ],
         ),

@@ -151,7 +151,7 @@ class _AssistantHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              OcGlyph(OcGlyphKind.sparkles, size: 11, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
+              OcGlyph(OcGlyphKind.sparkles, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
@@ -177,7 +177,7 @@ class _AssistantHeader extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      OcGlyph(OcGlyphKind.robot, size: 9, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
+                      OcGlyph(OcGlyphKind.robot, size: OcOptical.footerGlyph, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
                       const SizedBox(width: 3),
                       Text(
                         role,
@@ -276,23 +276,33 @@ class _FileChangeCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              OcGlyph(OcGlyphKind.file, size: 11, strokeWidth: OcOptical.headerGlyphStroke, color: OcTokens.of(context).mutedForeground),
+              OcGlyph(OcGlyphKind.file, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.listGlyphStroke, color: OcTokens.of(context).mutedForeground),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   t(context, 'chat.filesChanged.title'),
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, height: 1.2),
+                  style: const TextStyle(
+                    fontSize: OcOptical.meta,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: OcOptical.metaTracking,
+                    height: OcOptical.metaHeight,
+                  ),
                 ),
               ),
               Text(
                 t(context, 'chat.filesChanged.count', {'count': '${parts.length}'}),
-                style: TextStyle(fontSize: 11, height: 1.2, color: OcTokens.of(context).mutedForeground),
+                style: TextStyle(
+                  fontSize: OcOptical.meta,
+                  letterSpacing: OcOptical.metaTracking,
+                  height: OcOptical.metaHeight,
+                  color: OcTokens.of(context).mutedForeground,
+                ),
               ),
               const SizedBox(width: 2),
               OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.chevron, color: OcTokens.of(context).mutedForeground),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           for (final part in visible)
             Pressable(
               key: keyRows ? Key('chat-tool-diff-${part.id}') : null,
@@ -308,7 +318,11 @@ class _FileChangeCard extends StatelessWidget {
                         part.path ?? part.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13),
+                        style: const TextStyle(
+                          fontSize: OcOptical.rowTitle,
+                          letterSpacing: OcOptical.rowTitleTracking,
+                          height: OcOptical.rowTitleHeight,
+                        ),
                       ),
                     ),
                     Text.rich(
@@ -325,7 +339,11 @@ class _FileChangeCard extends StatelessWidget {
                           ),
                         ],
                       ),
-                      style: const TextStyle(fontSize: 12),
+                      style: const TextStyle(
+                        fontSize: OcOptical.meta,
+                        letterSpacing: OcOptical.metaTracking,
+                        height: OcOptical.metaHeight,
+                      ),
                     ),
                   ],
                 ),
@@ -338,9 +356,14 @@ class _FileChangeCard extends StatelessWidget {
                 children: [
                   Text(
                     t(context, 'chat.filesChanged.more', {'count': '${parts.length - visible.length}'}),
-                    style: TextStyle(fontSize: 13, color: OcTokens.of(context).mutedForeground),
+                    style: TextStyle(
+                      fontSize: OcOptical.rowTitle,
+                      letterSpacing: OcOptical.rowTitleTracking,
+                      height: OcOptical.rowTitleHeight,
+                      color: OcTokens.of(context).mutedForeground,
+                    ),
                   ),
-                  OcGlyph(OcGlyphKind.chevronRight, size: 12, color: OcTokens.of(context).mutedForeground),
+                  OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.chevron, strokeWidth: OcOptical.listGlyphStroke, color: OcTokens.of(context).mutedForeground),
                 ],
               ),
             ),
@@ -363,7 +386,7 @@ class UserTurnToolbar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (message.completedClock != null) ...[
-            OcGlyph(OcGlyphKind.clock, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
+            OcGlyph(OcGlyphKind.clock, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
             const SizedBox(width: 3),
             Text(
               message.completedClock!,
@@ -400,7 +423,7 @@ class UserTurnToolbar extends StatelessWidget {
         onTap: () {},
         child: Padding(
           padding: const EdgeInsets.all(3),
-          child: OcGlyph(glyph, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
+          child: OcGlyph(glyph, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
         ),
       ),
     );
@@ -517,7 +540,7 @@ class _TurnFooter extends StatelessWidget {
         key: key,
         mainAxisSize: MainAxisSize.min,
         children: [
-          OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.headerGlyphStroke, color: OcTokens.of(context).mutedForeground),
+          OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.listGlyphStroke, color: OcTokens.of(context).mutedForeground),
           const SizedBox(width: 3),
           Text(
             label,
@@ -548,7 +571,7 @@ class _TurnFooter extends StatelessWidget {
         onTap: onPressed ?? () {},
         child: Padding(
           padding: const EdgeInsets.all(3),
-          child: OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.headerGlyphStroke, color: OcTokens.of(context).mutedForeground),
+          child: OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.listGlyphStroke, color: OcTokens.of(context).mutedForeground),
         ),
       ),
     );

@@ -10,8 +10,10 @@ import 'oc_tokens.dart';
 class OcElevation {
   const OcElevation._();
 
-  /// Project / settings cards. Maps `--oc-mobile-float-shadow` without inset:
-  /// `0 0 2px / 0.04`, `0 0 12px / 0.05`, `0 10px 24px -6px / 0.1`.
+  /// Shared `--oc-mobile-float-shadow` without the inset highlight
+  /// (`0 0 2px / 0.04`, `0 0 12px / 0.05`, `0 10px 24px -6px / 0.1`).
+  /// Far wash is a hair quieter than the CSS 0.10 so opaque WidgetTester
+  /// cards do not read as Material elevation.
   static List<BoxShadow> card(BuildContext context, {bool tight = false}) =>
       cardFor(OcTokens.of(context), tight: tight);
 
@@ -20,39 +22,26 @@ class OcElevation {
     if (tight) {
       return const [
         BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-        BoxShadow(color: Color(0x0D000000), blurRadius: 10),
-        BoxShadow(color: Color(0x14000000), blurRadius: 18, spreadRadius: -6, offset: Offset(0, 8)),
+        BoxShadow(color: Color(0x0C000000), blurRadius: 8),
+        BoxShadow(color: Color(0x12000000), blurRadius: 16, spreadRadius: -6, offset: Offset(0, 6)),
       ];
     }
     return const [
       BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0D000000), blurRadius: 12),
-      BoxShadow(color: Color(0x1A000000), blurRadius: 24, spreadRadius: -6, offset: Offset(0, 10)),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 10),
+      BoxShadow(color: Color(0x14000000), blurRadius: 20, spreadRadius: -6, offset: Offset(0, 8)),
     ];
   }
 
-  /// Chat file-change card — `--oc-mobile-shadow-near` family.
+  /// Chat file-change card — same float-shadow family as project cards.
   static List<BoxShadow> grouped(BuildContext context) => groupedFor(OcTokens.of(context));
 
-  static List<BoxShadow> groupedFor(OcTokens tokens) {
-    if (tokens.isDark) return const [];
-    return const [
-      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0D000000), blurRadius: 12, spreadRadius: -4, offset: Offset(0, 3)),
-    ];
-  }
+  static List<BoxShadow> groupedFor(OcTokens tokens) => cardFor(tokens);
 
-  /// Dock capsule — `--oc-mobile-glass-shadow` geometry without glass fill.
+  /// Dock capsule — same float-shadow family (no glass fill).
   static List<BoxShadow> dock(BuildContext context) => dockFor(OcTokens.of(context));
 
-  static List<BoxShadow> dockFor(OcTokens tokens) {
-    if (tokens.isDark) return const [];
-    return const [
-      BoxShadow(color: Color(0x0D000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0F000000), blurRadius: 12),
-      BoxShadow(color: Color(0x1F000000), blurRadius: 20, spreadRadius: -6, offset: Offset(0, 8)),
-    ];
-  }
+  static List<BoxShadow> dockFor(OcTokens tokens) => cardFor(tokens);
 
   /// Search / + discs — `--oc-mobile-shadow-control`.
   static List<BoxShadow> control(BuildContext context) => controlFor(OcTokens.of(context));
@@ -60,20 +49,13 @@ class OcElevation {
   static List<BoxShadow> controlFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x0D000000), blurRadius: 2),
-      BoxShadow(color: Color(0x1F000000), blurRadius: 8, offset: Offset(0, 2)),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
+      BoxShadow(color: Color(0x14000000), blurRadius: 6, offset: Offset(0, 1)),
     ];
   }
 
-  /// Composer pill — same family as dock (`--oc-mobile-glass-shadow`).
+  /// Composer pill — same `--oc-mobile-float-shadow` as cards (not flatter).
   static List<BoxShadow> composer(BuildContext context) => composerFor(OcTokens.of(context));
 
-  static List<BoxShadow> composerFor(OcTokens tokens) {
-    if (tokens.isDark) return const [];
-    return const [
-      BoxShadow(color: Color(0x0D000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0F000000), blurRadius: 12),
-      BoxShadow(color: Color(0x1F000000), blurRadius: 20, spreadRadius: -6, offset: Offset(0, 8)),
-    ];
-  }
+  static List<BoxShadow> composerFor(OcTokens tokens) => cardFor(tokens);
 }

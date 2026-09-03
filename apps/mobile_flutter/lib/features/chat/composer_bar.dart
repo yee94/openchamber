@@ -132,7 +132,7 @@ class ComposerBar extends StatelessWidget {
                       width: OcOptical.scrollFab,
                       height: OcOptical.scrollFab,
                       child: Center(
-                        child: OcGlyph(OcGlyphKind.chevronDown, size: OcOptical.scrollChevron, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.foreground),
+                        child: OcGlyph(OcGlyphKind.chevronDown, size: OcOptical.scrollChevron, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.foreground),
                       ),
                     ),
                   ),
@@ -163,7 +163,7 @@ class ComposerBar extends StatelessWidget {
                           width: 32,
                           height: 32,
                           child: Center(
-                            child: OcGlyph(OcGlyphKind.plus, size: OcOptical.composerPlus, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.foreground),
+                            child: OcGlyph(OcGlyphKind.plus, size: OcOptical.composerPlus, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.foreground),
                           ),
                         ),
                       ),
@@ -175,7 +175,7 @@ class ComposerBar extends StatelessWidget {
                         tooltip: t(context, 'chat.dictation.start'),
                         visualDensity: VisualDensity.compact,
                         onPressed: onDictate,
-                        icon: OcGlyph(OcGlyphKind.mic, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
+                        icon: OcGlyph(OcGlyphKind.mic, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
                       ),
                     Pressable(
                       key: const Key('composer-send'),

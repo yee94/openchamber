@@ -58,23 +58,26 @@ void main() {
     expect(OcOptical.largeTitle, 32);
     expect(OcOptical.largeTitleTracking, greaterThan(0.8));
     expect(OcOptical.largeTitleHeight, greaterThan(1.15));
-    expect(OcOptical.rowTitleTracking, greaterThan(0.2));
-    expect(OcOptical.rowTitleHeight, lessThan(1.45));
-    expect(OcOptical.sessionRowPadV, lessThan(8));
-    expect(OcOptical.metaHeight, greaterThanOrEqualTo(1.35));
-    expect(OcOptical.entityTitleHeight, lessThanOrEqualTo(1.38));
-    expect(OcOptical.scheduleTitleMetaGap, lessThanOrEqualTo(8));
-    expect(OcOptical.chatBodyHeight, lessThan(1.55));
+    expect(OcOptical.rowTitleTracking, greaterThan(0.5));
+    expect(OcOptical.rowTitleHeight, greaterThan(1.35));
+    expect(OcOptical.sessionRowPadV, greaterThanOrEqualTo(6));
+    expect(OcOptical.metaHeight, greaterThanOrEqualTo(1.55));
+    expect(OcOptical.entityTitleHeight, greaterThan(1.35));
+    expect(OcOptical.scheduleTitleMetaGap, greaterThanOrEqualTo(8));
+    expect(OcOptical.chatBodyHeight, lessThan(1.6));
     expect(OcOptical.searchButton, 40);
     expect(OcOptical.addButton, 40);
     expect(OcOptical.headerGlyph, 20);
     expect(OcOptical.collapsingActionSize, 40);
     expect(OcOptical.titleCollapseDistance, 48);
     expect(OcOptical.titleCollapseScaleEnd, 0.625);
-    expect(OcOptical.dockGlyph, 11);
-    expect(OcOptical.leadingCircle, 13);
-    expect(OcOptical.scheduleStatus, 13);
-    expect(OcOptical.fileTypeW, 10);
+    expect(OcOptical.dockGlyph, 8);
+    expect(OcOptical.dockGlyphStroke, lessThan(0.75));
+    expect(OcOptical.listGlyphStroke, lessThan(OcOptical.headerGlyphStroke));
+    expect(OcOptical.leadingCircle, 11);
+    expect(OcOptical.footerGlyph, 7);
+    expect(OcOptical.scheduleStatus, 11);
+    expect(OcOptical.fileTypeW, 9);
     expect(OcOptical.dockCapsuleHeight, OcTokens.dockHeight);
     expect(OcOptical.dockCapsuleRadius, OcTokens.dockRadius);
     expect(OcOptical.dockBottomPad, OcTokens.pageGap);
@@ -85,10 +88,13 @@ void main() {
   test('OcElevation is layered in light and empty in dark', () {
     expect(OcElevation.cardFor(OcTokens.light), hasLength(3));
     expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, greaterThanOrEqualTo(2));
+    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, lessThanOrEqualTo(22));
     expect(
       OcElevation.cardFor(OcTokens.light, tight: true).last.blurRadius,
       lessThan(OcElevation.cardFor(OcTokens.light).last.blurRadius),
     );
+    expect(OcElevation.groupedFor(OcTokens.light), OcElevation.cardFor(OcTokens.light));
+    expect(OcElevation.composerFor(OcTokens.light), OcElevation.cardFor(OcTokens.light));
     expect(OcElevation.controlFor(OcTokens.light), isNotEmpty);
     expect(OcElevation.cardFor(OcTokens.dark), isEmpty);
     expect(OcElevation.dockFor(OcTokens.dark), isEmpty);

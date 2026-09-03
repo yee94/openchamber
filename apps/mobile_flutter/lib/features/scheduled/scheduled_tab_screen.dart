@@ -209,7 +209,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                 child: OcGlyph(
                   paused ? OcGlyphKind.pause : OcGlyphKind.check,
                   size: OcOptical.scheduleStatusGlyph,
-                  strokeWidth: OcOptical.headerGlyphStroke,
+                  strokeWidth: OcOptical.listGlyphStroke,
                   color: paused ? context.oc.mutedForeground : context.oc.statusSuccess,
                 ),
               ),
@@ -251,7 +251,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   projectId: task.projectId,
                   taskId: task.id,
                 ),
-                icon: OcGlyph(OcGlyphKind.ellipsis, size: OcOptical.overflow, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
+                icon: OcGlyph(OcGlyphKind.ellipsis, size: OcOptical.overflow, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
               ),
             ],
           ),
