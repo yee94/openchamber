@@ -151,16 +151,16 @@ class _AssistantHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              OcGlyph(OcGlyphKind.sparkles, size: 13, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
+              OcGlyph(OcGlyphKind.sparkles, size: 11, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
                   name,
                   style: TextStyle(
-                    fontSize: OcOptical.entityTitle,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: OcOptical.entityTitleTracking,
-                    height: OcOptical.entityTitleHeight,
+                    fontSize: OcOptical.rowTitle,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: OcOptical.rowTitleTracking,
+                    height: OcOptical.rowTitleHeight,
                     color: context.oc.foreground,
                   ),
                 ),
@@ -264,10 +264,10 @@ class _FileChangeCard extends StatelessWidget {
     final visible = parts.take(5).toList();
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
         color: context.oc.card,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: context.oc.mobileBorder, width: 0.5),
         boxShadow: OcElevation.grouped(context),
       ),
@@ -276,29 +276,29 @@ class _FileChangeCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              OcGlyph(OcGlyphKind.file, size: 12, strokeWidth: OcOptical.headerGlyphStroke, color: OcTokens.of(context).mutedForeground),
+              OcGlyph(OcGlyphKind.file, size: 11, strokeWidth: OcOptical.headerGlyphStroke, color: OcTokens.of(context).mutedForeground),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   t(context, 'chat.filesChanged.title'),
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, height: 1.2),
                 ),
               ),
               Text(
                 t(context, 'chat.filesChanged.count', {'count': '${parts.length}'}),
-                style: TextStyle(fontSize: 12, color: OcTokens.of(context).mutedForeground),
+                style: TextStyle(fontSize: 11, height: 1.2, color: OcTokens.of(context).mutedForeground),
               ),
               const SizedBox(width: 2),
-              OcGlyph(OcGlyphKind.chevronRight, size: 14, color: OcTokens.of(context).mutedForeground),
+              OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.chevron, color: OcTokens.of(context).mutedForeground),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           for (final part in visible)
             Pressable(
               key: keyRows ? Key('chat-tool-diff-${part.id}') : null,
               haptic: HapticStrength.light,
               child: Padding(
-                padding: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.symmetric(vertical: OcOptical.fileRowPadV),
                 child: Row(
                   children: [
                     _FileTypeMark(path: part.path ?? part.title),

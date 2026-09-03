@@ -128,7 +128,6 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   key: const Key('scheduled-add'),
                   glyph: OcGlyphKind.plus,
                   filled: true,
-                  ink: true,
                   size: OcOptical.addButton,
                   tooltip: t(context, 'scheduled.add'),
                   onPressed: () {},
@@ -200,7 +199,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
         haptic: HapticStrength.light,
         onPressed: () => _openTask(task.projectId, task.id),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
+          padding: const EdgeInsets.fromLTRB(16, OcOptical.scheduleCardPadV, 8, OcOptical.scheduleCardPadV),
           child: Row(
             children: [
               Container(
@@ -235,7 +234,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                         color: paused ? context.oc.mutedForeground : context.oc.foreground,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: OcOptical.scheduleTitleMetaGap),
                     Text(
                       paused
                           ? [_humanSchedule(context, task), '—'].join(' · ')

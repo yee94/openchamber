@@ -55,7 +55,7 @@ class ComposerBar extends StatelessWidget {
         focusedBorder: InputBorder.none,
         filled: false,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
         hintStyle: TextStyle(
           fontSize: OcTokens.textMarkdown,
           letterSpacing: OcOptical.chatBodyTracking,
@@ -140,7 +140,7 @@ class ComposerBar extends StatelessWidget {
               ),
             ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 4),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
@@ -149,7 +149,7 @@ class ComposerBar extends StatelessWidget {
                 boxShadow: OcElevation.composer(context),
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
+                padding: const EdgeInsets.fromLTRB(6, 2, 6, 2),
                 child: Row(
                   children: [
                     Tooltip(
@@ -160,8 +160,8 @@ class ComposerBar extends StatelessWidget {
                         highlight: false,
                         onPressed: onAttach,
                         child: SizedBox(
-                          width: 36,
-                          height: 36,
+                          width: 32,
+                          height: 32,
                           child: Center(
                             child: OcGlyph(OcGlyphKind.plus, size: OcOptical.composerPlus, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.foreground),
                           ),

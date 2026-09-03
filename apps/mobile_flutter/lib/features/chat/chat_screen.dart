@@ -351,7 +351,7 @@ class _ChatScreenState extends State<ChatScreen> {
         busy: _busy,
         trailing: CircularChromeButton(
           glyph: OcGlyphKind.ellipsis,
-          size: OcOptical.searchButton,
+          size: OcOptical.chatHeaderButton,
           onPressed: () {},
         ),
       ),

@@ -299,7 +299,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
       haptic: HapticStrength.light,
       onPressed: onToggle,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(compact ? 14 : 14, compact ? 12 : 14, 10, compact ? 12 : 14),
+        padding: EdgeInsets.fromLTRB(14, compact ? OcOptical.groupHeaderPadVCompact : OcOptical.groupHeaderPadV, 10, compact ? OcOptical.groupHeaderPadVCompact : OcOptical.groupHeaderPadV),
         child: Row(
           children: [
             Container(
@@ -331,7 +331,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                       height: compact ? OcOptical.rowTitleHeight : OcOptical.entityTitleHeight,
                     ),
                   ),
-                  const SizedBox(height: 7),
+                  const SizedBox(height: OcOptical.groupTitleMetaGap),
                   Text(
                     [
                       count == 1
@@ -392,14 +392,14 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
           haptic: HapticStrength.light,
           onPressed: () => setState(() => _expandedMore.add(groupId)),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 14, 10),
+            padding: const EdgeInsets.fromLTRB(16, OcOptical.moreLinkPadV, 14, OcOptical.moreLinkPadV),
             child: Row(
               children: [
                 Text(
                   t(context, 'projects.showMore'),
                   style: TextStyle(
-                    fontSize: OcOptical.rowTitle,
-                    letterSpacing: OcOptical.rowTitleTracking,
+                    fontSize: OcTokens.textUiLabel,
+                    letterSpacing: OcOptical.metaTracking,
                     height: OcOptical.rowTitleHeight,
                     color: context.oc.mutedForeground,
                   ),
@@ -419,7 +419,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
       haptic: HapticStrength.light,
       onPressed: () => _openChat(context, row),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+        padding: const EdgeInsets.fromLTRB(16, OcOptical.sessionRowPadV, 12, OcOptical.sessionRowPadV),
         child: Row(
           children: [
             Container(

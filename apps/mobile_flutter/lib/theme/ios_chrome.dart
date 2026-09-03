@@ -22,7 +22,7 @@ class OcChrome {
   static const double dockRadius = OcTokens.dockRadius;
   static const double largeTitleSize = OcTokens.rootTitleSize;
   static const double pageGutter = OcTokens.pageInlineInset;
-  static const double tabBarHeight = OcTokens.dockHeight;
+  static const double tabBarHeight = OcOptical.dockCapsuleHeight;
   static const double headerButtonSize = OcTokens.headerButtonSize;
 }
 
@@ -308,10 +308,10 @@ class SegmentedPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 4, OcChrome.pageGutter, 12),
-      padding: const EdgeInsets.all(3),
+      padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         color: context.oc.muted,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(11),
       ),
       child: Row(
         children: [
@@ -321,21 +321,21 @@ class SegmentedPill extends StatelessWidget {
                 key: Key('segment-$i'),
                 haptic: HapticStrength.light,
                 onPressed: () => onSelected(i),
-                borderRadius: BorderRadius.circular(9),
+                borderRadius: BorderRadius.circular(10),
                 child: OcSelectedSpring(
                   selected: selectedIndex == i,
                   builder: (context, t) {
                     final tokens = context.oc;
                     return Container(
-                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      padding: const EdgeInsets.symmetric(vertical: 4),
                       decoration: BoxDecoration(
                         color: Color.lerp(Colors.transparent, tokens.card, t),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(9),
                         boxShadow: t > 0.01
                             ? [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.04 * t),
-                                  blurRadius: 2,
+                                  color: Colors.black.withValues(alpha: 0.025 * t),
+                                  blurRadius: 3,
                                   offset: const Offset(0, 1),
                                 ),
                               ]
@@ -347,7 +347,7 @@ class SegmentedPill extends StatelessWidget {
                           if (icons != null) ...[
                             OcGlyph(
                               icons![i],
-                              size: 12,
+                              size: OcOptical.toolbarGlyph,
                               strokeWidth: OcOptical.headerGlyphStroke,
                               color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
                             ),
@@ -397,33 +397,37 @@ class FilterChipBar extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Row(
-              children: [
-                for (var i = 0; i < labels.length; i += 1)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Pressable(
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: context.oc.muted.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  for (var i = 0; i < labels.length; i += 1)
+                    Pressable(
                       key: Key('filter-$i'),
                       haptic: HapticStrength.light,
                       onPressed: () => onSelected(i),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(14),
                       child: OcSelectedSpring(
                         selected: selectedIndex == i,
                         builder: (context, t) {
                           final tokens = context.oc;
                           return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Color.lerp(Colors.transparent, tokens.muted, t * 0.9),
+                              color: Color.lerp(Colors.transparent, tokens.card.withValues(alpha: 0.92), t),
                               borderRadius: BorderRadius.circular(14),
                             ),
                             child: Text(
                               labels[i],
                               style: TextStyle(
                                 fontSize: 13,
-                                letterSpacing: 0.55,
-                                height: 1.25,
-                                fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
+                                letterSpacing: 0.28,
+                                height: 1.2,
+                                fontWeight: t > 0.5 ? FontWeight.w500 : FontWeight.w400,
                                 color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
                               ),
                             ),
@@ -431,11 +435,14 @@ class FilterChipBar extends StatelessWidget {
                         },
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
-          if (trailing != null) trailing!,
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            trailing!,
+          ],
         ],
       ),
     );
@@ -490,17 +497,18 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
   final bool busy;
 
   @override
-  Size get preferredSize => const Size.fromHeight(56);
+  Size get preferredSize => const Size.fromHeight(44);
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
+      padding: const EdgeInsets.fromLTRB(10, 2, 10, 4),
       child: Row(
         children: [
           CircularChromeButton(
             key: leadingKey,
             glyph: OcGlyphKind.chevronBack,
+            size: OcOptical.chatHeaderButton,
             tooltip: t(context, 'chat.back'),
             onPressed: () => Navigator.of(context).maybePop(),
           ),
@@ -515,10 +523,10 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.45,
-                      height: 1.28,
+                      fontSize: OcOptical.chatTitle,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: OcOptical.chatTitleTracking,
+                      height: OcOptical.chatTitleHeight,
                       color: context.oc.foreground,
                     ),
                   ),
@@ -531,15 +539,15 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
               key: const Key('chat-busy'),
               padding: const EdgeInsets.only(right: 8),
               child: SizedBox(
-                width: 20,
-                height: 20,
+                width: 18,
+                height: 18,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2,
+                  strokeWidth: 1.6,
                   color: context.oc.mutedForeground,
                 ),
               ),
             ),
-          if (trailing != null) trailing! else const SizedBox(width: OcOptical.searchButton),
+          if (trailing != null) trailing! else const SizedBox(width: OcOptical.chatHeaderButton),
         ],
       ),
     );

@@ -33,18 +33,18 @@ class FloatingCapsuleTabBar extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(22, 0, 22, 8),
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 6),
         child: DecoratedBox(
           key: Key('dock-selected-$selectedId'),
           decoration: BoxDecoration(
             color: tokens.card,
-            borderRadius: BorderRadius.circular(OcChrome.dockRadius),
+            borderRadius: BorderRadius.circular(OcOptical.dockCapsuleRadius),
             border: Border.all(color: tokens.mobileBorder, width: 0.5),
             boxShadow: OcElevation.dock(context),
           ),
           child: Material(
             color: Colors.transparent,
-            borderRadius: BorderRadius.circular(OcChrome.dockRadius),
+            borderRadius: BorderRadius.circular(OcOptical.dockCapsuleRadius),
             clipBehavior: Clip.antiAlias,
             child: SizedBox(
               height: OcChrome.tabBarHeight,
@@ -92,7 +92,7 @@ class _TabSlot extends StatelessWidget {
       key: Key('tab-$id'),
       haptic: HapticStrength.light,
       onPressed: onTap,
-      borderRadius: BorderRadius.circular(OcChrome.dockRadius),
+      borderRadius: BorderRadius.circular(OcOptical.dockCapsuleRadius),
       child: OcSelectedSpring(
         selected: selected,
         builder: (context, t) {
@@ -100,8 +100,8 @@ class _TabSlot extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: OcOptical.dockSquircleW,
-                height: OcOptical.dockSquircleH,
+                width: OcOptical.dockSquircle,
+                height: OcOptical.dockSquircle,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: Color.lerp(Colors.transparent, tokens.primary.withValues(alpha: 0.14), t),
@@ -114,7 +114,7 @@ class _TabSlot extends StatelessWidget {
                   strokeWidth: OcOptical.dockGlyphStroke,
                 ),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: OcOptical.dockLabelGap),
               Text(
                 label,
                 maxLines: 1,
