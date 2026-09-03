@@ -8,9 +8,11 @@ import '../../data/chat_timeline.dart';
 import '../../data/home_session.dart';
 import '../../data/message_id.dart';
 import '../../data/openchamber_http.dart';
+import '../../data/prompt_attachment.dart';
 import '../../l10n/app_strings.dart';
 import '../../native/haptics.dart';
 import '../../native/live_activity_controller.dart';
+import '../../native/media_channel.dart';
 import 'composer_bar.dart';
 import 'composer_occupancy.dart';
 import 'ios_composer_host.dart';
@@ -19,11 +21,12 @@ import 'reverse_chat_list.dart';
 /// Pushed secondary page — never a dock tab.
 /// 1.19.3-beta.5: re-entry jumps to the latest message (reverse index 0).
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key, required this.session, this.timeline, this.appController});
+  const ChatScreen({super.key, required this.session, this.timeline, this.appController, this.media});
 
   final HomeSessionRow session;
   final ReverseChatController? timeline;
   final AppController? appController;
+  final MediaChannel? media;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -33,8 +36,9 @@ class _ChatScreenState extends State<ChatScreen> {
   late final ReverseChatController _timeline = widget.timeline ?? ReverseChatController();
   final TextEditingController _composer = TextEditingController();
   final ScrollController _scroll = ScrollController();
-  final List<String> _attachments = [];
+  final List<AttachmentDraft> _attachments = [];
   final _haptics = NativeHaptics();
+  late final MediaChannel _media = widget.media ?? MediaChannel();
   bool _busy = false;
   String? _errorKey;
   Timer? _poll;
@@ -128,13 +132,40 @@ class _ChatScreenState extends State<ChatScreen> {
     _scroll.jumpTo(ReverseChatController.latestReverseIndex.toDouble());
   }
 
+  Future<void> _attach() async {
+    try {
+      final picked = await _media.pickImages();
+      final ready = <AttachmentDraft>[];
+      for (final draft in picked) {
+        var next = draft;
+        if (next.isHeic) {
+          next = await _media.transcodeHeic(next);
+        }
+        if (next.bytes.length > maxPromptAttachmentBytes) {
+          if (mounted) setState(() => _errorKey = 'chat.error.attachmentTooLarge');
+          continue;
+        }
+        await _media.publishVirtualAsset(next);
+        ready.add(next);
+      }
+      if (!mounted || ready.isEmpty) return;
+      setState(() {
+        _attachments.addAll(ready);
+        _errorKey = null;
+      });
+    } on PromptAttachmentUploadError {
+      if (mounted) setState(() => _errorKey = 'chat.error.attachFailed');
+    }
+  }
+
   Future<void> _send([String? raw]) async {
     final body = (raw ?? _composer.text).trim();
-    if (body.isEmpty) return;
+    if (body.isEmpty && _attachments.isEmpty) return;
     final controller = widget.appController;
     final messageId = ascendingId('msg');
+    final pending = List<AttachmentDraft>.from(_attachments);
     setState(() {
-      _timeline.appendNewer(ChatMessage(id: messageId, body: body, isUser: true));
+      _timeline.appendNewer(ChatMessage(id: messageId, body: body.isEmpty ? pending.map((item) => item.name).join(', ') : body, isUser: true));
       _composer.clear();
       _attachments.clear();
       _busy = true;
@@ -148,13 +179,26 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     try {
-      await controller.sendPrompt(session: widget.session, messageId: messageId, text: body);
+      await controller.sendPrompt(
+        session: widget.session,
+        messageId: messageId,
+        text: body,
+        attachments: pending,
+      );
       if (controller.liveEventsConnected) {
         _poll?.cancel();
         _poll = null;
       } else {
         _pollTranscript();
       }
+    } on PromptAttachmentUploadError {
+      setState(() {
+        _busy = false;
+        _attachments
+          ..clear()
+          ..addAll(pending);
+        _errorKey = 'chat.error.attachFailed';
+      });
     } on OpenChamberHttpException {
       setState(() {
         _busy = false;
@@ -253,12 +297,12 @@ class _ChatScreenState extends State<ChatScreen> {
                 visible: true,
                 warm: false,
                 text: _composer.text,
-                canSend: _composer.text.trim().isNotEmpty,
+                canSend: _composer.text.trim().isNotEmpty || _attachments.isNotEmpty,
                 canAbort: _busy,
-                attachments: _attachments,
+                attachments: _attachments.map((item) => item.name).toList(),
                 onSend: _send,
                 onStop: _stop,
-                onAttach: () => setState(() => _attachments.add('attachment-${_attachments.length + 1}')),
+                onAttach: _attach,
                 onText: (value) => setState(() => _composer.text = value),
               ),
             )
@@ -267,12 +311,14 @@ class _ChatScreenState extends State<ChatScreen> {
               color: Theme.of(context).colorScheme.surface,
               child: Padding(
                 padding: EdgeInsets.only(bottom: inset.bottom),
-                child: ComposerBar(
+                child:                 ComposerBar(
                   controller: _composer,
                   busy: _busy,
+                  attachments: _attachments,
                   onSend: _send,
                   onStop: _stop,
-                  onAttach: () => setState(() => _attachments.add('attachment-${_attachments.length + 1}')),
+                  onAttach: _attach,
+                  onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
                 ),
               ),
             ),

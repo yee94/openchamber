@@ -39,8 +39,34 @@ abstract final class OpenChamberPaths {
   static const smallModel = '/api/small-model';
   static const dictationStatus = '/api/dictation/status';
   static const ttsStatus = '/api/tts/status';
+  static const assistants = '/api/openchamber/assistants';
+  static const assistantsSettings = '/api/openchamber/assistants/settings';
+  static const scheduledTasks = '/api/openchamber/scheduled-tasks';
+  static const scheduledTaskRuns = '/api/openchamber/scheduled-task-runs';
+  static const pluginsEntry = '/api/config/plugins/entry';
+  static const skillsInstall = '/api/config/skills/install';
   static String quota(String providerId) =>
       '/api/quota/${Uri.encodeComponent(providerId)}';
+  static String promptAttachment(String attachmentId) =>
+      '/api/fs/prompt-attachments/${Uri.encodeComponent(attachmentId)}';
+  static String providerAuth(String providerId) =>
+      '/api/auth/${Uri.encodeComponent(providerId)}';
+  static String providerAuthDelete(String providerId) =>
+      '/api/provider/${Uri.encodeComponent(providerId)}/auth';
+  static String configAgent(String name) =>
+      '/api/config/agents/${Uri.encodeComponent(name)}';
+  static String assistant(String id) =>
+      '/api/openchamber/assistants/${Uri.encodeComponent(id)}';
+  static String assistantSessionNew(String id) =>
+      '${assistant(id)}/session/new';
+  static String configMcp(String name) =>
+      '/api/config/mcp/${Uri.encodeComponent(name)}';
+  static String pluginEntry(String id) =>
+      '/api/config/plugins/entry/${Uri.encodeComponent(id)}';
+  static String configSkill(String name) =>
+      '/api/config/skills/${Uri.encodeComponent(name)}';
+  static String configCommand(String name) =>
+      '/api/config/commands/${Uri.encodeComponent(name)}';
 }
 
 class OpenChamberHttpException implements Exception {
@@ -108,6 +134,7 @@ class OpenChamberRequest {
     required this.path,
     this.query = const {},
     this.body,
+    this.bytes,
     this.bearer,
     this.extraHeaders = const {},
     this.stream = false,
@@ -118,6 +145,8 @@ class OpenChamberRequest {
   final String path;
   final Map<String, String> query;
   final Map<String, Object?>? body;
+  /// Raw body for `PUT /api/fs/prompt-attachments/:id`. Never log these bytes.
+  final List<int>? bytes;
   final String? bearer;
   final Map<String, String> extraHeaders;
   final bool stream;
@@ -175,7 +204,11 @@ class LiveOpenChamberTransport implements OpenChamberTransport {
       httpRequest.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${request.bearer}');
     }
     request.extraHeaders.forEach(httpRequest.headers.set);
-    if (request.body != null) {
+    final bytes = request.bytes;
+    if (bytes != null) {
+      httpRequest.contentLength = bytes.length;
+      httpRequest.add(bytes);
+    } else if (request.body != null) {
       httpRequest.headers.contentType = ContentType.json;
       httpRequest.add(utf8.encode(jsonEncode(request.body)));
     }

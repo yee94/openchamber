@@ -11,6 +11,8 @@ object NativePlugins {
     fun register(engine: FlutterEngine, activity: MainActivity) {
         engine.plugins.add(SecureStorePlugin())
         engine.plugins.add(QrScanPlugin())
+        engine.plugins.add(MediaPlugin())
+        engine.plugins.add(VirtualAssetPlugin())
         val messenger = engine.dartExecutor.binaryMessenger
         deepLinkChannel = MethodChannel(messenger, "openchamber/deep_link").also { channel ->
             channel.setMethodCallHandler { call, result ->
@@ -69,7 +71,12 @@ object NativePlugins {
             }
         }
         MethodChannel(messenger, "openchamber/widget_snapshot").setMethodCallHandler { call, result ->
-            result.success(null)
+            if (call.method == "setBadge" || call.method == "write") {
+                // Android launchers have no official app-icon badge API without a posted notification.
+                result.success(null)
+            } else {
+                result.notImplemented()
+            }
         }
         MethodChannel(messenger, "openchamber/live_activity").setMethodCallHandler { call, result ->
             when (call.method) {

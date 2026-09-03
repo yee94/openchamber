@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../data/prompt_attachment.dart';
 import '../../l10n/app_strings.dart';
 import 'composer_occupancy.dart';
 
@@ -15,6 +16,8 @@ class ComposerBar extends StatelessWidget {
     this.onAttach,
     this.onStop,
     this.busy = false,
+    this.attachments = const [],
+    this.onRemoveAttachment,
   });
 
   final TextEditingController controller;
@@ -22,6 +25,8 @@ class ComposerBar extends StatelessWidget {
   final VoidCallback? onAttach;
   final VoidCallback? onStop;
   final bool busy;
+  final List<AttachmentDraft> attachments;
+  final ValueChanged<int>? onRemoveAttachment;
 
   @override
   Widget build(BuildContext context) {
@@ -78,6 +83,26 @@ class ComposerBar extends StatelessWidget {
                         onTap: () => controller.text = item.label,
                       ),
                   ],
+                ),
+              ),
+            if (attachments.isNotEmpty)
+              SizedBox(
+                height: 56,
+                child: ListView.separated(
+                  key: const Key('composer-attachments'),
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  itemCount: attachments.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final item = attachments[index];
+                    return InputChip(
+                      key: Key('composer-attachment-${item.name}'),
+                      label: Text(item.name),
+                      avatar: Image.memory(item.bytes, width: 20, height: 20, fit: BoxFit.cover),
+                      onDeleted: onRemoveAttachment == null ? null : () => onRemoveAttachment!(index),
+                    );
+                  },
                 ),
               ),
             Padding(

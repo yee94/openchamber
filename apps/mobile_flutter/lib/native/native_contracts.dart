@@ -91,7 +91,12 @@ const List<NativeContract> flutterNativeContracts = [
   ),
   NativeContract(
     id: 'virtual-assets-heic-picker',
-    status: 'missing',
-    summary: 'TODO: virtual image asset bridge, HEIC transcode, Android photo picker.',
+    status: 'landed',
+    summary: 'Android ACTION_PICK_IMAGES + iOS PHPicker, HEIC→JPEG transcode, virtual-asset create/append/finish. Composer uploads PUT /api/fs/prompt-attachments then file:// parts.',
+  ),
+  NativeContract(
+    id: 'app-icon-badge',
+    status: 'landed',
+    summary: 'iOS applicationIconBadgeNumber from session-index attentionCount when writing the widget snapshot. Android has no official badge API without a posted notification.',
   ),
 ];

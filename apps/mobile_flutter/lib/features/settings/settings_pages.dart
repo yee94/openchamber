@@ -5,6 +5,7 @@ import '../../data/app_version.dart';
 import '../../data/settings_catalog.dart';
 import '../../data/settings_remote.dart';
 import '../../l10n/app_strings.dart';
+import 'settings_editors.dart';
 import 'settings_primitives.dart';
 
 class SettingsDetailPage extends StatelessWidget {
@@ -39,54 +40,48 @@ class SettingsDetailPage extends StatelessWidget {
       case 'git':
         return GitSettingsPage(controller: controller);
       case 'providers':
-        return RemoteListSettingsPage(
+        return EntityEditorSettingsPage(
           controller: controller,
+          kind: SettingsEditorKind.providers,
           titleKey: 'settings.providers.title',
           emptyKey: 'settings.providers.empty',
-          resource: () => controller.remoteSettings.providers,
-          load: controller.remoteSettings.loadProviders,
         );
       case 'agents':
-        return RemoteListSettingsPage(
+        return EntityEditorSettingsPage(
           controller: controller,
+          kind: SettingsEditorKind.agents,
           titleKey: 'settings.agents.title',
           emptyKey: 'settings.agents.empty',
-          resource: () => controller.remoteSettings.agents,
-          load: controller.remoteSettings.loadAgents,
         );
       case 'assistants':
-        return RemoteListSettingsPage(
+        return EntityEditorSettingsPage(
           controller: controller,
+          kind: SettingsEditorKind.assistants,
           titleKey: 'settings.assistants.title',
           emptyKey: 'settings.assistants.empty',
-          resource: () => controller.remoteSettings.assistants,
-          load: controller.remoteSettings.loadAssistants,
         );
       case 'behavior':
         return BehaviorSettingsPage(controller: controller);
       case 'commands':
-        return RemoteListSettingsPage(
+        return EntityEditorSettingsPage(
           controller: controller,
+          kind: SettingsEditorKind.commands,
           titleKey: 'settings.commands.title',
           emptyKey: 'settings.commands.empty',
-          resource: () => controller.remoteSettings.commands,
-          load: controller.remoteSettings.loadCommands,
         );
       case 'mcp':
-        return RemoteListSettingsPage(
+        return EntityEditorSettingsPage(
           controller: controller,
+          kind: SettingsEditorKind.mcp,
           titleKey: 'settings.mcp.title',
           emptyKey: 'settings.mcp.empty',
-          resource: () => controller.remoteSettings.mcp,
-          load: controller.remoteSettings.loadMcp,
         );
       case 'plugins':
-        return RemoteListSettingsPage(
+        return EntityEditorSettingsPage(
           controller: controller,
+          kind: SettingsEditorKind.plugins,
           titleKey: 'settings.plugins.title',
           emptyKey: 'settings.plugins.empty',
-          resource: () => controller.remoteSettings.plugins,
-          load: controller.remoteSettings.loadPlugins,
         );
       case 'magic-prompts':
         return RemoteListSettingsPage(
@@ -105,12 +100,11 @@ class SettingsDetailPage extends StatelessWidget {
           load: controller.remoteSettings.loadSnippets,
         );
       case 'skills.installed':
-        return RemoteListSettingsPage(
+        return EntityEditorSettingsPage(
           controller: controller,
+          kind: SettingsEditorKind.skills,
           titleKey: 'settings.skills.title',
           emptyKey: 'settings.skills.empty',
-          resource: () => controller.remoteSettings.skills,
-          load: controller.remoteSettings.loadSkills,
         );
       case 'usage':
         return RemoteListSettingsPage(

@@ -11,6 +11,8 @@ abstract final class OpenChamberChannels {
   static const haptics = 'openchamber/haptics';
   static const push = 'openchamber/push';
   static const widgetSnapshot = 'openchamber/widget_snapshot';
+  static const media = 'openchamber/media';
+  static const virtualAsset = 'openchamber/virtual_asset';
 }
 
 abstract final class OpenChamberPlatformViews {

@@ -12,12 +12,14 @@ import '../native/platform_channels.dart';
 import '../native/push_registration.dart';
 import '../native/qr_scanner.dart';
 import '../native/share_targeting.dart';
+import 'assistant_scheduled.dart';
 import 'chat_timeline.dart';
 import 'home_session.dart';
 import 'instance_store.dart';
 import 'openchamber_api.dart';
 import 'openchamber_http.dart';
 import 'pairing_payload.dart';
+import 'prompt_attachment.dart';
 import 'relay/tunnel_client.dart';
 import 'secure_store.dart';
 import 'session_index.dart';
@@ -101,6 +103,12 @@ class AppController extends ChangeNotifier {
   int transcriptEpoch = 0;
   SessionIndexSnapshot? lastIndex;
   String? createSessionErrorKey;
+  SettingsResource<AssistantSnapshotView> assistantSnapshot = const SettingsResource();
+  SettingsResource<List<ScheduledTaskRecord>> scheduledTasks = const SettingsResource();
+  SettingsResource<List<ScheduledRunRecord>> scheduledRuns = const SettingsResource();
+  List<String> scheduledFailedProjectIds = const [];
+  String? scheduledFilterProjectId;
+  String? scheduledFilterTaskId;
 
   List<SavedInstance> get instances => List.unmodifiable(_instances);
   SavedInstance? get activeInstance {
@@ -494,13 +502,26 @@ class AppController extends ChangeNotifier {
   Future<void> sendPrompt({
     required HomeSessionRow session,
     required String messageId,
-    required String text,
+    String text = '',
+    List<AttachmentDraft> attachments = const [],
   }) async {
     final base = activeBase;
     final bearer = activeBearer;
     final directory = session.directory ?? '';
     if (base == null) {
       throw OpenChamberHttpException(0, OpenChamberPaths.sessionPromptAsync(session.id), code: 'not_connected');
+    }
+    final files = <PromptFilePart>[];
+    for (final draft in attachments) {
+      final uploaded = await uploadPromptAttachmentBytes(
+        api: _api,
+        base: base,
+        bearer: bearer,
+        bytes: draft.bytes,
+        mime: draft.mime,
+        filename: draft.name,
+      );
+      files.add(PromptFilePart(mime: uploaded.mime, filename: draft.name, url: uploaded.url));
     }
     await _api.promptAsync(
       base: base,
@@ -509,6 +530,7 @@ class AppController extends ChangeNotifier {
       directory: directory,
       messageId: messageId,
       text: text,
+      files: files,
     );
     liveActivity.selectSession(session.id);
     liveActivity.markWorkStarted();
@@ -970,11 +992,113 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<void> loadAssistantSnapshot() async {
+    final previous = assistantSnapshot;
+    assistantSnapshot = SettingsResource(value: previous.value, loading: true);
+    notifyListeners();
+    final base = activeBase;
+    if (base == null) {
+      assistantSnapshot = SettingsResource(value: previous.value, errorKey: 'settings.error.needsServer');
+      notifyListeners();
+      return;
+    }
+    try {
+      final payload = await _api.getAssistantsSnapshot(base: base, bearer: activeBearer);
+      assistantSnapshot = SettingsResource(value: parseAssistantSnapshotView(payload));
+    } on OpenChamberHttpException {
+      assistantSnapshot = SettingsResource(value: previous.value, errorKey: 'settings.error.loadFailed');
+    }
+    notifyListeners();
+  }
+
+  Future<void> setAssistantsFeatureEnabled(bool enabled) async {
+    final current = assistantSnapshot.value;
+    final base = activeBase;
+    if (base == null || current == null) {
+      throw const OpenChamberHttpException(0, OpenChamberPaths.assistantsSettings, code: 'not_connected');
+    }
+    await _api.putAssistantsSettings(
+      base: base,
+      bearer: activeBearer,
+      enabled: enabled,
+      expectedRevision: current.revision,
+    );
+    await loadAssistantSnapshot();
+  }
+
+  Future<HomeSessionRow?> openAssistant(AssistantRecord assistant) async {
+    final bound = assistant.boundSession;
+    if (bound != null) return bound;
+    final base = activeBase;
+    if (base == null) {
+      throw const OpenChamberHttpException(0, OpenChamberPaths.assistants, code: 'not_connected');
+    }
+    final binding = parseSessionBinding(
+      await _api.newAssistantSession(base: base, bearer: activeBearer, assistantId: assistant.id),
+    );
+    if (binding == null) return null;
+    return HomeSessionRow(
+      id: binding.id,
+      title: assistant.name,
+      projectLabel: assistant.name,
+      kind: HomeSessionKind.catalog,
+      directory: binding.directory ?? assistant.workspacePath,
+    );
+  }
+
+  Future<void> loadScheduledTasks() async {
+    final previous = scheduledTasks;
+    scheduledTasks = SettingsResource(value: previous.value, loading: true);
+    notifyListeners();
+    final base = activeBase;
+    if (base == null) {
+      scheduledTasks = SettingsResource(value: previous.value, errorKey: 'settings.error.needsServer');
+      notifyListeners();
+      return;
+    }
+    try {
+      final payload = await _api.getScheduledTasks(base: base, bearer: activeBearer);
+      scheduledTasks = SettingsResource(value: parseScheduledTasks(payload));
+      scheduledFailedProjectIds = parseFailedScheduledProjectIds(payload);
+    } on OpenChamberHttpException {
+      scheduledTasks = SettingsResource(value: previous.value, errorKey: 'settings.error.loadFailed');
+    }
+    notifyListeners();
+  }
+
+  Future<void> loadScheduledRuns({required String projectId, required String taskId}) async {
+    scheduledFilterProjectId = projectId;
+    scheduledFilterTaskId = taskId;
+    final previous = scheduledRuns;
+    scheduledRuns = SettingsResource(value: previous.value, loading: true);
+    notifyListeners();
+    final base = activeBase;
+    if (base == null) {
+      scheduledRuns = SettingsResource(value: previous.value, errorKey: 'settings.error.needsServer');
+      notifyListeners();
+      return;
+    }
+    try {
+      final payload = await _api.getScheduledTaskRuns(
+        base: base,
+        bearer: activeBearer,
+        projectId: projectId,
+        taskId: taskId,
+      );
+      scheduledRuns = SettingsResource(value: parseScheduledRuns(payload));
+    } on OpenChamberHttpException {
+      scheduledRuns = SettingsResource(value: previous.value, errorKey: 'settings.error.loadFailed');
+    }
+    notifyListeners();
+  }
+
   Future<void> _writeWidgetSnapshot() async {
+    final snapshot = buildWidgetSnapshot(sessions);
     if (!_useNativeLinks) return;
     try {
       const channel = MethodChannel(OpenChamberChannels.widgetSnapshot);
-      await channel.invokeMethod<void>('write', buildWidgetSnapshot(sessions).encode()).timeout(const Duration(milliseconds: 80));
+      await channel.invokeMethod<void>('write', snapshot.encode()).timeout(const Duration(milliseconds: 80));
+      await channel.invokeMethod<void>('setBadge', {'count': snapshot.attentionCount}).timeout(const Duration(milliseconds: 80));
     } catch (_) {}
   }
 

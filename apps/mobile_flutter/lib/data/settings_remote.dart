@@ -26,11 +26,12 @@ const List<String> officialQuotaProviderIds = [
 ];
 
 class SettingsNamedItem {
-  const SettingsNamedItem({required this.id, required this.title, this.subtitle});
+  const SettingsNamedItem({required this.id, required this.title, this.subtitle, this.meta = const {}});
 
   final String id;
   final String title;
   final String? subtitle;
+  final Map<String, String> meta;
 }
 
 /// Failure is never treated as an authoritative empty list.
@@ -223,6 +224,343 @@ class SettingsRemoteStore {
         fetch: () async => parseSmallModels(await _api.getSmallModel(base: _requireBase(), bearer: _bearer())),
       );
 
+  Future<void> saveProviderApiKey(String providerId, String key) {
+    return _mutate(
+      after: loadProviders,
+      run: () => _api.setProviderApiKey(
+        base: _requireBase(),
+        bearer: _bearer(),
+        providerId: providerId,
+        key: key,
+      ),
+    );
+  }
+
+  Future<void> createAgent({required String name, String? description, String? prompt, String mode = 'subagent'}) {
+    return _mutate(
+      after: loadAgents,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'POST',
+        path: OpenChamberPaths.configAgent(name),
+        body: {
+          'mode': mode,
+          if (description != null && description.isNotEmpty) 'description': description,
+          if (prompt != null && prompt.isNotEmpty) 'prompt': prompt,
+        },
+      ),
+    );
+  }
+
+  Future<void> updateAgent({required String name, String? description, String? prompt, String? mode}) {
+    return _mutate(
+      after: loadAgents,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'PATCH',
+        path: OpenChamberPaths.configAgent(name),
+        body: {
+          if (mode != null) 'mode': mode,
+          if (description != null) 'description': description,
+          if (prompt != null) 'prompt': prompt,
+        },
+      ),
+    );
+  }
+
+  Future<void> deleteAgent(String name) {
+    return _mutate(
+      after: loadAgents,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'DELETE',
+        path: OpenChamberPaths.configAgent(name),
+        body: const {},
+      ),
+    );
+  }
+
+  Future<void> createAssistant({
+    required String name,
+    required String providerId,
+    required String modelId,
+    String mode = 'chat',
+    String defaultPrompt = '',
+  }) {
+    return _mutate(
+      after: loadAssistants,
+      run: () => _api.createAssistantDraft(
+        base: _requireBase(),
+        bearer: _bearer(),
+        draft: {
+          'enabled': true,
+          'name': name,
+          'defaultPrompt': defaultPrompt,
+          'workspacePath': null,
+          'providerID': providerId,
+          'modelID': modelId,
+          'agent': null,
+          'mode': mode,
+        },
+      ),
+    );
+  }
+
+  Future<void> updateAssistant({
+    required String id,
+    required int expectedRevision,
+    required String name,
+    required String providerId,
+    required String modelId,
+    String mode = 'chat',
+    String defaultPrompt = '',
+  }) {
+    return _mutate(
+      after: loadAssistants,
+      run: () => _api.patchAssistant(
+        base: _requireBase(),
+        bearer: _bearer(),
+        id: id,
+        draft: {
+          'enabled': true,
+          'name': name,
+          'defaultPrompt': defaultPrompt,
+          'workspacePath': null,
+          'providerID': providerId,
+          'modelID': modelId,
+          'agent': null,
+          'mode': mode,
+          'expectedRevision': expectedRevision,
+        },
+      ),
+    );
+  }
+
+  Future<void> deleteAssistant({required String id, required int expectedRevision}) {
+    return _mutate(
+      after: loadAssistants,
+      run: () => _api.deleteAssistant(
+        base: _requireBase(),
+        bearer: _bearer(),
+        id: id,
+        expectedRevision: expectedRevision,
+      ),
+    );
+  }
+
+  Future<void> createMcp({required String name, required String type, String? command, String? url}) {
+    return _mutate(
+      after: loadMcp,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'POST',
+        path: OpenChamberPaths.configMcp(name),
+        body: {
+          'type': type,
+          if (type == 'local') 'command': (command ?? '').split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList(),
+          if (type == 'remote') 'url': url ?? '',
+        },
+      ),
+    );
+  }
+
+  Future<void> updateMcp({required String name, required String type, String? command, String? url}) {
+    return _mutate(
+      after: loadMcp,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'PATCH',
+        path: OpenChamberPaths.configMcp(name),
+        body: {
+          'type': type,
+          if (type == 'local') 'command': (command ?? '').split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList(),
+          if (type == 'remote') 'url': url ?? '',
+        },
+      ),
+    );
+  }
+
+  Future<void> deleteMcp(String name) {
+    return _mutate(
+      after: loadMcp,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'DELETE',
+        path: OpenChamberPaths.configMcp(name),
+      ),
+    );
+  }
+
+  Future<void> createPlugin({required String spec, String scope = 'user'}) {
+    return _mutate(
+      after: loadPlugins,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'POST',
+        path: OpenChamberPaths.pluginsEntry,
+        body: {'spec': spec, 'scope': scope},
+      ),
+    );
+  }
+
+  Future<void> updatePlugin({required String id, required String spec, String? scope}) {
+    return _mutate(
+      after: loadPlugins,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'PATCH',
+        path: OpenChamberPaths.pluginEntry(id),
+        body: {
+          'spec': spec,
+          if (scope != null) 'scope': scope,
+        },
+      ),
+    );
+  }
+
+  Future<void> deletePlugin(String id) {
+    return _mutate(
+      after: loadPlugins,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'DELETE',
+        path: OpenChamberPaths.pluginEntry(id),
+      ),
+    );
+  }
+
+  Future<void> createSkill({required String name, required String description, String? instructions}) {
+    return _mutate(
+      after: loadSkills,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'POST',
+        path: OpenChamberPaths.configSkill(name),
+        body: {
+          'name': name,
+          'description': description,
+          if (instructions != null && instructions.isNotEmpty) 'instructions': instructions,
+        },
+      ),
+    );
+  }
+
+  Future<void> updateSkill({required String name, required String description, String? instructions}) {
+    return _mutate(
+      after: loadSkills,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'PATCH',
+        path: OpenChamberPaths.configSkill(name),
+        body: {
+          'description': description,
+          if (instructions != null) 'instructions': instructions,
+        },
+      ),
+    );
+  }
+
+  Future<void> deleteSkill(String name) {
+    return _mutate(
+      after: loadSkills,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'DELETE',
+        path: OpenChamberPaths.configSkill(name),
+      ),
+    );
+  }
+
+  Future<void> installSkill({
+    required String source,
+    required String skillDir,
+    String scope = 'user',
+  }) {
+    return _mutate(
+      after: loadSkills,
+      run: () => _api.installSkillFromSource(
+        base: _requireBase(),
+        bearer: _bearer(),
+        request: {
+          'source': source,
+          'scope': scope,
+          'selections': [
+            {'skillDir': skillDir},
+          ],
+        },
+      ),
+    );
+  }
+
+  Future<void> createCommand({required String name, required String template, String? description}) {
+    return _mutate(
+      after: loadCommands,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'POST',
+        path: OpenChamberPaths.configCommand(name),
+        body: {
+          'template': template,
+          if (description != null && description.isNotEmpty) 'description': description,
+        },
+      ),
+    );
+  }
+
+  Future<void> updateCommand({required String name, required String template, String? description}) {
+    return _mutate(
+      after: loadCommands,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'PATCH',
+        path: OpenChamberPaths.configCommand(name),
+        body: {
+          'template': template,
+          if (description != null) 'description': description,
+        },
+      ),
+    );
+  }
+
+  Future<void> deleteCommand(String name) {
+    return _mutate(
+      after: loadCommands,
+      run: () => _api.mutateConfigEntity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        method: 'DELETE',
+        path: OpenChamberPaths.configCommand(name),
+      ),
+    );
+  }
+
+  Future<void> _mutate({
+    required Future<Object?> Function() run,
+    required Future<void> Function() after,
+  }) async {
+    try {
+      await run();
+    } on OpenChamberHttpException {
+      onChanged?.call();
+      rethrow;
+    }
+    await after();
+  }
+
   Future<void> loadUsage() => _load(
         current: () => usage,
         assign: (next) => usage = next,
@@ -308,7 +646,16 @@ List<SettingsNamedItem> parseAgentList(Object? payload) {
   return items.map((item) {
     final name = item['name']?.toString() ?? item['id']?.toString() ?? '';
     final mode = item['mode']?.toString() ?? item['scope']?.toString();
-    return SettingsNamedItem(id: name, title: name, subtitle: mode);
+    return SettingsNamedItem(
+      id: name,
+      title: name,
+      subtitle: mode,
+      meta: {
+        if (mode != null) 'mode': mode,
+        if (item['description'] != null) 'description': item['description'].toString(),
+        if (item['prompt'] != null) 'prompt': item['prompt'].toString(),
+      },
+    );
   }).where((item) => item.id.isNotEmpty).toList();
 }
 
@@ -318,7 +665,18 @@ List<SettingsNamedItem> parseAssistantSnapshot(Object? payload) {
     final id = item['id']?.toString() ?? '';
     final name = item['name']?.toString() ?? id;
     final model = [item['providerID'], item['modelID']].whereType<String>().where((part) => part.isNotEmpty).join('/');
-    return SettingsNamedItem(id: id, title: name, subtitle: model.isEmpty ? item['mode']?.toString() : model);
+    return SettingsNamedItem(
+      id: id,
+      title: name,
+      subtitle: model.isEmpty ? item['mode']?.toString() : model,
+      meta: {
+        if (item['revision'] != null) 'revision': item['revision'].toString(),
+        if (item['providerID'] != null) 'providerID': item['providerID'].toString(),
+        if (item['modelID'] != null) 'modelID': item['modelID'].toString(),
+        if (item['mode'] != null) 'mode': item['mode'].toString(),
+        if (item['defaultPrompt'] != null) 'defaultPrompt': item['defaultPrompt'].toString(),
+      },
+    );
   }).where((item) => item.id.isNotEmpty).toList();
 }
 
@@ -328,7 +686,16 @@ List<SettingsNamedItem> parseCommandCatalog(Object? payload) {
     final name = item['name']?.toString() ?? '';
     final scope = item['scope']?.toString();
     final builtIn = item['isBuiltIn'] == true ? 'built-in' : scope;
-    return SettingsNamedItem(id: name, title: name, subtitle: item['description']?.toString() ?? builtIn);
+    return SettingsNamedItem(
+      id: name,
+      title: name,
+      subtitle: item['description']?.toString() ?? builtIn,
+      meta: {
+        if (item['template'] != null) 'template': item['template'].toString(),
+        if (item['description'] != null) 'description': item['description'].toString(),
+        if (item['isBuiltIn'] == true) 'builtIn': 'true',
+      },
+    );
   }).where((item) => item.id.isNotEmpty).toList();
 }
 
@@ -337,7 +704,16 @@ List<SettingsNamedItem> parseMcpServers(Object? payload) {
     final name = item['name']?.toString() ?? item['id']?.toString() ?? '';
     final type = item['type']?.toString();
     final enabled = item['enabled'] == false ? 'disabled' : type;
-    return SettingsNamedItem(id: name, title: name, subtitle: enabled);
+    return SettingsNamedItem(
+      id: name,
+      title: name,
+      subtitle: enabled,
+      meta: {
+        if (type != null) 'type': type,
+        if (item['url'] != null) 'url': item['url'].toString(),
+        if (item['command'] is List) 'command': (item['command'] as List).join(' '),
+      },
+    );
   }).where((item) => item.id.isNotEmpty).toList();
 }
 
@@ -346,7 +722,15 @@ List<SettingsNamedItem> parsePluginEntries(Object? payload) {
   return asObjectList(root['entries']).map((item) {
     final id = item['id']?.toString() ?? item['spec']?.toString() ?? '';
     final spec = item['spec']?.toString() ?? id;
-    return SettingsNamedItem(id: id, title: spec, subtitle: item['scope']?.toString());
+    return SettingsNamedItem(
+      id: id,
+      title: spec,
+      subtitle: item['scope']?.toString(),
+      meta: {
+        'spec': spec,
+        if (item['scope'] != null) 'scope': item['scope'].toString(),
+      },
+    );
   }).where((item) => item.id.isNotEmpty).toList();
 }
 
@@ -358,6 +742,9 @@ List<SettingsNamedItem> parseSkills(Object? payload) {
       id: name,
       title: name,
       subtitle: item['description']?.toString() ?? item['scope']?.toString(),
+      meta: {
+        if (item['description'] != null) 'description': item['description'].toString(),
+      },
     );
   }).where((item) => item.id.isNotEmpty).toList();
 }

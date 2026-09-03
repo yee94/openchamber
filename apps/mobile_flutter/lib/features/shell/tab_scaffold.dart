@@ -42,8 +42,8 @@ class _MobileTabScaffoldState extends State<MobileTabScaffold> {
         controller: widget.controller,
         bottomOccupancy: defaultTargetPlatform == TargetPlatform.iOS ? collapsedComposerOccupancy : 0,
       ),
-      const AssistantTabScreen(),
-      const ScheduledTabScreen(),
+      AssistantTabScreen(controller: widget.controller),
+      ScheduledTabScreen(controller: widget.controller),
       SettingsHomeScreen(controller: widget.controller),
     ];
 

@@ -1,6 +1,7 @@
 import 'chat_timeline.dart';
 import 'home_session.dart';
 import 'openchamber_http.dart';
+import 'prompt_attachment.dart';
 import 'session_index.dart';
 
 /// Official OpenChamber / OpenCode calls used by mobile connect + home + chat.
@@ -195,9 +196,20 @@ class OpenChamberApi {
     required String sessionId,
     required String directory,
     required String messageId,
-    required String text,
+    String text = '',
+    List<PromptFilePart> files = const [],
   }) async {
     final path = OpenChamberPaths.sessionPromptAsync(sessionId);
+    final parts = <Map<String, Object?>>[
+      if (text.isNotEmpty) {'type': 'text', 'text': text},
+      for (final file in files)
+        {
+          'type': 'file',
+          'mime': file.mime,
+          'filename': file.filename,
+          'url': file.url,
+        },
+    ];
     final response = await transport.send(
       base,
       OpenChamberRequest(
@@ -208,15 +220,66 @@ class OpenChamberApi {
           'sessionID': sessionId,
           'directory': directory,
           'messageID': messageId,
-          'parts': [
-            {'type': 'text', 'text': text},
-          ],
+          'parts': parts,
         },
       ),
     );
     if (!response.ok) {
       throw OpenChamberHttpException(response.status, path);
     }
+  }
+
+  Future<PromptAttachmentUploadResult> putPromptAttachment({
+    required Uri base,
+    String? bearer,
+    required String attachmentId,
+    required List<int> bytes,
+    required String mime,
+    required String sha256,
+    String? filename,
+  }) async {
+    final path = OpenChamberPaths.promptAttachment(attachmentId);
+    final response = await transport.send(
+      base,
+      OpenChamberRequest(
+        method: 'PUT',
+        path: path,
+        bearer: bearer,
+        bytes: bytes,
+        extraHeaders: {
+          'Content-Type': mime,
+          'Content-Length': '${bytes.length}',
+          'X-OpenChamber-Content-Length': '${bytes.length}',
+          'X-OpenChamber-Sha256': sha256,
+          'X-OpenChamber-Mime': mime,
+          if (filename != null && filename.isNotEmpty)
+            'X-OpenChamber-Filename': Uri.encodeComponent(filename),
+        },
+        timeout: const Duration(seconds: 30),
+      ),
+    );
+    if (response.status == 413) {
+      throw const PromptAttachmentUploadError(413, 'too-large');
+    }
+    if (!response.ok) {
+      throw PromptAttachmentUploadError(
+        response.status,
+        response.status >= 500 || response.status == 0 ? 'unavailable' : 'rejected',
+      );
+    }
+    final body = response.map;
+    final storedPath = body['path']?.toString() ?? '';
+    if (storedPath.isEmpty) {
+      throw PromptAttachmentUploadError(response.status, 'unavailable');
+    }
+    final size = body['size'];
+    return PromptAttachmentUploadResult(
+      path: storedPath,
+      url: toPromptAttachmentFileUrl(storedPath),
+      mime: body['mime']?.toString().isNotEmpty == true ? body['mime'].toString() : mime,
+      size: size is int ? size : bytes.length,
+      sha256: body['sha256']?.toString() ?? sha256,
+    );
   }
 
   Future<void> abortSession({
@@ -450,6 +513,166 @@ class OpenChamberApi {
     return _requireOk(base, OpenChamberRequest(method: 'GET', path: OpenChamberPaths.quota(providerId)), bearer);
   }
 
+  Future<Object?> getAssistantsCapability({required Uri base, String? bearer}) {
+    return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.assistantsCapability), bearer);
+  }
+
+  Future<Object?> getScheduledTasks({required Uri base, String? bearer}) {
+    return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.scheduledTasks), bearer);
+  }
+
+  Future<Object?> getScheduledTaskRuns({
+    required Uri base,
+    String? bearer,
+    String? projectId,
+    String? taskId,
+    int limit = 20,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'GET',
+        path: OpenChamberPaths.scheduledTaskRuns,
+        query: {
+          'limit': '$limit',
+          if (projectId != null && projectId.isNotEmpty) 'projectId': projectId,
+          if (taskId != null && taskId.isNotEmpty) 'taskId': taskId,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> setProviderApiKey({
+    required Uri base,
+    String? bearer,
+    required String providerId,
+    required String key,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'PUT',
+        path: OpenChamberPaths.providerAuth(providerId),
+        body: {'type': 'api', 'key': key},
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> deleteProviderAuth({
+    required Uri base,
+    String? bearer,
+    required String providerId,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'DELETE',
+        path: OpenChamberPaths.providerAuthDelete(providerId),
+        query: const {'scope': 'all'},
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> mutateConfigEntity({
+    required Uri base,
+    String? bearer,
+    required String method,
+    required String path,
+    Map<String, Object?>? body,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(method: method, path: path, body: body),
+      bearer,
+    );
+  }
+
+  Future<Object?> createAssistantDraft({
+    required Uri base,
+    String? bearer,
+    required Map<String, Object?> draft,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(method: 'POST', path: OpenChamberPaths.assistants, body: draft),
+      bearer,
+    );
+  }
+
+  Future<Object?> patchAssistant({
+    required Uri base,
+    String? bearer,
+    required String id,
+    required Map<String, Object?> draft,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(method: 'PATCH', path: OpenChamberPaths.assistant(id), body: draft),
+      bearer,
+    );
+  }
+
+  Future<Object?> deleteAssistant({
+    required Uri base,
+    String? bearer,
+    required String id,
+    required int expectedRevision,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'DELETE',
+        path: OpenChamberPaths.assistant(id),
+        body: {'expectedRevision': expectedRevision},
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> putAssistantsSettings({
+    required Uri base,
+    String? bearer,
+    required bool enabled,
+    required int expectedRevision,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'PUT',
+        path: OpenChamberPaths.assistantsSettings,
+        body: {'enabled': enabled, 'expectedRevision': expectedRevision},
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> newAssistantSession({
+    required Uri base,
+    String? bearer,
+    required String assistantId,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(method: 'POST', path: OpenChamberPaths.assistantSessionNew(assistantId)),
+      bearer,
+    );
+  }
+
+  Future<Object?> installSkillFromSource({
+    required Uri base,
+    String? bearer,
+    required Map<String, Object?> request,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(method: 'POST', path: OpenChamberPaths.skillsInstall, body: request),
+      bearer,
+    );
+  }
+
   Future<Map<String, Object?>> _requireMap(Uri base, OpenChamberRequest request, String? bearer) async {
     final body = await _requireOk(base, request, bearer);
     if (body is Map<String, Object?>) return body;
@@ -465,6 +688,7 @@ class OpenChamberApi {
         path: request.path,
         query: request.query,
         body: request.body,
+        bytes: request.bytes,
         bearer: bearer,
         extraHeaders: request.extraHeaders,
         stream: request.stream,
@@ -578,6 +802,8 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   int createStatus = 200;
   int settingsStatus = 200;
   int catalogStatus = 200;
+  int mutationStatus = 200;
+  int uploadStatus = 200;
 
   Map<String, Object?> settings = Map<String, Object?>.from(defaultTestSettings);
   Object? providerCatalog = defaultTestProviderCatalog;
@@ -598,8 +824,13 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
 
   final List<OpenChamberRequest> calls = [];
   final List<String> sentPrompts = [];
+  final List<List<Map<String, Object?>>> sentPromptParts = [];
+  final List<Map<String, Object?>> uploadedAttachments = [];
   final List<Map<String, Object?>> createdSessions = [];
   List<String> eventChunks = const [];
+  Object? scheduledTasks = defaultTestScheduledTasks;
+  Object? scheduledRuns = defaultTestScheduledRuns;
+  Object? assistantsCapability = const {'available': true};
 
   @override
   Stream<List<int>> openByteStream(Uri base, OpenChamberRequest request) async* {
@@ -611,6 +842,92 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
 
   @override
   Future<void> close() async {}
+
+  void _appendAssistant(Map<String, Object?> created) {
+    final root = assistants is Map ? Map<String, Object?>.from((assistants as Map).map((key, value) => MapEntry(key.toString(), value))) : <String, Object?>{'revision': 1, 'enabled': true, 'assistants': <Object?>[]};
+    final list = [...(root['assistants'] is List ? (root['assistants'] as List) : const [])];
+    list.add(created);
+    root['assistants'] = list;
+    assistants = root;
+  }
+
+  void _appendPlugin(Map<String, Object?> created) {
+    final root = plugins is Map ? Map<String, Object?>.from((plugins as Map).map((key, value) => MapEntry(key.toString(), value))) : <String, Object?>{'entries': <Object?>[]};
+    final list = [...(root['entries'] is List ? (root['entries'] as List) : const [])];
+    list.add(created);
+    root['entries'] = list;
+    plugins = root;
+  }
+
+  OpenChamberResponse _mutateNamedList(
+    OpenChamberRequest request, {
+    required Object? current,
+    required void Function(Object? next) assign,
+    required String idKey,
+  }) {
+    final name = Uri.decodeComponent(request.path.split('/').last);
+    var items = current is List ? [...current] : <Object?>[];
+    if (request.method == 'DELETE') {
+      items = items.where((item) => item is! Map || item[idKey]?.toString() != name).toList();
+    } else if (request.method == 'POST') {
+      items = [...items, {idKey: name, ...?request.body}];
+    } else if (request.method == 'PATCH') {
+      items = items.map((item) {
+        if (item is Map && item[idKey]?.toString() == name) {
+          return {...item.map((key, value) => MapEntry(key.toString(), value)), ...?request.body};
+        }
+        return item;
+      }).toList();
+    }
+    assign(items);
+    return OpenChamberResponse(status: mutationStatus, body: {'ok': true});
+  }
+
+  OpenChamberResponse _mutateNamedCatalog(
+    OpenChamberRequest request, {
+    required Object? current,
+    required void Function(Object? next) assign,
+    required String listKey,
+    String idKey = 'name',
+  }) {
+    final root = current is Map ? Map<String, Object?>.from(current.map((key, value) => MapEntry(key.toString(), value))) : <String, Object?>{listKey: <Object?>[]};
+    final name = Uri.decodeComponent(request.path.split('/').last);
+    var items = root[listKey] is List ? [...(root[listKey] as List)] : <Object?>[];
+    if (request.method == 'DELETE') {
+      items = items.where((item) => item is! Map || item[idKey]?.toString() != name).toList();
+    } else if (request.method == 'POST') {
+      items = [...items, {idKey: name, ...?request.body}];
+    } else if (request.method == 'PATCH') {
+      items = items.map((item) {
+        if (item is Map && item[idKey]?.toString() == name) {
+          return {...item.map((key, value) => MapEntry(key.toString(), value)), ...?request.body};
+        }
+        return item;
+      }).toList();
+    }
+    root[listKey] = items;
+    assign(root);
+    return OpenChamberResponse(status: mutationStatus, body: {'ok': true});
+  }
+
+  OpenChamberResponse _mutateAssistant(OpenChamberRequest request) {
+    final id = Uri.decodeComponent(request.path.split('/').last);
+    final root = assistants is Map ? Map<String, Object?>.from((assistants as Map).map((key, value) => MapEntry(key.toString(), value))) : <String, Object?>{'revision': 1, 'enabled': true, 'assistants': <Object?>[]};
+    var items = root['assistants'] is List ? [...(root['assistants'] as List)] : <Object?>[];
+    if (request.method == 'DELETE') {
+      items = items.where((item) => item is! Map || item['id']?.toString() != id).toList();
+    } else if (request.method == 'PATCH') {
+      items = items.map((item) {
+        if (item is Map && item['id']?.toString() == id) {
+          return {...item.map((key, value) => MapEntry(key.toString(), value)), ...?request.body};
+        }
+        return item;
+      }).toList();
+    }
+    root['assistants'] = items;
+    assistants = root;
+    return OpenChamberResponse(status: mutationStatus, body: {'ok': true});
+  }
 
   static final Map<String, Object?> defaultTestSessionIndex = {
     'available': true,
@@ -735,8 +1052,57 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
     'revision': 1,
     'enabled': true,
     'assistants': [
-      {'id': 'asst-1', 'name': 'Home', 'providerID': 'anthropic', 'modelID': 'claude-sonnet-4', 'mode': 'chat'},
+      {
+        'id': 'asst-1',
+        'revision': 1,
+        'enabled': true,
+        'name': 'Home',
+        'defaultPrompt': '',
+        'workspacePath': '/workspace/openchamber',
+        'providerID': 'anthropic',
+        'modelID': 'claude-sonnet-4',
+        'mode': 'chat',
+        'sessionID': 'sess-catalog',
+      },
     ],
+  };
+
+  static const Map<String, Object?> defaultTestScheduledTasks = {
+    'tasks': [
+      {
+        'projectId': 'proj-1',
+        'task': {
+          'id': 'cron-1',
+          'name': 'Nightly review',
+          'enabled': true,
+          'schedule': {'kind': 'daily', 'time': '02:00'},
+          'execution': {'prompt': 'Review the diff', 'providerID': 'anthropic', 'modelID': 'claude-sonnet-4'},
+          'state': {'createdAt': 1, 'updatedAt': 2, 'lastStatus': 'success', 'lastSessionId': 'sess-catalog'},
+        },
+      },
+    ],
+    'failedProjectIds': <Object?>[],
+  };
+
+  static const Map<String, Object?> defaultTestScheduledRuns = {
+    'runs': [
+      {
+        'id': 'run-1',
+        'projectId': 'proj-1',
+        'taskId': 'cron-1',
+        'taskName': 'Nightly review',
+        'trigger': 'scheduled',
+        'status': 'success',
+        'sessionId': 'sess-catalog',
+        'directory': '/workspace/openchamber',
+        'error': null,
+        'startedAt': 1,
+        'finishedAt': 2,
+        'durationMs': 1,
+      },
+    ],
+    'nextCursor': null,
+    'complete': true,
   };
 
   static const Map<String, Object?> defaultTestCommands = {
@@ -865,6 +1231,43 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         return OpenChamberResponse(status: catalogStatus, body: agents);
       case OpenChamberPaths.assistantsSnapshot:
         return OpenChamberResponse(status: catalogStatus, body: assistants);
+      case OpenChamberPaths.assistantsCapability:
+        return OpenChamberResponse(status: catalogStatus, body: assistantsCapability);
+      case OpenChamberPaths.assistantsSettings:
+        final enabled = request.body?['enabled'] == true;
+        if (assistants is Map<String, Object?>) {
+          assistants = {...assistants as Map<String, Object?>, 'enabled': enabled};
+        }
+        return OpenChamberResponse(status: mutationStatus, body: {'ok': true});
+      case OpenChamberPaths.assistants:
+        if (request.method == 'POST') {
+          final created = <String, Object?>{
+            'id': 'asst-${DateTime.now().microsecondsSinceEpoch}',
+            'revision': 1,
+            'enabled': true,
+            ...?request.body,
+          };
+          _appendAssistant(created);
+          return OpenChamberResponse(status: mutationStatus, body: created);
+        }
+        return OpenChamberResponse(status: catalogStatus, body: assistants);
+      case OpenChamberPaths.scheduledTasks:
+        return OpenChamberResponse(status: catalogStatus, body: scheduledTasks);
+      case OpenChamberPaths.scheduledTaskRuns:
+        return OpenChamberResponse(status: catalogStatus, body: scheduledRuns);
+      case OpenChamberPaths.pluginsEntry:
+        if (request.method == 'POST') {
+          final created = <String, Object?>{
+            'id': 'plug-${DateTime.now().microsecondsSinceEpoch}',
+            'spec': request.body?['spec'],
+            'scope': request.body?['scope'] ?? 'user',
+          };
+          _appendPlugin(created);
+          return OpenChamberResponse(status: mutationStatus, body: created);
+        }
+        return OpenChamberResponse(status: mutationStatus, body: const {'ok': true});
+      case OpenChamberPaths.skillsInstall:
+        return OpenChamberResponse(status: mutationStatus, body: const {'ok': true, 'installed': <Object?>[]});
       case OpenChamberPaths.commandsMetadata:
         return OpenChamberResponse(status: catalogStatus, body: commands);
       case OpenChamberPaths.mcp:
@@ -897,15 +1300,19 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         }
         if (request.path.endsWith('/prompt_async')) {
           final parts = request.body?['parts'];
-          if (parts is List && parts.isNotEmpty && parts.first is Map) {
-            sentPrompts.add((parts.first as Map)['text']?.toString() ?? '');
+          if (parts is List) {
+            final maps = parts.whereType<Map>().map((part) => part.map((key, value) => MapEntry(key.toString(), value))).toList();
+            sentPromptParts.add(maps);
+            for (final part in maps) {
+              if (part['type'] == 'text') {
+                sentPrompts.add(part['text']?.toString() ?? '');
+              }
+            }
             transcript = [
               ...transcript,
               {
                 'info': {'id': request.body?['messageID'] ?? 'local', 'role': 'user'},
-                'parts': [
-                  {'type': 'text', 'text': (parts.first as Map)['text']},
-                ],
+                'parts': maps,
               },
             ];
           }
@@ -913,6 +1320,61 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         }
         if (request.path.endsWith('/abort')) {
           return OpenChamberResponse(status: abortStatus, body: true);
+        }
+        if (request.path.startsWith('/api/fs/prompt-attachments/')) {
+          final mime = request.extraHeaders['X-OpenChamber-Mime'] ?? 'application/octet-stream';
+          final sha = request.extraHeaders['X-OpenChamber-Sha256'] ?? '';
+          final storedPath = '/data/openchamber/prompt-attachments/${request.path.split('/').last}';
+          uploadedAttachments.add({
+            'path': storedPath,
+            'size': request.bytes?.length ?? 0,
+            'mime': mime,
+            'sha256': sha,
+          });
+          return OpenChamberResponse(
+            status: uploadStatus,
+            body: {
+              'success': true,
+              'path': storedPath,
+              'size': request.bytes?.length ?? 0,
+              'mime': mime,
+              'sha256': sha,
+            },
+          );
+        }
+        if (request.path.startsWith('/api/auth/')) {
+          return OpenChamberResponse(status: mutationStatus, body: const {'ok': true});
+        }
+        if (request.path.contains('/auth') && request.path.startsWith('/api/provider/')) {
+          return OpenChamberResponse(status: mutationStatus, body: const {'ok': true});
+        }
+        if (request.path.startsWith('/api/config/agents/')) {
+          return _mutateNamedList(request, current: agents, assign: (next) => agents = next, idKey: 'name');
+        }
+        if (request.path.startsWith('/api/config/mcp/')) {
+          return _mutateNamedList(request, current: mcp, assign: (next) => mcp = next, idKey: 'name');
+        }
+        if (request.path.startsWith('/api/config/commands/')) {
+          return _mutateNamedCatalog(request, current: commands, assign: (next) => commands = next, listKey: 'commands');
+        }
+        if (request.path.startsWith('/api/config/skills/') && request.path != OpenChamberPaths.skills) {
+          return _mutateNamedCatalog(request, current: skills, assign: (next) => skills = next, listKey: 'skills');
+        }
+        if (request.path.startsWith('/api/config/plugins/entry/')) {
+          return _mutateNamedCatalog(request, current: plugins, assign: (next) => plugins = next, listKey: 'entries', idKey: 'id');
+        }
+        if (request.path.startsWith('/api/openchamber/assistants/') && request.path.endsWith('/session/new')) {
+          return OpenChamberResponse(
+            status: mutationStatus,
+            body: {
+              'sessionID': 'sess-catalog',
+              'directory': '/workspace/openchamber',
+              'sessionGeneration': 1,
+            },
+          );
+        }
+        if (request.path.startsWith('/api/openchamber/assistants/')) {
+          return _mutateAssistant(request);
         }
         return const OpenChamberResponse(status: 404, body: {'error': 'not_found'});
     }

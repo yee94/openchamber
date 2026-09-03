@@ -72,7 +72,7 @@ Native contracts / shell
 | Appearance `iosNativeUi` | **not present** | Do not rebuild. Native is always on. |
 | Plan mode / project notes / Todo | **not present** | Removed in 1.19.2. Do not rebuild. |
 | Capgo OTA | **not ported** | WebView web-bundle hot update only. Flutter ships IPA/APK. |
-| Flutter CI | landed | `.github/workflows/flutter-mobile-ci.yml` automatic on this track |
+| Flutter CI | landed | `.github/workflows/flutter-mobile-ci.yml` automatic on this track. **#13** `332ad6f82` and **#14** `77baf9b6f` both fully green (analyze + Android APK + iOS simulator). |
 | Signed release workflow | landed | `.github/workflows/flutter-mobile-release.yml` — existing secret names only |
 
 ## Settings slug checklist (`MOBILE_SETTINGS_PAGE_SLUGS`)
@@ -134,9 +134,9 @@ Native contracts / shell
 | Native back | landed | Flutter routes | iOS `CupertinoPageRoute` edge pan; Android `PredictiveBackPageTransitionsBuilder` |
 | Secure storage | landed | Keychain / Android Keystore | Never log tokens |
 | Deep links | landed | `openchamber://` | Pairing cold-launch, share-inbox, session jump URI |
-| Virtual assets / HEIC / Android picker | missing | `OpenChamberVirtualAsset`, `OpenChamberMedia` | Later |
-| External browser | missing | Android-only plugin | Later |
-| App-icon badge | missing | HANDOFF | Later |
+| Virtual assets / HEIC / Android picker | landed | `OpenChamberVirtualAsset`, `OpenChamberMedia` | Android `ACTION_PICK_IMAGES`, iOS PHPicker, HEIC transcode, in-memory virtual-asset create/append/finish. Composer uploads `PUT /api/fs/prompt-attachments/:id` then `file://` parts. Flutter preview is `Image.memory` — the `openchamber-asset://` scheme is for WebView. |
+| External browser | missing | Android-only plugin | Later. Provider/MCP OAuth is an honest gap this slice. |
+| App-icon badge | landed (iOS) | session-index `attentionCount` | iOS `applicationIconBadgeNumber` when writing the widget snapshot. No `GET /badge-count`. Android has no official badge API without a posted notification. |
 | Status bar | stub | Capacitor overlay | Use Flutter/system insets |
 | Capgo OTA | **will not port** | `@capgo/capacitor-updater` | Full IPA/APK via signed-release |
 
@@ -169,7 +169,7 @@ Capacitor pipelines on `main` are unchanged (`mobile-ci.yml`, `mobile-release.ym
 
 | Workflow | Trigger | What |
 |---|---|---|
-| `.github/workflows/flutter-mobile-ci.yml` | **push to `work/flutter-native` only** + `workflow_dispatch` | Parallel `analyze-test` / `android-debug` / `ios-simulator`. Flutter **3.32.8** pinned. No `pull_request`. iOS job is a real `flutter build ios --simulator --no-codesign` and asserts `Runner.app`. **#13 (`332ad6f82`, [run 33713282610](https://github.com/yee94/openchambery/actions/runs/33713282610)):** analyze + Android debug APK + iOS simulator **all success**. |
+| `.github/workflows/flutter-mobile-ci.yml` | **push to `work/flutter-native` only** + `workflow_dispatch` | Parallel `analyze-test` / `android-debug` / `ios-simulator`. Flutter **3.32.8** pinned. No `pull_request`. iOS job is a real `flutter build ios --simulator --no-codesign` and asserts `Runner.app`. **#13 (`332ad6f82`, [run 33713282610](https://github.com/yee94/openchambery/actions/runs/33713282610))** and **#14 (`77baf9b6f`, [run 33714058628](https://github.com/yee94/openchambery/actions/runs/33714058628))** fully green. |
 | `.github/workflows/flutter-mobile-release.yml` | `workflow_dispatch` only | Decode **existing** Android keystore + iOS p12 / four profiles; signed Android APK/AAB; iOS archive/export + TestFlight gated by `build_ios` (default **false**) |
 
 Secret names reused (do not invent new ones; do not print values):
@@ -205,7 +205,7 @@ Capgo (`mobile-beta-ota.yml`) stays Capacitor/WebView. Flutter does not consume 
 | No Chat dock tab | Widget test: 4 destinations |
 | No iosNativeUi | Catalog + Settings home tests |
 | `flutter analyze` + tests on Linux | Required this slice |
-| Flutter CI YAML | Push-only on `work/flutter-native`; parallel jobs; iOS job asserts `Runner.app`. **#13 green** on `332ad6f82`: https://github.com/yee94/openchambery/actions/runs/33713282610 |
+| Flutter CI YAML | Push-only on `work/flutter-native`; parallel jobs; iOS job asserts `Runner.app`. **#13 green** on `332ad6f82`: https://github.com/yee94/openchambery/actions/runs/33713282610. **#14 green** on `77baf9b6f`: https://github.com/yee94/openchambery/actions/runs/33714058628 |
 | Signed-release YAML attaches all four profiles | Committed. **Signed archive not run here** |
 
 ## Commands
@@ -261,16 +261,32 @@ flutter build apk --release
 
 | Surface | Status | Notes |
 |---|---|---|
-| Settings completeness | landed (list + official fields) | Every `MOBILE_SETTINGS_PAGE_SLUGS` page except already-real instances/appearance/about now reads official APIs. Collection pages are list + key fields + honest empty/error. Full agent/MCP/plugin **editors** (create/OAuth/file write) are not ported. |
+| Settings completeness | landed (list + official fields) | Every `MOBILE_SETTINGS_PAGE_SLUGS` page except already-real instances/appearance/about now reads official APIs. Slice 6 adds create/edit/delete. Provider/MCP OAuth and plugin file write remain honest gaps. |
 | Settings blob | landed | GET/PUT `/api/config/settings` is a merge PUT, same as `createWebSettingsAPI`. Failure keeps the previous snapshot. |
 | Notifications finish | landed | Toggles PUT `nativeNotificationsEnabled` / `notifyOnCompletion` / `notifyOnError` / `notifyOnQuestion`. Background push still uses `POST /api/push/apns-token`. |
 | Tunneled WebSockets | **gap** | Still not ported. SSE-through-HTTP-mux is enough for chat + live events. |
-| Virtual assets / HEIC / picker | **gap** | Not cheap; left for later. |
+| Virtual assets / HEIC / picker | landed | See sixth-slice. |
+
+## Sixth-slice status
+
+| Surface | Status | Notes |
+|---|---|---|
+| Native photo picker | landed | Android `MediaStore.ACTION_PICK_IMAGES` (+ `ACTION_GET_CONTENT` fallback). iOS `PHPicker` on the main actor. |
+| HEIC transcode | landed | Official `{data, mime, quality?}` → `{data, mime:'image/jpeg'}`. Accept only `image/heic` / `image/heif`. 32 MiB pick / 25 MiB upload. |
+| Virtual image asset | landed (native store) | `create` / `append` / `finish` / `cancel`. Flutter composer preview uses `Image.memory`, not the WebView scheme. |
+| Composer image send | landed | `PUT /api/fs/prompt-attachments/{id}` raw bytes + SHA-256 headers, then `prompt_async` `file` parts with `file://` URLs. Never `data:` / `blob:`. |
+| Settings entity editors | landed | Providers API key `PUT /api/auth/{id}`; agents/MCP/commands/skills CRUD; assistants POST/PATCH/DELETE + expectedRevision; plugins entry create/edit/delete; skills install `POST /api/config/skills/install`. |
+| Provider / MCP OAuth | **honest gap** | Needs an external browser. UI shows `settings.oauth.needsBrowser`. |
+| Plugin file editor | **honest gap** | File write APIs exist; this slice does entry spec only. |
+| Assistant tab | landed | `GET /api/openchamber/assistants/snapshot`. Enable via `PUT /api/openchamber/assistants/settings`. Tap opens bound `sessionID` or `POST .../session/new`. |
+| Scheduled tab | landed | `GET /api/openchamber/scheduled-tasks`. Tap loads `GET /api/openchamber/scheduled-task-runs?projectId&taskId`. Run with `sessionId` opens that chat. |
+| App-icon badge | landed (iOS) | From widget-snapshot `attentionCount`. Not a new REST endpoint. |
 
 ## Remaining gaps
 
 1. Tunneled WebSockets + `oc_url_token` (`packages/ui/src/lib/relay/tunnel-client.ts` `openWebSocket`, `packages/ui/src/lib/runtime-auth.ts`)
 2. Experimental session-list fallback when index returns 501
-3. Virtual assets / HEIC / picker
+3. Provider/MCP OAuth (external browser) and plugin **file** editor
 4. Capgo / plan / notes / Todo / Chat dock tab — will not port
 5. A relay-paired **phone** talking to a real hosted relay was **not** exercised from this Linux VM. Dart client ↔ Dart host memory-wire proves redeem + session-index. Live `wss://` + real host private key is still a device/network check.
+6. Android launcher badge — no official API without posting a notification. iOS badge is local `attentionCount`.
