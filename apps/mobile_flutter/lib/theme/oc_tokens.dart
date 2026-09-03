@@ -146,11 +146,11 @@ class OcTokens extends ThemeExtension<OcTokens> {
   Color get glassFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
-  /// 0.68 official fill + frost still a cream coin on WidgetTester
-  /// (center ≈ ring). Quiet white so blur/saturate can bleed content
-  /// through — no coin silhouette. 40 hit / 36 visual. `+` stays primary.
+  /// 0.12–0.68 still a cream plate (center–ring ΔL). Quieter white so
+  /// official blur + saturate can bleed content through the disc.
+  /// 40 hit / 36 visual. `+` stays primary.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.10 : 0.12);
+      .withValues(alpha: isDark ? 0.08 : 0.08);
 
   /// Official `--oc-mobile-glass-highlight` is white / 0.60
   /// (dark 0.18). Inset sheen on the elevated plate.

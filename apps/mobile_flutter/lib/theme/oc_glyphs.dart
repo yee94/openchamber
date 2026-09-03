@@ -101,6 +101,19 @@ class _OcGlyphPainter extends CustomPainter {
       _folderFill(canvas, size, color);
       return;
     }
+    // Official `Icon weight="medium"` is stroke 2. Filling the sparkles
+    // star path is a heavy blob vs delicate medium.
+    if (kind == OcGlyphKind.sparkles && filled && official != null) {
+      paintOfficialSprite(
+        canvas: canvas,
+        size: size,
+        sprite: official,
+        color: color,
+        strokeWidth: strokeWidth,
+        filled: false,
+      );
+      return;
+    }
     if (official != null) {
       paintOfficialSprite(
         canvas: canvas,
@@ -495,8 +508,8 @@ class _OcGlyphPainter extends CustomPainter {
     final tooth = RRect.fromRectAndRadius(
       Rect.fromCenter(
         center: Offset(0, -(rim + w * 0.02)),
-        width: w * 0.18,
-        height: w * 0.08,
+        width: w * 0.16,
+        height: w * 0.07,
       ),
       Radius.circular(w * 0.02),
     );
