@@ -22,14 +22,14 @@ class OcElevation {
     if (tight) {
       return const [
         BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-        BoxShadow(color: Color(0x0C000000), blurRadius: 8),
-        BoxShadow(color: Color(0x12000000), blurRadius: 16, spreadRadius: -6, offset: Offset(0, 6)),
+        BoxShadow(color: Color(0x0B000000), blurRadius: 10),
+        BoxShadow(color: Color(0x0E000000), blurRadius: 16, spreadRadius: -4, offset: Offset(0, 3)),
       ];
     }
     return const [
       BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0C000000), blurRadius: 10),
-      BoxShadow(color: Color(0x11000000), blurRadius: 18, spreadRadius: -6, offset: Offset(0, 7)),
+      BoxShadow(color: Color(0x0B000000), blurRadius: 12),
+      BoxShadow(color: Color(0x0E000000), blurRadius: 20, spreadRadius: -4, offset: Offset(0, 4)),
     ];
   }
 
@@ -49,8 +49,8 @@ class OcElevation {
   static List<BoxShadow> controlFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-      BoxShadow(color: Color(0x14000000), blurRadius: 6, offset: Offset(0, 1)),
+      BoxShadow(color: Color(0x08000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0E000000), blurRadius: 5, offset: Offset(0, 1)),
     ];
   }
 
