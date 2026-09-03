@@ -21,7 +21,8 @@ abstract class DictationWire {
 class MemoryDictationWire implements DictationWire {
   MemoryDictationWire();
 
-  final _incoming = StreamController<String>.broadcast();
+  // Non-broadcast so `ready` is buffered if tests deliver it before the client listens.
+  final _incoming = StreamController<String>();
   final sent = <Map<String, Object?>>[];
   bool closed = false;
 

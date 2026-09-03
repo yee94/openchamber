@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openchamber/data/app_controller.dart';
@@ -11,7 +9,6 @@ import 'package:openchamber/data/openchamber_http.dart';
 import 'package:openchamber/data/pcm_capture.dart';
 import 'package:openchamber/data/relay/crypto.dart';
 import 'package:openchamber/data/relay/handshake.dart';
-import 'package:openchamber/data/relay/protocol.dart';
 import 'package:openchamber/data/relay/tunnel_client.dart';
 import 'package:openchamber/data/secure_store.dart';
 import 'package:openchamber/features/chat/tool_cards.dart';
@@ -153,7 +150,7 @@ void main() {
       ),
     );
     expect(find.byKey(const Key('chat-tts-m-tts')), findsOneWidget);
-    expect(find.text('Read aloud'), findsOneWidget);
+    expect(find.byTooltip('Read aloud'), findsOneWidget);
     await tester.tap(find.byKey(const Key('chat-tts-m-tts')));
     expect(spoken, isTrue);
   });

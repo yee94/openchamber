@@ -692,7 +692,7 @@ class OpenChamberApi {
   }
 
   Future<String?> mintUrlToken({required Uri base, String? bearer}) async {
-    final response = await _transport.send(
+    final response = await transport.send(
       base,
       OpenChamberRequest(method: 'POST', path: OpenChamberPaths.authUrlToken, bearer: bearer),
     );
@@ -710,7 +710,7 @@ class OpenChamberApi {
     String voice = 'nova',
     double speed = 0.9,
   }) async {
-    final response = await _transport.send(
+    final response = await transport.send(
       base,
       OpenChamberRequest(
         method: 'POST',

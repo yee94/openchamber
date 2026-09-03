@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 /// Official OpenChamber / OpenCode paths used by `packages/ui` mobile.
 /// Do not invent endpoints. See `packages/ui/src/apps/mobileConnections.ts`

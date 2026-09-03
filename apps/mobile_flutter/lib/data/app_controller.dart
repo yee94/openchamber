@@ -1264,7 +1264,9 @@ class AppController extends ChangeNotifier {
   Future<void> stopSpeaking() async {
     try {
       await TtsPlayback().stop();
-    } on MissingPluginException {}
+    } on MissingPluginException {
+      // Widget tests and Linux have no audio plugin.
+    }
   }
 
   SavedInstance? _mostRecentInstance() {
