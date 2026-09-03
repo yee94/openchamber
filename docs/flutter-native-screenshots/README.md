@@ -18,7 +18,7 @@ Recapture after restoring Yee-open type (tracking + line-height) on top of the s
 | `02-projects.png` | Light: catalog sand/orange. Overlay collapsing header (content can scroll under). Official 40px search/`+`. One elevated card per project and per branch. Floating 68px dock pill. |
 | `02-projects-dark.png` | Same Projects surface after Appearance → Dark (catalog `OcTokens`, not a photo recolor). |
 | `03-assistant.png` | Contact cards (name / mode / summary). No 「启用助理」 toggle. |
-| `04-scheduled.png` | Light: catalog tokens. Open title/meta leading, filter capsule track, primary `+` 28. Dock 计划 only. |
+| `04-scheduled.png` | Light: catalog tokens. Open title/meta leading, filter capsule track, primary `+` 24. Dock 计划 only. |
 | `04-scheduled-dark.png` | Same Scheduled surface after Appearance → Dark. |
 | `05-settings.png` | Large title, pill search, inset groups. |
 | `06-settings-appearance.png` | Light: language + theme. Latin labels must render. No `iosNativeUi`. |

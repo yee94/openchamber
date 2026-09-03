@@ -121,12 +121,16 @@ class _TabSlot extends StatelessWidget {
               children: [
                 DecoratedBox(
                   decoration: BoxDecoration(
-                    color: Color.lerp(Colors.transparent, tokens.primary.withValues(alpha: 0.18), t),
+                    color: Color.lerp(
+                      Colors.transparent,
+                      tokens.primary.withValues(alpha: OcOptical.dockIconWashAlpha),
+                      t,
+                    ),
                     borderRadius: BorderRadius.circular(OcOptical.dockIconPillRadius),
                   ),
                   child: SizedBox(
-                    width: OcOptical.dockIconPill,
-                    height: OcOptical.dockIconPill,
+                    width: OcOptical.dockIconPillWidth,
+                    height: OcOptical.dockIconPillHeight,
                     child: Center(
                       child: OcGlyph(
                         glyph,

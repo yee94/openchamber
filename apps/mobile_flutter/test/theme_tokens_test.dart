@@ -59,24 +59,27 @@ void main() {
     expect(OcOptical.largeTitleTracking, greaterThan(0.8));
     expect(OcOptical.largeTitleHeight, greaterThan(1.15));
     expect(OcOptical.rowTitleTracking, greaterThan(0.9));
-    expect(OcOptical.rowTitleHeight, greaterThan(1.48));
-    expect(OcOptical.sessionRowPadV, greaterThanOrEqualTo(6));
+    expect(OcOptical.rowTitleHeight, greaterThan(1.58));
+    expect(OcOptical.sessionRowPadV, greaterThanOrEqualTo(9));
     expect(OcOptical.metaHeight, greaterThanOrEqualTo(1.55));
     expect(OcOptical.entityTitleHeight, greaterThan(1.35));
     expect(OcOptical.scheduleTitleMetaGap, greaterThanOrEqualTo(8));
     expect(OcOptical.chatBodyHeight, lessThan(1.6));
     expect(OcOptical.searchButton, 40);
     expect(OcOptical.addButton, 40);
-    expect(OcOptical.headerDisc, 28);
+    expect(OcOptical.headerDisc, 24);
     expect(OcOptical.headerDisc, lessThan(OcOptical.searchButton));
-    expect(OcOptical.headerGlyph, 14);
+    expect(OcOptical.headerGlyph, 12);
     expect(OcOptical.collapsingActionSize, 40);
     expect(OcOptical.titleCollapseDistance, 48);
     expect(OcOptical.titleCollapseScaleEnd, 0.625);
     expect(OcOptical.dockGlyph, 6);
-    expect(OcOptical.dockIconPill, 20);
-    expect(OcOptical.dockIconPill, lessThan(OcOptical.dockCapsuleHeight / 2));
-    expect(OcOptical.dockGlyphStroke, lessThan(0.55));
+    expect(OcOptical.dockIconPillWidth, 28);
+    expect(OcOptical.dockIconPillHeight, 16);
+    expect(OcOptical.dockIconPillHeight, lessThan(OcOptical.dockIconPillWidth));
+    expect(OcOptical.dockIconPillWidth, lessThan(OcOptical.dockCapsuleHeight / 2));
+    expect(OcOptical.dockIconWashAlpha, lessThan(0.15));
+    expect(OcOptical.dockGlyphStroke, lessThan(0.48));
     expect(OcOptical.listGlyphStroke, lessThan(OcOptical.headerGlyphStroke));
     expect(OcOptical.leadingCircle, 11);
     expect(OcOptical.footerGlyph, 7);
@@ -91,8 +94,8 @@ void main() {
 
   test('OcElevation is layered in light and empty in dark', () {
     expect(OcElevation.cardFor(OcTokens.light), hasLength(3));
-    expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, greaterThanOrEqualTo(2));
-    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, lessThanOrEqualTo(20));
+    expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, greaterThanOrEqualTo(4));
+    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, lessThanOrEqualTo(28));
     expect(
       OcElevation.cardFor(OcTokens.light, tight: true).last.blurRadius,
       lessThan(OcElevation.cardFor(OcTokens.light).last.blurRadius),

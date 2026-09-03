@@ -16,24 +16,24 @@ class OcOptical {
   /// tracking and leading (README air), not official CSS `-0.024em`.
   /// Glyph sizes stay small; colors stay on [OcTokens].
   static const double rowTitle = 15;
-  static const double rowTitleTracking = 1.05;
-  static const double rowTitleHeight = 1.52;
-  static const double sessionRowPadV = 7;
-  static const double moreLinkPadV = 6;
+  static const double rowTitleTracking = 1.12;
+  static const double rowTitleHeight = 1.64;
+  static const double sessionRowPadV = 10;
+  static const double moreLinkPadV = 8;
   static const double groupHeaderPadV = 12;
   static const double groupHeaderPadVCompact = 10;
-  static const double groupTitleMetaGap = 8;
+  static const double groupTitleMetaGap = 10;
 
   static const double entityTitle = 16;
-  static const double entityTitleTracking = 1.28;
-  static const double entityTitleHeight = 1.52;
+  static const double entityTitleTracking = 1.32;
+  static const double entityTitleHeight = 1.64;
 
   static const double meta = 13;
-  static const double metaTracking = 1.0;
-  static const double metaHeight = 1.75;
+  static const double metaTracking = 1.05;
+  static const double metaHeight = 1.82;
 
-  static const double scheduleCardPadV = 14;
-  static const double scheduleTitleMetaGap = 13;
+  static const double scheduleCardPadV = 15;
+  static const double scheduleTitleMetaGap = 16;
 
   static const double chatTitle = 15;
   static const double chatTitleTracking = 0.6;
@@ -56,11 +56,11 @@ class OcOptical {
   /// smaller so search / + do not read as heavy glass plates.
   static const double searchButton = 40;
   static const double addButton = 40;
-  static const double headerDisc = 28;
-  static const double headerGlyph = 14;
-  static const double headerGlyphStroke = 0.55;
+  static const double headerDisc = 24;
+  static const double headerGlyph = 12;
+  static const double headerGlyphStroke = 0.50;
   /// In-card / dock / footer glyphs — thinner than header strokes.
-  static const double listGlyphStroke = 0.48;
+  static const double listGlyphStroke = 0.42;
 
   /// `--oc-mobile-collapsing-action-size` / expand-shift / collapse distance.
   static const double collapsingActionSize = 40;
@@ -70,10 +70,13 @@ class OcOptical {
   static const double titleCollapseScaleEnd = 0.625;
 
   static const double dockGlyph = 6;
-  static const double dockGlyphStroke = 0.48;
-  /// Soft selected wash behind the dock **icon only** — not the whole slot.
-  static const double dockIconPill = 20;
-  static const double dockIconPillRadius = 10;
+  static const double dockGlyphStroke = 0.42;
+  /// Soft selected wash behind the dock **icon only** — stadium, not a
+  /// circular peach disc and not a full-slot wash.
+  static const double dockIconPillWidth = 28;
+  static const double dockIconPillHeight = 16;
+  static const double dockIconPillRadius = 8;
+  static const double dockIconWashAlpha = 0.11;
 
   static const double leadingCircle = 11;
   static const double leadingCircleCompact = 9;
@@ -89,13 +92,13 @@ class OcOptical {
 
   static const double fileTypeW = 9;
   static const double fileTypeH = 6;
-  static const double fileTypeMark = 3.5;
+  static const double fileTypeMark = 3;
   static const double fileRowPadV = 4;
 
   static const double composerRadius = 22;
-  static const double composerPlus = 8;
-  static const double sendRing = 17;
-  static const double sendRingStroke = 0.85;
+  static const double composerPlus = 7;
+  static const double sendRing = 16;
+  static const double sendRingStroke = 0.65;
   static const double sendStop = 4.5;
   static const double scrollFab = 16;
   static const double scrollChevron = 7;

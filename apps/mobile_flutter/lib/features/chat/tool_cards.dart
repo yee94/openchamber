@@ -462,13 +462,13 @@ class _FileTypeMark extends StatelessWidget {
       height: OcOptical.fileTypeH,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: tint.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(3),
+        color: tint.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(2.5),
       ),
       child: Text(
         mark,
         textAlign: TextAlign.center,
-        style: TextStyle(fontSize: OcOptical.fileTypeMark, fontWeight: FontWeight.w700, color: tint, height: 1, letterSpacing: 0.2),
+        style: TextStyle(fontSize: OcOptical.fileTypeMark, fontWeight: FontWeight.w500, color: tint, height: 1, letterSpacing: 0.15),
       ),
     );
   }
