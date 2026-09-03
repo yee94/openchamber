@@ -28,17 +28,31 @@ class FloatingCapsuleTabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     assert(_items.length == 4);
     final haptics = NativeHaptics();
+    final hero = OcIosHero.of(context);
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-        child: Material(
+        padding: const EdgeInsets.fromLTRB(22, 0, 22, 8),
+        child: DecoratedBox(
           key: Key('dock-selected-$selectedId'),
-          color: context.oc.dockFill,
-          elevation: 3,
-          shadowColor: context.oc.surfaceForeground.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(OcChrome.dockRadius),
-          child: SizedBox(
+          decoration: BoxDecoration(
+            color: hero.card,
+            borderRadius: BorderRadius.circular(OcChrome.dockRadius),
+            border: Border.all(color: hero.separator, width: 0.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: hero.isDark ? 0.40 : 0.08),
+                blurRadius: 18,
+                spreadRadius: -2,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(OcChrome.dockRadius),
+            clipBehavior: Clip.antiAlias,
+            child: SizedBox(
             height: OcChrome.tabBarHeight,
             child: Row(
               children: [
@@ -57,6 +71,7 @@ class FloatingCapsuleTabBar extends StatelessWidget {
                   ),
               ],
             ),
+          ),
           ),
         ),
       ),
@@ -81,7 +96,7 @@ class _TabSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final hero = OcIosHero.of(context);
     return InkWell(
       key: Key('tab-$id'),
       onTap: onTap,
@@ -91,17 +106,17 @@ class _TabSlot extends StatelessWidget {
         children: [
           Container(
             width: 28,
-            height: 22,
+            height: 24,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: selected ? primary.withValues(alpha: 0.16) : Colors.transparent,
-              borderRadius: BorderRadius.circular(6),
+              color: selected ? hero.tintFill : Colors.transparent,
+              borderRadius: BorderRadius.circular(7),
             ),
             child: OcGlyph(
               glyph,
-              size: 18,
-              color: selected ? primary : context.oc.mutedForeground,
-              strokeWidth: selected ? 2.0 : 1.6,
+              size: 17,
+              color: selected ? hero.tint : hero.secondaryLabel,
+              strokeWidth: selected ? 1.3 : 1.15,
             ),
           ),
           const SizedBox(height: 2),
@@ -110,9 +125,9 @@ class _TabSlot extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 11,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? primary : context.oc.mutedForeground,
+              fontSize: 10,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              color: selected ? hero.tint : hero.secondaryLabel,
             ),
           ),
         ],

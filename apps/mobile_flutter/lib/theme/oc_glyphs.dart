@@ -65,7 +65,7 @@ class OcGlyph extends StatelessWidget {
         painter: _OcGlyphPainter(
           kind: kind,
           color: resolved,
-          strokeWidth: strokeWidth ?? (size < 16 ? 1.4 : 1.8),
+          strokeWidth: strokeWidth ?? (size < 16 ? 1.1 : 1.2),
         ),
       ),
     );
@@ -119,9 +119,9 @@ class _OcGlyphPainter extends CustomPainter {
           ..close();
         canvas.drawPath(folder, stroke);
       case OcGlyphKind.sparkles:
-        _star(canvas, Offset(w * 0.38, h * 0.42), w * 0.28, fill);
-        _star(canvas, Offset(w * 0.72, h * 0.28), w * 0.14, fill);
-        _star(canvas, Offset(w * 0.70, h * 0.70), w * 0.12, fill);
+        _sparkle(canvas, Offset(w * 0.38, h * 0.42), w * 0.26, stroke);
+        _sparkle(canvas, Offset(w * 0.72, h * 0.26), w * 0.12, stroke);
+        _sparkle(canvas, Offset(w * 0.70, h * 0.70), w * 0.10, stroke);
       case OcGlyphKind.calendar:
         canvas.drawRRect(
           RRect.fromRectAndRadius(
@@ -172,18 +172,18 @@ class _OcGlyphPainter extends CustomPainter {
         canvas.drawLine(Offset(w * 0.62, h * 0.22), Offset(w * 0.36, h * 0.50), stroke);
         canvas.drawLine(Offset(w * 0.36, h * 0.50), Offset(w * 0.62, h * 0.78), stroke);
       case OcGlyphKind.ellipsis:
-        canvas.drawCircle(Offset(w * 0.22, h * 0.5), w * 0.08, fill);
-        canvas.drawCircle(Offset(w * 0.50, h * 0.5), w * 0.08, fill);
-        canvas.drawCircle(Offset(w * 0.78, h * 0.5), w * 0.08, fill);
+        canvas.drawCircle(Offset(w * 0.22, h * 0.5), w * 0.055, fill);
+        canvas.drawCircle(Offset(w * 0.50, h * 0.5), w * 0.055, fill);
+        canvas.drawCircle(Offset(w * 0.78, h * 0.5), w * 0.055, fill);
       case OcGlyphKind.code:
         canvas.drawLine(Offset(w * 0.38, h * 0.22), Offset(w * 0.18, h * 0.50), stroke);
         canvas.drawLine(Offset(w * 0.18, h * 0.50), Offset(w * 0.38, h * 0.78), stroke);
         canvas.drawLine(Offset(w * 0.62, h * 0.22), Offset(w * 0.82, h * 0.50), stroke);
         canvas.drawLine(Offset(w * 0.82, h * 0.50), Offset(w * 0.62, h * 0.78), stroke);
       case OcGlyphKind.branch:
-        canvas.drawCircle(Offset(w * 0.32, h * 0.24), w * 0.10, fill);
-        canvas.drawCircle(Offset(w * 0.32, h * 0.76), w * 0.10, fill);
-        canvas.drawCircle(Offset(w * 0.72, h * 0.50), w * 0.10, fill);
+        canvas.drawCircle(Offset(w * 0.32, h * 0.24), w * 0.09, stroke);
+        canvas.drawCircle(Offset(w * 0.32, h * 0.76), w * 0.09, stroke);
+        canvas.drawCircle(Offset(w * 0.72, h * 0.50), w * 0.09, stroke);
         canvas.drawLine(Offset(w * 0.32, h * 0.34), Offset(w * 0.32, h * 0.66), stroke);
         canvas.drawLine(Offset(w * 0.32, h * 0.42), Offset(w * 0.62, h * 0.50), stroke);
       case OcGlyphKind.file:
@@ -296,7 +296,7 @@ class _OcGlyphPainter extends CustomPainter {
           ..lineTo(w * 0.72, h * 0.44)
           ..lineTo(w * 0.52, h * 0.44)
           ..close();
-        canvas.drawPath(bolt, fill);
+        canvas.drawPath(bolt, stroke);
       case OcGlyphKind.hourglass:
         canvas.drawLine(Offset(w * 0.28, h * 0.18), Offset(w * 0.72, h * 0.18), stroke);
         canvas.drawLine(Offset(w * 0.28, h * 0.82), Offset(w * 0.72, h * 0.82), stroke);
@@ -356,20 +356,12 @@ class _OcGlyphPainter extends CustomPainter {
     }
   }
 
-  void _star(Canvas canvas, Offset center, double radius, Paint paint) {
-    final path = Path();
-    for (var i = 0; i < 8; i += 1) {
-      final a = (i / 8) * math.pi * 2 - math.pi / 2;
-      final r = i.isEven ? radius : radius * 0.38;
-      final point = Offset(center.dx + math.cos(a) * r, center.dy + math.sin(a) * r);
-      if (i == 0) {
-        path.moveTo(point.dx, point.dy);
-      } else {
-        path.lineTo(point.dx, point.dy);
-      }
-    }
-    path.close();
-    canvas.drawPath(path, paint);
+  void _sparkle(Canvas canvas, Offset center, double radius, Paint paint) {
+    canvas.drawLine(Offset(center.dx, center.dy - radius), Offset(center.dx, center.dy + radius), paint);
+    canvas.drawLine(Offset(center.dx - radius, center.dy), Offset(center.dx + radius, center.dy), paint);
+    final diag = radius * 0.55;
+    canvas.drawLine(Offset(center.dx - diag, center.dy - diag), Offset(center.dx + diag, center.dy + diag), paint);
+    canvas.drawLine(Offset(center.dx + diag, center.dy - diag), Offset(center.dx - diag, center.dy + diag), paint);
   }
 
   @override

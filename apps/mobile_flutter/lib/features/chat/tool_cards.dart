@@ -141,29 +141,28 @@ class _AssistantHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              OcGlyph(OcGlyphKind.sparkles, size: 18, color: OcTokens.of(context).mutedForeground),
+              OcGlyph(OcGlyphKind.sparkles, size: 16, strokeWidth: 1.15, color: OcIosHero.of(context).secondaryLabel),
               const SizedBox(width: 6),
               Flexible(
-                child: Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                child: Text(name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: OcIosHero.of(context).label)),
               ),
               if (role != null && role.isNotEmpty) ...[
                 const SizedBox(width: 8),
                 Container(
                   key: const Key('chat-role-badge'),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
+                    color: OcIosHero.of(context).track,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: OcTokens.of(context).mobileBorder),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      OcGlyph(OcGlyphKind.robot, size: 11, color: OcTokens.of(context).mutedForeground),
-                      const SizedBox(width: 4),
+                      OcGlyph(OcGlyphKind.robot, size: 10, strokeWidth: 1.1, color: OcIosHero.of(context).secondaryLabel),
+                      const SizedBox(width: 3),
                       Text(
                         role,
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: OcTokens.of(context).mutedForeground),
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: OcIosHero.of(context).secondaryLabel),
                       ),
                     ],
                   ),
@@ -197,31 +196,21 @@ class _AssistantHeader extends StatelessWidget {
                 if (message.agentCount > 0)
                   Container(
                     key: const Key('chat-agent-count'),
-                    padding: const EdgeInsets.fromLTRB(6, 3, 4, 3),
+                    padding: const EdgeInsets.fromLTRB(6, 2, 4, 2),
                     decoration: BoxDecoration(
-                      color: OcChrome.agentAccent.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(20),
+                      color: OcChrome.agentAccent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          width: 16,
-                          height: 16,
-                          decoration: const BoxDecoration(
-                            color: OcChrome.agentAccent,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Center(
-                            child: OcGlyph(OcGlyphKind.sparkles, size: 9, color: Colors.white),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
+                        const OcGlyph(OcGlyphKind.sparkles, size: 8, strokeWidth: 1.1, color: OcChrome.agentAccent),
+                        const SizedBox(width: 3),
                         Text(
                           t(context, 'chat.agentsInvolved', {'count': '${message.agentCount}'}),
-                          style: const TextStyle(fontSize: 12, color: OcChrome.agentAccent, fontWeight: FontWeight.w600),
+                          style: const TextStyle(fontSize: 10, color: OcChrome.agentAccent, fontWeight: FontWeight.w500, height: 1.1),
                         ),
-                        const OcGlyph(OcGlyphKind.chevronRight, size: 12, color: OcChrome.agentAccent),
+                        const OcGlyph(OcGlyphKind.chevronRight, size: 9, color: OcChrome.agentAccent),
                       ],
                     ),
                   ),
@@ -245,10 +234,18 @@ class _FileChangeCard extends StatelessWidget {
     final visible = parts.take(5).toList();
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        borderRadius: BorderRadius.circular(12),
+        color: OcIosHero.of(context).card,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: OcIosHero.of(context).isDark ? 0.28 : 0.05),
+            blurRadius: 14,
+            spreadRadius: -2,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -336,9 +333,9 @@ class UserTurnToolbar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (message.completedClock != null) ...[
-            OcGlyph(OcGlyphKind.clock, size: 12, color: OcTokens.of(context).mutedForeground),
+            OcGlyph(OcGlyphKind.clock, size: 12, strokeWidth: 1.1, color: OcIosHero.of(context).secondaryLabel),
             const SizedBox(width: 3),
-            Text(message.completedClock!, style: TextStyle(fontSize: 11, color: OcTokens.of(context).mutedForeground)),
+            Text(message.completedClock!, style: TextStyle(fontSize: 11, color: OcIosHero.of(context).secondaryLabel)),
             const SizedBox(width: 6),
           ],
           _icon(context, key: const Key('chat-action-revert'), glyph: OcGlyphKind.undo, tooltip: t(context, 'chat.messageBody.actions.revert')),
@@ -365,7 +362,7 @@ class UserTurnToolbar extends StatelessWidget {
         onTap: () {},
         child: Padding(
           padding: const EdgeInsets.all(3),
-          child: OcGlyph(glyph, size: 13, color: OcTokens.of(context).mutedForeground),
+          child: OcGlyph(glyph, size: 13, strokeWidth: 1.1, color: OcIosHero.of(context).tertiaryLabel),
         ),
       ),
     );
@@ -382,18 +379,37 @@ class _FileTypeMark extends StatelessWidget {
     final tokens = OcTokens.of(context);
     final lower = path.toLowerCase();
     final Color tint;
+    final String mark;
     if (lower.endsWith('.md')) {
       tint = tokens.chart1;
+      mark = 'MD';
     } else if (lower.endsWith('.tsx') || lower.endsWith('.jsx')) {
-      tint = tokens.chart3;
+      tint = const Color(0xFF61DAFB);
+      mark = 'TSX';
     } else if (lower.endsWith('.ts') || lower.endsWith('.js')) {
-      tint = tokens.chart2;
+      tint = const Color(0xFF3178C6);
+      mark = 'TS';
     } else if (lower.endsWith('.dart')) {
-      tint = tokens.primary;
+      tint = const Color(0xFF0175C2);
+      mark = 'DT';
     } else {
       tint = tokens.mutedForeground;
+      mark = 'F';
     }
-    return OcGlyph(OcGlyphKind.file, size: 14, color: tint, strokeWidth: 1.5);
+    return Container(
+      width: 22,
+      height: 16,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        mark,
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 7.5, fontWeight: FontWeight.w700, color: tint, height: 1, letterSpacing: -0.2),
+      ),
+    );
   }
 }
 

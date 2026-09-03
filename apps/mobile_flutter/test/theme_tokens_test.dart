@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openchamber/theme/app_theme.dart';
+import 'package:openchamber/theme/ios_hero.dart';
 import 'package:openchamber/theme/oklch.dart';
 
 void main() {
@@ -50,6 +51,44 @@ void main() {
     expect(dark.colorScheme.primary, OcTokens.dark.primary);
     expect(light.scaffoldBackgroundColor, OcTokens.light.pageBackground);
     expect(dark.scaffoldBackgroundColor, OcTokens.dark.pageBackground);
+  });
+
+  test('OcIosHero photograph chrome is UIKit blue, not design-system orange', () {
+    expect(OcIosHero.light.tint, OcIosHero.systemBlue);
+    expect(OcIosHero.light.groupedBackground, const Color(0xFFF2F2F7));
+    expect(OcIosHero.light.card, const Color(0xFFFFFFFF));
+    expect(OcIosHero.light.tint, isNot(OcTokens.light.primary));
+    expect(OcTokens.light.primary, isNot(OcIosHero.systemBlue));
+  });
+
+  testWidgets('HeroSurface remaps catalog sand/orange only inside the overlay', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: materialTheme(Brightness.light),
+        home: HeroSurface(
+          child: Builder(
+            builder: (context) {
+              return ColoredBox(
+                key: const Key('hero-probe'),
+                color: Theme.of(context).scaffoldBackgroundColor,
+                child: Text(
+                  'probe',
+                  key: const Key('hero-primary'),
+                  style: TextStyle(color: OcTokens.of(context).primary),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    expect(
+      tester.widget<ColoredBox>(find.byKey(const Key('hero-probe'))).color,
+      OcIosHero.light.groupedBackground,
+    );
+    expect(OcTokens.of(tester.element(find.byKey(const Key('hero-primary')))).primary, OcIosHero.systemBlue);
+    expect(materialTheme(Brightness.light).scaffoldBackgroundColor, isNot(OcIosHero.light.groupedBackground));
+    expect(materialTheme(Brightness.light).colorScheme.primary, OcTokens.light.primary);
   });
 
   test('resolveOcBrightness honors Light / Dark / System', () {

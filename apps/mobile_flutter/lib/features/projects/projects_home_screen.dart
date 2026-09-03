@@ -52,8 +52,8 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         }).toList());
         final inProgress = controller.sessions.where((row) => row.kind == HomeSessionKind.inProgress).toList();
 
-        return Scaffold(
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        return HeroSurface(
+          child: Scaffold(
           body: SafeArea(
             bottom: false,
             child: RefreshIndicator(
@@ -74,6 +74,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                         CircularChromeButton(
                           key: const Key('projects-search-toggle'),
                           glyph: _searchOpen ? OcGlyphKind.xmark : OcGlyphKind.search,
+                          size: 32,
                           tooltip: t(context, 'projects.search.aria'),
                           onPressed: () {
                             _haptics.impact(HapticStrength.light);
@@ -108,20 +109,20 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                             PopupMenuItem(value: 'switch', child: Text(t(context, 'projects.menu.switchInstance'))),
                           ],
                           child: Container(
-                            width: OcChrome.headerButtonSize,
-                            height: OcChrome.headerButtonSize,
+                            width: 36,
+                            height: 36,
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary,
+                              color: OcIosHero.of(context).tint,
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.28),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 6),
+                                  color: OcIosHero.of(context).tint.withValues(alpha: 0.22),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
                                 ),
                               ],
                             ),
-                            child: OcGlyph(OcGlyphKind.plus, size: 18, color: Theme.of(context).colorScheme.onPrimary),
+                            child: const OcGlyph(OcGlyphKind.plus, size: 15, strokeWidth: 1.15, color: Colors.white),
                           ),
                         ),
                       ],
@@ -187,6 +188,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
               ),
             ),
           ),
+        ),
         );
       },
     );
@@ -299,20 +301,25 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         child: Row(
           children: [
             Container(
-              width: compact ? 26 : 30,
-              height: compact ? 26 : 30,
+              width: compact ? 24 : 26,
+              height: compact ? 24 : 26,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.10),
+                color: OcIosHero.of(context).track,
                 shape: BoxShape.circle,
               ),
-              child: OcGlyph(glyph, size: compact ? 14 : 16, color: Theme.of(context).colorScheme.primary),
+              child: OcGlyph(
+                glyph,
+                size: compact ? 13 : 14,
+                strokeWidth: 1.2,
+                color: OcIosHero.of(context).secondaryLabel,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  HighlightedText(name, query: _query, style: TextStyle(fontSize: compact ? 15 : 16, fontWeight: FontWeight.w600)),
+                  HighlightedText(name, query: _query, style: TextStyle(fontSize: compact ? 15 : 16, fontWeight: FontWeight.w500)),
                   const SizedBox(height: 1),
                   Text(
                     [
@@ -324,7 +331,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                     ].join(' · '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: context.oc.mutedForeground),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: OcIosHero.of(context).secondaryLabel),
                   ),
                 ],
               ),
@@ -391,10 +398,10 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         child: Row(
           children: [
             Container(
-              width: 7,
-              height: 7,
+              width: 5,
+              height: 5,
               decoration: BoxDecoration(
-                color: row.unread ? Theme.of(context).colorScheme.primary : context.oc.mutedForeground.withValues(alpha: 0.45),
+                color: row.unread ? OcIosHero.of(context).tint : OcIosHero.of(context).tertiaryLabel,
                 shape: BoxShape.circle,
               ),
               child: row.unread && unreadKey ? const SizedBox(key: Key('unread-dot')) : null,
@@ -404,18 +411,17 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
               child: HighlightedText(
                 row.title,
                 query: _query,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w400),
               ),
             ),
             if (formatRelativeTime(row.updated) != null)
-              Text(
-                formatRelativeTime(row.updated)!,
-                style: TextStyle(fontSize: 13, color: context.oc.mutedForeground),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Text(
+                  formatRelativeTime(row.updated)!,
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w400, color: OcIosHero.of(context).secondaryLabel),
+                ),
               ),
-            Padding(
-              padding: const EdgeInsets.only(left: 4, right: 4),
-              child: OcGlyph(OcGlyphKind.ellipsis, size: 14, color: context.oc.mutedForeground),
-            ),
           ],
         ),
       ),

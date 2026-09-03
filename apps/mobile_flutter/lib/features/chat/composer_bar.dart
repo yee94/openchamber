@@ -110,17 +110,20 @@ class ComposerBar extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.only(right: 22, bottom: 6),
                 child: Material(
-                  color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
+                  color: OcIosHero.of(context).card,
                   shape: const CircleBorder(),
-                  elevation: 2,
+                  elevation: 1,
+                  shadowColor: Colors.black.withValues(alpha: 0.10),
                   child: InkWell(
                     key: const Key('chat-scroll-to-bottom'),
                     customBorder: const CircleBorder(),
                     onTap: onScrollToBottom,
-                    child: const SizedBox(
-                      width: 36,
-                      height: 36,
-                      child: Center(child: OcGlyph(OcGlyphKind.chevronDown, size: 18)),
+                    child: SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: Center(
+                        child: OcGlyph(OcGlyphKind.chevronDown, size: 14, strokeWidth: 1.2, color: OcIosHero.of(context).label),
+                      ),
                     ),
                   ),
                 ),
@@ -135,48 +138,55 @@ class ComposerBar extends StatelessWidget {
                 border: Border.all(color: context.oc.mobileBorder),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
+                    color: Colors.black.withValues(alpha: 0.04),
                     blurRadius: 10,
+                    spreadRadius: -1,
                     offset: const Offset(0, 3),
                   ),
                 ],
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 6, 6, 6),
+                padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
                 child: Row(
                   children: [
                     IconButton(
                       key: const Key('composer-attach'),
                       tooltip: t(context, 'chat.composer.attach'),
+                      visualDensity: VisualDensity.compact,
                       onPressed: onAttach,
-                      icon: const OcGlyph(OcGlyphKind.plus, size: 20, strokeWidth: 2.1),
+                      icon: OcGlyph(OcGlyphKind.plus, size: 17, strokeWidth: 1.15, color: OcIosHero.of(context).label),
                     ),
                     Expanded(child: field),
                     if (onDictate != null)
                       IconButton(
                         key: const Key('composer-dictate'),
                         tooltip: t(context, 'chat.dictation.start'),
+                        visualDensity: VisualDensity.compact,
                         onPressed: onDictate,
-                        icon: const OcGlyph(OcGlyphKind.mic, size: 18),
+                        icon: OcGlyph(OcGlyphKind.mic, size: 16, strokeWidth: 1.2, color: OcIosHero.of(context).secondaryLabel),
                       ),
-                    Material(
-                      color: Colors.black,
-                      shape: const CircleBorder(),
-                      child: InkWell(
-                        key: const Key('composer-send'),
-                        customBorder: const CircleBorder(),
-                        onTap: busy ? onStop : onSend,
-                        child: const SizedBox(
-                          width: 36,
-                          height: 36,
-                          child: Center(
-                            child: OcGlyph(
-                              OcGlyphKind.sendSquare,
-                              size: 14,
-                              color: Colors.white,
-                            ),
-                          ),
+                    InkWell(
+                      key: const Key('composer-send'),
+                      customBorder: const CircleBorder(),
+                      onTap: busy ? onStop : onSend,
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: OcIosHero.of(context).label, width: 1.25),
                         ),
+                        alignment: Alignment.center,
+                        child: busy
+                            ? Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: OcIosHero.of(context).label,
+                                  borderRadius: BorderRadius.circular(1.5),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
                       ),
                     ),
                   ],

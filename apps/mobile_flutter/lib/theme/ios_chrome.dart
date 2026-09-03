@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/app_strings.dart';
+import 'ios_hero.dart';
 import 'oc_glyphs.dart';
 import 'oc_tokens.dart';
 
+export 'ios_hero.dart' show HeroSurface, OcIosHero;
 export 'oc_tokens.dart' show OcProductChrome, OcTokens, OcTokensContext;
 
 /// Geometry aliases of official `--oc-mobile-*` tokens.
@@ -58,10 +60,10 @@ class LargeTitleHeader extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: OcChrome.largeTitleSize,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.2,
-                    height: 1.1,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.6,
+                    height: 1.05,
                     color: onSurface,
                   ),
                 ),
@@ -83,6 +85,7 @@ class CircularChromeButton extends StatelessWidget {
     this.filled = false,
     this.ink = false,
     this.tooltip,
+    this.size,
   });
 
   final OcGlyphKind glyph;
@@ -90,36 +93,39 @@ class CircularChromeButton extends StatelessWidget {
   final bool filled;
   final bool ink;
   final String? tooltip;
+  final double? size;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = context.oc;
-    final primary = tokens.primary;
+    final hero = OcIosHero.of(context);
+    final diameter = size ?? (filled ? 36.0 : 32.0);
     final fill = !filled
-        ? Color.lerp(tokens.surfaceElevated, tokens.muted, 0.55)!
+        ? hero.card
         : ink
-            ? tokens.foreground
-            : primary;
+            ? hero.navy
+            : hero.tint;
     final child = Material(
       color: fill,
       shape: const CircleBorder(),
-      elevation: filled ? 1.5 : 0,
-      shadowColor: filled ? Colors.black.withValues(alpha: 0.22) : Colors.transparent,
+      elevation: filled ? 0.6 : 0.3,
+      shadowColor: Colors.black.withValues(alpha: filled ? 0.10 : 0.06),
+      surfaceTintColor: Colors.transparent,
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onPressed,
         child: SizedBox(
-          width: OcChrome.headerButtonSize,
-          height: OcChrome.headerButtonSize,
+          width: diameter,
+          height: diameter,
           child: Center(
             child: OcGlyph(
               glyph,
-              size: 18,
+              size: filled ? 15 : 15,
+              strokeWidth: 1.15,
               color: !filled
-                  ? tokens.foreground
+                  ? hero.secondaryLabel
                   : ink
-                      ? tokens.background
-                      : tokens.primaryForeground,
+                      ? hero.card
+                      : Colors.white,
             ),
           ),
         ),
@@ -147,14 +153,14 @@ class GroupedInsetCard extends StatelessWidget {
       margin: margin ?? const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 8),
       padding: padding,
       decoration: BoxDecoration(
-        color: context.oc.surfaceElevated,
-        borderRadius: BorderRadius.circular(OcChrome.cardRadius),
-        border: Border.all(color: context.oc.mobileBorder),
+        color: OcIosHero.of(context).card,
+        borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: context.oc.surfaceForeground.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: Theme.of(context).brightness == Brightness.dark ? 0.36 : 0.055),
+            blurRadius: 16,
+            spreadRadius: -2,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -291,10 +297,10 @@ class SegmentedPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 4, OcChrome.pageGutter, 12),
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(OcChrome.pillRadius),
+        color: OcIosHero.of(context).track,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
@@ -302,16 +308,23 @@ class SegmentedPill extends StatelessWidget {
             Expanded(
               child: InkWell(
                 key: Key('segment-$i'),
-                borderRadius: BorderRadius.circular(OcChrome.pillRadius),
+                borderRadius: BorderRadius.circular(9),
                 onTap: () => onSelected(i),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  padding: const EdgeInsets.symmetric(vertical: 6),
                   decoration: BoxDecoration(
-                    color: selectedIndex == i
-                        ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.16)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(OcChrome.pillRadius),
+                    color: selectedIndex == i ? OcIosHero.of(context).card : Colors.transparent,
+                    borderRadius: BorderRadius.circular(9),
+                    boxShadow: selectedIndex == i
+                        ? [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.06),
+                              blurRadius: 2,
+                              offset: const Offset(0, 1),
+                            ),
+                          ]
+                        : null,
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -319,21 +332,22 @@ class SegmentedPill extends StatelessWidget {
                       if (icons != null) ...[
                         OcGlyph(
                           icons![i],
-                          size: 16,
+                          size: 14,
+                          strokeWidth: 1.2,
                           color: selectedIndex == i
-                              ? Theme.of(context).colorScheme.primary
-                              : context.oc.mutedForeground,
+                              ? OcIosHero.of(context).label
+                              : OcIosHero.of(context).secondaryLabel,
                         ),
                         const SizedBox(width: 6),
                       ],
                       Text(
                         labels[i],
                         style: TextStyle(
-                          fontSize: OcTokens.textMarkdown,
-                          fontWeight: selectedIndex == i ? FontWeight.w700 : FontWeight.w500,
+                          fontSize: 14,
+                          fontWeight: selectedIndex == i ? FontWeight.w600 : FontWeight.w400,
                           color: selectedIndex == i
-                              ? Theme.of(context).colorScheme.onSurface
-                              : context.oc.mutedForeground,
+                              ? OcIosHero.of(context).label
+                              : OcIosHero.of(context).secondaryLabel,
                         ),
                       ),
                     ],
@@ -379,20 +393,14 @@ class FilterChipBar extends StatelessWidget {
                       onTap: () => onSelected(i),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: selectedIndex == i
-                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.14)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
                         child: Text(
                           labels[i],
                           style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: selectedIndex == i ? FontWeight.w700 : FontWeight.w500,
+                            fontSize: 15,
+                            fontWeight: selectedIndex == i ? FontWeight.w600 : FontWeight.w400,
                             color: selectedIndex == i
-                                ? Theme.of(context).colorScheme.onSurface
-                                : context.oc.mutedForeground,
+                                ? OcIosHero.of(context).label
+                                : OcIosHero.of(context).secondaryLabel,
                           ),
                         ),
                       ),
@@ -445,20 +453,18 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
   const PushedNavBar({
     super.key,
     required this.title,
-    this.subtitle,
     this.leadingKey,
     this.trailing,
     this.busy = false,
   });
 
   final String title;
-  final String? subtitle;
   final Key? leadingKey;
   final Widget? trailing;
   final bool busy;
 
   @override
-  Size get preferredSize => Size.fromHeight(subtitle == null || subtitle!.isEmpty ? 56 : 72);
+  Size get preferredSize => const Size.fromHeight(56);
 
   @override
   Widget build(BuildContext context) {
@@ -477,21 +483,17 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-                ),
-                if (subtitle != null && subtitle!.isNotEmpty)
                   Text(
-                    subtitle!,
-                    key: const Key('chat-header-subtitle'),
+                    title,
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: OcTokens.textMicro, color: context.oc.mutedForeground),
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.3,
+                      color: OcIosHero.of(context).label,
+                    ),
                   ),
               ],
             ),

@@ -98,8 +98,8 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
     final tasks = widget.controller.scheduledTasks;
     final runs = widget.controller.scheduledRuns;
     final filterId = widget.controller.scheduledFilterTaskId;
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+    return HeroSurface(
+      child: Scaffold(
       body: SafeArea(
         bottom: false,
         child: ListView(
@@ -126,6 +126,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   glyph: OcGlyphKind.plus,
                   filled: true,
                   ink: true,
+                  size: 28,
                   tooltip: t(context, 'scheduled.add'),
                   onPressed: () {},
                 ),
@@ -181,6 +182,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 
@@ -195,16 +197,17 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
           child: Row(
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: 26,
+                height: 26,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: context.oc.muted.withValues(alpha: 0.72),
+                  border: Border.all(color: paused ? OcIosHero.of(context).tertiaryLabel : const Color(0xFF34C759), width: 1.2),
                 ),
                 child: OcGlyph(
                   paused ? OcGlyphKind.pause : OcGlyphKind.check,
-                  size: 14,
-                  color: paused ? context.oc.mutedForeground : context.oc.statusSuccess,
+                  size: 12,
+                  strokeWidth: 1.2,
+                  color: paused ? const Color(0xFF5AC8FA) : const Color(0xFF34C759),
                 ),
               ),
               const SizedBox(width: 12),
@@ -216,8 +219,8 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                       task.name.isEmpty ? task.id : task.name,
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: paused ? context.oc.mutedForeground : Theme.of(context).colorScheme.onSurface,
+                        fontWeight: FontWeight.w500,
+                        color: paused ? OcIosHero.of(context).secondaryLabel : OcIosHero.of(context).label,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -225,7 +228,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                       paused
                           ? [_humanSchedule(context, task), '—'].join(' · ')
                           : _taskSubtitle(context, task),
-                      style: TextStyle(fontSize: 13, color: context.oc.mutedForeground),
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: OcIosHero.of(context).secondaryLabel),
                     ),
                   ],
                 ),
@@ -244,6 +247,6 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
         ),
       ),
     );
-    return paused ? Opacity(opacity: 0.62, child: card) : card;
+    return paused ? Opacity(opacity: 0.72, child: card) : card;
   }
 }

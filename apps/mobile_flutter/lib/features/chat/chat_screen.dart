@@ -344,16 +344,16 @@ class _ChatScreenState extends State<ChatScreen> {
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
     final inset = MediaQuery.viewInsetsOf(context);
     final atLiveEdge = _atLiveEdge;
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+    return HeroSurface(
+      child: Scaffold(
       resizeToAvoidBottomInset: !ios,
       appBar: PushedNavBar(
         title: widget.session.title,
-        subtitle: widget.session.subtitle,
         leadingKey: const Key('chat-back'),
         busy: _busy,
         trailing: CircularChromeButton(
           glyph: OcGlyphKind.ellipsis,
+          size: 32,
           onPressed: () {},
         ),
       ),
@@ -380,21 +380,31 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          UserTurnToolbar(message: message),
                           Container(
-                            margin: const EdgeInsets.only(top: 4),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            margin: const EdgeInsets.only(bottom: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(16),
+                              color: OcIosHero.of(context).userBubble,
+                              borderRadius: BorderRadius.circular(18),
                             ),
-                            child: ChatTranscriptBody(
-                              message: message,
-                              isLastAssistant: isLastAssistant,
-                              isTurnLive: _busy && isLastAssistant && messageHasRunningTool(message),
-                              isSpeaking: _speakingMessageId == message.id,
+                            child: DefaultTextStyle.merge(
+                              style: TextStyle(
+                                fontSize: 15,
+                                height: 1.35,
+                                fontWeight: FontWeight.w400,
+                                color: OcIosHero.of(context).isDark
+                                    ? OcIosHero.of(context).label
+                                    : const Color(0xFF3C4A5C),
+                              ),
+                              child: ChatTranscriptBody(
+                                message: message,
+                                isLastAssistant: isLastAssistant,
+                                isTurnLive: _busy && isLastAssistant && messageHasRunningTool(message),
+                                isSpeaking: _speakingMessageId == message.id,
+                              ),
                             ),
                           ),
+                          UserTurnToolbar(message: message),
                         ],
                       ),
                     ),
@@ -453,6 +463,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
         ],
       ),
+    ),
     );
   }
 }
