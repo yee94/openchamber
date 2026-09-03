@@ -103,9 +103,13 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
 }
 
 /// Paint a 24×24 official sprite into [size]. [strokeWidth] is the viewBox
-/// stroke (1.5 regular / 2 medium), matching `Icon.tsx` (`fill="none"`).
-/// Paths and rects stay stroke-only so the calendar grid / folder never
-/// become a filled square. [filled] only inks small accent dots (r ≤ 2.6).
+/// stroke (1.5 regular / 2 medium).
+///
+/// [filled] is the dock mass pass: fill path/rect *bodies* (folder-open-fill,
+/// sparkling star, calendar plate). Small circles on a filled rect are
+/// punched holes so the calendar stays a grid, not a solid square. Other
+/// small circles (sparkle) ink as accents. Open line paths (hangers, plus)
+/// have no fill area. Do not use this on calendar-schedule / settings-3.
 void paintOfficialSprite({
   required Canvas canvas,
   required Size size,
@@ -126,21 +130,42 @@ void paintOfficialSprite({
   final fill = Paint()
     ..color = color
     ..style = PaintingStyle.fill;
+  final punchHoles = filled && sprite.rects.isNotEmpty && sprite.circles.any((c) => c.$3 <= 2.6);
+  if (punchHoles) {
+    canvas.saveLayer(const Rect.fromLTWH(-4, -4, 32, 32), Paint());
+  }
   for (final d in sprite.paths) {
-    canvas.drawPath(parseSvgPath(d), stroke);
+    final path = parseSvgPath(d);
+    if (filled) canvas.drawPath(path, fill);
+    canvas.drawPath(path, stroke);
   }
   for (final rect in sprite.rects) {
     final rrect = RRect.fromRectAndRadius(
       Rect.fromLTWH(rect.$1, rect.$2, rect.$3, rect.$4),
       Radius.circular(rect.$5),
     );
+    if (filled) canvas.drawRRect(rrect, fill);
     canvas.drawRRect(rrect, stroke);
   }
   for (final circle in sprite.circles) {
     final center = Offset(circle.$1, circle.$2);
-    if (filled && circle.$3 <= 2.6) canvas.drawCircle(center, circle.$3, fill);
-    canvas.drawCircle(center, circle.$3, stroke);
+    if (filled && circle.$3 <= 2.6) {
+      if (punchHoles) {
+        canvas.drawCircle(
+          center,
+          circle.$3,
+          Paint()
+            ..blendMode = BlendMode.dstOut
+            ..style = PaintingStyle.fill,
+        );
+      } else {
+        canvas.drawCircle(center, circle.$3, fill);
+      }
+    } else {
+      canvas.drawCircle(center, circle.$3, stroke);
+    }
   }
+  if (punchHoles) canvas.restore();
   canvas.restore();
 }
 

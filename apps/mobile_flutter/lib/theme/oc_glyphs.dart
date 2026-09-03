@@ -59,9 +59,8 @@ class OcGlyph extends StatelessWidget {
   final double size;
   final Color? color;
   final double? strokeWidth;
-  /// Official dock `Icon weight="medium"` is stroke 2 / `fill="none"`.
-  /// [filled] inks accent dots only — do not fill the calendar grid,
-  /// folder-open, or holed gear.
+  /// Dock [filled] paints official filled-mass bodies (folder-open-fill,
+  /// sparkling star, calendar plate, holed gear). Not a stroke-width bump.
   final bool filled;
 
   @override
@@ -448,8 +447,8 @@ class _OcGlyphPainter extends CustomPainter {
   }
 
   void _gear(Canvas canvas, Size size, Paint paint, bool filled) {
-    // Six teeth + hollow hub. Always stroke the rings so `filled` cannot
-    // close the hole into a flower/blob.
+    // Six teeth + hollow hub. Filled mass punches the hub — never settings-3
+    // flower lobes.
     final w = size.width;
     final h = size.height;
     final c = Offset(w * 0.5, h * 0.5);
@@ -459,19 +458,40 @@ class _OcGlyphPainter extends CustomPainter {
       ..strokeWidth = paint.strokeWidth > 0 ? paint.strokeWidth : 2
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
+    final fill = Paint()
+      ..color = paint.color
+      ..style = PaintingStyle.fill;
+    final tooth = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(0, -w * 0.38), width: w * 0.15, height: w * 0.13),
+      Radius.circular(w * 0.035),
+    );
+    if (filled) {
+      canvas.saveLayer(Rect.fromLTWH(0, 0, w, h), Paint());
+      canvas.drawCircle(c, w * 0.26, fill);
+      for (var i = 0; i < 6; i += 1) {
+        canvas.save();
+        canvas.translate(c.dx, c.dy);
+        canvas.rotate(i * math.pi / 3);
+        canvas.drawRRect(tooth, fill);
+        canvas.restore();
+      }
+      canvas.drawCircle(
+        c,
+        w * 0.11,
+        Paint()
+          ..blendMode = BlendMode.dstOut
+          ..style = PaintingStyle.fill,
+      );
+      canvas.restore();
+      return;
+    }
     canvas.drawCircle(c, w * 0.26, stroke);
     canvas.drawCircle(c, w * 0.11, stroke);
     for (var i = 0; i < 6; i += 1) {
       canvas.save();
       canvas.translate(c.dx, c.dy);
       canvas.rotate(i * math.pi / 3);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(0, -w * 0.38), width: w * 0.15, height: w * 0.13),
-          Radius.circular(w * 0.035),
-        ),
-        stroke,
-      );
+      canvas.drawRRect(tooth, stroke);
       canvas.restore();
     }
   }

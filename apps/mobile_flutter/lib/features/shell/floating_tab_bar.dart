@@ -140,9 +140,9 @@ class _TabSlot extends StatelessWidget {
                       size: OcOptical.dockGlyphVisual,
                       color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
                       strokeWidth: OcOptical.dockGlyphStrokeVisual,
-                      // Official 23px medium. Accent dots fill; calendar
-                      // body / folder / holed gear stay stroke at weight 2.
-                      filled: true,
+                      // Official 23px medium filled-mass sprites. Bodies
+                      // fill; calendar date cells / gear hub stay holes.
+                      filled: OcOptical.dockGlyphFillBodies,
                     ),
                     const SizedBox(height: OcOptical.dockLabelGap),
                     Text(

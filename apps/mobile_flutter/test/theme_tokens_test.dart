@@ -161,6 +161,7 @@ void main() {
     expect(OcOptical.dockGlyphVisual, OcOptical.dockGlyph);
     expect(OcOptical.dockGlyphStrokeVisual, OcOptical.dockGlyphStroke);
     expect(OcOptical.dockGlyphStrokeVisual, 2);
+    expect(OcOptical.dockGlyphFillBodies, isTrue);
     expect(OcOptical.dockTabHeight, 58);
     expect(OcOptical.dockTabRadius, 29);
     expect(OcOptical.dockLabel, 12);
