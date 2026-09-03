@@ -6,7 +6,6 @@ import 'package:openchamber/data/secure_store.dart';
 import 'package:openchamber/data/settings_catalog.dart';
 import 'package:openchamber/features/shell/secondary_chrome.dart';
 import 'package:openchamber/features/shell/tab_scaffold.dart';
-import 'package:openchamber/theme/app_theme.dart';
 import 'package:openchamber/theme/ios_chrome.dart';
 import 'package:openchamber/theme/oc_glyphs.dart';
 
