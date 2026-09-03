@@ -280,7 +280,9 @@ class CircularChromeButton extends StatelessWidget {
             decoration: BoxDecoration(
               color: ink ? tokens.foreground : tokens.primary,
               shape: BoxShape.circle,
-              boxShadow: OcElevation.control(context),
+              // Contact only — official control umbra paints a second
+              // circle under the solid primary `+`.
+              boxShadow: OcElevation.chip(context),
             ),
             child: SizedBox(
               width: disc,
