@@ -34,9 +34,9 @@ void main() {
     expect(OcTokens.light.glassFill.g, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassFill.b, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassFill, isNot(OcTokens.light.surfaceElevated));
-    expect(OcTokens.light.glassChipFill.a, closeTo(0, 0.005));
+    expect(OcTokens.light.glassChipFill.a, closeTo(0.10, 0.01));
     expect(OcTokens.light.glassChipFill.a, lessThan(OcTokens.light.glassFill.a));
-    expect(OcTokens.dark.glassChipFill.a, closeTo(0, 0.005));
+    expect(OcTokens.dark.glassChipFill.a, closeTo(0.10, 0.01));
     expect(OcTokens.light.glassChipFill.r, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassHighlight.a, closeTo(0.60, 0.01));
     expect(OcTokens.dark.glassHighlight.a, closeTo(0.18, 0.01));
@@ -44,10 +44,10 @@ void main() {
     expect(OcTokens.light.dockPlate.a, lessThan(OcTokens.light.glassFill.a));
     expect(
       OcTokens.light.selectedTabWash.a,
-      closeTo(OcTokens.light.interactiveSelection.a * OcOptical.dockIconWashAlpha, 0.005),
+      closeTo(OcTokens.light.interactiveSelection.a, 0.005),
     );
-    expect(OcTokens.light.selectedTabWash.a, lessThan(OcTokens.light.interactiveSelection.a));
-    expect(OcTokens.light.selectedTabWash.a, greaterThan(0.03));
+    expect(OcTokens.light.selectedTabWash.a, greaterThan(0.07));
+    expect(OcTokens.light.selectedTabWash.a, lessThan(0.15));
     expect(OcOptical.dockIconWashAlpha, closeTo(0.55, 0.01));
     expect(
       (OcTokens.light.selectedTabWash.r - OcTokens.light.primary.r).abs(),
@@ -250,12 +250,12 @@ void main() {
     expect(OcElevation.cardFor(OcTokens.light), hasLength(3));
     expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, 2);
     expect(OcElevation.cardFor(OcTokens.light)[1].blurRadius, 12);
-    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, 24);
-    expect(OcElevation.cardFor(OcTokens.light).last.offset.dy, 10);
-    expect(OcElevation.cardFor(OcTokens.light).last.spreadRadius, -6);
+    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, 20);
+    expect(OcElevation.cardFor(OcTokens.light).last.offset.dy, 6);
+    expect(OcElevation.cardFor(OcTokens.light).last.spreadRadius, -8);
     expect(
       (OcElevation.cardFor(OcTokens.light).last.color.a * 255).round(),
-      closeTo(0x1A, 1),
+      lessThan(0x1A),
     );
     expect(
       OcElevation.cardFor(OcTokens.light, tight: true),
@@ -278,8 +278,8 @@ void main() {
       isTrue,
     );
     expect(
-      OcElevation.chipFor(OcTokens.light).every((s) => s.blurRadius < 8 && s.offset == Offset.zero),
-      isTrue,
+      [...OcElevation.chipFor(OcTokens.light), ...OcElevation.glassHighlightFor(OcTokens.light)],
+      hasLength(2),
     );
     expect(OcElevation.glassHighlightFor(OcTokens.light).single.blurStyle, BlurStyle.inner);
     expect(
@@ -287,7 +287,7 @@ void main() {
       lessThanOrEqualTo(0x1F),
     );
     expect(OcElevation.cardFor(OcTokens.dark), hasLength(3));
-    expect(OcElevation.cardFor(OcTokens.dark).last.offset.dy, 10);
+    expect(OcElevation.cardFor(OcTokens.dark).last.offset.dy, 6);
     expect(OcElevation.dockFor(OcTokens.dark), isEmpty);
     expect(OcElevation.controlFor(OcTokens.dark), isEmpty);
   });

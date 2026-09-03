@@ -16,17 +16,18 @@ class OcElevation {
       cardFor(OcTokens.of(context), tight: tight);
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
-    // Light: 0 0 2px 4%, 0 0 12px 5%, 0 10px 24px -6px 10%.
-    // Dark: 0 0 2px 26%, 0 0 12px 24%, 0 10px 24px -6px 34%.
+    // Official light: 0 0 2px 4%, 0 0 12px 5%, 0 10px 24px -6px 10%.
+    // Near pair stays official 2/12. Far 10/24/-6 at 10% painted a ~15px
+    // hard band (dL≈16). Soften lift: same family, shorter/softer umbra.
     if (tokens.isDark) {
       return const [
         BoxShadow(color: Color(0x42000000), blurRadius: 2),
         BoxShadow(color: Color(0x3D000000), blurRadius: 12),
         BoxShadow(
-          color: Color(0x57000000),
-          offset: Offset(0, 10),
-          blurRadius: 24,
-          spreadRadius: -6,
+          color: Color(0x38000000),
+          offset: Offset(0, 6),
+          blurRadius: 20,
+          spreadRadius: -8,
         ),
       ];
     }
@@ -34,10 +35,10 @@ class OcElevation {
       BoxShadow(color: Color(0x0A000000), blurRadius: 2),
       BoxShadow(color: Color(0x0D000000), blurRadius: 12),
       BoxShadow(
-        color: Color(0x1A000000),
-        offset: Offset(0, 10),
-        blurRadius: 24,
-        spreadRadius: -6,
+        color: Color(0x0F000000),
+        offset: Offset(0, 6),
+        blurRadius: 20,
+        spreadRadius: -8,
       ),
     ];
   }
