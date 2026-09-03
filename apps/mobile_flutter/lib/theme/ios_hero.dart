@@ -47,7 +47,7 @@ class OcOptical {
   /// glyphs do not fill the 16/12 boxes. Total box stays official —
   /// [ocCssLineBox] must not floor `height` at 1.0 or leading grows the
   /// row instead of opening air inside it.
-  static const double sessionLineLeading = 0.39;
+  static const double sessionLineLeading = 0.395;
   /// `.oc-mobile-session-status` 0.75rem; `.oc-mobile-session-row-main` gap 0.5rem.
   static const double sessionStatus = 12;
   static const double sessionRowMainGap = 8;
@@ -189,8 +189,8 @@ class OcOptical {
   static const bool dockSelectedFullSlot = true;
   static const double dockIconWashAlpha = 0.55;
   /// Cell frost only — nested 20/8 still smeared a second cream well.
-  /// Sigma 4 + 55% mix reads as frost over the dock glass.
-  static const double dockWashBlur = 4;
+  /// Sigma 3 + 55% mix — frost over dock glass, not a cream well.
+  static const double dockWashBlur = 3;
   static const double dockIconGlowAlpha = 0.0;
   static const double dockIconGlowBlur = 0;
 

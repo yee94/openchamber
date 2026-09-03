@@ -113,14 +113,18 @@ class OcGlassChip extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          // Official `mobileGlass` family: white glass + glass-shadow.
-          // 0.68/0.58 still a WidgetTester coin. Soften via [glassChipFill]
-          // 0.46 — not surface-elevated cream. No disc BackdropFilter.
+          // Official `mobileGlass` family: white glass + glass-shadow drop.
+          // 0.46 + 0.60 inset still a WidgetTester coin. Soften fill and
+          // sheen — not surface-elevated cream. No disc BackdropFilter.
           // No primary + glow. 40 hit / 36 visual.
           color: context.oc.glassChipFill,
           boxShadow: [
             ...OcElevation.control(context),
-            ...OcElevation.glassHighlight(context),
+            BoxShadow(
+              color: context.oc.glassChipHighlight,
+              offset: const Offset(0, 1),
+              blurStyle: BlurStyle.inner,
+            ),
           ],
         ),
         child: Center(child: child),

@@ -460,22 +460,22 @@ class _OcGlyphPainter extends CustomPainter {
       ..color = color
       ..style = PaintingStyle.fill;
     final tab = Path()
-      ..moveTo(w * 0.28, h * 0.36)
-      ..lineTo(w * 0.28, h * 0.44)
+      ..moveTo(w * 0.30, h * 0.37)
+      ..lineTo(w * 0.30, h * 0.44)
       ..lineTo(w * 0.42, h * 0.44)
-      ..lineTo(w * 0.39, h * 0.36)
+      ..lineTo(w * 0.40, h * 0.37)
       ..close();
     final body = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.28, h * 0.43, w * 0.44, h * 0.22),
-      Radius.circular(w * 0.04),
+      Rect.fromLTWH(w * 0.30, h * 0.43, w * 0.40, h * 0.20),
+      Radius.circular(w * 0.035),
     );
     canvas.saveLayer(Rect.fromLTWH(0, 0, w, h), Paint());
     canvas.drawPath(tab, fill);
     canvas.drawRRect(body, fill);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(w * 0.34, h * 0.49, w * 0.32, h * 0.11),
-        Radius.circular(w * 0.025),
+        Rect.fromLTWH(w * 0.36, h * 0.49, w * 0.28, h * 0.09),
+        Radius.circular(w * 0.02),
       ),
       Paint()
         ..blendMode = BlendMode.dstOut
@@ -497,15 +497,15 @@ class _OcGlyphPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
     final tooth = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(0, -w * 0.27), width: w * 0.065, height: w * 0.055),
-      Radius.circular(w * 0.018),
+      Rect.fromCenter(center: Offset(0, -w * 0.26), width: w * 0.055, height: w * 0.048),
+      Radius.circular(w * 0.016),
     );
     if (filled) {
       final fill = Paint()
         ..color = paint.color
         ..style = PaintingStyle.fill;
       canvas.saveLayer(Rect.fromLTWH(0, 0, w, h), Paint());
-      canvas.drawCircle(c, w * 0.185, fill);
+      canvas.drawCircle(c, w * 0.175, fill);
       for (var i = 0; i < 6; i += 1) {
         canvas.save();
         canvas.translate(c.dx, c.dy);
@@ -515,7 +515,7 @@ class _OcGlyphPainter extends CustomPainter {
       }
       canvas.drawCircle(
         c,
-        w * 0.142,
+        w * 0.136,
         Paint()
           ..blendMode = BlendMode.dstOut
           ..style = PaintingStyle.fill,
