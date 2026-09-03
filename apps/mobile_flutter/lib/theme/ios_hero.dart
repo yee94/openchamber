@@ -189,8 +189,8 @@ class OcOptical {
   static const bool dockSelectedFullSlot = true;
   static const double dockIconWashAlpha = 0.55;
   /// Cell frost only — nested 20/8 still smeared a second cream well.
-  /// Sigma 3 + 55% mix — frost over dock glass, not a cream well.
-  static const double dockWashBlur = 3;
+  /// Sigma 2 + 55% mix — frost over dock glass, not a cream well.
+  static const double dockWashBlur = 2;
   static const double dockIconGlowAlpha = 0.0;
   static const double dockIconGlowBlur = 0;
 

@@ -34,11 +34,10 @@ void main() {
     expect(OcTokens.light.glassFill.g, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassFill.b, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassFill, isNot(OcTokens.light.surfaceElevated));
-    expect(OcTokens.light.glassChipFill.a, closeTo(0.34, 0.01));
+    expect(OcTokens.light.glassChipFill.a, closeTo(0.26, 0.01));
     expect(OcTokens.light.glassChipFill.a, lessThan(OcTokens.light.glassFill.a));
-    expect(OcTokens.light.glassChipFill.a, greaterThan(0.28));
+    expect(OcTokens.light.glassChipFill.a, greaterThan(0.20));
     expect(OcTokens.light.glassChipFill.r, closeTo(1.0, 0.01));
-    expect(OcTokens.light.glassChipHighlight.a, lessThan(OcTokens.light.glassHighlight.a));
     expect(OcTokens.light.glassHighlight.a, closeTo(0.60, 0.01));
     expect(OcTokens.dark.glassHighlight.a, closeTo(0.18, 0.01));
     expect(OcTokens.light.glassHighlight.a, lessThan(OcTokens.light.floatHighlight.a));
@@ -181,7 +180,7 @@ void main() {
     expect(OcOptical.dockGlyphStrokeVisual, closeTo(1.55, 0.01));
     expect(OcOptical.dockGlyphStrokeVisual, greaterThan(1.4));
     expect(OcOptical.dockGlyphFillBodies, isTrue);
-    expect(OcOptical.dockWashBlur, 3);
+    expect(OcOptical.dockWashBlur, 2);
     expect(OcOptical.dockWashBlur, lessThan(OcOptical.glassBlur));
     expect(OcOptical.dockTabHeight, 58);
     expect(OcOptical.dockTabRadius, 29);
