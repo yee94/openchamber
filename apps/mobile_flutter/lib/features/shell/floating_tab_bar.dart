@@ -157,8 +157,8 @@ class _TabSlot extends StatelessWidget {
               width: double.infinity,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
-                // Official 55% selection frost over the cell. Light
-                // sigma so WidgetTester shows tint, not a cream smear.
+                // Official 55% selection frost over the cell. Sigma 5
+                // frosts the slot; 2 painted a beige coin, 8+ went muddy.
                 child: t <= 0
                     ? column
                     : OcFrosted(

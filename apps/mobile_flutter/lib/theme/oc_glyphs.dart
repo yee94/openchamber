@@ -460,21 +460,21 @@ class _OcGlyphPainter extends CustomPainter {
       ..color = color
       ..style = PaintingStyle.fill;
     final tab = Path()
-      ..moveTo(w * 0.30, h * 0.37)
-      ..lineTo(w * 0.30, h * 0.44)
-      ..lineTo(w * 0.42, h * 0.44)
-      ..lineTo(w * 0.40, h * 0.37)
+      ..moveTo(w * 0.32, h * 0.38)
+      ..lineTo(w * 0.32, h * 0.45)
+      ..lineTo(w * 0.42, h * 0.45)
+      ..lineTo(w * 0.40, h * 0.38)
       ..close();
     final body = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.30, h * 0.43, w * 0.40, h * 0.20),
-      Radius.circular(w * 0.035),
+      Rect.fromLTWH(w * 0.32, h * 0.44, w * 0.36, h * 0.18),
+      Radius.circular(w * 0.03),
     );
     canvas.saveLayer(Rect.fromLTWH(0, 0, w, h), Paint());
     canvas.drawPath(tab, fill);
     canvas.drawRRect(body, fill);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(w * 0.36, h * 0.49, w * 0.28, h * 0.09),
+        Rect.fromLTWH(w * 0.38, h * 0.495, w * 0.24, h * 0.08),
         Radius.circular(w * 0.02),
       ),
       Paint()
@@ -485,37 +485,49 @@ class _OcGlyphPainter extends CustomPainter {
   }
 
   void _gear(Canvas canvas, Size size, Paint paint, bool filled) {
-    // Six teeth + hollow hub. Filled mass punches the hub — never settings-3
-    // flower lobes.
+    // Official filled-medium gear (Lucide `settings` family): 8
+    // rectangular teeth + a clear hub. Not settings-3 flower lobes and
+    // not a 6-ray sun on a tiny disc.
     final w = size.width;
     final h = size.height;
     final c = Offset(w * 0.5, h * 0.5);
+    final rim = w * 0.28;
+    final hole = w * 0.13;
+    final tooth = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(0, -(rim + w * 0.036)),
+        width: w * 0.16,
+        height: w * 0.13,
+      ),
+      Radius.circular(w * 0.025),
+    );
     final stroke = Paint()
       ..color = paint.color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = paint.strokeWidth > 0 ? paint.strokeWidth : 2
+      ..strokeWidth = paint.strokeWidth > 0 ? paint.strokeWidth : 1.55
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
-    final tooth = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(0, -w * 0.26), width: w * 0.055, height: w * 0.048),
-      Radius.circular(w * 0.016),
-    );
-    if (filled) {
-      final fill = Paint()
-        ..color = paint.color
-        ..style = PaintingStyle.fill;
-      canvas.saveLayer(Rect.fromLTWH(0, 0, w, h), Paint());
-      canvas.drawCircle(c, w * 0.175, fill);
-      for (var i = 0; i < 6; i += 1) {
+    final fill = Paint()
+      ..color = paint.color
+      ..style = PaintingStyle.fill;
+
+    void teeth(Paint p) {
+      for (var i = 0; i < 8; i += 1) {
         canvas.save();
         canvas.translate(c.dx, c.dy);
-        canvas.rotate(i * math.pi / 3);
-        canvas.drawRRect(tooth, fill);
+        canvas.rotate(i * math.pi / 4);
+        canvas.drawRRect(tooth, p);
         canvas.restore();
       }
+    }
+
+    if (filled) {
+      canvas.saveLayer(Rect.fromLTWH(0, 0, w, h), Paint());
+      canvas.drawCircle(c, rim, fill);
+      teeth(fill);
       canvas.drawCircle(
         c,
-        w * 0.136,
+        hole,
         Paint()
           ..blendMode = BlendMode.dstOut
           ..style = PaintingStyle.fill,
@@ -523,15 +535,9 @@ class _OcGlyphPainter extends CustomPainter {
       canvas.restore();
       return;
     }
-    canvas.drawCircle(c, w * 0.26, stroke);
-    canvas.drawCircle(c, w * 0.11, stroke);
-    for (var i = 0; i < 6; i += 1) {
-      canvas.save();
-      canvas.translate(c.dx, c.dy);
-      canvas.rotate(i * math.pi / 3);
-      canvas.drawRRect(tooth, stroke);
-      canvas.restore();
-    }
+    canvas.drawCircle(c, rim, stroke);
+    canvas.drawCircle(c, hole, stroke);
+    teeth(stroke);
   }
 
   @override

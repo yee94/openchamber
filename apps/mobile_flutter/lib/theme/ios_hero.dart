@@ -22,7 +22,7 @@ class OcOptical {
   static const double sessionRowHeight = 46;
   static const double sessionRowVisualHeight = 40;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem.
-  static const double sessionRowPadV = 5;
+  static const double sessionRowPadV = 4.5;
   static const double moreLinkPadV = 8;
   static const double groupHeaderPadV = 10;
   static const double groupHeaderPadVCompact = 8;
@@ -35,14 +35,14 @@ class OcOptical {
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
-  /// Official title/subtitle column is `gap-0.5` (2). With padV 5 + 16 + 2
-  /// + 12 + 5 the visual row is exactly 40. Do not add extra gap or grow
-  /// icons. Air inside the box comes from [sessionLineLeading] on the strut.
+  /// Official title/subtitle column is `gap-0.5` (2). Review still reads
+  /// tight, so open the gap a hair (3) and steal 0.5 from each padV.
+  /// 4.5 + 16 + 3 + 12 + 4.5 stays the official 40 box. Do not grow icons.
   /// CSS `font-size` is the ink; `line-height` is the strut. Do not also
   /// multiply Flutter `TextStyle.height` — that packs CJK into the box.
   /// Official title is `font-medium` / unread `font-semibold`. The review
   /// CJK face is Regular-only, so paint Regular / Medium — do not faux-bold.
-  static const double sessionTitleSubtitleGap = 2;
+  static const double sessionTitleSubtitleGap = 3;
   /// Fraction of the CSS line-height moved into strut `leading` so CJK
   /// glyphs do not fill the 16/12 boxes. Total box stays official —
   /// [ocCssLineBox] must not floor `height` at 1.0 or leading grows the
@@ -188,9 +188,14 @@ class OcOptical {
   static const bool dockGlyphFillBodies = true;
   static const bool dockSelectedFullSlot = true;
   static const double dockIconWashAlpha = 0.55;
-  /// Cell frost only — nested 20/8 still smeared a second cream well.
-  /// Sigma 2 + 55% mix — frost over dock glass, not a cream well.
-  static const double dockWashBlur = 2;
+  /// Cell frost only — nested 20/8 smeared a cream well; sigma 2 painted
+  /// a beige coin. Official is `bg-interactive-selection/55` over dock
+  /// glass. Sigma 5 frosts the cell without a muddy 8+ smear.
+  static const double dockWashBlur = 5;
+  /// Official `--oc-mobile-glass-blur` on the 36 `mobileGlass` disc.
+  /// ClipOval + quiet [OcTokens.glassChipFill] so content behind frosts
+  /// instead of a painted plate.
+  static const double chipBlur = 20;
   static const double dockIconGlowAlpha = 0.0;
   static const double dockIconGlowBlur = 0;
 

@@ -123,11 +123,12 @@ class ComposerBar extends StatelessWidget {
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    boxShadow: OcElevation.control(context),
+                    boxShadow: OcElevation.chip(context),
                   ),
                   child: ClipOval(
                     child: OcFrosted(
                       fill: context.oc.glassChipFill,
+                      sigma: OcOptical.chipBlur,
                       child: Pressable(
                         key: const Key('chat-scroll-to-bottom'),
                         haptic: HapticStrength.light,

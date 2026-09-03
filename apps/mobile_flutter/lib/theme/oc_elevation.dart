@@ -81,8 +81,8 @@ class OcElevation {
   }
 
   /// Search / + discs — official `--oc-mobile-glass-shadow` (near pair
-  /// + 8/20/-6 umbra). Surface-elevated fill; no disc BackdropFilter,
-  /// no primary 10/22 glow.
+  /// + 8/20/-6 umbra). Primary `+` keeps the umbra. Glass chips use
+  /// [chip] so the 8px drop does not paint a second offset circle.
   static List<BoxShadow> control(BuildContext context) => controlFor(OcTokens.of(context));
 
   static List<BoxShadow> controlFor(OcTokens tokens) {
@@ -96,6 +96,18 @@ class OcElevation {
         blurRadius: 20,
         spreadRadius: -6,
       ),
+    ];
+  }
+
+  /// Glass chips — official near pair only. The 8/20/−6 umbra reads as a
+  /// second offset circle on the 36 disc (chat back, search).
+  static List<BoxShadow> chip(BuildContext context) => chipFor(OcTokens.of(context));
+
+  static List<BoxShadow> chipFor(OcTokens tokens) {
+    if (tokens.isDark) return const [];
+    return const [
+      BoxShadow(color: Color(0x0D000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0F000000), blurRadius: 12),
     ];
   }
 

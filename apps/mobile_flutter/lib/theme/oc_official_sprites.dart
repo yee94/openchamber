@@ -51,7 +51,7 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
           (16, 18, 0.8),
         ],
       ),
-    // `gear` is painted by OcGlyph `_gear` (six teeth + hollow hub).
+    // `gear` is painted by OcGlyph `_gear` (8 teeth + hollow hub).
     // Official `settings-3` lobes bloom into a flower at 23px medium.
     'code' => const OcOfficialSprite(
         paths: ['m18 16 4-4-4-4', 'm6 8-4 4 4 4', 'm14.5 4-5 16'],
@@ -149,7 +149,7 @@ void paintOfficialSprite({
     if (filled) {
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(rect.$1, rect.$2, rect.$3, 2.4),
+          Rect.fromLTWH(rect.$1, rect.$2, rect.$3, 2.0), // shaved header band
           Radius.circular(rect.$5),
         ),
         fill,
