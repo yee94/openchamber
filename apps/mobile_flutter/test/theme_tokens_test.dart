@@ -59,8 +59,8 @@ void main() {
     expect(OcOptical.largeTitleTracking, greaterThan(0.8));
     expect(OcOptical.largeTitleHeight, greaterThan(1.15));
     expect(OcOptical.rowTitle, 12);
-    expect(OcOptical.rowTitleTracking, greaterThan(0.2));
-    expect(OcOptical.rowTitleTracking, lessThan(0.4));
+    expect(OcOptical.rowTitleTracking, greaterThanOrEqualTo(0));
+    expect(OcOptical.rowTitleTracking, lessThan(0.12));
     expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
     expect(OcOptical.rowTitleHeight, lessThan(1.42));
     expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);
@@ -75,13 +75,13 @@ void main() {
     expect(OcOptical.searchButton, 40);
     expect(OcOptical.addButton, 40);
     expect(OcOptical.headerDisc, OcOptical.searchButton);
-    expect(OcOptical.headerGlyph, 14);
+    expect(OcOptical.headerGlyph, 13);
     expect(OcOptical.collapsingActionSize, 40);
     expect(OcOptical.titleCollapseDistance, 48);
     expect(OcOptical.titleCollapseScaleEnd, 0.625);
-    expect(OcOptical.dockGlyph, 11);
-    expect(OcOptical.dockIconPillWidth, 32);
-    expect(OcOptical.dockIconPillHeight, 22);
+    expect(OcOptical.dockGlyph, 10);
+    expect(OcOptical.dockIconPillWidth, 26);
+    expect(OcOptical.dockIconPillHeight, 18);
     expect(OcOptical.dockIconPillHeight, lessThan(OcOptical.dockIconPillWidth));
     expect(OcOptical.dockIconPillWidth, lessThan(OcOptical.dockCapsuleHeight * 0.6));
     expect(OcOptical.dockIconWashAlpha, lessThan(0.11));
@@ -105,11 +105,11 @@ void main() {
   test('OcElevation is layered in light and empty in dark', () {
     expect(OcElevation.cardFor(OcTokens.light), hasLength(3));
     expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, greaterThanOrEqualTo(2));
-    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, lessThanOrEqualTo(24));
-    expect(OcElevation.cardFor(OcTokens.light).last.offset.dy, 10);
+    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, lessThanOrEqualTo(16));
+    expect(OcElevation.cardFor(OcTokens.light).last.offset.dy, lessThanOrEqualTo(3));
     expect(
       (OcElevation.cardFor(OcTokens.light).last.color.a * 255).round(),
-      lessThan(0x14),
+      lessThan(0x0C),
     );
     expect(
       OcElevation.cardFor(OcTokens.light, tight: true),
