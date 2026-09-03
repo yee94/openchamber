@@ -119,11 +119,11 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  /// Official hit is `size-10` (40). WidgetTester's opaque plate reads larger
-  /// than live glass, so the painted disc/glyph sit one step inside (`size-9`
-  /// / `size-4.5`) while the tap target stays 40.
-  static const double headerDiscVisual = 36;
-  static const double headerGlyph = 18;
+  /// Official hit is `size-10` (40). Glyph is official `size-5` (20). The
+  /// painted plate sits 2px inside so WidgetTester frost does not read as a
+  /// larger coin than the live glass chip.
+  static const double headerDiscVisual = 38;
+  static const double headerGlyph = 20;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
@@ -156,11 +156,14 @@ class OcOptical {
   /// full tab slot (58 tall, radius 29) with `bg-interactive-selection/55`.
   /// Glyph stays visible — wash never replaces it with a primary square.
   static const double dockGlyph = 23;
-  /// Flutter round-cap strokes bloom at dpr 3; paint one step inside the
-  /// official 23px box so medium weight does not read as a blob.
-  static const double dockGlyphVisual = 21;
+  /// Official `size-[23px]`. Do not shrink the box — medium weight is the
+  /// 23px sprite, not a 21px stand-in.
+  static const double dockGlyphVisual = 23;
   /// Official dock `Icon weight="medium"` (`ICON_STROKE_WIDTH_MEDIUM` = 2).
   static const double dockGlyphStroke = 2;
+  /// Flutter round-cap bloom at dpr 3; paint just under official 2 so the
+  /// 23px sprite stays medium, not a filled blob.
+  static const double dockGlyphStrokeVisual = 1.75;
   static const bool dockSelectedFullSlot = true;
   static const double dockIconWashAlpha = 0.55;
   static const double dockIconGlowAlpha = 0.0;

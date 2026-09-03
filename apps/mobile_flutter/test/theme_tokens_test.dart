@@ -25,8 +25,10 @@ void main() {
     expect(OcTokens.light.surfaceBackground, OcTokens.light.background);
     expect(OcTokens.light.surfaceMuted, OcTokens.light.muted);
     expect(OcTokens.dark.pageBackground, isNot(OcTokens.light.pageBackground));
-    expect(OcTokens.light.floatSurface.a, lessThan(1));
-    expect(OcTokens.dark.floatSurface, OcTokens.dark.card);
+    expect(OcTokens.light.floatSurface.a, closeTo(0.45, 0.01));
+    expect(OcTokens.dark.floatSurface.a, closeTo(0.45, 0.01));
+    expect(OcTokens.light.dockPlate.a, closeTo(0.45, 0.01));
+    expect(OcTokens.light.glassChipFill.a, closeTo(0.24, 0.01));
     expect(OcTokens.light.glassChipFill.a, lessThan(OcTokens.light.glassFill.a));
     expect(OcTokens.light.dockPlate.a, lessThan(OcTokens.light.glassFill.a));
     expect(OcTokens.light.selectedTabWash.a, closeTo(0.086 * 0.55, 0.01));
@@ -122,9 +124,9 @@ void main() {
     expect(OcOptical.searchButton, 40);
     expect(OcOptical.addButton, 40);
     expect(OcOptical.headerDisc, OcOptical.searchButton);
-    expect(OcOptical.headerDiscVisual, 36);
+    expect(OcOptical.headerDiscVisual, 38);
     expect(OcOptical.headerDiscVisual, lessThan(OcOptical.headerDisc));
-    expect(OcOptical.headerGlyph, 18);
+    expect(OcOptical.headerGlyph, 20);
     expect(OcOptical.headerGlyphStroke, 1.5);
     expect(OcOptical.collapsingActionSize, 40);
     expect(OcOptical.collapsingTitleCompactSize, 20);
@@ -139,8 +141,9 @@ void main() {
     expect(OcOptical.rootTitleTracking(0), closeTo(-1.28, 0.01));
     expect(OcOptical.rootTitleTracking(1), closeTo(-0.64, 0.01));
     expect(OcOptical.dockGlyph, 23);
-    expect(OcOptical.dockGlyphVisual, 21);
-    expect(OcOptical.dockGlyphVisual, lessThan(OcOptical.dockGlyph));
+    expect(OcOptical.dockGlyphVisual, OcOptical.dockGlyph);
+    expect(OcOptical.dockGlyphStrokeVisual, 1.75);
+    expect(OcOptical.dockGlyphStrokeVisual, lessThan(OcOptical.dockGlyphStroke));
     expect(OcOptical.dockTabHeight, 58);
     expect(OcOptical.dockTabRadius, 29);
     expect(OcOptical.dockLabel, 12);

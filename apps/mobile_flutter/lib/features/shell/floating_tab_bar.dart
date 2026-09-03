@@ -52,7 +52,6 @@ class FloatingCapsuleTabBar extends StatelessWidget {
             key: Key('dock-selected-$selectedId'),
             decoration: BoxDecoration(
               borderRadius: radius,
-              border: Border.all(color: tokens.mobileBorder, width: 0.5),
               boxShadow: [
                 ...OcElevation.dock(context),
                 ...OcElevation.highlight(context),
@@ -137,7 +136,7 @@ class _TabSlot extends StatelessWidget {
                       glyph,
                       size: OcOptical.dockGlyphVisual,
                       color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
-                      strokeWidth: OcOptical.dockGlyphStroke,
+                      strokeWidth: OcOptical.dockGlyphStrokeVisual,
                       // Official `Icon` is `fill="none"` + medium stroke 2.
                       // Filling calendar-schedule's open body paints a primary
                       // square that replaces the glyph.

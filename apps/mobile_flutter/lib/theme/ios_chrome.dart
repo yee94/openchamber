@@ -311,14 +311,9 @@ class GroupedInsetCard extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: radius,
-        child: ColoredBox(
-          color: context.oc.floatSurface,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border.all(color: context.oc.mobileBorder, width: 0.5),
-            ),
-            child: padding == null ? child : Padding(padding: padding!, child: child),
-          ),
+        child: OcFrosted(
+          fill: context.oc.floatSurface,
+          child: padding == null ? child : Padding(padding: padding!, child: child),
         ),
       ),
     );
@@ -485,7 +480,11 @@ class SegmentedPill extends StatelessWidget {
                             height: itemHeight,
                             child: DecoratedBox(
                               decoration: BoxDecoration(
-                                color: Color.lerp(Colors.transparent, tokens.card, t),
+                                color: Color.lerp(
+                                  Colors.transparent,
+                                  tokens.card.withValues(alpha: 0.55),
+                                  t,
+                                ),
                                 borderRadius: BorderRadius.circular(itemRadius),
                                 boxShadow: t > 0.01
                                     ? [
@@ -590,7 +589,11 @@ class FilterChipBar extends StatelessWidget {
                                     height: 40,
                                     child: DecoratedBox(
                                       decoration: BoxDecoration(
-                                        color: Color.lerp(Colors.transparent, tokens.card, t),
+                                        color: Color.lerp(
+                                  Colors.transparent,
+                                  tokens.card.withValues(alpha: 0.55),
+                                  t,
+                                ),
                                         borderRadius: BorderRadius.circular(20),
                                         boxShadow: t > 0.01
                                             ? [

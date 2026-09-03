@@ -196,20 +196,22 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
           padding: const EdgeInsets.fromLTRB(16, OcOptical.scheduleCardPadV, 8, OcOptical.scheduleCardPadV),
           child: Row(
             children: [
-              Container(
+              SizedBox(
                 width: OcOptical.scheduleStatus,
                 height: OcOptical.scheduleStatus,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: context.oc.glassChipFill,
-                ),
-                alignment: Alignment.center,
-                child: OcGlyph(
-                  paused ? OcGlyphKind.pause : OcGlyphKind.check,
-                  size: OcOptical.scheduleStatusGlyph,
-                  strokeWidth: OcOptical.listGlyphStroke,
-                  filled: false,
-                  color: paused ? context.oc.mutedForeground : context.oc.statusSuccess,
+                child: ClipOval(
+                  child: OcFrosted(
+                    fill: context.oc.glassChipFill,
+                    child: Center(
+                      child: OcGlyph(
+                        paused ? OcGlyphKind.pause : OcGlyphKind.check,
+                        size: OcOptical.scheduleStatusGlyph,
+                        strokeWidth: OcOptical.listGlyphStroke,
+                        filled: false,
+                        color: paused ? context.oc.mutedForeground : context.oc.statusSuccess,
+                      ),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: OcOptical.projectTriggerGap),

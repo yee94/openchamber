@@ -12,14 +12,9 @@ class HighlightedText extends StatelessWidget {
   Widget build(BuildContext context) {
     final needle = query.trim();
     if (needle.isEmpty) {
-      return Text(
-        text,
-        style: style,
-        textHeightBehavior: const TextHeightBehavior(
-          applyHeightToFirstAscent: false,
-          applyHeightToLastDescent: false,
-        ),
-      );
+      // Official `.oc-mobile-session-title` / subtitle keep CSS line-height
+      // boxes (16px / 12px). Collapsing Flutter leading made rows denser.
+      return Text(text, style: style);
     }
     final lower = text.toLowerCase();
     final match = needle.toLowerCase();
@@ -40,12 +35,6 @@ class HighlightedText extends StatelessWidget {
       );
       start = index + needle.length;
     }
-    return Text.rich(
-      TextSpan(style: style, children: spans),
-      textHeightBehavior: const TextHeightBehavior(
-        applyHeightToFirstAscent: false,
-        applyHeightToLastDescent: false,
-      ),
-    );
+    return Text.rich(TextSpan(style: style, children: spans));
   }
 }

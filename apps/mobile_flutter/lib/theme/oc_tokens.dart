@@ -116,10 +116,9 @@ class OcTokens extends ThemeExtension<OcTokens> {
   /// `--oc-mobile-page-background`: muted 18% over background
   Color get pageBackground => Color.lerp(background, muted, 0.18)!;
 
-  /// `--oc-mobile-float-background` analogue. Official is elevated 45% over
-  /// transparent; WidgetTester has no live blur, so keep a high-alpha plate
-  /// plus [mobileBorder] instead of an opaque Material slab.
-  Color get floatSurface => isDark ? card : card.withValues(alpha: 0.82);
+  /// Official `--oc-mobile-float-background`: elevated 45% over transparent.
+  /// Pair with [OcFrosted] / `BackdropFilter` — not an opaque Material slab.
+  Color get floatSurface => card.withValues(alpha: 0.45);
 
   /// Official `--oc-mobile-float-highlight` (elevated 92%).
   Color get floatHighlight => (isDark ? Colors.white : card).withValues(alpha: isDark ? 0.18 : 0.92);
@@ -148,16 +147,13 @@ class OcTokens extends ThemeExtension<OcTokens> {
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
   /// Circular `mobileGlass` chips. Official fill is 0.68 + live blur;
-  /// WidgetTester has no blur, so drop alpha so cream peeks through
-  /// instead of a 40px solid plate.
+  /// WidgetTester frost is weaker, so drop alpha so cream peeks through.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.30 : 0.32);
+      .withValues(alpha: isDark ? 0.22 : 0.24);
 
   /// Official dock plate is `--oc-mobile-float-background` (elevated 45%)
-  /// plus glass blur — not `--oc-mobile-glass-fill` (0.68). Without blur,
-  /// sit between 45% and a readable frosted bar.
-  Color get dockPlate => (isDark ? const Color(0xFF26262C) : card)
-      .withValues(alpha: isDark ? 0.50 : 0.55);
+  /// plus glass blur — same token as [floatSurface], not glass-fill 0.68.
+  Color get dockPlate => floatSurface;
 
   /// Legacy alias. Floating chrome uses [glassFill] + blur instead.
   Color get dockFill => dockPlate;
