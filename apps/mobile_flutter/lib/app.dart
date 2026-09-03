@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'data/app_controller.dart';
 import 'features/connect/connect_screen.dart';
@@ -48,11 +49,17 @@ class _OpenChamberAppState extends State<OpenChamberApp> with WidgetsBindingObse
         final home = _phaseHome(controller);
 
         Widget app;
+        const delegates = <LocalizationsDelegate<dynamic>>[
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ];
         if (useCupertino) {
           app = CupertinoApp(
             debugShowCheckedModeBanner: false,
             locale: controller.locale,
             supportedLocales: AppStrings.supported,
+            localizationsDelegates: delegates,
             theme: cupertinoTheme(
               controller.themeMode == ThemeMode.dark ? Brightness.dark : Brightness.light,
             ),
@@ -63,6 +70,7 @@ class _OpenChamberAppState extends State<OpenChamberApp> with WidgetsBindingObse
             debugShowCheckedModeBanner: false,
             locale: controller.locale,
             supportedLocales: AppStrings.supported,
+            localizationsDelegates: delegates,
             theme: materialTheme(Brightness.light),
             darkTheme: materialTheme(Brightness.dark),
             themeMode: controller.themeMode,
