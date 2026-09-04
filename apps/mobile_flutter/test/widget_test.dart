@@ -144,6 +144,7 @@ void main() {
     final sessionTitle = tester.widget<Text>(find.text('Release notes'));
     expect(sessionTitle.style?.color, OcTokens.light.foreground);
     expect(sessionTitle.style?.color!.computeLuminance(), lessThan(0.12));
+    expect(sessionTitle.style?.fontWeight, FontWeight.w500);
     final projectTitle = tester.widgetList<Text>(find.text('openchamber')).first;
     expect(projectTitle.style?.color, OcTokens.light.foreground);
     expect(projectTitle.style?.fontWeight, FontWeight.w400);

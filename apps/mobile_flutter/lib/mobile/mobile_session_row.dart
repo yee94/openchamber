@@ -86,10 +86,14 @@ class MobileSessionRow extends StatelessWidget {
                             query: highlightQuery,
                             style: TextStyle(
                               fontSize: OcOptical.rowTitle,
-                              // Official `font-medium` / `font-semibold`.
-                              // Review CJK is a Regular-only cut — w500/w600
-                              // synthesize a bold blob that fills the 16px box.
-                              fontWeight: FontWeight.w400,
+                              // Official `.oc-mobile-session-title` is
+                              // `font-medium` (unread `font-semibold`).
+                              // ReviewSans has a real Medium cut so Latin
+                              // is not faux-bold. 12px Regular CJK AA-washed
+                              // to ~RGB 150 on cream (p5 218–240 in the
+                              // row box) — medium restores scannable ink
+                              // without the 32px page-title w600 blob.
+                              fontWeight: FontWeight.w500,
                               letterSpacing: OcOptical.rowTitleTracking,
                               height: OcOptical.rowTitleHeight,
                               color: context.oc.foreground,
