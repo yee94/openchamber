@@ -788,7 +788,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
             left: 0,
             right: 0,
             height: fadeH,
-            child: OcHeaderFade(safeTop: view.top, opacity: 0.58),
+            child: OcHeaderFade(safeTop: view.top, opacity: 0.42),
           ),
           Padding(
             padding: EdgeInsets.fromLTRB(inlineLeft, view.top, inlineRight, 0),

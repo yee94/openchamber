@@ -247,11 +247,26 @@ class ComposerBar extends StatelessWidget {
                                             ),
                                           ),
                                         )
-                                      : OcGlyph(
-                                          OcGlyphKind.sendPlane,
-                                          size: OcOptical.sendPlane,
-                                          strokeWidth: OcOptical.headerGlyphStrokeVisual,
-                                          color: context.oc.primary,
+                                      : DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: context.oc.primary.withValues(alpha: 0.55),
+                                              width: OcOptical.sendRingStroke,
+                                            ),
+                                          ),
+                                          child: SizedBox(
+                                            width: OcOptical.sendRingDisc,
+                                            height: OcOptical.sendRingDisc,
+                                            child: Center(
+                                              child: OcGlyph(
+                                                OcGlyphKind.sendPlane,
+                                                size: OcOptical.sendPlane,
+                                                strokeWidth: OcOptical.headerGlyphStrokeVisual,
+                                                color: context.oc.primary,
+                                              ),
+                                            ),
+                                          ),
                                         ),
                             ),
                           ),

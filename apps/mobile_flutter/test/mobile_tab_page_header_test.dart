@@ -96,7 +96,7 @@ void main() {
     await tester.pump();
 
     expect(tester.getSize(find.byType(PushedNavBar)).height, 47 + 56);
-    expect(tester.getSize(find.byKey(const Key('chat-back'))).height, 40);
+    expect(tester.getSize(find.byKey(const Key('chat-back'))).height, OcOptical.chatChip);
     expect(tester.getTopLeft(find.byKey(const Key('chat-back'))).dx, 16);
   });
 }
