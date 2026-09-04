@@ -337,7 +337,7 @@ void main() {
     expect(OcOptical.sendPlane, 16);
     expect(OcOptical.sendStop, 9);
     expect(OcOptical.sendArrow, 13);
-    expect(OcOptical.headerRestPeek, 20);
+    expect(OcOptical.headerRestPeek, 0);
     expect(OcOptical.settingsGroupRadius, 16);
     expect(OcOptical.settingsRowMinHeight, 52);
     expect(OcOptical.settingsSearchMinHeight, 44);

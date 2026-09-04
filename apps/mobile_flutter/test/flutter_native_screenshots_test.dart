@@ -88,8 +88,12 @@ void main() {
     expect(find.byKey(const Key('home-project-stack-openchamber')), findsOneWidget);
     final restHeader = tester.getRect(find.byType(MobileTabPageHeader));
     final restCard = tester.getRect(find.byKey(const Key('home-project-openchamber')));
-    expect(restCard.top, lessThan(restHeader.bottom));
-    expect(restCard.top, greaterThan(restHeader.bottom - OcOptical.headerRestPeek - 1));
+    expect(
+      restCard.top,
+      greaterThanOrEqualTo(
+        restHeader.bottom + OcOptical.collapsingExpandShift + OcOptical.pageProjectGap - 0.5,
+      ),
+    );
     expect(find.byKey(const Key('home-worktree-openchamber::/workspace/Code/github/openchamber-wt/feat-opencode2up')), findsOneWidget);
     expect(find.textContaining('feat/opencode2up'), findsNothing);
     expect(find.textContaining('feat-opencode2up'), findsWidgets);

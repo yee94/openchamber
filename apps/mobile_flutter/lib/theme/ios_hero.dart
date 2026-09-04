@@ -193,10 +193,9 @@ class OcOptical {
   static const double titleCollapseScaleReduce = 0.375;
   static const double titleCollapseScaleEnd = 0.625;
   static const double pageScrollBottomExtra = 40;
-  /// At-rest list peek under the transparent collapsing header. Official
-  /// overlay is sticky + transparent; WidgetTester must show catalog under
-  /// the plate or the header reads as a solid cream banner.
-  static const double headerRestPeek = 20;
+  /// Do not pull the in-flow list up through the expand-shift spacer.
+  /// Catalog peeks under translucent chrome via the Stack overlay only.
+  static const double headerRestPeek = 0;
 
   /// Official `--oc-settings-group-radius` 1rem. Not project 1.5rem.
   static const double settingsGroupRadius = 16;

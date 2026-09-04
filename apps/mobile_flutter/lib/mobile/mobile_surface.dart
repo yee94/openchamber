@@ -75,8 +75,10 @@ class MobileLabeledSurfaceGroup extends StatelessWidget {
 /// Flutter analogue of sticky `.oc-mobile-collapsing-header`: a [Stack] overlay
 /// so scrolling content passes **under** the translucent header / status area.
 /// The scroll body keeps an in-flow [MobileTabPageHeader.layoutSlot] plus the
-/// official `0.625rem` expand-shift spacer. Children stay a built [Column]
-/// (not a lazy sliver) so settings slugs remain hittable via `ensureVisible`.
+/// official `0.625rem` expand-shift spacer as a real sibling. Do not pull
+/// children up through that spacer — peek is the overlay Stack, not a
+/// negative translate. Children stay a built [Column] (not a lazy sliver)
+/// so settings slugs remain hittable via `ensureVisible`.
 /// WidgetTester / Android paint header frost via [MobileTabPageHeader].
 /// Real iOS still keeps live glass on the UIKit `UITabBar` overlay.
 class MobileTabPageScaffold extends StatefulWidget {
@@ -88,7 +90,6 @@ class MobileTabPageScaffold extends StatefulWidget {
     this.trailing,
     this.onRefresh,
     this.bottomOccupancy = 0,
-    this.restPeek = OcOptical.headerRestPeek,
   });
 
   final String title;
@@ -97,10 +98,6 @@ class MobileTabPageScaffold extends StatefulWidget {
   final List<Widget> children;
   final Future<void> Function()? onRefresh;
   final double bottomOccupancy;
-
-  /// Projects peek catalog under the translucent title. Scheduled / assistant
-  /// / settings keep content below the large title (official stack).
-  final double restPeek;
 
   @override
   State<MobileTabPageScaffold> createState() => _MobileTabPageScaffoldState();
@@ -155,14 +152,7 @@ class _MobileTabPageScaffoldState extends State<MobileTabPageScaffold> {
           children: [
             MobileTabPageHeader.layoutSlot(safeTop: safeTop),
             MobileTabPageHeader.expandShiftSpacer,
-            Transform.translate(
-              offset: Offset(0, -widget.restPeek),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: widget.children,
-              ),
-            ),
-            SizedBox(height: widget.restPeek),
+            ...widget.children,
           ],
         ),
       ),

@@ -49,8 +49,7 @@ void main() {
 
     final headerRect = tester.getRect(find.byType(MobileTabPageHeader));
     final rowAtRest = tester.getTopLeft(find.text('row-0')).dy;
-    expect(rowAtRest, lessThan(headerRect.bottom));
-    expect(rowAtRest, greaterThan(headerRect.bottom - OcOptical.headerRestPeek - 1));
+    expect(rowAtRest, greaterThanOrEqualTo(headerRect.bottom + OcOptical.collapsingExpandShift - 0.5));
 
     final titleAtRest = tester.widget<Transform>(find.byKey(const Key('mobile-tab-page-title')));
     expect(titleAtRest.transform.storage[0], closeTo(1, 0.001));

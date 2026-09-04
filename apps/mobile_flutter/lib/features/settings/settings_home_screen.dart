@@ -31,7 +31,6 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
 
     return MobileTabPageScaffold(
       title: t(context, 'settings.home.title'),
-      restPeek: 0,
       children: [
             SettingsSearchField(
               query: _query,

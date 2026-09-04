@@ -105,7 +105,6 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
     final filterId = widget.controller.scheduledFilterTaskId;
     return MobileTabPageScaffold(
       title: t(context, 'tabs.scheduled'),
-      restPeek: 0,
       children: [
             SegmentedPill(
               labels: [t(context, 'scheduled.views.tasks'), t(context, 'scheduled.views.history')],
