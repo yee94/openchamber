@@ -845,3 +845,18 @@ Latin −0.012em/−0.024em stay. Press DONE.
 Kept 03 `2bd63bf8` (MAE ~0.29). Restored scrolled / 05-dark / 06 / 07
 (MAE ≤ 0.09). 02/04/05 light SAME.
 **精致: 还没有.**
+
+**2026-09-04 wake-0608 (stale `194528ca9` / dart `e3fcf1b89`):**
+Watch scored the transparent-header recapture, not live
+`eb042e3ad`. STRUCTURE PASS. THEME OK. VISUAL REJECT type/icon/
+shadow vs README `mobile_projects` / `mobile_schedules` /
+`mobile_chat` (MAE ~27). Header-frost MAE ~0.22 is below that
+README gap because cream/orange + Regular Micro Hei + WidgetTester
+frost are not official cool-gray PingFang + UIKit `UIGlassEffect`.
+Do **not** rewind. Do **not** pile 3.2 / 3.0 / 1.46 / 1.02, do
+**not** grow search glyph **14** or discs 34/28/24, do **not**
+invent umbra or quieter-than-official far. Live tip already ports
+official `.oc-mobile-assistant-name` 15/20 / −0.02em (`03=2bd63bf8`).
+Locked float-shadow / Latin tracking stay. Press DONE. No second
+recapture — pixels already include that type delta.
+**精致: 还没有.**
