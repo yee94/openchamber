@@ -610,7 +610,7 @@ class SegmentedPill extends StatelessWidget {
                                       style: TextStyle(
                                         fontSize: OcTokens.textUiHeader,
                                         height: 1.0,
-                                        fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
+                                        fontWeight: FontWeight.w400,
                                         color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
                                       ),
                                     ),
@@ -699,7 +699,7 @@ class FilterChipBar extends StatelessWidget {
                                           style: TextStyle(
                                             fontSize: OcTokens.textUiLabel,
                                             height: 1.0,
-                                            fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w400,
+                                            fontWeight: FontWeight.w400,
                                             color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
                                           ),
                                         ),

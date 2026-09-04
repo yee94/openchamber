@@ -147,7 +147,9 @@ class _TabSlot extends StatelessWidget {
                     fontSize: OcOptical.dockLabel,
                     letterSpacing: OcOptical.dockLabelTracking,
                     height: OcOptical.dockLabelHeight,
-                    fontWeight: t > 0.5 ? FontWeight.w600 : FontWeight.w500,
+                    // Official selected is semibold. Review CJK is Regular-only —
+                    // w600 at 12px fills the dock label box.
+                    fontWeight: FontWeight.w400,
                     color: Color.lerp(tokens.mutedForeground, tokens.primary, t),
                   ),
                 ),

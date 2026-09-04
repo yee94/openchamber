@@ -67,6 +67,10 @@ void main() {
       expect(glyph.strokeWidth, stroke);
       expect(glyph.filled, OcOptical.dockGlyphFillBodies);
     }
+    final dockLabel = tester.widget<Text>(
+      find.descendant(of: find.byKey(const Key('dock-capsule')), matching: find.text('Projects')),
+    );
+    expect(dockLabel.style?.fontWeight, FontWeight.w400);
     expect(capsule.width, lessThan(tester.view.physicalSize.width / tester.view.devicePixelRatio));
   });
 
