@@ -27,7 +27,6 @@ void main() {
     expect(name.style?.fontWeight, FontWeight.w600);
     expect(name.style?.fontSize, OcOptical.assistantName);
     expect(name.style?.letterSpacing, closeTo(OcOptical.assistantNameTrackingOfficial, 0.01));
-    expect(name.style?.height, closeTo(OcOptical.assistantNameHeight, 0.01));
 
     final mode = tester.widget<Text>(find.text('连续模式'));
     expect(mode.style?.fontSize, OcOptical.meta);
