@@ -657,7 +657,10 @@ jump half-lead to 0. Gap **2**, 20+10+20, title↔meta **4**, far
 search plate **36**. No frost clone. Project / worktree / schedule
 14/18 `cardTitleHalfLead` **2.7 → 3.0** (type air vs PingFang
 Medium; not a session-row bump). Small-chrome stroke **0.38 → 0.28**.
-Recapture 02 (+scrolled/dark) and 04 if schedule titles move.
+Recapture 02 (+scrolled/dark) and 04 after `2896bbd38`:
+`02=f493f9d6` / scrolled `a50c1d20` / dark `46822d2d`;
+04 `77c1902c` / 04-dark `ddec1df2`. MAE vs `80e16e7c2` ~0.07 /
+0.07 / 0.14 on 02; ~2.98 / 2.36 on 04. 03/05/07 SAME.
 **Not 精致.**
 
 | File | Screen |
