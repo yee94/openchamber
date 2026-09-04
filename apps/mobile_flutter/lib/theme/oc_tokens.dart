@@ -154,7 +154,7 @@ class OcTokens extends ThemeExtension<OcTokens> {
   /// Near-glass chip fill — under official glass 0.68 so search / chat
   /// discs are frost plates (mobileGlass), not cream coins or bare glyphs.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.30 : 0.30);
+      .withValues(alpha: isDark ? 0.34 : 0.34);
 
   /// Official `--oc-mobile-glass-highlight` is white / 0.60
   /// (dark 0.18). Inset sheen on the elevated plate.
@@ -371,7 +371,8 @@ class OcTokens extends ThemeExtension<OcTokens> {
   static const double projectActionSize = 36;
 
   /// Root `--oc-mobile-session-row-height` = 2.875rem. Project-shell CSS
-  /// is 2.5rem (40) — [OcOptical.sessionRowVisualHeight] matches that.
+  /// is 2.5rem (40); [OcOptical.sessionRowVisualHeight] stays in that
+  /// class with a tiny CJK half-lead (42).
   static const double sessionRowHeight = 46;
 
   static const double groupRadius = surfaceRadius;

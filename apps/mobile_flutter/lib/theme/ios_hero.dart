@@ -12,7 +12,7 @@ class OcOptical {
 
   /// Official `.oc-mobile-session-title` is 0.75rem / 1rem / −0.012em.
   /// `.oc-mobile-project-shell` sets `--oc-mobile-session-row-height` to
-  /// 2.5rem (40). Paint titles in that box — do not add empty half-lead.
+  /// 2.5rem (40). Tiny CJK half-lead only — do not invent 7.5/70 air.
   /// Ink is `font-size`; strut is `line-height`. Do not faux-bold CJK.
   static const double rowTitle = 12;
   /// Official CSS is −0.012em. Flutter letterSpacing packs CJK tighter than
@@ -20,9 +20,10 @@ class OcOptical {
   static const double rowTitleTracking = 0;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
-  /// Official project-shell row: pad 5 + title 16 + gap-0.5 2 + subtitle 12 + pad 5.
-  /// CJK air stays inside the 16/12 boxes — no invented gap or 70px rows.
-  static const double sessionRowVisualHeight = 40;
+  /// Official project-shell row is 40. Tiny CJK half-lead (0.5/side) adds
+  /// 2px total so Flutter Regular CJK is not flush in the 16/12 boxes.
+  /// Stay in the 40-class — never 7.5 half-lead / 70px rows.
+  static const double sessionRowVisualHeight = 42;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
@@ -43,8 +44,8 @@ class OcOptical {
   /// CJK face is Regular-only, so paint Regular — do not faux-bold.
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
-  /// Extra Flutter half-lead bloated rows and washed titles. Keep 0.
-  static const double cssLineCjkHalfLead = 0;
+  /// One extra Flutter half-pixel un-cramps CJK without leaving ~40 density.
+  static const double cssLineCjkHalfLead = 0.5;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
@@ -198,12 +199,12 @@ class OcOptical {
   /// Flutter round-cap bloom at dpr 3; paint under 2 so slim filled-medium
   /// 23px stays delicate — not bricks, not hairlines.
   static const double dockGlyphStroke = 2;
-  /// Slimmer than 1.06 so calendar/gear read filled-medium, not bricks
-  /// (wake-0928). Folder / sparkles stay [dockStrokeGlyphStrokeVisual].
-  static const double dockGlyphStrokeVisual = 1.02;
+  /// Official medium is 2; Flutter round-cap bloom at dpr 3. Paint under
+  /// 1.02 so calendar/gear stay filled-medium sprites, not bricks.
+  static const double dockGlyphStrokeVisual = 0.96;
   /// Folder / sparkles stay official medium stroke but paint lighter
-  /// than calendar/gear so the 23px outline is not a brick (wake-0928).
-  static const double dockStrokeGlyphStrokeVisual = 0.94;
+  /// than calendar/gear so the 23px outline is not a brick.
+  static const double dockStrokeGlyphStrokeVisual = 0.88;
   /// Official filled-medium 23px sprites: folder / sparkles / calendar
   /// grid / holed gear. Not hairline outlines and not brick mass.
   static const bool dockGlyphFillBodies = true;
@@ -219,7 +220,7 @@ class OcOptical {
   /// Official `--oc-mobile-glass-blur` on the 36 `mobileGlass` disc.
   static const double chipBlur = 20;
   /// Chip frost sigma. Official [chipBlur] is 20; WidgetTester cream +
-  /// 20 paints a coin. 14 + fill 0.30 is a delicate mobileGlass plate —
+  /// 20 paints a coin. 14 + fill 0.34 is a mobileGlass frost plate —
   /// not a bare glyph and not a 0.68 cream disc.
   static const double chipBleedBlur = 14;
   /// Official `.oc-mobile-floating-surface` `blur(22px) saturate(1.35)`.
@@ -238,11 +239,16 @@ class OcOptical {
   static const double leadingCircleVisual = 32;
   static const double leadingCircleCompact = 22;
   /// Official `.oc-mobile-project-shell .oc-mobile-project-icon-glyph` is
-  /// 1.125rem (18). 16 painted as a 9px-mass hairline on cream.
+  /// 1.125rem (18). Flutter CustomPaint blooms past the web SVG; paint
+  /// [leadingGlyphVisual] inside the official 38/32 hit/plate.
   static const double leadingGlyph = 18;
+  static const double leadingGlyphVisual = 17;
   static const double leadingGlyphCompact = 14;
   static const double worktreeIconBox = 18;
+  /// Official worktree `git-branch` is `size-3.5` (14). Paint [worktreeGlyphVisual]
+  /// inside the 18 box so the sprite matches the web scale.
   static const double worktreeGlyph = 14;
+  static const double worktreeGlyphVisual = 13;
   /// Session / worktree `more-2` `size-3.5`. Project action is `size-4`.
   static const double sessionMore = 12;
   /// Official visible more is `min-w-9` + `mr-1`. Open the trailing air a

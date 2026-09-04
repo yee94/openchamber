@@ -7,6 +7,7 @@ import 'package:openchamber/data/settings_catalog.dart';
 import 'package:openchamber/features/shell/secondary_chrome.dart';
 import 'package:openchamber/features/shell/tab_scaffold.dart';
 import 'package:openchamber/features/settings/settings_primitives.dart';
+import 'package:openchamber/mobile/mobile_surface.dart';
 import 'package:openchamber/theme/ios_chrome.dart';
 import 'package:openchamber/theme/oc_glyphs.dart';
 
@@ -69,7 +70,7 @@ void main() {
     expect(capsule.width, lessThan(tester.view.physicalSize.width / tester.view.devicePixelRatio));
   });
 
-  testWidgets('OcCssLine keeps official CSS line boxes without extra half-lead', (tester) async {
+  testWidgets('OcCssLine keeps official CSS line boxes with tiny CJK half-lead', (tester) async {
     const title = TextStyle(fontSize: OcOptical.rowTitle, height: OcOptical.rowTitleHeight);
     await tester.pumpWidget(
       const MaterialApp(
@@ -87,7 +88,7 @@ void main() {
       OcOptical.rowTitle * OcOptical.rowTitleHeight + 2 * OcOptical.cssLineCjkHalfLead,
     );
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.cssLineCjkHalfLead, 0);
+    expect(OcOptical.cssLineCjkHalfLead, 0.5);
   });
 
   testWidgets('chat is a pushed secondary page from Projects', (tester) async {
@@ -126,6 +127,8 @@ void main() {
     final add = tester.widget<CircularChromeButton>(find.byKey(const Key('scheduled-add')));
     expect(add.ink, isFalse);
     expect(add.filled, isFalse);
+    final scheduleCard = tester.widget<MobileFloatingSurface>(find.byType(MobileFloatingSurface).first);
+    expect(scheduleCard.tight, isTrue);
   });
 
   testWidgets('project and session titles paint full foreground ink', (tester) async {
@@ -137,7 +140,12 @@ void main() {
     expect(projectTitle.style?.color, OcTokens.light.foreground);
     final row = tester.getSize(find.byKey(const Key('home-session-sess-pinned')));
     expect(row.height, greaterThanOrEqualTo(OcOptical.sessionRowVisualHeight));
-    expect(row.height, lessThan(56));
+    expect(row.height, lessThan(48));
+    final codeGlyph = tester.widgetList<OcGlyph>(find.byType(OcGlyph)).firstWhere(
+      (glyph) => glyph.kind == OcGlyphKind.code,
+    );
+    expect(codeGlyph.size, OcOptical.leadingGlyphVisual);
+    expect(codeGlyph.size, lessThan(OcOptical.leadingGlyph));
   });
 
   testWidgets('session search matches titles and hides non-matches', (tester) async {

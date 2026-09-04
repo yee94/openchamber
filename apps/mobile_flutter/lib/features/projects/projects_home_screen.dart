@@ -315,7 +315,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
               child: Center(
                 child: OcGlyph(
                   OcGlyphKind.branch,
-                  size: OcOptical.worktreeGlyph,
+                  size: OcOptical.worktreeGlyphVisual,
                   strokeWidth: OcOptical.listGlyphStroke,
                   color: context.oc.mutedForeground,
                 ),

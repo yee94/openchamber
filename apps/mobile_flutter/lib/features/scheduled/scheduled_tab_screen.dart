@@ -147,6 +147,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
             else ...[
               if (filterId == null && (runs.value == null || runs.value!.isEmpty))
                 GroupedInsetCard(
+                  tight: true,
                   child: ListTile(
                     key: const Key('scheduled-runs-empty'),
                     title: Text(t(context, 'scheduled.history.empty')),
@@ -159,6 +160,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
               else if (runs.value != null)
                 for (final run in runs.value!)
                   GroupedInsetCard(
+                    tight: true,
                     child: Pressable(
                       key: Key('scheduled-run-${run.id}'),
                       haptic: run.sessionId == null || run.sessionId!.isEmpty ? null : HapticStrength.light,
@@ -188,6 +190,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
   Widget _taskCard(BuildContext context, ScheduledTaskRecord task) {
     final paused = !task.enabled;
     final card = MobileFloatingSurface(
+      tight: true,
       child: Pressable(
         key: Key('scheduled-task-${task.id}'),
         haptic: HapticStrength.light,
