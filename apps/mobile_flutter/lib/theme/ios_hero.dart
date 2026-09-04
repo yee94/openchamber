@@ -8,6 +8,9 @@ class OcOptical {
   const OcOptical._();
 
   /// Official `.oc-mobile-root-page-title`: 2rem / 1.2 / −0.04em, semibold.
+  /// Widget style stays `w600`. Collapsing CJK paints Regular Micro Hei
+  /// at this size (DemiLight@500 bricks vs PingFang Semibold air).
+  /// Session/card titles stay DemiLight@500. Not a half-lead pile.
   static const double largeTitle = 32;
   static const double largeTitleTracking = -1.28;
   static const double largeTitleHeight = 1.2;
@@ -191,11 +194,10 @@ class OcOptical {
   static const double headerGlyph = 14;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
-  /// Small chrome still read heavy at 0.28 vs official medium bloom.
-  /// 0.16 is the next optical-weight step — still above dock 0.12,
-  /// still far under official 1.5. Hit boxes stay 40. Search glyph
-  /// stays 14. Catalog discs are 12 in the 28 plate. Not a hairline.
-  static const double headerGlyphStrokeVisual = 0.16;
+  /// Small chrome official optical is 0.28 (wake-0325 keep). 0.16 was
+  /// below tester noise. Hit boxes stay 40. Search glyph stays 14.
+  /// Catalog discs stay 12 in the 28 plate. Not a hairline.
+  static const double headerGlyphStrokeVisual = 0.28;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
   static const double listGlyphStroke = 1.5;
   /// Search-field prefix `Icon name="search" className="size-4"`.
@@ -310,8 +312,8 @@ class OcOptical {
   static const double worktreeMeta = 11;
   static const double worktreeMetaHeight = 14 / 11;
   /// Official session `more-2` is `size-3.5` (14). Trailing ··· / chevron
-  /// stay dock visual — not small-chrome 0.16 (that fattened meatballs
-  /// vs README). Search / leading keep 0.16.
+  /// stay dock visual — not small-chrome 0.28 (that fattened meatballs
+  /// vs README). Search / leading keep 0.28.
   static const double sessionMore = 14;
   static const double sessionMoreStroke = dockGlyphStrokeVisual;
   /// Official visible more is `min-w-9` + `mr-1`. Open the trailing air a

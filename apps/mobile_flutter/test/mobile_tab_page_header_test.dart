@@ -138,6 +138,33 @@ void main() {
     expect(MobileTabPageHeader.titleBandAir, OcTokens.pageGap + OcOptical.collapsingExpandShift + OcTokens.pageGap);
   });
 
+  testWidgets('collapsing page-title CJK is Regular; Latin stays semibold', (tester) async {
+    await tester.pumpWidget(
+      StringsScope(
+        strings: AppStrings.of(AppStrings.zhCN),
+        child: MaterialApp(
+          theme: materialTheme(Brightness.light),
+          home: const MobileTabPageScaffold(
+            title: '项目 Open',
+            children: [Text('body')],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final pageTitle = tester.widget<Text>(
+      find.descendant(of: find.byKey(const Key('mobile-tab-page-title')), matching: find.byType(Text)),
+    );
+    expect(pageTitle.style?.fontWeight, FontWeight.w600);
+    final runs = (pageTitle.textSpan! as TextSpan).children!.whereType<TextSpan>().toList();
+    expect(runs, hasLength(2));
+    expect(runs.first.text, '项目');
+    expect(runs.first.style?.fontWeight, FontWeight.w400);
+    expect(runs.last.text, ' Open');
+    expect(runs.last.style?.fontWeight, isNull);
+  });
+
   testWidgets('detail nav consumes viewPadding.top and keeps a 56px band', (tester) async {
     tester.view.physicalSize = const Size(390 * 3, 844 * 3);
     tester.view.devicePixelRatio = 3;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../features/projects/highlighted_text.dart';
 import '../theme/ios_chrome.dart';
 
 /// Official `MobileTabPageHeader` — shared root-tab chrome.
@@ -154,13 +155,27 @@ class MobileTabPageHeader extends StatelessWidget {
                             key: const Key('mobile-tab-page-title'),
                             alignment: Alignment.centerLeft,
                             scale: 1 - (OcOptical.titleCollapseScaleReduce * t),
-                            child: Text(
-                              title,
+                            child: Text.rich(
+                              TextSpan(
+                                children: [
+                                  for (final run in scriptRuns(title))
+                                    TextSpan(
+                                      text: run.text,
+                                      style: run.cjk
+                                          ? const TextStyle(fontWeight: FontWeight.w400)
+                                          : null,
+                                    ),
+                                ],
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: OcOptical.largeTitle,
-                                // Official `.oc-mobile-root-page-title` is font-semibold.
+                                // Official `.oc-mobile-root-page-title` is
+                                // font-semibold. Latin keeps ReviewSans
+                                // Medium. 32px DemiLight@500 bricks vs
+                                // PingFang Semibold — CJK uses Regular
+                                // Micro Hei. Session/card stay DemiLight.
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: OcOptical.rootTitleTracking(t),
                                 height: OcOptical.largeTitleHeight,
