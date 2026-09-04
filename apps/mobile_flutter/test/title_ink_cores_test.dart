@@ -15,6 +15,18 @@ void main() {
 
   setUpAll(loadReviewFonts);
 
+  test('stem/shade runs split CJK from Latin so Medium Latin is not bloated', () {
+    final runs = scriptRuns('NPM 全 package 版本发布');
+    expect(runs.map((run) => (run.text, run.cjk)).toList(), [
+      ('NPM ', false),
+      ('全', true),
+      (' package ', false),
+      ('版本发布', true),
+    ]);
+    expect(scriptRuns('Composer IME').every((run) => !run.cjk), isTrue);
+    expect(scriptRuns('发布说明').every((run) => run.cjk), isTrue);
+  });
+
   testWidgets('session titles keep L<120 cores above floating frost', (tester) async {
     tester.view.devicePixelRatio = 3;
     tester.view.physicalSize = const Size(390 * 3, 160 * 3);
