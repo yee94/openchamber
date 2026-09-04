@@ -708,8 +708,14 @@ Semibold air. Session/card titles stay DemiLight@500. Collapsing
 page-title CJK paints Regular Micro Hei (`w400`) — not a Medium
 flip, not a half-lead pile. Stroke back to official optical
 **0.28**. Half-lead **3.2** / card **3.0** / tracking / plate **34**
-/ far **10/24/-6 @ 10%** stay. Recapture 02/03/04/05 after dart.
-**Not 精致.**
+/ far **10/24/-6 @ 10%** stay. Recapture after dart `18a0135f8`:
+`02=3c3419a2` / scrolled `017f1cc6` / dark `0a56f7ba`;
+03 `147da994`; 04 `25b842f5` / 04-dark `0e78a22e`;
+05 `8d94356a` / 05-dark `13efae4d`. MAE vs `640063340`
+~0.29 / 0.11 / 0.27 on 02; ~0.31 on 03; ~0.24 / 0.21 on 04;
+~0.35 / 0.13 on 05. Restored 01 / 06 / 07 / 08 (MAE ≤ 0.11
+except 01/08 SAME). Scrolled kept (same Regular title at
+compact scale). **Not 精致.**
 
 | File | Screen |
 |---|---|
