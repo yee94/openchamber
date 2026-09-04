@@ -196,10 +196,14 @@ class OcGlassChip extends StatelessWidget {
     super.key,
     required this.child,
     this.size = OcOptical.headerDiscVisual,
+    this.fill,
   });
 
   final Widget child;
   final double size;
+  /// Default is [OcTokens.glassChipFill] 0.34. Search passes
+  /// [OcTokens.glassChipThrough] so the 32 plate is frost, not a coin.
+  final Color? fill;
 
   @override
   Widget build(BuildContext context) {
@@ -213,7 +217,7 @@ class OcGlassChip extends StatelessWidget {
       ),
       child: ClipOval(
         child: OcFrosted(
-          fill: context.oc.glassChipFill,
+          fill: fill ?? context.oc.glassChipFill,
           sigma: OcOptical.chipBleedBlur,
           saturate: OcOptical.glassSaturate,
           child: SizedBox(
@@ -364,7 +368,11 @@ class CircularChromeButton extends StatelessWidget {
               child: Center(child: glyphWidget),
             ),
           )
-        : OcGlassChip(size: disc, child: glyphWidget);
+        : OcGlassChip(
+            size: disc,
+            fill: tokens.glassChipThrough,
+            child: glyphWidget,
+          );
     final child = SizedBox(
       width: hit,
       height: hit,

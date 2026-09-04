@@ -34,8 +34,8 @@ void main() {
     expect(OcTokens.light.settingsGroupBackground, isNot(OcTokens.light.pageBackground));
     expect(OcTokens.light.floatSurface.a, closeTo(0.45, 0.01));
     expect(OcTokens.dark.floatSurface.a, closeTo(0.45, 0.01));
-    expect(OcTokens.light.dockPlate.a, closeTo(0.28, 0.02));
-    expect(OcTokens.dark.dockPlate.a, closeTo(0.28, 0.02));
+    expect(OcTokens.light.dockPlate.a, closeTo(0.24, 0.02));
+    expect(OcTokens.dark.dockPlate.a, closeTo(0.24, 0.02));
     expect(OcTokens.light.dockPlate.a, lessThan(OcTokens.light.floatSurface.a));
     expect(OcTokens.light.dockPlate.r, greaterThan(OcTokens.light.card.r * 0.9));
     expect(OcTokens.light.glassFill.a, closeTo(0.68, 0.01));
@@ -45,6 +45,8 @@ void main() {
     expect(OcTokens.light.glassFill.b, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassFill, isNot(OcTokens.light.surfaceElevated));
     expect(OcTokens.light.glassChipFill.a, closeTo(0.34, 0.01));
+    expect(OcTokens.light.glassChipThrough.a, closeTo(0.22, 0.01));
+    expect(OcTokens.light.glassChipThrough.a, lessThan(OcTokens.light.glassChipFill.a));
     expect(OcTokens.light.glassChipFill.a, lessThan(OcTokens.light.glassFill.a));
     expect(OcTokens.dark.glassChipFill.a, closeTo(0.34, 0.01));
     expect(OcTokens.light.glassChipFill.r, closeTo(1.0, 0.01));

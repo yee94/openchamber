@@ -152,9 +152,15 @@ class OcTokens extends ThemeExtension<OcTokens> {
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
   /// mobileGlass frost plate — under official 0.68 coin, above bare
-  /// page-bleed. Search / schedule discs are frost, not cream coins.
+  /// page-bleed. Chat / schedule discs stay this 0.34 plate.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: isDark ? 0.34 : 0.34);
+
+  /// Search header frost. 0.34 reads as a cream coin on the collapsing
+  /// header (nothing behind to blur). 0.22 is through-frost — still a
+  /// 32 plate + σ14, not page-bleed and not a 0.68 coin.
+  Color get glassChipThrough => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
+      .withValues(alpha: 0.22);
 
   /// Official `--oc-mobile-glass-highlight` is white / 0.60
   /// (dark 0.18). Inset sheen on the elevated plate.
@@ -166,12 +172,12 @@ class OcTokens extends ThemeExtension<OcTokens> {
   /// live glass. A plain card@0.30 wash reads as a muddy cream slab.
   /// Mix official glass milk over a lighter elevated wash so the stadium
   /// is frost (list still reads through). 0.14/0.22 still read muted on
-  /// cream WidgetTester — 0.12/0.18 keeps the wash without a muddy slab.
-  /// Selected stays mix-only `/55`.
+  /// cream WidgetTester — 0.12/0.18 still stacked a muddy selected pill.
+  /// 0.10/0.15 keeps elevated frost; selected `/55` stays mix-only.
   Color get dockPlate => Color.alphaBlend(
         (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-            .withValues(alpha: 0.12),
-        card.withValues(alpha: 0.18),
+            .withValues(alpha: 0.10),
+        card.withValues(alpha: 0.15),
       );
 
   /// Legacy alias. Floating chrome uses [glassFill] + blur instead.
