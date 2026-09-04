@@ -99,7 +99,7 @@ class MobileAssistantCard extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: OcOptical.entityTitle,
                                   fontWeight: FontWeight.w600,
-                                  letterSpacing: OcOptical.entityTitleTracking,
+                                  letterSpacing: OcOptical.entityTitleTrackingOfficial,
                                   height: OcOptical.entityTitleHeight,
                                   color: context.oc.foreground,
                                 ),

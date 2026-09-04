@@ -102,7 +102,7 @@ class OcChrome {
   static const double headerButtonSize = OcTokens.headerButtonSize;
 }
 
-/// Official `--oc-mobile-glass-fill` + blur 20 + saturate 1.25.
+/// Official `--oc-mobile-glass-fill` + blur 20 + saturate 1.25/1.2.
 /// iOS 26 chrome is UIKit `UIGlassEffect` (`OpenChamberTabBarView` /
 /// composer). This widget is the Android / WidgetTester degrade:
 /// clipped [BackdropFilter] through-plates. Not a Flutter glass clone.
@@ -112,13 +112,15 @@ class OcFrosted extends StatelessWidget {
     required this.child,
     this.fill,
     this.sigma = OcOptical.glassBlur,
-    this.saturate = OcOptical.glassSaturate,
+    this.saturate,
   });
 
   final Widget child;
   final Color? fill;
   final double sigma;
-  final double saturate;
+  /// Null uses official `--oc-mobile-glass-saturate` for brightness
+  /// (light 1.25 / dark 1.2). Cards pass [OcOptical.floatSaturate].
+  final double? saturate;
 
   @override
   Widget build(BuildContext context) {
@@ -127,12 +129,13 @@ class OcFrosted extends StatelessWidget {
       child: child,
     );
     if (sigma <= 0) return plate;
+    final applied = saturate ?? OcOptical.glassSaturateFor(context.oc.isDark);
     ImageFilter filter = ImageFilter.blur(sigmaX: sigma, sigmaY: sigma);
-    if (saturate != 1.0) {
+    if (applied != 1.0) {
       // Official `backdrop-filter: blur() saturate()`. Blur first.
       filter = ImageFilter.compose(
         inner: filter,
-        outer: ColorFilter.matrix(_saturateMatrix(saturate)),
+        outer: ColorFilter.matrix(_saturateMatrix(applied)),
       );
     }
     // Clip to this plate. An unclipped BackdropFilter in a Stack
@@ -232,7 +235,6 @@ class OcGlassChip extends StatelessWidget {
         child: OcFrosted(
           fill: fill ?? context.oc.glassChipFill,
           sigma: OcOptical.chipBleedBlur,
-          saturate: OcOptical.glassSaturate,
           child: SizedBox(
             width: size,
             height: size,

@@ -1,3 +1,5 @@
+import 'oc_live_ios.dart';
+
 /// Official `packages/ui/src/styles/mobile.css` rem tokens, in px at 16.
 ///
 /// Colors stay on [OcTokens] (design-system orange / sand). Do not free-tune
@@ -20,10 +22,12 @@ class OcOptical {
   /// 2.5rem (40). Tiny CJK half-lead only — do not invent 7.5/70 air.
   /// Ink is `font-size`; strut is `line-height`. Do not faux-bold CJK.
   static const double rowTitle = 12;
-  /// Official CSS is −0.012em. Flutter Regular CJK still packs tighter
-  /// than the WebView — 1.46 opens the 12px band after the 3.2 box
-  /// step (1.42 packed). Stay under 1.5. Do not pile. Official 16/12
-  /// boxes stay.
+  /// Official `.oc-mobile-session-title` letter-spacing −0.012em.
+  /// Latin and live iOS PingFang use this. Regular Micro Hei CJK on
+  /// WidgetTester / Android still needs [rowTitleTracking].
+  static const double rowTitleTrackingOfficial = rowTitle * -0.012;
+  /// Regular CJK compensation only — not Latin, not live iOS.
+  /// Stay under 1.5. Do not pile onto official −0.012em.
   static const double rowTitleTracking = 1.46;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
@@ -31,8 +35,11 @@ class OcOptical {
   /// inside the 16/12 box — 3.2 is the next step toward that official
   /// box (was 3.7 / 47.4). Subtitle/time stay the official 10/12 box
   /// (`sessionSubtitleHalfLead` 0) so gap-0.5 is not eaten.
-  /// 40 + 2×3.2 + 0 = 46.4. Do not jump to 0 (packs Regular CJK).
+  /// 40 + 2×3.2 + 0 = 46.4. Do not jump to 0 on the tester path
+  /// (packs Regular CJK). Live iOS uses the official 16/12 box.
   static const double sessionTitleHalfLead = 3.2;
+  static double get sessionTitleHalfLeadPaint =>
+      ocLiveIosType ? 0 : sessionTitleHalfLead;
   static const double sessionRowVisualHeight =
       40 + 2 * sessionTitleHalfLead + (sessionTitleSubtitleGap - 2);
   /// Official `.oc-mobile-session-subtitle` / time is the 10/12 CSS box.
@@ -62,8 +69,8 @@ class OcOptical {
   /// style stays that weight so Latin keeps ReviewSans Medium. CJK
   /// fills Regular Micro Hei (DemiLight@500 still bricks 12px / 14px
   /// vs PingFang Medium air). Do not revive a miter stem. Session
-  /// title half-lead is [sessionTitleHalfLead] (3.2); tracking is
-  /// [rowTitleTracking] (1.46).
+  /// title half-lead is [sessionTitleHalfLead] (3.2) on Regular CJK;
+  /// Latin / live iOS tracking is [rowTitleTrackingOfficial].
   static const double sessionTitleStem = 0;
   static const double sessionTitleShade = 0;
   static const double sessionTitleSubtitleGap = 2;
@@ -108,19 +115,26 @@ class OcOptical {
   /// Root `--oc-mobile-entity-title` 16 / 20. Project-shell tightens to
   /// 0.875rem / 1.125rem / letter-spacing -0.024em.
   static const double entityTitle = 16;
+  /// Official `.oc-mobile-entity-title` letter-spacing −0.024em at 16.
+  static const double entityTitleTrackingOfficial = entityTitle * -0.024;
+  /// Residual near-zero on assistant names before official −0.024em.
   static const double entityTitleTracking = 0.04;
   static const double entityTitleHeight = 1.25;
   static const double projectTitle = 14;
-  /// Official entity title is −0.024em. Flutter Regular CJK packs
-  /// tighter than the WebView at 0.95 — 1.02 opens 14px card titles.
-  /// Official 18/14 box unchanged. Stay under 1.1.
+  /// Official project-shell entity title −0.024em at 14.
+  /// Latin and live iOS use this. Regular CJK keeps [projectTitleTracking].
+  static const double projectTitleTrackingOfficial = projectTitle * -0.024;
+  /// Regular CJK compensation only. Stay under 1.1. Do not pile.
   static const double projectTitleTracking = 1.02;
   static const double projectTitleHeight = 18 / 14;
   /// Session titles stay [sessionTitleHalfLead] (3.2) — do not pile.
   /// 14/18 project / worktree / schedule titles still pack Regular CJK
   /// in the official CSS box at 2.7. 3.0 opens that band toward
   /// PingFang Medium. Not a session-row bump, not 7.5, not a gap widen.
+  /// Live iOS uses the official 18/14 box.
   static const double cardTitleHalfLead = 3.0;
+  static double get cardTitleHalfLeadPaint =>
+      ocLiveIosType ? 0 : cardTitleHalfLead;
 
   /// Official `.oc-mobile-assistant-avatar` is 2.5rem. Visual AgentAvatar
   /// is 38 inside a 1px muted ring. Flutter `CircleAvatar` radius 22 (44)
@@ -415,8 +429,12 @@ class OcOptical {
   static const double scrollChevron = 16;
   static const double scrollChevronStroke = 1.8;
   static const double glassBlur = 20;
-  /// Official `--oc-mobile-glass-saturate` (light 1.25).
+  /// Official `--oc-mobile-glass-saturate` (light 1.25 / dark 1.2).
+  /// Android / WidgetTester frost is this CSS degrade, not UIKit glass.
   static const double glassSaturate = 1.25;
+  static const double glassSaturateDark = 1.2;
+  static double glassSaturateFor(bool isDark) =>
+      isDark ? glassSaturateDark : glassSaturate;
 
   static const double toolbarGlyph = 16;
   /// Official `MESSAGE_ACTION_ICON_CLASS` `size-3.5` / medium stroke.

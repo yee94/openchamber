@@ -96,13 +96,13 @@ class MobileProjectCard extends StatelessWidget {
                       query: highlightQuery,
                       // 14/18 official CSS box + [cardTitleHalfLead].
                       // Compact worktree labels keep the session half-lead.
-                      halfLead: compact ? null : OcOptical.cardTitleHalfLead,
+                      halfLead: compact ? null : OcOptical.cardTitleHalfLeadPaint,
                       stem: OcOptical.sessionTitleStem,
                       style: TextStyle(
                         fontSize: compact ? OcOptical.rowTitle : OcOptical.projectTitle,
                         // Official is font-semibold.
                         fontWeight: FontWeight.w600,
-                        letterSpacing: compact ? OcOptical.rowTitleTracking : OcOptical.projectTitleTracking,
+                        letterSpacing: compact ? OcOptical.rowTitleTrackingOfficial : OcOptical.projectTitleTrackingOfficial,
                         height: compact ? OcOptical.rowTitleHeight : OcOptical.projectTitleHeight,
                         color: context.oc.foreground,
                       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openchamber/mobile/mobile_tab_page_header.dart';
+import 'package:openchamber/features/projects/highlighted_text.dart';
 import 'package:openchamber/theme/app_theme.dart';
 import 'package:openchamber/theme/ios_chrome.dart';
 import 'package:openchamber/theme/ios_hero.dart';
@@ -121,6 +122,62 @@ void main() {
       iosTheme.textTheme.bodyMedium?.fontFamily,
       Typography.material2021(platform: TargetPlatform.iOS).black.bodyMedium?.fontFamily,
     );
+    expect(OcOptical.sessionTitleHalfLeadPaint, 0);
+    expect(OcOptical.cardTitleHalfLeadPaint, 0);
+    debugOcLiveIosType = false;
+    expect(OcOptical.sessionTitleHalfLeadPaint, OcOptical.sessionTitleHalfLead);
+    expect(OcOptical.cardTitleHalfLeadPaint, OcOptical.cardTitleHalfLead);
+  });
+
+  testWidgets('Latin uses official session tracking; Regular CJK keeps 1.46', (tester) async {
+    addTearDown(() => debugOcLiveIosType = null);
+    debugOcLiveIosType = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: materialTheme(Brightness.light),
+        home: const HighlightedText(
+          'openchamber 发布',
+          query: '',
+          style: TextStyle(
+            fontSize: OcOptical.rowTitle,
+            fontWeight: FontWeight.w500,
+            letterSpacing: OcOptical.rowTitleTrackingOfficial,
+            height: OcOptical.rowTitleHeight,
+          ),
+        ),
+      ),
+    );
+    final text = tester.widget<Text>(find.byType(Text));
+    final root = text.textSpan!;
+    final spans = root.children!.cast<TextSpan>();
+    expect(spans, hasLength(2));
+    expect(spans[0].text, 'openchamber ');
+    expect(spans[0].style?.letterSpacing, closeTo(OcOptical.rowTitleTrackingOfficial, 0.01));
+    expect(spans[1].text, '发布');
+    expect(spans[1].style?.letterSpacing, closeTo(OcOptical.rowTitleTracking, 0.01));
+    expect(spans[1].style?.fontWeight, FontWeight.w400);
+
+    debugOcLiveIosType = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: materialTheme(Brightness.light),
+        home: const HighlightedText(
+          'openchamber 发布',
+          query: '',
+          style: TextStyle(
+            fontSize: OcOptical.rowTitle,
+            fontWeight: FontWeight.w500,
+            letterSpacing: OcOptical.rowTitleTrackingOfficial,
+            height: OcOptical.rowTitleHeight,
+          ),
+        ),
+      ),
+    );
+    final live = tester.widget<Text>(find.byType(Text));
+    final liveSpans = live.textSpan!.children!.cast<TextSpan>();
+    expect(liveSpans[1].style?.letterSpacing ?? live.textSpan!.style?.letterSpacing,
+        closeTo(OcOptical.rowTitleTrackingOfficial, 0.01));
+    expect(liveSpans[1].style?.fontWeight, FontWeight.w500);
   });
 
   test('OcOptical sizes are smaller/airier than the previous crude chrome', () {
@@ -128,12 +185,18 @@ void main() {
     expect(OcOptical.largeTitleTracking, closeTo(-1.28, 0.01));
     expect(OcOptical.largeTitleHeight, 1.2);
     expect(OcOptical.rowTitle, 12);
+    expect(OcOptical.rowTitleTrackingOfficial, closeTo(12 * -0.012, 0.01));
+    expect(OcOptical.rowTitleTrackingOfficial, lessThan(0));
     expect(OcOptical.rowTitleTracking, closeTo(1.46, 0.01));
     expect(OcOptical.rowTitleTracking, greaterThan(1.2));
     expect(OcOptical.rowTitleTracking, lessThan(1.5));
+    expect(OcOptical.projectTitleTrackingOfficial, closeTo(14 * -0.024, 0.01));
+    expect(OcOptical.projectTitleTrackingOfficial, lessThan(0));
     expect(OcOptical.projectTitleTracking, closeTo(1.02, 0.01));
     expect(OcOptical.projectTitleTracking, greaterThan(0.8));
     expect(OcOptical.projectTitleTracking, lessThan(1.1));
+    expect(OcOptical.entityTitleTrackingOfficial, closeTo(16 * -0.024, 0.01));
+    expect(OcOptical.entityTitleTrackingOfficial, lessThan(OcOptical.entityTitleTracking));
     expect(
       OcCssLine.boxHeight(
         const TextStyle(
@@ -313,6 +376,11 @@ void main() {
     expect(OcOptical.chipBleedBlur, lessThan(OcOptical.chipBlur));
     expect(OcOptical.chipBleedBlur, greaterThan(0));
     expect(OcOptical.glassSaturate, closeTo(1.25, 0.01));
+    expect(OcOptical.glassSaturateDark, closeTo(1.2, 0.01));
+    expect(OcOptical.glassSaturateFor(false), OcOptical.glassSaturate);
+    expect(OcOptical.glassSaturateFor(true), OcOptical.glassSaturateDark);
+    expect(OcOptical.sessionTitleHalfLeadPaint, OcOptical.sessionTitleHalfLead);
+    expect(OcOptical.cardTitleHalfLeadPaint, OcOptical.cardTitleHalfLead);
     expect(OcOptical.floatBlur, 22);
     expect(OcOptical.floatSaturate, closeTo(1.35, 0.01));
     expect(OcOptical.floatBlur, greaterThan(OcOptical.chipBlur));

@@ -61,7 +61,6 @@ class FloatingCapsuleTabBar extends StatelessWidget {
               child: OcFrosted(
                 fill: tokens.dockPlate,
                 sigma: OcOptical.glassBlur,
-                saturate: OcOptical.glassSaturate,
                 child: Material(
                   color: Colors.transparent,
                   child: SizedBox(

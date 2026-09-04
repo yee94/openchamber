@@ -235,12 +235,12 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                     HighlightedText(
                       task.name.isEmpty ? task.id : task.name,
                       query: '',
-                      halfLead: OcOptical.cardTitleHalfLead,
+                      halfLead: OcOptical.cardTitleHalfLeadPaint,
                       stem: OcOptical.sessionTitleStem,
                       style: TextStyle(
                         fontSize: OcOptical.projectTitle,
                         fontWeight: FontWeight.w600,
-                        letterSpacing: OcOptical.projectTitleTracking,
+                        letterSpacing: OcOptical.projectTitleTrackingOfficial,
                         height: OcOptical.projectTitleHeight,
                         color: context.oc.foreground,
                       ),

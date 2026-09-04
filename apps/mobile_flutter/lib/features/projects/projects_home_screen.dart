@@ -331,12 +331,12 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                 // Official worktree name is project-shell
                 // `oc-mobile-entity-title` (14/18 + semibold), not
                 // session 12/16 Regular. Same CJK band as project titles.
-                halfLead: OcOptical.cardTitleHalfLead,
+                halfLead: OcOptical.cardTitleHalfLeadPaint,
                 stem: OcOptical.sessionTitleStem,
                 style: TextStyle(
                   fontSize: OcOptical.projectTitle,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: OcOptical.projectTitleTracking,
+                  letterSpacing: OcOptical.projectTitleTrackingOfficial,
                   height: OcOptical.projectTitleHeight,
                   color: context.oc.foreground,
                 ),

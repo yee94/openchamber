@@ -91,7 +91,7 @@ class MobileSessionRow extends StatelessWidget {
                           HighlightedText(
                             row.title,
                             query: highlightQuery,
-                            halfLead: OcOptical.sessionTitleHalfLead,
+                            halfLead: OcOptical.sessionTitleHalfLeadPaint,
                             stem: OcOptical.sessionTitleStem,
                             style: TextStyle(
                               fontSize: OcOptical.rowTitle,
@@ -102,7 +102,7 @@ class MobileSessionRow extends StatelessWidget {
                               // bricks 12px vs PingFang Medium air).
                               // Do not stem.
                               fontWeight: row.unread ? FontWeight.w600 : FontWeight.w500,
-                              letterSpacing: OcOptical.rowTitleTracking,
+                              letterSpacing: OcOptical.rowTitleTrackingOfficial,
                               height: OcOptical.rowTitleHeight,
                               color: context.oc.foreground,
                             ),

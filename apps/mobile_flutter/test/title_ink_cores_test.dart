@@ -112,7 +112,7 @@ void main() {
                     style: TextStyle(
                       fontSize: OcOptical.rowTitle,
                       fontWeight: FontWeight.w500,
-                      letterSpacing: OcOptical.rowTitleTracking,
+                      letterSpacing: OcOptical.rowTitleTrackingOfficial,
                       height: OcOptical.rowTitleHeight,
                       color: OcTokens.light.foreground,
                     ),

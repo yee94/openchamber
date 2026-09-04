@@ -16,8 +16,8 @@ class HighlightedText extends StatelessWidget {
   final String text;
   final String query;
   final TextStyle? style;
-  /// Session 16/12 rows use [OcOptical.sessionTitleHalfLead]. Project /
-  /// schedule 14/18 titles use [OcOptical.cardTitleHalfLead] (not 0).
+  /// Session 16/12 rows use [OcOptical.sessionTitleHalfLeadPaint]. Project /
+  /// schedule 14/18 titles use [OcOptical.cardTitleHalfLeadPaint].
   final double? halfLead;
   /// Reserved. Do not revive a miter stem — official `font-medium` is a
   /// real Medium cut (PingFang / Noto). Keep 0 (fill-only). Latin uses
@@ -152,11 +152,22 @@ class HighlightedText extends StatelessWidget {
   /// Not a half-lead pile. Not a Medium/Bold flip.
   TextStyle _cjkFill(TextStyle paint) {
     if (ocLiveIosType) return _shaded(paint);
+    var next = paint;
     final weight = paint.fontWeight;
     if (weight == FontWeight.w500 || weight == FontWeight.w600) {
-      return _shaded(paint.copyWith(fontWeight: FontWeight.w400));
+      next = next.copyWith(fontWeight: FontWeight.w400);
     }
-    return _shaded(paint);
+    // Regular Micro Hei packs tighter than PingFang. Official CSS
+    // tracking stays on Latin and live iOS. Do not invent a 16px pile.
+    final open = switch (paint.fontSize) {
+      OcOptical.rowTitle => OcOptical.rowTitleTracking,
+      OcOptical.projectTitle => OcOptical.projectTitleTracking,
+      _ => null,
+    };
+    if (open != null) {
+      next = next.copyWith(letterSpacing: open);
+    }
+    return _shaded(next);
   }
 
   TextStyle _shaded(TextStyle paint) {
