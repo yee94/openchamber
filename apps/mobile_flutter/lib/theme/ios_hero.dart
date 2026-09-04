@@ -41,10 +41,10 @@ class OcOptical {
   /// Official title/subtitle column is `gap-0.5` (2). Keep that; do not
   /// invent extra title↔meta gap or 15px empty air per line.
   /// Official title is `font-medium` / unread `font-semibold`. Review CJK
-  /// has no Medium cut; 12px Regular AA-washes to ~L 129 even at stem 2.0
-  /// (zero L<120 cores). Same-color stem plus a 0.6 cardinal shade so
-  /// mid-list p5 reaches dark ink. Not a 0.02 series. Device PingFang /
-  /// Noto Medium is stronger.
+  /// has no Medium cut; stem 2.0 + 0.6 cardinal shade keep Regular 12px
+  /// on authored foreground. Card frost must sit behind the child —
+  /// wrapping ink in `floatSurface` 0.45 floors cores at ~L 129. Not a
+  /// 0.02 stem series and not more half-lead.
   static const double sessionTitleStem = 2.0;
   static const double sessionTitleShade = 0.6;
   static const double sessionTitleSubtitleGap = 2;

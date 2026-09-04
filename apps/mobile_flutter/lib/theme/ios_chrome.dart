@@ -419,11 +419,23 @@ class GroupedInsetCard extends StatelessWidget {
           decoration: BoxDecoration(
             boxShadow: OcElevation.highlight(context),
           ),
-          child: OcFrosted(
-            fill: context.oc.floatSurface,
-            sigma: OcOptical.floatBlur,
-            saturate: OcOptical.floatSaturate,
-            child: padding == null ? child : Padding(padding: padding!, child: child),
+          // Frost + 0.45 float fill stay *behind* the child. Wrapping
+          // titles in OcFrosted's ColoredBox composites 12px CJK through
+          // the plate (cores floor at ~L 129). Official backdrop-filter
+          // frosts the surface, not the ink. Search / dock OcFrosted
+          // chips are unchanged.
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: OcFrosted(
+                  fill: context.oc.floatSurface,
+                  sigma: OcOptical.floatBlur,
+                  saturate: OcOptical.floatSaturate,
+                  child: const SizedBox.expand(),
+                ),
+              ),
+              padding == null ? child : Padding(padding: padding!, child: child),
+            ],
           ),
         ),
       ),
