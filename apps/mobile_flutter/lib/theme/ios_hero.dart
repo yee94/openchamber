@@ -293,9 +293,11 @@ class OcOptical {
   /// Official `.oc-mobile-project-shell .oc-mobile-project-icon-glyph` is
   /// 1.125rem (18). Flutter CustomPaint blooms past the web SVG; paint
   /// [leadingGlyphVisual] inside the official 38 hit / 28 plate.
+  /// 14 still read large vs README air after DemiLight titles.
+  /// 12 matches worktree visual — not a plate nibble, not a 28 hole.
   static const double leadingGlyph = 18;
-  static const double leadingGlyphVisual = 14;
-  static const double leadingGlyphCompact = 14;
+  static const double leadingGlyphVisual = 12;
+  static const double leadingGlyphCompact = 12;
   static const double worktreeIconBox = 18;
   /// Official worktree `git-branch` is `size-3.5` (14). Paint [worktreeGlyphVisual]
   /// inside the 18 box so the sprite matches the web scale.
@@ -340,9 +342,10 @@ class OcOptical {
   /// check/pause discs. 28 matches project leading restore. Fill is
   /// glassChipThrough + inset highlight — not OcGlassChip frost.
   static const double scheduleStatusVisual = 28;
-  /// Official non-tab scheduled glyph is `size-3.5` (14). Same 14 as
-  /// the project leading restore — not a 1px speck.
-  static const double scheduleStatusGlyph = 14;
+  /// Official non-tab scheduled glyph is `size-3.5` (14). Flutter bloom
+  /// at dpr 3; 12 matches project leading visual so check/pause are
+  /// not 14 bricks in the 28 plate. Not a 1px speck.
+  static const double scheduleStatusGlyph = 12;
   /// Schedule overflow `more-2` — slimmer than session 12.
   static const double scheduleMore = 10;
   /// Header now shares dock visual so the 4/2 badge is not a second weight.

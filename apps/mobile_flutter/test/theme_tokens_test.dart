@@ -304,9 +304,10 @@ void main() {
     expect(OcOptical.leadingCircleCompact, OcOptical.worktreeIconBox);
     expect(OcOptical.leadingCircleVisual, lessThan(OcOptical.leadingCircle));
     expect(OcOptical.leadingGlyph, 18);
-    expect(OcOptical.leadingGlyphVisual, 14);
+    expect(OcOptical.leadingGlyphVisual, 12);
     expect(OcOptical.leadingGlyphVisual, lessThan(OcOptical.leadingGlyph));
-    expect(OcOptical.leadingGlyphCompact, 14);
+    expect(OcOptical.leadingGlyphVisual, OcOptical.worktreeGlyphVisual);
+    expect(OcOptical.leadingGlyphCompact, 12);
     expect(OcOptical.worktreeIconBox, 18);
     expect(OcOptical.worktreeGlyph, 14);
     expect(OcOptical.worktreeGlyphVisual, 12);
@@ -331,7 +332,8 @@ void main() {
     expect(OcOptical.scheduleStatus, OcOptical.leadingCircle);
     expect(OcOptical.scheduleStatusVisual, lessThan(OcOptical.scheduleStatus));
     expect(OcOptical.scheduleStatusVisual, 28);
-    expect(OcOptical.scheduleStatusGlyph, 14);
+    expect(OcOptical.scheduleStatusGlyph, 12);
+    expect(OcOptical.scheduleStatusGlyph, OcOptical.leadingGlyphVisual);
     expect(OcOptical.scheduleMore, 10);
     expect(OcOptical.scheduleMore, lessThan(OcOptical.sessionMore));
     expect(OcOptical.scheduleMoreStroke, OcOptical.dockGlyphStrokeVisual);
