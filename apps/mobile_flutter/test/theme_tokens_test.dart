@@ -34,8 +34,8 @@ void main() {
     expect(OcTokens.light.settingsGroupBackground, isNot(OcTokens.light.pageBackground));
     expect(OcTokens.light.floatSurface.a, closeTo(0.45, 0.01));
     expect(OcTokens.dark.floatSurface.a, closeTo(0.45, 0.01));
-    expect(OcTokens.light.dockPlate.a, closeTo(0.08, 0.01));
-    expect(OcTokens.dark.dockPlate.a, closeTo(0.08, 0.01));
+    expect(OcTokens.light.dockPlate.a, closeTo(0.0, 0.01));
+    expect(OcTokens.dark.dockPlate.a, closeTo(0.0, 0.01));
     expect(OcTokens.light.dockPlate.a, lessThan(OcTokens.light.floatSurface.a));
     expect(OcTokens.light.dockPlate.r, closeTo(OcTokens.light.card.r, 0.01));
     expect(OcTokens.light.glassFill.a, closeTo(0.68, 0.01));
