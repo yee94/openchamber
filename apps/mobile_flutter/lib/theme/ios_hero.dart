@@ -170,14 +170,16 @@ class OcOptical {
   /// `glassChipThrough` 0.22 / σ14, not a 0.68 coin and not a 22 bleed
   /// glyph. Solid primary `+` paints the full 40 hit. No 8/20 umbra.
   static const double headerDiscVisual = 36;
-  /// Official `size-5` is 20. Flutter bloom still read large in the 36
-  /// plate — paint 5 so search / ink glyphs are not massy coins.
-  static const double headerGlyph = 5;
+  /// Official `size-5` is 20. Shrink-to-death 5 vanished in the 36
+  /// plate vs README search. 12 is the optical restore — still under
+  /// the 16 field glyph and official 20. Not a 22 bleed coin.
+  static const double headerGlyph = 12;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
-  /// Flutter round-cap bloom at dpr 3; paint the dock visual so search
-  /// / more / chevron stay thin in the 36 plate — not header-weight bricks.
-  static const double headerGlyphStrokeVisual = dockGlyphStrokeVisual;
+  /// Small chrome (search / leading / schedule) needs more than dock
+  /// 0.12 or a 12px glyph stays a sub-pixel hairline at dpr 3. 0.45
+  /// is still far under official 1.5. Dock 23px stays 0.12.
+  static const double headerGlyphStrokeVisual = 0.45;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
   static const double listGlyphStroke = 1.5;
   /// Search-field prefix `Icon name="search" className="size-4"`.
@@ -264,15 +266,17 @@ class OcOptical {
   /// Worktree label: `.oc-mobile-group-label-icon` 1.125rem box + `git-branch`
   /// `size-3.5` (14). Hit areas (36/40) stay separate from these visuals.
   static const double leadingCircle = 38;
-  /// Painted plate inside the official 38 shell so project leading
-  /// discs are not oversized coins. 8 still read large vs README.
-  static const double leadingCircleVisual = 2;
-  static const double leadingCircleCompact = 2;
+  /// Official plate fills the 38 shell. Shrink-to-death 2 vanished vs
+  /// README `</>` discs. 28 is the optical restore — not a 38 cream
+  /// coin, not an empty 38 hole.
+  static const double leadingCircleVisual = 28;
+  /// Official worktree `.oc-mobile-group-label-icon` is 1.125rem (18).
+  static const double leadingCircleCompact = 18;
   /// Official `.oc-mobile-project-shell .oc-mobile-project-icon-glyph` is
   /// 1.125rem (18). Flutter CustomPaint blooms past the web SVG; paint
-  /// [leadingGlyphVisual] inside the official 38/32 hit/plate.
+  /// [leadingGlyphVisual] inside the official 38 hit / 28 plate.
   static const double leadingGlyph = 18;
-  static const double leadingGlyphVisual = 1;
+  static const double leadingGlyphVisual = 14;
   static const double leadingGlyphCompact = 14;
   static const double worktreeIconBox = 18;
   /// Official worktree `git-branch` is `size-3.5` (14). Paint [worktreeGlyphVisual]
@@ -305,21 +309,19 @@ class OcOptical {
 
   /// Official scheduled status uses the project-shell glass disc (2.375rem).
   static const double scheduleStatus = leadingCircle;
-  /// Hit stays official 38. Paint 2 so leading check/pause is not a
-  /// massy coin beside the title. Fill is glassChipThrough + inset
-  /// highlight — same quiet disc as project leading, not OcGlassChip
-  /// frost + chip shadow (that read as a Material badge).
-  static const double scheduleStatusVisual = 2;
-  /// Official non-tab scheduled glyph is `size-3.5`; residual optical
-  /// paints 1 so the 2px plate is not a filled coin beside the title.
-  static const double scheduleStatusGlyph = 1;
+  /// Hit stays official 38. Shrink-to-death 2 vanished vs README
+  /// check/pause discs. 28 matches project leading restore. Fill is
+  /// glassChipThrough + inset highlight — not OcGlassChip frost.
+  static const double scheduleStatusVisual = 28;
+  /// Official non-tab scheduled glyph is `size-3.5` (14). Same 14 as
+  /// the project leading restore — not a 1px speck.
+  static const double scheduleStatusGlyph = 14;
   /// Schedule overflow `more-2` — slimmer than session 12.
   static const double scheduleMore = 10;
   /// Header now shares dock visual so the 4/2 badge is not a second weight.
   static const double scheduleMoreStroke = dockGlyphStrokeVisual;
-  /// Quiet status polish: check/pause at dock visual stroke so the
-  /// 38 disc does not outweigh the card title.
-  static const double scheduleStatusGlyphStroke = dockGlyphStrokeVisual;
+  /// Check/pause share small-chrome stroke so 14px glyphs read at dpr 3.
+  static const double scheduleStatusGlyphStroke = headerGlyphStrokeVisual;
 
   /// Official `FileTypeIcon` mobile size `h-3 w-3` (12px).
   static const double fileTypeSize = 12;
