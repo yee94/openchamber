@@ -40,8 +40,10 @@ class OcOptical {
   static const double sessionRowPadRight = 2;
   /// Official title/subtitle column is `gap-0.5` (2). Keep that; do not
   /// invent extra title↔meta gap or 15px empty air per line.
-  /// Official title is `font-medium` / unread `font-semibold`. The review
-  /// CJK face is Regular-only, so paint Regular — do not faux-bold.
+  /// Official title is `font-medium` / unread `font-semibold`. Review CJK
+  /// has no Medium cut; 12px Regular AA-washes to ~RGB 150. One same-color
+  /// stem (not a 0.02 series) so the glyph core reaches foreground.
+  static const double sessionTitleStem = 1.0;
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
   /// 1.25 extra Flutter pixels un-cramp CJK without leaving ~40 density.
