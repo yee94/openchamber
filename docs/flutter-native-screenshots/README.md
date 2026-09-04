@@ -805,12 +805,16 @@ below noise. Dart reverted. No second recapture. Goldens stay
 | `07-chat-activity.png` | Expanded 「已处理」 activity: gap under header, skill + terminal rows, foreground ink, OcGlyph folder/`>_`/chevron. |
 | `08-permission.png` | Permission card only. |
 
-**2026-09-04 wake-0548 residual (after dart on `20a513a19`):**
+**2026-09-04 wake-0548 residual (after dart `8346d0d04` / recapture):**
 STRUCTURE PASS. THEME OK. Do **not** undo 20+10+20, session gap **2**,
 title↔meta **4**, discs 34/28/24, search glyph **14**, frost through
 **0.16**, far **10/24/-6**, schedule official float-shadow, press DONE.
-Latin + live iOS titles now use official CSS tracking (−0.012em /
+Latin + live iOS titles use official CSS tracking (−0.012em /
 −0.024em). Regular Micro Hei CJK on WidgetTester / Android keeps
 1.46 / 1.02. Live iOS half-lead is the official CSS box. Android
 frost saturate is official light 1.25 / dark 1.2 (not a UIKit clone).
+Kept 02 `2df54af6` / scrolled `6bb51dd2` / dark `69a69b02`
+(MAE ~2.48 / 2.64 / 2.04), 03 `255a25b8` (MAE ~0.25),
+04 `13e78af7` / 04-dark `b2d7c84d` (MAE ~1.31 / 1.11).
+Restored 05-dark saturate (MAE ~0.008) and 01/05/06/07/08.
 **精致: 还没有.**
