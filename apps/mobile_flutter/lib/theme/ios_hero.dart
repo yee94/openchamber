@@ -24,8 +24,8 @@ class OcOptical {
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   /// Official project-shell row is 40. 4.7px CJK half-lead (per side)
-  /// plus title↔subtitle air after Medium ate 2 / 4 / 6 / 8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 / 24 / 26 / 28 / 30 / 32 / 34 / 36 / 38 / 40 / 42 / 44 / 46 / 48.
-  /// 40 + 4×4.7 + 48 = 106.8 — gap residual, not 7.5 half-lead / 70.
+  /// plus title↔subtitle air after Medium ate 2 / 4 / 6 / 8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 / 24 / 26 / 28 / 30 / 32 / 34 / 36 / 38 / 40 / 42 / 44 / 46 / 48 / 50.
+  /// 40 + 4×4.7 + 50 = 108.8 — gap residual, not 7.5 half-lead / 70.
   static const double sessionRowVisualHeight =
       40 + 4 * cssLineCjkHalfLead + (sessionTitleSubtitleGap - 2);
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
@@ -38,20 +38,20 @@ class OcOptical {
   static const double projectTriggerPad = 10;
   static const double projectTriggerGap = 7;
   /// Project title column `flex-col gap-1` = 0.25rem. Medium ate 4 / 6 / 8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 / 24 / 26 / 28
-  /// — 46 is the next 2px of card title↔meta air, not a half-lead pile.
-  static const double groupTitleMetaGap = 46;
+  /// — 48 is the next 2px of card title↔meta air, not a half-lead pile.
+  static const double groupTitleMetaGap = 48;
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
   /// Official title/subtitle column is `gap-0.5` (2). Medium ate 2, 4,
-  /// 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, and 48. 50 is the next 2px of column air —
+  /// 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, and 50. 52 is the next 2px of column air —
   /// not a half-lead pile and not 7.5/70.
   /// Official title is `font-medium` / unread `font-semibold`. Fill-only
   /// at that weight. Do not revive a miter stem. Half-lead 4.7 + tracking
   /// 1.42 stay. Latin is ReviewSans Medium.
   static const double sessionTitleStem = 0;
   static const double sessionTitleShade = 0;
-  static const double sessionTitleSubtitleGap = 50;
+  static const double sessionTitleSubtitleGap = 52;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
   /// 4.7 extra Flutter pixels open Regular CJK that still packed at 4.6.
   /// Stay under the 4.75 ceiling — do not invent 7.5/70.
@@ -122,9 +122,9 @@ class OcOptical {
   /// Official scheduled task row `p-3` (12).
   static const double scheduleCardPadV = 12;
   /// Official scheduled meta `mt-1` (4). Title air is the 18px CSS box
-  /// plus [cardTitleHalfLead] — not session 4.7. Medium ate 4 / 6 / 8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 / 24 / 26 / 28 / 30 / 32 / 34 / 36 / 38 / 40 / 42 / 44 —
-  /// 46 matches the project card title↔meta residual.
-  static const double scheduleTitleMetaGap = 46;
+  /// plus [cardTitleHalfLead] — not session 4.7. Medium ate 4 / 6 / 8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 / 24 / 26 / 28 / 30 / 32 / 34 / 36 / 38 / 40 / 42 / 44 / 46 —
+  /// 48 matches the project card title↔meta residual.
+  static const double scheduleTitleMetaGap = 48;
 
   /// Official `.oc-mobile-detail-title` 0.9375rem / line-height 1.4 / weight 650.
   static const double chatTitle = 15;
