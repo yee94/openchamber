@@ -27,7 +27,7 @@ Recapture after restoring Yee-open type (tracking + line-height) on top of the s
 | `05-settings.png` | Large title, pill search, inset groups. |
 | `06-settings-appearance.png` | Light: language + theme. Latin labels must render. No `iosNativeUi`. |
 | `06-settings-appearance-dark.png` | Appearance after tapping Dark — tokens switch live. |
-| `07-chat.png` | Isolated pushed Chat (light): 40px glass chips, centered title, official attach `size-5`, last-turn footer meta (copy / fork / tok/s / duration / clock), one “已处理”, file `+N/-M`. Not UIKit glass. |
+| `07-chat.png` | Isolated pushed Chat (light): official 1.625 transcript leading, 40px glass chips, centered title, official attach `size-5`, last-turn footer meta (copy / fork / tok/s / duration / clock), one “已处理”, folded file marks + `+N/-M`. Not UIKit glass. |
 | `07-chat-dark.png` | Same isolated Chat with `ThemeMode.dark`. |
 | `07-chat-activity.png` | Expanded 「已处理」 activity: gap under header, skill + terminal rows, foreground ink, OcGlyph folder/`>_`/chevron. |
 | `08-permission.png` | Permission card only. |
