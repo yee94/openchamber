@@ -482,6 +482,17 @@ void main() {
     );
     expect(OcElevation.cardFor(OcTokens.dark), hasLength(3));
     expect(OcElevation.cardFor(OcTokens.dark).last.offset.dy, 10);
+    expect(OcElevation.cardFor(OcTokens.dark).last.blurRadius, 24);
+    expect(OcElevation.cardFor(OcTokens.dark).last.spreadRadius, -6);
+    expect(
+      OcElevation.cardFor(OcTokens.dark).last.color.a,
+      closeTo(0.34, 0.001),
+    );
+    expect(
+      OcElevation.cardFor(OcTokens.dark, tight: true).last.color.a,
+      closeTo(0.34, 0.001),
+    );
+    expect(OcElevation.cardFor(OcTokens.dark).last.color.red, 0);
     expect(OcElevation.dockFor(OcTokens.dark), isEmpty);
     expect(OcElevation.controlFor(OcTokens.dark), isEmpty);
   });

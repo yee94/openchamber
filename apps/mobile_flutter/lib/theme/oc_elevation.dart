@@ -17,12 +17,13 @@ class OcElevation {
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
     // Official `--oc-mobile-float-shadow` far is `0 10px 24px -6px`
-    // rgb(0 0 0 / 0.1). Alpha stays 10%. Offset/blur/spread stay
-    // official 10/24/-6 — do not invent Material 8/20 or WidgetTester
-    // -2 (that loudens the umbra on cream). Near pair stays quieter
-    // on tight. Dock / chips stay near-pair only.
+    // light `rgb(0 0 0 / 0.1)` / dark `rgb(0 0 0 / 0.34)`. Geometry
+    // stays 10/24/-6 — do not invent Material 8/20 or WidgetTester
+    // -2 (that loudens the umbra on cream). Light alpha stays 10%.
+    // Dark was incorrectly painted at light 10% (wash-out). Near
+    // pair stays quieter on tight. Dock / chips stay near-pair only.
     final far = BoxShadow(
-      color: Color.fromRGBO(0, 0, 0, 0.10),
+      color: Color.fromRGBO(0, 0, 0, tokens.isDark ? 0.34 : 0.10),
       offset: const Offset(0, 10),
       blurRadius: 24,
       spreadRadius: -6,
