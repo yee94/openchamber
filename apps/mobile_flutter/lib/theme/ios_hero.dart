@@ -191,11 +191,11 @@ class OcOptical {
   static const double headerGlyph = 14;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
-  /// Small chrome still read heavy at 0.38 vs official medium bloom.
-  /// 0.28 is the next optical-weight step — still above dock 0.12,
-  /// still far under official 1.5. Hit boxes stay 40. Glyphs stay 14.
-  /// Plates stay 28. Not a hairline and not a disc shrink.
-  static const double headerGlyphStrokeVisual = 0.28;
+  /// Small chrome still read heavy at 0.28 vs official medium bloom.
+  /// 0.16 is the next optical-weight step — still above dock 0.12,
+  /// still far under official 1.5. Hit boxes stay 40. Search glyph
+  /// stays 14. Catalog discs are 12 in the 28 plate. Not a hairline.
+  static const double headerGlyphStrokeVisual = 0.16;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
   static const double listGlyphStroke = 1.5;
   /// Search-field prefix `Icon name="search" className="size-4"`.
@@ -310,8 +310,8 @@ class OcOptical {
   static const double worktreeMeta = 11;
   static const double worktreeMetaHeight = 14 / 11;
   /// Official session `more-2` is `size-3.5` (14). Trailing ··· / chevron
-  /// stay dock visual — not small-chrome 0.28 (that fattened meatballs
-  /// vs README). Search / leading keep 0.28.
+  /// stay dock visual — not small-chrome 0.16 (that fattened meatballs
+  /// vs README). Search / leading keep 0.16.
   static const double sessionMore = 14;
   static const double sessionMoreStroke = dockGlyphStrokeVisual;
   /// Official visible more is `min-w-9` + `mr-1`. Open the trailing air a
