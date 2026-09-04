@@ -84,6 +84,7 @@ class MobileSessionRow extends StatelessWidget {
                           HighlightedText(
                             row.title,
                             query: highlightQuery,
+                            stem: 0.35,
                             style: TextStyle(
                               fontSize: OcOptical.rowTitle,
                               // Official `.oc-mobile-session-title` is

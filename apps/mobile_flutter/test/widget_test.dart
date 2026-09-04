@@ -141,7 +141,9 @@ void main() {
 
   testWidgets('project and session titles paint full foreground ink', (tester) async {
     await pumpConnected(tester);
-    final sessionTitle = tester.widget<Text>(find.text('Release notes'));
+    final sessionTitle = tester.widgetList<Text>(find.text('Release notes')).firstWhere(
+      (title) => title.style?.color != null,
+    );
     expect(sessionTitle.style?.color, OcTokens.light.foreground);
     expect(sessionTitle.style?.color!.computeLuminance(), lessThan(0.12));
     expect(sessionTitle.style?.fontWeight, FontWeight.w500);

@@ -10,6 +10,7 @@ class HighlightedText extends StatelessWidget {
     required this.query,
     this.style,
     this.halfLead,
+    this.stem = 0,
   });
 
   final String text;
@@ -18,6 +19,9 @@ class HighlightedText extends StatelessWidget {
   /// Session 16/12 rows keep the pinned 1.25 CJK half-lead. Project /
   /// schedule 14/18 titles pass 0 so the official CSS box is not inflated.
   final double? halfLead;
+  /// Same-color hairline under Regular CJK so 12px stems reach
+  /// authored foreground. ReviewCjk has no Medium cut; 0 = off.
+  final double stem;
 
   @override
   Widget build(BuildContext context) {
@@ -32,12 +36,7 @@ class HighlightedText extends StatelessWidget {
       return OcCssLine(
         style: style,
         halfLead: halfLead,
-        child: Text(
-          text,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: paint,
-        ),
+        child: _inkText(text, paint),
       );
     }
     final lower = text.toLowerCase();
@@ -62,11 +61,68 @@ class HighlightedText extends StatelessWidget {
     return OcCssLine(
       style: style,
       halfLead: halfLead,
-      child: Text.rich(
-        TextSpan(style: paint, children: spans),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
+      child: _inkRich(TextSpan(style: paint, children: spans), paint),
+    );
+  }
+
+  Widget _inkText(String value, TextStyle paint) {
+    final fill = Text(
+      value,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: paint,
+    );
+    if (stem <= 0 || paint.color == null) return fill;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        ExcludeSemantics(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: paint.copyWith(
+              color: null,
+              foreground: Paint()
+                ..color = paint.color!
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = stem
+                ..strokeJoin = StrokeJoin.round,
+            ),
+          ),
+        ),
+        fill,
+      ],
+    );
+  }
+
+  Widget _inkRich(InlineSpan span, TextStyle paint) {
+    final fill = Text.rich(
+      span,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+    if (stem <= 0 || paint.color == null) return fill;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        ExcludeSemantics(
+          child: Text.rich(
+            span,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: paint.copyWith(
+              color: null,
+              foreground: Paint()
+                ..color = paint.color!
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = stem
+                ..strokeJoin = StrokeJoin.round,
+            ),
+          ),
+        ),
+        fill,
+      ],
     );
   }
 }
