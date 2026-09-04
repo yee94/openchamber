@@ -904,3 +904,10 @@ recapture again for this dart. Do not invent frost/umbra or
 unlock discs 34/28/24 / glyph **14**. Press DONE. Honest
 leftover is live PingFang + UIKit `UIGlassEffect`.
 **精致: 还没有.**
+
+**2026-09-04 wake-0627 (delayed dup of `d48bdbed0` / wake-0622):**
+Watch scored the mode-tag dart before the unrestored
+recapture note. Tip-tree goldens already BYTE-IDENTICAL to
+wake-0622 (`03=3a881f07`). No second recapture. Header stays
+official transparent `MobileTabPageHeader`. Press DONE.
+**精致: 还没有.**
