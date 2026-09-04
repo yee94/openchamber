@@ -167,8 +167,9 @@ class HighlightedText extends StatelessWidget {
 }
 
 /// CJK / kana / hangul vs Latin-digit runs. Stem/shade stay on CJK —
-/// Latin already has ReviewSans Medium (`font-medium`).
-@visibleForTesting
+/// Latin already has ReviewSans Medium (`font-medium`). Production
+/// collapsing page titles share this splitter so 32px CJK can paint
+/// Regular Micro Hei.
 List<({String text, bool cjk})> scriptRuns(String value) {
   if (value.isEmpty) return const [];
   final runs = <({String text, bool cjk})>[];
