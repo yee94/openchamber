@@ -61,7 +61,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
               padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
               child: Text(
                 t(context, 'connect.welcome.title'),
-                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w700, height: 1.15),
+                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w600, height: 1.15),
               ),
             ),
             const SizedBox(height: 8),
