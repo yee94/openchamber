@@ -96,7 +96,7 @@ void main() {
       OcOptical.rowTitle * OcOptical.rowTitleHeight + 2 * OcOptical.cssLineCjkHalfLead,
     );
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.cssLineCjkHalfLead, closeTo(1.25, 0.01));
+    expect(OcOptical.cssLineCjkHalfLead, closeTo(2.0, 0.01));
   });
 
   testWidgets('chat is a pushed secondary page from Projects', (tester) async {
@@ -152,7 +152,7 @@ void main() {
     expect(projectTitle.style?.fontWeight, FontWeight.w400);
     final row = tester.getSize(find.byKey(const Key('home-session-sess-pinned')));
     expect(row.height, greaterThanOrEqualTo(OcOptical.sessionRowVisualHeight));
-    expect(row.height, lessThan(48));
+    expect(row.height, lessThan(52));
     final codeGlyph = tester.widgetList<OcGlyph>(find.byType(OcGlyph)).firstWhere(
       (glyph) => glyph.kind == OcGlyphKind.code,
     );
