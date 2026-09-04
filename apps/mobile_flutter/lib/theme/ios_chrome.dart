@@ -132,9 +132,15 @@ class OcFrosted extends StatelessWidget {
         outer: ColorFilter.matrix(_saturateMatrix(saturate)),
       );
     }
-    return BackdropFilter(
-      filter: filter,
-      child: plate,
+    // Clip to this plate. An unclipped BackdropFilter in a Stack
+    // (collapsing header, clipBehavior: none) filters the whole
+    // scene — 12px session cores then floor at ~L 129. CSS
+    // backdrop-filter is element-bounded.
+    return ClipRect(
+      child: BackdropFilter(
+        filter: filter,
+        child: plate,
+      ),
     );
   }
 }
