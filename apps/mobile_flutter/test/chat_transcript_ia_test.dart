@@ -124,6 +124,9 @@ void main() {
       tester.widgetList<OcGlyph>(find.byType(OcGlyph)).any((glyph) => glyph.kind == OcGlyphKind.terminal),
       isTrue,
     );
+
+    final pub = tester.widget<Text>(find.text('pub'));
+    expect(pub.style?.color, OcTokens.light.background);
   });
 }
 

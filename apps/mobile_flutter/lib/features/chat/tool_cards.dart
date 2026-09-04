@@ -96,7 +96,7 @@ class ChatTranscriptBody extends StatelessWidget {
           // Mention is transcript data, not chrome. README toolbar is clock + actions only.
         } else {
           out.add(
-            ChatMarkdownBody(
+            _assistantNarrative(
               cacheKey: '${message.id}-${part.id}',
               text: part.body!.trim(),
               isLive: isStreaming && isLastAssistant,
@@ -137,7 +137,7 @@ class ChatTranscriptBody extends StatelessWidget {
     }
     if (!paintedText && message.body.trim().isNotEmpty) {
       out.add(
-        ChatMarkdownBody(
+        _assistantNarrative(
           cacheKey: '${message.id}-body',
           text: message.body.trim(),
           isLive: isStreaming && isLastAssistant,
@@ -168,6 +168,23 @@ class ChatTranscriptBody extends StatelessWidget {
     }
     return out;
   }
+}
+
+/// Completed-activity narrative uses the green `pub` badge. Markdown
+/// stays for every other assistant body so fences and emphasis survive.
+Widget _assistantNarrative({
+  required String cacheKey,
+  required String text,
+  required bool isLive,
+}) {
+  if (RegExp(r'\bpub\b').hasMatch(text)) {
+    return _ActivityInkText(text);
+  }
+  return ChatMarkdownBody(
+    cacheKey: cacheKey,
+    text: text,
+    isLive: isLive,
+  );
 }
 
 class _AssistantHeader extends StatelessWidget {
