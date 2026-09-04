@@ -143,18 +143,18 @@ void main() {
     expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
     expect(OcOptical.rowTitleHeight, lessThan(1.42));
     expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);
-    expect(OcOptical.sessionRowVisualHeight, closeTo(76.8, 0.01));
+    expect(OcOptical.sessionRowVisualHeight, closeTo(78.8, 0.01));
     expect(OcOptical.sessionRowVisualHeight, greaterThanOrEqualTo(40));
-    expect(OcOptical.sessionRowVisualHeight, lessThan(78));
+    expect(OcOptical.sessionRowVisualHeight, lessThan(80));
     expect(OcOptical.sessionRowPadV, 5);
     expect(OcOptical.metaHeight, 1.25);
     expect(OcOptical.entityTitleHeight, 1.25);
-    expect(OcOptical.groupTitleMetaGap, 16);
+    expect(OcOptical.groupTitleMetaGap, 18);
     expect(OcOptical.projectTriggerPad, 10);
     expect(OcOptical.projectTriggerGap, 7);
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
-    expect(OcOptical.sessionTitleSubtitleGap, 20);
+    expect(OcOptical.sessionTitleSubtitleGap, 22);
     expect(OcOptical.sessionTitleStem, 0);
     expect(OcOptical.sessionTitleStem, lessThan(0.15));
     expect(OcOptical.sessionTitleShade, 0);
@@ -208,7 +208,7 @@ void main() {
     expect(OcOptical.worktreeLabelPadRight, 2);
     expect(OcOptical.floatCardStackGap, 16);
     expect(OcOptical.scheduleCardPadV, 12);
-    expect(OcOptical.scheduleTitleMetaGap, 16);
+    expect(OcOptical.scheduleTitleMetaGap, 18);
     expect(OcOptical.chatBodyHeight, closeTo(1.625, 0.001));
     expect(OcOptical.chatBodyHeight, greaterThan(1.50));
     expect(OcOptical.chatTitle, 15);
@@ -229,7 +229,7 @@ void main() {
     expect(OcOptical.headerGlyphStrokeVisual, closeTo(0.12, 0.01));
     expect(OcOptical.headerGlyphStrokeVisual, lessThan(OcOptical.headerGlyphStroke));
     expect(OcOptical.detailSubtitleGap, 2);
-    expect(OcOptical.headerGlyph, 12);
+    expect(OcOptical.headerGlyph, 10);
     expect(OcOptical.headerGlyph, lessThan(OcOptical.searchFieldGlyph));
     expect(OcOptical.headerGlyph, lessThan(20));
     expect(OcOptical.headerGlyphStroke, 1.5);
@@ -276,10 +276,10 @@ void main() {
     expect(OcOptical.listGlyphStroke, OcOptical.headerGlyphStroke);
     expect(OcOptical.searchFieldGlyph, 16);
     expect(OcOptical.leadingCircle, 38);
-    expect(OcOptical.leadingCircleVisual, 20);
+    expect(OcOptical.leadingCircleVisual, 18);
     expect(OcOptical.leadingCircleVisual, lessThan(OcOptical.leadingCircle));
     expect(OcOptical.leadingGlyph, 18);
-    expect(OcOptical.leadingGlyphVisual, 10);
+    expect(OcOptical.leadingGlyphVisual, 9);
     expect(OcOptical.leadingGlyphVisual, lessThan(OcOptical.leadingGlyph));
     expect(OcOptical.leadingGlyphCompact, 14);
     expect(OcOptical.worktreeIconBox, 18);
@@ -291,8 +291,8 @@ void main() {
     expect(OcOptical.footerGlyph, 14);
     expect(OcOptical.scheduleStatus, OcOptical.leadingCircle);
     expect(OcOptical.scheduleStatusVisual, lessThan(OcOptical.scheduleStatus));
-    expect(OcOptical.scheduleStatusVisual, 10);
-    expect(OcOptical.scheduleStatusGlyph, 4);
+    expect(OcOptical.scheduleStatusVisual, 8);
+    expect(OcOptical.scheduleStatusGlyph, 3);
     expect(OcOptical.scheduleMore, 10);
     expect(OcOptical.scheduleMore, lessThan(OcOptical.sessionMore));
     expect(OcOptical.scheduleMoreStroke, OcOptical.dockGlyphStrokeVisual);
@@ -361,9 +361,9 @@ void main() {
     expect(OcElevation.cardFor(OcTokens.light), hasLength(3));
     expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, 2);
     expect(OcElevation.cardFor(OcTokens.light)[1].blurRadius, 12);
-    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, 40);
+    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, 48);
     expect(OcElevation.cardFor(OcTokens.light).last.offset.dy, 10);
-    expect(OcElevation.cardFor(OcTokens.light).last.spreadRadius, -10);
+    expect(OcElevation.cardFor(OcTokens.light).last.spreadRadius, -12);
     expect(
       OcElevation.cardFor(OcTokens.light).take(2).every((s) => s.offset == Offset.zero),
       isTrue,
