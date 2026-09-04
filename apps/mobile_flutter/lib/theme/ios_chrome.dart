@@ -46,7 +46,7 @@ StrutStyle? ocCssLineBox(TextStyle? style) {
 /// Official CSS line-height: ink occupies `font-size`; extra half-leading
 /// sits above/below inside `font-size * line-height`. Do not clip the
 /// child to `font-size` — that sliced CJK into cream. Optional
-/// [OcOptical.cssLineCjkHalfLead] is 2.5 Flutter pixels unless a face needs more.
+/// [OcOptical.cssLineCjkHalfLead] is 2.75 Flutter pixels unless a face needs more.
 /// Official 16/12 tokens and `gap-0.5` stay; do not invent gap.
 class OcCssLine extends StatelessWidget {
   const OcCssLine({
@@ -61,7 +61,7 @@ class OcCssLine extends StatelessWidget {
   final Widget child;
   /// Full-width in a column / [Expanded]. Trailing time / counts stay tight.
   final bool expand;
-  /// Default is [OcOptical.cssLineCjkHalfLead] (2.5). The 56px chat
+  /// Default is [OcOptical.cssLineCjkHalfLead] (2.75). The 56px chat
   /// detail band also passes `halfLead: 0` so title + subtitle + gap-0.5
   /// still fit.
   final double? halfLead;
