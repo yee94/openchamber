@@ -204,7 +204,7 @@ class OcGlassChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // mobileGlass frost. BackdropFilter stays; fill is glassChipFill
-    // (0.34), not official 0.68. Chip near-pair shadow — no hairline
+    // (0.30), not official 0.68. Chip near-pair shadow — no hairline
     // rim, no 8/20 umbra. WidgetTester ≠ UIGlassEffect.
     return DecoratedBox(
       decoration: BoxDecoration(

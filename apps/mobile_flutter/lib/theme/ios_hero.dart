@@ -20,10 +20,9 @@ class OcOptical {
   static const double rowTitleTracking = 0;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
-  /// Official project-shell density stays ~40. Tiny CJK half-lead (1×2)
-  /// adds residual title/subtitle air: 5 + 18 + 2 + 14 + 5 = 44.
-  /// Not the 70px / 7.5 half-lead readability regression.
-  static const double sessionRowVisualHeight = 44;
+  /// Official project-shell row: pad 5 + title 16 + gap-0.5 2 + subtitle 12 + pad 5.
+  /// CJK air stays inside the 16/12 boxes — no invented gap or 70px rows.
+  static const double sessionRowVisualHeight = 40;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
@@ -43,9 +42,9 @@ class OcOptical {
   /// Official title is `font-medium` / unread `font-semibold`. The review
   /// CJK face is Regular-only, so paint Regular — do not faux-bold.
   static const double sessionTitleSubtitleGap = 2;
-  /// Tiny CJK metric so title/subtitle do not pack against the CSS box.
-  /// 1px/side — not 7.5 (15px empty air / 70px rows).
-  static const double cssLineCjkHalfLead = 1;
+  /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
+  /// Extra Flutter half-lead bloated rows and washed titles. Keep 0.
+  static const double cssLineCjkHalfLead = 0;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
@@ -220,8 +219,8 @@ class OcOptical {
   /// Official `--oc-mobile-glass-blur` on the 36 `mobileGlass` disc.
   static const double chipBlur = 20;
   /// Chip frost sigma. Official [chipBlur] is 20; WidgetTester cream +
-  /// 20 paints a coin. 14 + fill 0.34 is a mobileGlass plate — not a
-  /// bare glyph and not a 0.68 cream disc.
+  /// 20 paints a coin. 14 + fill 0.30 is a delicate mobileGlass plate —
+  /// not a bare glyph and not a 0.68 cream disc.
   static const double chipBleedBlur = 14;
   /// Official `.oc-mobile-floating-surface` `blur(22px) saturate(1.35)`.
   /// Distinct from control-scale [chipBlur] / [glassSaturate].

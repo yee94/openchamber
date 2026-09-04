@@ -69,7 +69,7 @@ void main() {
     expect(capsule.width, lessThan(tester.view.physicalSize.width / tester.view.devicePixelRatio));
   });
 
-  testWidgets('OcCssLine keeps official CSS line boxes plus tiny CJK half-lead', (tester) async {
+  testWidgets('OcCssLine keeps official CSS line boxes without extra half-lead', (tester) async {
     const title = TextStyle(fontSize: OcOptical.rowTitle, height: OcOptical.rowTitleHeight);
     await tester.pumpWidget(
       const MaterialApp(
@@ -87,7 +87,7 @@ void main() {
       OcOptical.rowTitle * OcOptical.rowTitleHeight + 2 * OcOptical.cssLineCjkHalfLead,
     );
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.cssLineCjkHalfLead, 1);
+    expect(OcOptical.cssLineCjkHalfLead, 0);
   });
 
   testWidgets('chat is a pushed secondary page from Projects', (tester) async {
