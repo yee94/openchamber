@@ -18,10 +18,10 @@ class OcOptical {
   /// Ink is `font-size`; strut is `line-height`. Do not faux-bold CJK.
   static const double rowTitle = 12;
   /// Official CSS is −0.012em. Flutter Regular CJK still packs tighter
-  /// than the WebView at 1.1 — 1.25 opens the 12px band (~0.104em).
-  /// Keep the 16/12 CSS boxes. Stem/shade stay 1.4 / 0.35 miter and
-  /// apply to CJK runs only (Latin is real Medium).
-  static const double rowTitleTracking = 1.25;
+  /// than the WebView at 1.25 — 1.35 opens the 12px band (~0.113em).
+  /// Keep the 16/12 CSS boxes. Stem/shade stay CJK-only miter (Latin
+  /// is real Medium). Row stays 51 — do not add more half-lead.
+  static const double rowTitleTracking = 1.35;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   /// Official project-shell row is 40. 2.75px CJK half-lead (per side)
@@ -47,12 +47,12 @@ class OcOptical {
   /// Official title is `font-medium` / unread `font-semibold`. Review CJK
   /// has no Medium cut; a same-color stem + cardinal shade keep Regular
   /// 12px on authored foreground. Stem 2.0 / shade 0.6 + round join
-  /// bloated a gray halo (~L84) around L32 cores. 1.4 / 0.35 + miter
-  /// stays in the family without fake-bold bloom. Card frost must sit
-  /// behind the child — wrapping ink in `floatSurface` 0.45 floors cores
-  /// at ~L 129. Not a 0.02 stem series and not more half-lead.
-  static const double sessionTitleStem = 1.4;
-  static const double sessionTitleShade = 0.35;
+  /// bloated a gray halo (~L84) around L32 cores. 1.2 / 0.28 + miter
+  /// is the Medium-weight family without fake-bold bloom. Card frost
+  /// must sit behind the child — wrapping ink in `floatSurface` 0.45
+  /// floors cores at ~L 129. Not more half-lead (row already 51).
+  static const double sessionTitleStem = 1.2;
+  static const double sessionTitleShade = 0.28;
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
   /// 2.75 extra Flutter pixels open Regular CJK without leaving ~40 density.
@@ -95,9 +95,9 @@ class OcOptical {
   static const double entityTitleHeight = 1.25;
   static const double projectTitle = 14;
   /// Official entity title is −0.024em. Flutter Regular CJK packs
-  /// tighter than the WebView at 0.7 — 0.85 opens 14px card titles.
+  /// tighter than the WebView at 0.85 — 0.95 opens 14px card titles.
   /// Official 18/14 box unchanged.
-  static const double projectTitleTracking = 0.85;
+  static const double projectTitleTracking = 0.95;
   static const double projectTitleHeight = 18 / 14;
 
   /// `.oc-mobile-entity-meta` 0.75rem / 0.9375rem.
