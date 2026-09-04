@@ -4,11 +4,20 @@ import '../../theme/ios_chrome.dart';
 
 /// 1.19.3-beta.1 keyword highlight for home session search.
 class HighlightedText extends StatelessWidget {
-  const HighlightedText(this.text, {super.key, required this.query, this.style});
+  const HighlightedText(
+    this.text, {
+    super.key,
+    required this.query,
+    this.style,
+    this.halfLead,
+  });
 
   final String text;
   final String query;
   final TextStyle? style;
+  /// Session 16/12 rows keep the pinned 1.25 CJK half-lead. Project /
+  /// schedule 14/18 titles pass 0 so the official CSS box is not inflated.
+  final double? halfLead;
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +31,7 @@ class HighlightedText extends StatelessWidget {
     if (needle.isEmpty) {
       return OcCssLine(
         style: style,
+        halfLead: halfLead,
         child: Text(
           text,
           maxLines: 1,
@@ -51,6 +61,7 @@ class HighlightedText extends StatelessWidget {
     }
     return OcCssLine(
       style: style,
+      halfLead: halfLead,
       child: Text.rich(
         TextSpan(style: paint, children: spans),
         maxLines: 1,

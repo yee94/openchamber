@@ -218,6 +218,9 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     OcCssLine(
+                      // Official 14/18 entity box. Session 1.25 half-lead
+                      // inflates schedule titles into a massy band.
+                      halfLead: 0,
                       style: const TextStyle(
                         fontSize: OcOptical.projectTitle,
                         height: OcOptical.projectTitleHeight,

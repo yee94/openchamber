@@ -111,6 +111,16 @@ void main() {
     expect(OcOptical.rowTitle, 12);
     expect(OcOptical.rowTitleTracking, 0);
     expect(OcOptical.projectTitleTracking, 0);
+    expect(
+      OcCssLine.boxHeight(
+        const TextStyle(
+          fontSize: OcOptical.projectTitle,
+          height: OcOptical.projectTitleHeight,
+        ),
+        halfLead: 0,
+      ),
+      OcOptical.projectTitle * OcOptical.projectTitleHeight,
+    );
     expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
     expect(OcOptical.rowTitleHeight, lessThan(1.42));
     expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);

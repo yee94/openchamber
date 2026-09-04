@@ -91,6 +91,8 @@ class MobileProjectCard extends StatelessWidget {
                     HighlightedText(
                       name,
                       query: highlightQuery,
+                      // 14/18 official CSS box — do not add session 1.25.
+                      halfLead: compact ? null : 0,
                       style: TextStyle(
                         fontSize: compact ? OcOptical.rowTitle : OcOptical.projectTitle,
                         // Official is font-semibold. Review CJK is Regular-only —
