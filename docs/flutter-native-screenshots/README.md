@@ -861,10 +861,12 @@ Locked float-shadow / Latin tracking stay. Press DONE. No second
 recapture — pixels already include that type delta.
 **精致: 还没有.**
 
-**2026-09-04 wake-0615 dart:**
+**2026-09-04 wake-0615 residual (after dart `22a033b87`):**
 STRUCTURE PASS. THEME OK. Official `MobileAssistantCard` still
 invented shell entity-meta 12/15 and a 14px letter coin. Port root
 `--oc-mobile-entity-meta` **13/16** plus official `AgentAvatar`
-5×5 identicon (id seed, 38 inside the 1px muted ring). Do not pile
-3.2 / 1.46 or grow search glyph **14**. Press DONE. Recapture 03.
+5×5 identicon (id seed, 38 inside the 1px muted ring, clipped to
+the official circle). Do not pile 3.2 / 1.46 or grow search glyph
+**14**. Press DONE. Kept 03 `3a881f07` (MAE ~0.61). 02/04/05/07
+restored. Locked shadows stay.
 **精致: 还没有.**
