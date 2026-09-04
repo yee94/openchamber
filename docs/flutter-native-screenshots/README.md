@@ -693,11 +693,13 @@ Watch scored live `640063340` / `02=cb525b1e`. STRUCTURE PASS.
 THEME OK. DemiLight@500 stays — do **not** flip Medium/Bold. Do
 **not** pile session half-lead 3.2, card 3.0, tracking 1.46/1.02,
 or search plate 34. Far stays official **10/24/-6 @ 10%**. Plates
-**28**. Search glyph **14**. Catalog disc glyphs **14 → 12** (MAE
-~0.002 — below tester noise; goldens unrestored). Small-chrome
-stroke **0.28 → 0.16** (quietness toward dock 0.12; not a hairline).
-Hits **40**. No frost clone. Recapture 02/04 after the stroke dart.
-**Not 精致.**
+**28**. Search glyph **14**. Catalog disc glyphs **14 → 12** then
+small-chrome stroke **0.28 → 0.16**. Recapture MAE vs `640063340`
+~0.006 / 0.005 / 0.005 on 02; ~0.019 / 0.012 on 04 — below tester
+noise; goldens unrestored (`02=cb525b1e` / scrolled `5f8943fc` /
+dark `1ab0d576`; 04 `c3f0753c` / 04-dark `75bd68be`). WidgetTester
+cannot prove the 2px glyph or 0.12 stroke. Hits **40**. No frost
+clone. **Not 精致.**
 
 | File | Screen |
 |---|---|
