@@ -203,9 +203,9 @@ class OcGlassChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // mobileGlass frost. BackdropFilter stays; fill is glassChipFill
-    // (0.30), not official 0.68. Chip near-pair shadow — no hairline
-    // rim, no 8/20 umbra. WidgetTester ≠ UIGlassEffect.
+    // Page-bleed mobileGlass. BackdropFilter stays; fill is
+    // glassChipFill (0.24), not official 0.68 and not a 0.30 coin.
+    // Chip near-pair shadow — no hairline rim, no 8/20 umbra.
     return DecoratedBox(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -388,7 +388,8 @@ class GroupedInsetCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? margin;
   final EdgeInsetsGeometry? padding;
-  /// Schedule cards use a softer lift; project shells keep official float-shadow.
+  /// Soft schedule lift when [tight] is set; project / schedule shells
+  /// keep official float-shadow unless a watch asks for tight.
   final bool tight;
 
   @override

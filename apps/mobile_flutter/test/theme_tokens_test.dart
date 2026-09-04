@@ -41,9 +41,10 @@ void main() {
     expect(OcTokens.light.glassFill.g, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassFill.b, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassFill, isNot(OcTokens.light.surfaceElevated));
-    expect(OcTokens.light.glassChipFill.a, closeTo(0.34, 0.01));
+    expect(OcTokens.light.glassChipFill.a, closeTo(0.24, 0.01));
+    expect(OcTokens.light.glassChipFill.a, lessThan(0.30));
     expect(OcTokens.light.glassChipFill.a, lessThan(OcTokens.light.glassFill.a));
-    expect(OcTokens.dark.glassChipFill.a, closeTo(0.34, 0.01));
+    expect(OcTokens.dark.glassChipFill.a, closeTo(0.24, 0.01));
     expect(OcTokens.light.glassChipFill.r, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassHighlight.a, closeTo(0.60, 0.01));
     expect(OcTokens.dark.glassHighlight.a, closeTo(0.18, 0.01));
@@ -216,9 +217,9 @@ void main() {
     expect(OcOptical.dockWashBlur, 0);
     expect(OcOptical.dockWashBlur, lessThan(OcOptical.glassBlur));
     expect(OcOptical.chipBlur, OcOptical.glassBlur);
-    expect(OcOptical.chipBleedBlur, 14);
+    expect(OcOptical.chipBleedBlur, 16);
     expect(OcOptical.chipBleedBlur, lessThan(OcOptical.chipBlur));
-    expect(OcOptical.chipBleedBlur, greaterThan(0));
+    expect(OcOptical.chipBleedBlur, greaterThan(OcOptical.chipBlur / 2));
     expect(OcOptical.glassSaturate, closeTo(1.25, 0.01));
     expect(OcOptical.floatBlur, 22);
     expect(OcOptical.floatSaturate, closeTo(1.35, 0.01));
@@ -251,6 +252,8 @@ void main() {
     expect(OcOptical.scheduleStatusVisual, OcOptical.scheduleStatus);
     expect(OcOptical.scheduleStatusVisual, 38);
     expect(OcOptical.scheduleStatusGlyph, 12);
+    expect(OcOptical.scheduleStatusGlyphStroke, OcOptical.headerGlyphStrokeVisual);
+    expect(OcOptical.scheduleStatusGlyphStroke, lessThan(OcOptical.listGlyphStroke));
     expect(OcOptical.overflow, 16);
     expect(OcOptical.chatChip, 44);
     expect(OcOptical.chatChip, greaterThan(OcOptical.headerDisc));

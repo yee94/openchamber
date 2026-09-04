@@ -128,7 +128,7 @@ void main() {
     expect(add.ink, isFalse);
     expect(add.filled, isFalse);
     final scheduleCard = tester.widget<MobileFloatingSurface>(find.byType(MobileFloatingSurface).first);
-    expect(scheduleCard.tight, isTrue);
+    expect(scheduleCard.tight, isFalse);
   });
 
   testWidgets('project and session titles paint full foreground ink', (tester) async {

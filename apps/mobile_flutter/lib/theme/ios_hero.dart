@@ -220,9 +220,9 @@ class OcOptical {
   /// Official `--oc-mobile-glass-blur` on the 36 `mobileGlass` disc.
   static const double chipBlur = 20;
   /// Chip frost sigma. Official [chipBlur] is 20; WidgetTester cream +
-  /// 20 paints a coin. 14 + fill 0.34 is a mobileGlass frost plate —
-  /// not a bare glyph and not a 0.68 cream disc.
-  static const double chipBleedBlur = 14;
+  /// 20 paints a coin. 16 + fill 0.24 is page-bleed mobileGlass —
+  /// not a bare glyph and not a 0.30–0.68 cream disc.
+  static const double chipBleedBlur = 16;
   /// Official `.oc-mobile-floating-surface` `blur(22px) saturate(1.35)`.
   /// Distinct from control-scale [chipBlur] / [glassSaturate].
   static const double floatBlur = 22;
@@ -278,6 +278,9 @@ class OcOptical {
   /// Official non-tab scheduled glyph is `size-3.5`; residual optical
   /// paints 12 so the badge does not outweigh the segment track.
   static const double scheduleStatusGlyph = 12;
+  /// Quiet status polish: 12px check/pause at header visual stroke so
+  /// the 38 disc does not outweigh the card title.
+  static const double scheduleStatusGlyphStroke = headerGlyphStrokeVisual;
 
   /// Official `FileTypeIcon` mobile size `h-3 w-3` (12px).
   static const double fileTypeSize = 12;
