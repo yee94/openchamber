@@ -508,18 +508,7 @@ void main() {
       OcElevation.dockFor(OcTokens.dark).every((s) => s.offset == Offset.zero),
       isTrue,
     );
-    expect(OcElevation.controlFor(OcTokens.dark), hasLength(3));
-    expect(OcElevation.controlFor(OcTokens.dark).last.blurRadius, 20);
-    expect(OcElevation.controlFor(OcTokens.dark).last.offset.dy, 8);
-    expect(OcElevation.controlFor(OcTokens.dark).last.spreadRadius, -6);
-    expect(
-      OcElevation.controlFor(OcTokens.dark).last.color.a,
-      closeTo(0.40, 0.001),
-    );
-    expect(
-      OcElevation.controlFor(OcTokens.dark).first.color.a,
-      closeTo(0.30, 0.001),
-    );
+    expect(OcElevation.controlFor(OcTokens.dark), isEmpty);
   });
 
   test('resolveOcBrightness honors Light / Dark / System', () {
