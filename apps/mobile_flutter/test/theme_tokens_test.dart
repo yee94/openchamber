@@ -347,7 +347,7 @@ void main() {
     expect(OcOptical.settingsRowMinHeight, 52);
     expect(OcOptical.settingsSearchMinHeight, 44);
     expect(OcOptical.settingsNavIcon, 16);
-    expect(OcOptical.settingsGlyphStrokeVisual, OcOptical.headerGlyphStrokeVisual);
+    expect(OcOptical.settingsGlyphStrokeVisual, OcOptical.dockGlyphStrokeVisual);
     expect(OcOptical.settingsGlyphStrokeVisual, lessThan(OcOptical.listGlyphStroke));
     expect(OcOptical.sessionMoreHit, 36);
     expect(OcOptical.sessionMoreEdge, 4);

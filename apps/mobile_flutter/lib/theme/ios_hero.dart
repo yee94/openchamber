@@ -214,7 +214,9 @@ class OcOptical {
   static const double settingsNavIcon = 16;
   /// Official settings stroke is 1.5. Flutter round-cap dpr-3 bloom;
   /// same dock visual as header so 16px nav glyphs are not chunky bricks.
-  static const double settingsGlyphStrokeVisual = headerGlyphStrokeVisual;
+  /// Settings nav is official `h-4` (16). Keep dock visual so 05 is
+  /// not pulled into the search / leading small-chrome restore.
+  static const double settingsGlyphStrokeVisual = dockGlyphStrokeVisual;
 
   /// `.oc-mobile-root-page-title` letter-spacing: −0.04em + 0.02em × collapse.
   static double rootTitleTracking(double collapse) =>
