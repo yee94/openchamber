@@ -17,7 +17,20 @@ class OcElevation {
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
     // Official `--oc-mobile-float-shadow`: 2 / 12 / 10-24/-6.
+    // [tight] is a softer schedule-card lift — same family, less umbra.
     if (tokens.isDark) {
+      if (tight) {
+        return const [
+          BoxShadow(color: Color(0x2E000000), blurRadius: 2),
+          BoxShadow(color: Color(0x2A000000), blurRadius: 10),
+          BoxShadow(
+            color: Color(0x3D000000),
+            offset: Offset(0, 8),
+            blurRadius: 18,
+            spreadRadius: -6,
+          ),
+        ];
+      }
       return const [
         BoxShadow(color: Color(0x42000000), blurRadius: 2),
         BoxShadow(color: Color(0x3D000000), blurRadius: 12),
@@ -25,6 +38,18 @@ class OcElevation {
           color: Color(0x57000000),
           offset: Offset(0, 10),
           blurRadius: 24,
+          spreadRadius: -6,
+        ),
+      ];
+    }
+    if (tight) {
+      return const [
+        BoxShadow(color: Color(0x08000000), blurRadius: 2),
+        BoxShadow(color: Color(0x0A000000), blurRadius: 10),
+        BoxShadow(
+          color: Color(0x12000000),
+          offset: Offset(0, 8),
+          blurRadius: 18,
           spreadRadius: -6,
         ),
       ];
@@ -98,7 +123,7 @@ class OcElevation {
 
   /// Official `--oc-mobile-glass-shadow` near pair + 8/20/-6 umbra.
   /// Header discs do not use this — the 8px drop paints a second circle.
-  /// Primary `+` and glass chips use [chip] (contact only).
+  /// Search / `+` use [chip] (near pair, no umbra).
   static List<BoxShadow> control(BuildContext context) => controlFor(OcTokens.of(context));
 
   static List<BoxShadow> controlFor(OcTokens tokens) {
@@ -115,14 +140,15 @@ class OcElevation {
     ];
   }
 
-  /// Official glass-shadow contact: `0 0 2px rgb(0 0 0 / 0.05)`.
-  /// Halo + 8/20 umbra paint a coin around the 36 disc.
+  /// Official glass-shadow near pair: `0 0 2px / 0.05` + `0 0 12px / 0.06`.
+  /// Soft lift for search / `+` — no 8/20 umbra (that paints a second circle).
   static List<BoxShadow> chip(BuildContext context) => chipFor(OcTokens.of(context));
 
   static List<BoxShadow> chipFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x05000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0F000000), blurRadius: 12),
     ];
   }
 

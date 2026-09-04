@@ -41,9 +41,9 @@ void main() {
     expect(OcTokens.light.glassFill.g, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassFill.b, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassFill, isNot(OcTokens.light.surfaceElevated));
-    expect(OcTokens.light.glassChipFill.a, closeTo(0.20, 0.01));
+    expect(OcTokens.light.glassChipFill.a, closeTo(0.34, 0.01));
     expect(OcTokens.light.glassChipFill.a, lessThan(OcTokens.light.glassFill.a));
-    expect(OcTokens.dark.glassChipFill.a, closeTo(0.20, 0.01));
+    expect(OcTokens.dark.glassChipFill.a, closeTo(0.34, 0.01));
     expect(OcTokens.light.glassChipFill.r, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassHighlight.a, closeTo(0.60, 0.01));
     expect(OcTokens.dark.glassHighlight.a, closeTo(0.18, 0.01));
@@ -111,7 +111,7 @@ void main() {
     expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
     expect(OcOptical.rowTitleHeight, lessThan(1.42));
     expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);
-    expect(OcOptical.sessionRowVisualHeight, 40);
+    expect(OcOptical.sessionRowVisualHeight, 44);
     expect(OcOptical.sessionRowVisualHeight, lessThan(OcOptical.sessionRowHeight));
     expect(OcOptical.sessionRowVisualHeight, greaterThanOrEqualTo(36));
     expect(OcOptical.sessionRowPadV, 5);
@@ -123,7 +123,8 @@ void main() {
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.cssLineCjkHalfLead, 0);
+    expect(OcOptical.cssLineCjkHalfLead, 1);
+    expect(OcOptical.cssLineCjkHalfLead, lessThan(2));
     expect(OcOptical.sessionLineLeading, closeTo(0.57, 0.001));
     expect(OcOptical.sessionLineLeading, greaterThan(0.48));
     expect(OcOptical.sessionLineLeading, lessThan(0.58));
@@ -213,7 +214,7 @@ void main() {
     expect(OcOptical.dockWashBlur, 0);
     expect(OcOptical.dockWashBlur, lessThan(OcOptical.glassBlur));
     expect(OcOptical.chipBlur, OcOptical.glassBlur);
-    expect(OcOptical.chipBleedBlur, 12);
+    expect(OcOptical.chipBleedBlur, 14);
     expect(OcOptical.chipBleedBlur, lessThan(OcOptical.chipBlur));
     expect(OcOptical.chipBleedBlur, greaterThan(0));
     expect(OcOptical.glassSaturate, closeTo(1.25, 0.01));
@@ -241,8 +242,8 @@ void main() {
     expect(OcOptical.chevron, 14);
     expect(OcOptical.footerGlyph, 14);
     expect(OcOptical.scheduleStatus, OcOptical.leadingCircle);
-    expect(OcOptical.scheduleStatusVisual, 28);
-    expect(OcOptical.scheduleStatusVisual, lessThan(OcOptical.scheduleStatus));
+    expect(OcOptical.scheduleStatusVisual, OcOptical.scheduleStatus);
+    expect(OcOptical.scheduleStatusVisual, 38);
     expect(OcOptical.scheduleStatusGlyph, 12);
     expect(OcOptical.overflow, 16);
     expect(OcOptical.chatChip, 44);
@@ -289,7 +290,7 @@ void main() {
     expect(OcTokens.light.primary, isNot(const Color(0xFF007AFF)));
   });
 
-  test('OcElevation ports official float-shadow and keeps discs contact-only', () {
+  test('OcElevation ports official float-shadow and chip near-pair lift', () {
     expect(OcElevation.cardFor(OcTokens.light), hasLength(3));
     expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, 2);
     expect(OcElevation.cardFor(OcTokens.light)[1].blurRadius, 12);
@@ -301,8 +302,12 @@ void main() {
       closeTo(0x1A, 1),
     );
     expect(
-      OcElevation.cardFor(OcTokens.light, tight: true),
-      OcElevation.cardFor(OcTokens.light),
+      OcElevation.cardFor(OcTokens.light, tight: true).last.blurRadius,
+      lessThan(OcElevation.cardFor(OcTokens.light).last.blurRadius),
+    );
+    expect(
+      (OcElevation.cardFor(OcTokens.light, tight: true).last.color.a * 255).round(),
+      lessThan(0x1A),
     );
     expect(OcElevation.groupedFor(OcTokens.light), OcElevation.cardFor(OcTokens.light));
     expect(OcElevation.composerFor(OcTokens.light), isEmpty);
@@ -313,16 +318,17 @@ void main() {
     expect(OcElevation.controlFor(OcTokens.light).last.blurRadius, 20);
     expect(OcElevation.controlFor(OcTokens.light).last.offset.dy, 8);
     expect(OcElevation.controlFor(OcTokens.light).last.spreadRadius, -6);
-    expect(OcElevation.chipFor(OcTokens.light), hasLength(1));
-    expect(OcElevation.chipFor(OcTokens.light).single.blurRadius, 2);
-    expect(OcElevation.chipFor(OcTokens.light).single.offset, Offset.zero);
+    expect(OcElevation.chipFor(OcTokens.light), hasLength(2));
+    expect(OcElevation.chipFor(OcTokens.light).first.blurRadius, 2);
+    expect(OcElevation.chipFor(OcTokens.light).last.blurRadius, 12);
+    expect(OcElevation.chipFor(OcTokens.light).every((s) => s.offset == Offset.zero), isTrue);
     expect(OcElevation.chipFor(OcTokens.dark), isEmpty);
     expect(
       OcElevation.chipFor(OcTokens.light).every((s) => s.blurStyle != BlurStyle.inner),
       isTrue,
     );
-    // Primary `+` stays contact-only. OcGlassChip no longer paints a rim.
-    expect(OcElevation.chipFor(OcTokens.light), hasLength(1));
+    // Search / `+` near-pair lift — no 8/20 umbra.
+    expect(OcElevation.chipFor(OcTokens.light).every((s) => s.blurRadius <= 12), isTrue);
     expect(OcElevation.glassHighlightFor(OcTokens.light), hasLength(1));
     expect(OcElevation.glassHighlightFor(OcTokens.light).single.blurStyle, BlurStyle.inner);
     expect(

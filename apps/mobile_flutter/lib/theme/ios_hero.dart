@@ -20,10 +20,11 @@ class OcOptical {
   static const double rowTitleTracking = 0;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
-  /// Official project-shell row: pad 5 + title 16 + gap-0.5 2 + subtitle 12 + pad 5.
-  static const double sessionRowVisualHeight = 40;
+  /// Official project-shell density stays ~40. Tiny CJK half-lead (1×2)
+  /// adds residual title/subtitle air: 5 + 18 + 2 + 14 + 5 = 44.
+  /// Not the 70px / 7.5 half-lead readability regression.
+  static const double sessionRowVisualHeight = 44;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
-  /// 5 + 16 + 2 + 12 + 5 = 40. Do not invent gap or half-lead air.
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
   static const double groupHeaderPadV = 10;
@@ -42,10 +43,9 @@ class OcOptical {
   /// Official title is `font-medium` / unread `font-semibold`. The review
   /// CJK face is Regular-only, so paint Regular — do not faux-bold.
   static const double sessionTitleSubtitleGap = 2;
-  /// Official CSS half-leading is already inside the 16/12 boxes (2px /
-  /// 1px). Extra Flutter compensation washed titles and bloated rows to
-  /// 70px. 0 = official density; add a tiny metric only if CJK clips.
-  static const double cssLineCjkHalfLead = 0;
+  /// Tiny CJK metric so title/subtitle do not pack against the CSS box.
+  /// 1px/side — not 7.5 (15px empty air / 70px rows).
+  static const double cssLineCjkHalfLead = 1;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
@@ -220,9 +220,9 @@ class OcOptical {
   /// Official `--oc-mobile-glass-blur` on the 36 `mobileGlass` disc.
   static const double chipBlur = 20;
   /// Chip frost sigma. Official [chipBlur] is 20; WidgetTester cream +
-  /// 20 paints a coin. 12 is a near-glass plate — not glyph-only and
-  /// not a solid 0.68 cream disc.
-  static const double chipBleedBlur = 12;
+  /// 20 paints a coin. 14 + fill 0.34 is a mobileGlass plate — not a
+  /// bare glyph and not a 0.68 cream disc.
+  static const double chipBleedBlur = 14;
   /// Official `.oc-mobile-floating-surface` `blur(22px) saturate(1.35)`.
   /// Distinct from control-scale [chipBlur] / [glassSaturate].
   static const double floatBlur = 22;
@@ -266,11 +266,10 @@ class OcOptical {
   static const double chatChip = 44;
   static const double chatChipGlyph = 16;
 
-  /// Official scheduled status uses the project-shell glass disc, with a
-  /// quieter `size-4` glyph so the row does not out-weigh the segment track.
+  /// Official scheduled status uses the project-shell glass disc (2.375rem).
   static const double scheduleStatus = leadingCircle;
-  /// Painted plate sits inside the 38 shell so WidgetTester frost is not a coin.
-  static const double scheduleStatusVisual = 28;
+  /// Painted plate is the official 38 shell — not a 28 inset coin.
+  static const double scheduleStatusVisual = 38;
   /// Official non-tab scheduled glyph is `size-3.5`; residual optical
   /// paints 12 so the badge does not outweigh the segment track.
   static const double scheduleStatusGlyph = 12;

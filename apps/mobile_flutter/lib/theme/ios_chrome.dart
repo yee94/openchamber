@@ -203,9 +203,9 @@ class OcGlassChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Page-bleed frost (wake-0932). BackdropFilter stays; fill is
-    // glassChipFill, not official 0.68. Contact-only chip shadow —
-    // no hairline rim, no 8/20 umbra. WidgetTester ≠ UIGlassEffect.
+    // mobileGlass frost. BackdropFilter stays; fill is glassChipFill
+    // (0.34), not official 0.68. Chip near-pair shadow — no hairline
+    // rim, no 8/20 umbra. WidgetTester ≠ UIGlassEffect.
     return DecoratedBox(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -350,7 +350,7 @@ class CircularChromeButton extends StatelessWidget {
             decoration: BoxDecoration(
               color: ink ? tokens.foreground : tokens.primary,
               shape: BoxShape.circle,
-              // Contact only — official control umbra paints a second
+              // Near-pair lift — official control umbra paints a second
               // circle under the solid primary `+`.
               boxShadow: OcElevation.chip(context),
             ),
@@ -388,7 +388,7 @@ class GroupedInsetCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? margin;
   final EdgeInsetsGeometry? padding;
-  /// Kept for call-site compat. Elevation is one shared float-shadow family.
+  /// Schedule cards use a softer lift; project shells keep official float-shadow.
   final bool tight;
 
   @override
