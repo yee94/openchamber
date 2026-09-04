@@ -18,15 +18,15 @@ class OcOptical {
   /// Ink is `font-size`; strut is `line-height`. Do not faux-bold CJK.
   static const double rowTitle = 12;
   /// Official CSS is −0.012em. Flutter Regular CJK still packs tighter
-  /// than the WebView — tracking stays 1.35 (do not chase more letter-
-  /// spacing). Stem/shade stay CJK-only miter. Latin is real Medium.
-  /// No Medium CJK cut on review/CI; open half-lead instead of tracking.
-  static const double rowTitleTracking = 1.35;
+  /// than the WebView — 1.42 opens the 12px band that packed at 1.35.
+  /// Stay under 1.5. Stem/shade stay CJK-only miter. Latin is real Medium.
+  /// No Medium CJK cut on review/CI. Official 16/12 boxes stay.
+  static const double rowTitleTracking = 1.42;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
-  /// Official project-shell row is 40. 4.6px CJK half-lead (per side)
-  /// opens Regular that still packed at 4.5. 40 + 4×4.6 = 58.4 —
-  /// not 7.5 half-lead / 70px rows. Ceiling stays ~4.75. No more tracking.
+  /// Official project-shell row is 40. 4.7px CJK half-lead (per side)
+  /// opens Regular that still packed at 4.6. 40 + 4×4.7 = 58.8 —
+  /// not 7.5 half-lead / 70px rows. Ceiling stays ~4.75.
   static const double sessionRowVisualHeight = 40 + 4 * cssLineCjkHalfLead;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
   static const double sessionRowPadV = 5;
@@ -49,15 +49,15 @@ class OcOptical {
   /// 12px on authored foreground. Stem 2.0 / shade 0.6 + round join
   /// bloated a gray halo (~L84) around L32 cores. 1.05 / 0.22 + miter
   /// keeps Regular on foreground without the heavier 1.2 brick. Card
-  /// frost must sit behind the child. Half-lead 4.6 is title-band air
-  /// (no more tracking knobs; no Medium CJK on review/CI).
+  /// frost must sit behind the child. Half-lead 4.7 is title-band air
+  /// (tracking 1.42; no Medium CJK on review/CI).
   static const double sessionTitleStem = 1.05;
   static const double sessionTitleShade = 0.22;
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
-  /// 4.6 extra Flutter pixels open Regular CJK that still packed at 4.5.
+  /// 4.7 extra Flutter pixels open Regular CJK that still packed at 4.6.
   /// Stay under the 4.75 ceiling — do not invent 7.5/70.
-  static const double cssLineCjkHalfLead = 4.6;
+  static const double cssLineCjkHalfLead = 4.7;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
@@ -96,14 +96,14 @@ class OcOptical {
   static const double entityTitleHeight = 1.25;
   static const double projectTitle = 14;
   /// Official entity title is −0.024em. Flutter Regular CJK packs
-  /// tighter than the WebView at 0.85 — 0.95 opens 14px card titles.
-  /// Official 18/14 box unchanged.
-  static const double projectTitleTracking = 0.95;
+  /// tighter than the WebView at 0.95 — 1.02 opens 14px card titles.
+  /// Official 18/14 box unchanged. Stay under 1.1.
+  static const double projectTitleTracking = 1.02;
   static const double projectTitleHeight = 18 / 14;
-  /// Session rows keep [cssLineCjkHalfLead] (4.6). 14/18 project /
+  /// Session rows keep [cssLineCjkHalfLead] (4.7). 14/18 project /
   /// schedule titles get a smaller CJK band so Regular is not packed
   /// into the official CSS box — not another session-row bump, not 7.5.
-  static const double cardTitleHalfLead = 2.4;
+  static const double cardTitleHalfLead = 2.7;
 
   /// `.oc-mobile-entity-meta` 0.75rem / 0.9375rem.
   static const double meta = 12;
@@ -121,7 +121,7 @@ class OcOptical {
   /// Official scheduled task row `p-3` (12).
   static const double scheduleCardPadV = 12;
   /// Official scheduled meta `mt-1` (4). Title air is the 18px CSS box
-  /// plus [cardTitleHalfLead] — not session 4.6 and not a second gap.
+  /// plus [cardTitleHalfLead] — not session 4.7 and not a second gap.
   static const double scheduleTitleMetaGap = 4;
 
   /// Official `.oc-mobile-detail-title` 0.9375rem / line-height 1.4 / weight 650.

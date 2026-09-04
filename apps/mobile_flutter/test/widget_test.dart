@@ -96,7 +96,7 @@ void main() {
       OcOptical.rowTitle * OcOptical.rowTitleHeight + 2 * OcOptical.cssLineCjkHalfLead,
     );
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.cssLineCjkHalfLead, closeTo(4.6, 0.01));
+    expect(OcOptical.cssLineCjkHalfLead, closeTo(4.7, 0.01));
   });
 
   testWidgets('chat is a pushed secondary page from Projects', (tester) async {
@@ -224,10 +224,13 @@ void main() {
       final decoration = box.decoration as BoxDecoration;
       expect(decoration.border, isNull);
     }
-    expect(find.descendant(
+    final searchChip = tester.widget<OcGlassChip>(find.descendant(
       of: find.byKey(const Key('projects-search-toggle')),
       matching: find.byType(OcGlassChip),
-    ), findsOneWidget);
+    ));
+    expect(searchChip.fill, OcTokens.light.glassChipThrough);
+    expect(searchChip.size, OcOptical.headerDiscVisual);
+    expect(searchChip.fill!.a, closeTo(0.22, 0.01));
     expect(find.descendant(
       of: find.byKey(const Key('projects-search-toggle')),
       matching: find.byType(OcFrosted),

@@ -111,10 +111,10 @@ void main() {
     expect(OcOptical.largeTitleTracking, closeTo(-1.28, 0.01));
     expect(OcOptical.largeTitleHeight, 1.2);
     expect(OcOptical.rowTitle, 12);
-    expect(OcOptical.rowTitleTracking, closeTo(1.35, 0.01));
+    expect(OcOptical.rowTitleTracking, closeTo(1.42, 0.01));
     expect(OcOptical.rowTitleTracking, greaterThan(1.2));
     expect(OcOptical.rowTitleTracking, lessThan(1.5));
-    expect(OcOptical.projectTitleTracking, closeTo(0.95, 0.01));
+    expect(OcOptical.projectTitleTracking, closeTo(1.02, 0.01));
     expect(OcOptical.projectTitleTracking, greaterThan(0.8));
     expect(OcOptical.projectTitleTracking, lessThan(1.1));
     expect(
@@ -127,7 +127,7 @@ void main() {
       ),
       OcOptical.projectTitle * OcOptical.projectTitleHeight,
     );
-    expect(OcOptical.cardTitleHalfLead, closeTo(2.4, 0.01));
+    expect(OcOptical.cardTitleHalfLead, closeTo(2.7, 0.01));
     expect(OcOptical.cardTitleHalfLead, greaterThan(0));
     expect(OcOptical.cardTitleHalfLead, lessThan(OcOptical.cssLineCjkHalfLead));
     expect(
@@ -143,7 +143,7 @@ void main() {
     expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
     expect(OcOptical.rowTitleHeight, lessThan(1.42));
     expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);
-    expect(OcOptical.sessionRowVisualHeight, closeTo(58.4, 0.01));
+    expect(OcOptical.sessionRowVisualHeight, closeTo(58.8, 0.01));
     expect(OcOptical.sessionRowVisualHeight, greaterThanOrEqualTo(40));
     expect(OcOptical.sessionRowVisualHeight, lessThan(62));
     expect(OcOptical.sessionRowPadV, 5);
@@ -160,7 +160,7 @@ void main() {
     expect(OcOptical.sessionTitleStem, lessThan(1.2));
     expect(OcOptical.sessionTitleShade, closeTo(0.22, 0.01));
     expect(OcOptical.sessionTitleShade, lessThan(0.28));
-    expect(OcOptical.cssLineCjkHalfLead, closeTo(4.6, 0.01));
+    expect(OcOptical.cssLineCjkHalfLead, closeTo(4.7, 0.01));
     expect(OcOptical.cssLineCjkHalfLead, greaterThan(4.4));
     expect(OcOptical.cssLineCjkHalfLead, lessThan(4.75));
     expect(OcOptical.sessionLineLeading, closeTo(0.57, 0.001));
