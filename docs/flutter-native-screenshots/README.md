@@ -450,6 +450,18 @@ instead of the 54 air gap. Settings nav stays dock **0.12**.
 `headerRestPeek` 0. Recapture 02/04 after this dart.
 **Not 精致.**
 
+**2026-09-04 wake-0008 residual (after `9f080513c`):**
+Watch scored live `9f080513c` / `02=8ce0b5b2`. Stay on tip.
+Do **not** pile +2 air. Gap stays **58**; meta **54**; plates **28**;
+glyphs **14**; search **14**; small-chrome stroke **0.62**; dock
+**0.12**; far **10/24/-6**. Title-row start-align stays. Session rows
+`CrossAxisAlignment.start` so time / ··· sit on the title band (not
+the 114.8 air). Unread titles official `font-semibold` (w600; review
+CJK snaps to Medium). Session more **12 → 14** (`size-3.5`); trailing
+··· / chevron use dock **0.12** (not 0.62 meatballs). Recapture 02/04
+after this dart.
+**Not 精致.**
+
 | File | Screen |
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |

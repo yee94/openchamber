@@ -153,7 +153,7 @@ class MobileProjectCard extends StatelessWidget {
               OcGlyph(
                 expanded ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
                 size: OcOptical.chevron,
-                strokeWidth: OcOptical.headerGlyphStrokeVisual,
+                strokeWidth: OcOptical.sessionMoreStroke,
                 color: context.oc.mutedForeground,
               ),
               Padding(
@@ -165,7 +165,7 @@ class MobileProjectCard extends StatelessWidget {
                     child: OcGlyph(
                       OcGlyphKind.ellipsis,
                       size: OcOptical.overflow,
-                      strokeWidth: OcOptical.headerGlyphStrokeVisual,
+                      strokeWidth: OcOptical.sessionMoreStroke,
                       color: context.oc.mutedForeground,
                     ),
                   ),

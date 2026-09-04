@@ -289,7 +289,9 @@ void main() {
     expect(OcOptical.worktreeGlyph, 14);
     expect(OcOptical.worktreeGlyphVisual, 12);
     expect(OcOptical.worktreeGlyphVisual, lessThan(OcOptical.worktreeGlyph));
-    expect(OcOptical.sessionMore, 12);
+    expect(OcOptical.sessionMore, 14);
+    expect(OcOptical.sessionMoreStroke, OcOptical.dockGlyphStrokeVisual);
+    expect(OcOptical.sessionMoreStroke, isNot(OcOptical.headerGlyphStrokeVisual));
     expect(OcOptical.chevron, 14);
     expect(OcOptical.footerGlyph, 14);
     expect(OcOptical.scheduleStatus, OcOptical.leadingCircle);

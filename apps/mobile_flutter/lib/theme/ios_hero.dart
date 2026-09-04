@@ -285,8 +285,11 @@ class OcOptical {
   /// inside the 18 box so the sprite matches the web scale.
   static const double worktreeGlyph = 14;
   static const double worktreeGlyphVisual = 12;
-  /// Session / worktree `more-2` `size-3.5`. Project action is `size-4`.
-  static const double sessionMore = 12;
+  /// Official session `more-2` is `size-3.5` (14). Trailing ··· / chevron
+  /// stay dock visual — not small-chrome 0.62 (that fattened meatballs
+  /// vs README). Search / leading keep 0.62.
+  static const double sessionMore = 14;
+  static const double sessionMoreStroke = dockGlyphStrokeVisual;
   /// Official visible more is `min-w-9` + `mr-1`. Open the trailing air a
   /// hair past that so time + ellipsis do not crowd the card edge.
   static const double sessionMoreHit = 36;

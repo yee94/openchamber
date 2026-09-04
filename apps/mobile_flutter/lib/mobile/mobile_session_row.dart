@@ -46,6 +46,10 @@ class MobileSessionRow extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: OcOptical.sessionRowVisualHeight),
         child: Row(
+          // Official row-main is items-center in a 40 box. Our visual
+          // height is 114.8 (locked 58 gap). Center parked time / ···
+          // in the air. Start keeps them on the title band (README).
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: Padding(
@@ -56,6 +60,7 @@ class MobileSessionRow extends StatelessWidget {
                   OcOptical.sessionRowPadV,
                 ),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(
                       width: OcOptical.sessionStatus,
@@ -88,11 +93,12 @@ class MobileSessionRow extends StatelessWidget {
                             style: TextStyle(
                               fontSize: OcOptical.rowTitle,
                               // Official `.oc-mobile-session-title` is
-                              // `font-medium` (unread `font-semibold`).
+                              // `font-medium` / unread `font-semibold`.
                               // ReviewSans Medium covers Latin. CJK uses
                               // the real Medium cut (PingFang / Noto).
-                              // Do not stem and do not clamp to Regular.
-                              fontWeight: FontWeight.w500,
+                              // w600 snaps to that Medium on review —
+                              // not Noto Bold. Do not stem.
+                              fontWeight: row.unread ? FontWeight.w600 : FontWeight.w500,
                               letterSpacing: OcOptical.rowTitleTracking,
                               height: OcOptical.rowTitleHeight,
                               color: context.oc.foreground,
@@ -146,7 +152,7 @@ class MobileSessionRow extends StatelessWidget {
                 child: OcGlyph(
                   OcGlyphKind.ellipsis,
                   size: OcOptical.sessionMore,
-                  strokeWidth: OcOptical.headerGlyphStrokeVisual,
+                  strokeWidth: OcOptical.sessionMoreStroke,
                   color: context.oc.mutedForeground,
                 ),
               ),
