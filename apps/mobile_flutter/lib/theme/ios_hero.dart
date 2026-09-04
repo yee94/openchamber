@@ -23,9 +23,9 @@ class OcOptical {
   /// Project-shell CSS min-height is 2.5rem (40). Flutter CJK paints past
   /// `font-size` into the CSS half-leading, so the visual row is official
   /// pads + 16/12 boxes + [cssLineCjkHalfLead] + `gap-0.5`.
-  static const double sessionRowVisualHeight = 68;
+  static const double sessionRowVisualHeight = 70;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
-  /// 5 + 30 + 2 + 26 + 5 = 68. Extra 14/line is [cssLineCjkHalfLead].
+  /// 5 + 31 + 2 + 27 + 5 = 70. Extra 15/line is [cssLineCjkHalfLead].
   /// Do not grow icons. Do not invent gap.
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
@@ -49,9 +49,9 @@ class OcOptical {
   /// Extra half-leading each side of [OcCssLine] so Flutter CJK, which
   /// paints past `font-size` into the CSS 2px/1px half-leading, keeps
   /// ink-to-box air. Official CSS tokens stay 16/12; this is metric
-  /// compensation (7.0 × 2 = 14px / line). Wake-0928: title↔meta still
-  /// compact vs official — tune half-leading only, keep gap-0.5.
-  static const double cssLineCjkHalfLead = 7.0;
+  /// compensation (7.5 × 2 = 15px / line). Wake-0932: title↔meta still
+  /// residual tight vs official — tune half-leading only, keep gap-0.5.
+  static const double cssLineCjkHalfLead = 7.5;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
@@ -147,16 +147,16 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  /// Official hit is 40 (`mobileIcon`). Painted plate is 24 — smaller
-  /// than the 26/36 coin so search/+ read as a delicate glass disc.
-  /// `+` stays primary. No primary + glow. No 8/20 umbra.
-  static const double headerDiscVisual = 24;
-  static const double headerGlyph = 13;
+  /// Official hit is 40 (`mobileIcon`). Painted plate is 22 — page-bleed
+  /// frost, not a 24/36 coin. `+` stays primary. No primary + glow.
+  /// No 8/20 umbra. No UIKit liquid-glass clone.
+  static const double headerDiscVisual = 22;
+  static const double headerGlyph = 12;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
-  /// Flutter round-cap bloom at dpr 3; paint under official 1.5 so 13px
+  /// Flutter round-cap bloom at dpr 3; paint under official 1.5 so 12px
   /// header glyphs stay thin vs `size-5` medium, not massy coins.
-  static const double headerGlyphStrokeVisual = 0.84;
+  static const double headerGlyphStrokeVisual = 0.78;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
   static const double listGlyphStroke = 1.5;
   /// Search-field prefix `Icon name="search" className="size-4"`.
@@ -215,9 +215,9 @@ class OcOptical {
   /// Official `--oc-mobile-glass-blur` on the 36 `mobileGlass` disc.
   static const double chipBlur = 20;
   /// Chip frost sigma. Official [chipBlur] is 20; WidgetTester cream +
-  /// 20 paints a coin. 10 keeps the BackdropFilter path without a
-  /// solid plate. Search/+ stay delicate glass, not glyph-only.
-  static const double chipBleedBlur = 10;
+  /// 20 paints a coin. 8 keeps the BackdropFilter path as page-bleed,
+  /// not a solid plate. Search/+ stay frost, not glyph-only.
+  static const double chipBleedBlur = 8;
   /// Official `.oc-mobile-floating-surface` `blur(22px) saturate(1.35)`.
   /// Distinct from control-scale [chipBlur] / [glassSaturate].
   static const double floatBlur = 22;

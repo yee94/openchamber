@@ -203,8 +203,8 @@ class OcGlassChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Delicate glass plate (wake-0905). BackdropFilter stays; fill is
-    // glassChipFill 0.22, not official 0.68. Contact-only chip shadow —
+    // Page-bleed frost (wake-0932). BackdropFilter stays; fill is
+    // glassChipFill, not official 0.68. Contact-only chip shadow —
     // no hairline rim, no 8/20 umbra. WidgetTester ≠ UIGlassEffect.
     return DecoratedBox(
       decoration: BoxDecoration(

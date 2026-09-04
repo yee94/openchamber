@@ -29,14 +29,11 @@ class OcElevation {
         ),
       ];
     }
-    // Official geometry 2 / 12 / 10-24/-6. Flutter cream-on-cream
-    // under-reads 0.04/0.05/0.10 — paint a hair stronger, not a
-    // Material 8/20 stack.
     return const [
-      BoxShadow(color: Color(0x0C000000), blurRadius: 2),
-      BoxShadow(color: Color(0x10000000), blurRadius: 12),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 12),
       BoxShadow(
-        color: Color(0x22000000),
+        color: Color(0x1A000000),
         offset: Offset(0, 10),
         blurRadius: 24,
         spreadRadius: -6,
@@ -94,8 +91,8 @@ class OcElevation {
   static List<BoxShadow> dockFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x04000000), blurRadius: 2),
-      BoxShadow(color: Color(0x06000000), blurRadius: 12),
+      BoxShadow(color: Color(0x03000000), blurRadius: 2),
+      BoxShadow(color: Color(0x04000000), blurRadius: 12),
     ];
   }
 
