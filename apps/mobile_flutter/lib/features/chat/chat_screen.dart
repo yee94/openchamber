@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
 import '../../data/chat_timeline.dart';
-import '../../data/dictation.dart';
 import '../../data/home_session.dart';
 import '../../data/message_id.dart';
 import '../../data/openchamber_http.dart';
@@ -49,11 +48,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final ValueNotifier<bool> _busy = ValueNotifier(false);
   final ValueNotifier<bool> _atLiveEdge = ValueNotifier(true);
   final ValueNotifier<String?> _errorKey = ValueNotifier<String?>(null);
-  final ValueNotifier<String?> _speakingMessageId = ValueNotifier<String?>(null);
-  String? _dictationLabel;
   Timer? _poll;
-
-  DictationSession get _dictation => widget.appController?.dictation ?? UnavailableDictation();
 
   LiveActivityController get _live => widget.appController?.liveActivity ?? LiveActivityController();
 
@@ -100,7 +95,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _busy.dispose();
     _atLiveEdge.dispose();
     _errorKey.dispose();
-    _speakingMessageId.dispose();
     if (_ownsTimeline) _timeline.dispose();
     super.dispose();
   }
@@ -267,52 +261,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _speak(ChatMessage message) async {
-    final controller = widget.appController;
-    if (controller == null) return;
-    if (_speakingMessageId.value == message.id) {
-      await controller.stopSpeaking();
-      if (mounted) _speakingMessageId.value = null;
-      return;
-    }
-    final text = message.parts
-        .where((part) => part.kind == ChatPartKind.text)
-        .map((part) => part.body?.trim() ?? '')
-        .where((item) => item.isNotEmpty)
-        .join('\n');
-    final spoken = text.isNotEmpty ? text : message.body;
-    _speakingMessageId.value = message.id;
-    try {
-      await controller.speakMessage(spoken);
-    } on OpenChamberHttpException {
-      if (mounted) _errorKey.value = 'chat.error.ttsFailed';
-    } finally {
-      if (mounted) _speakingMessageId.value = null;
-    }
-  }
-
-  Future<void> _dictate() async {
-    final session = _dictation;
-    if (session.status == DictationStatus.recording) {
-      final result = await session.confirm();
-      if (!mounted) return;
-      if (result != null && result.text.isNotEmpty) {
-        _composer.text = _composer.text.isEmpty ? result.text : '${_composer.text} ${result.text}';
-        setState(() => _dictationLabel = null);
-      } else {
-        setState(() => _dictationLabel = t(context, 'chat.dictation.failed'));
-      }
-      return;
-    }
-    await session.start();
-    if (!mounted) return;
-    setState(() {
-      _dictationLabel = session.status == DictationStatus.failed
-          ? t(context, 'chat.dictation.unavailable')
-          : t(context, 'chat.dictation.listening');
-    });
-  }
-
   Future<void> _stop() async {
     _poll?.cancel();
     _haptics.impact(HapticStrength.heavy);
@@ -330,134 +278,130 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
-    final inset = MediaQuery.viewInsetsOf(context);
-    final view = MediaQuery.viewPaddingOf(context);
     final navH = PushedNavBar.overlayHeight(context);
     return Scaffold(
       extendBody: true,
       extendBodyBehindAppBar: true,
-      resizeToAvoidBottomInset: !ios,
       backgroundColor: context.oc.pageBackground,
-      body: Stack(
-        children: [
-          ReverseChatList(
-            controller: _timeline,
-            scrollController: _scroll,
-            paddingBuilder: (length) {
-              final composerReserve = composerListReserve(
-                ios: ios,
-                viewBottom: view.bottom,
-                insetBottom: inset.bottom,
-                showScrollToBottom: length >= 2,
-              );
-              return EdgeInsets.fromLTRB(12, navH, 12, composerReserve + 12);
-            },
-            itemBuilder: (context, message, reverseIndex) {
-              return ChatTranscriptRow(
+      body: Builder(
+        builder: (context) {
+          final padding = MediaQuery.paddingOf(context);
+          return Stack(
+            children: [
+              ReverseChatList(
                 controller: _timeline,
-                messageId: message.id,
-                reverseIndex: reverseIndex,
-                busy: _busy,
-                speakingId: _speakingMessageId,
-                onSpeak: widget.appController == null ? null : _speak,
-                onPermission: widget.appController == null ? null : _replyPermission,
-              );
-            },
-          ),
-          ValueListenableBuilder<String?>(
-            valueListenable: _errorKey,
-            builder: (context, errorKey, _) {
-              if (errorKey == null) return const SizedBox.shrink();
-              return Positioned(
-                top: navH,
-                left: 8,
-                right: 8,
-                child: Text(t(context, errorKey), style: TextStyle(color: Theme.of(context).colorScheme.error)),
-              );
-            },
-          ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: ValueListenableBuilder<bool>(
-              valueListenable: _busy,
-              builder: (context, busy, _) {
-                return PushedNavBar(
-                  title: widget.session.title,
-                  subtitle: widget.session.subtitle,
-                  leadingKey: const Key('chat-back'),
-                  busy: busy,
-                  trailing: Pressable(
-                    haptic: HapticStrength.light,
-                    highlight: false,
-                    onPressed: () {},
-                    child: SizedBox(
-                      width: OcOptical.chatChip,
-                      height: OcOptical.chatChip,
-                      child: Center(
-                        child: OcGlassChip(
-                          size: OcOptical.chatChip,
-                          child: OcGlyph(
-                            OcGlyphKind.ellipsis,
-                            size: OcOptical.chatChipGlyph,
-                            strokeWidth: OcOptical.headerGlyphStrokeVisual,
-                            color: context.oc.foreground,
+                scrollController: _scroll,
+                paddingBuilder: (length) {
+                  final composerReserve = composerListReserve(
+                    ios: ios,
+                    paddingBottom: padding.bottom,
+                    showScrollToBottom: length >= 2,
+                  );
+                  return EdgeInsets.fromLTRB(12, navH, 12, composerReserve + 12);
+                },
+                itemBuilder: (context, message, reverseIndex) {
+                  return ChatTranscriptRow(
+                    controller: _timeline,
+                    messageId: message.id,
+                    reverseIndex: reverseIndex,
+                    busy: _busy,
+                    onPermission: widget.appController == null ? null : _replyPermission,
+                  );
+                },
+              ),
+              ValueListenableBuilder<String?>(
+                valueListenable: _errorKey,
+                builder: (context, errorKey, _) {
+                  if (errorKey == null) return const SizedBox.shrink();
+                  return Positioned(
+                    top: navH,
+                    left: 8,
+                    right: 8,
+                    child: Text(t(context, errorKey), style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  );
+                },
+              ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: _busy,
+                  builder: (context, busy, _) {
+                    return PushedNavBar(
+                      title: widget.session.title,
+                      subtitle: widget.session.subtitle,
+                      leadingKey: const Key('chat-back'),
+                      busy: busy,
+                      trailing: Pressable(
+                        haptic: HapticStrength.light,
+                        highlight: false,
+                        onPressed: () {},
+                        child: SizedBox(
+                          width: OcOptical.chatChip,
+                          height: OcOptical.chatChip,
+                          child: Center(
+                            child: OcGlassChip(
+                              size: OcOptical.chatChip,
+                              child: OcGlyph(
+                                OcGlyphKind.ellipsis,
+                                size: OcOptical.chatChipGlyph,
+                                strokeWidth: OcOptical.headerGlyphStrokeVisual,
+                                color: context.oc.foreground,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: ios ? 0 : inset.bottom,
-            child: ios
-                ? SizedBox(
-                    height: collapsedComposerOccupancy + MediaQuery.paddingOf(context).bottom,
-                    child: ValueListenableBuilder<bool>(
-                      valueListenable: _busy,
-                      builder: (context, busy, _) {
-                        return IosComposerHost(
-                          visible: true,
-                          warm: false,
-                          text: _composer.text,
-                          canSend: _composer.text.trim().isNotEmpty || _attachments.isNotEmpty,
-                          canAbort: busy,
-                          attachments: _attachments.map((item) => item.name).toList(),
-                          onSend: _send,
-                          onStop: _stop,
-                          onAttach: _attach,
-                          onDictate: _dictate,
-                          onText: (value) => _composer.text = value,
-                        );
-                      },
-                    ),
-                  )
-                : ListenableBuilder(
-                    listenable: Listenable.merge([_busy, _atLiveEdge, _timeline]),
-                    builder: (context, _) {
-                      return ComposerBar(
-                        controller: _composer,
-                        busy: _busy.value,
-                        attachments: _attachments,
-                        dictationLabel: _dictationLabel,
-                        showScrollToBottom: !_atLiveEdge.value || _timeline.length >= 2,
-                        onScrollToBottom: _jumpToLatest,
-                        onSend: _send,
-                        onStop: _stop,
-                        onAttach: _attach,
-                        onDictate: widget.appController?.dictation is UnavailableDictation ? null : _dictate,
-                        onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
-                      );
-                    },
-                  ),
-          ),
-        ],
+                    );
+                  },
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: ios
+                    ? SizedBox(
+                        height: collapsedComposerOccupancy + padding.bottom,
+                        child: ValueListenableBuilder<bool>(
+                          valueListenable: _busy,
+                          builder: (context, busy, _) {
+                            return IosComposerHost(
+                              visible: true,
+                              warm: false,
+                              text: _composer.text,
+                              canSend: _composer.text.trim().isNotEmpty || _attachments.isNotEmpty,
+                              canAbort: busy,
+                              attachments: _attachments.map((item) => item.name).toList(),
+                              onSend: _send,
+                              onStop: _stop,
+                              onAttach: _attach,
+                              onText: (value) => _composer.text = value,
+                            );
+                          },
+                        ),
+                      )
+                    : ListenableBuilder(
+                        listenable: Listenable.merge([_busy, _atLiveEdge, _timeline]),
+                        builder: (context, _) {
+                          return ComposerBar(
+                            controller: _composer,
+                            busy: _busy.value,
+                            attachments: _attachments,
+                            showScrollToBottom: !_atLiveEdge.value || _timeline.length >= 2,
+                            onScrollToBottom: _jumpToLatest,
+                            onSend: _send,
+                            onStop: _stop,
+                            onAttach: _attach,
+                            onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

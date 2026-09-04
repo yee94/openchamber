@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openchamber/data/app_controller.dart';
-import 'package:openchamber/data/dictation.dart';
 import 'package:openchamber/data/event_pipeline.dart';
 import 'package:openchamber/data/openchamber_api.dart';
 import 'package:openchamber/data/openchamber_http.dart';
@@ -46,7 +45,6 @@ void main() {
     final controller = AppController(
       store: MemorySecureStore(),
       api: OpenChamberApi(transport: transport),
-      dictation: MemoryDictation(),
     );
     await controller.bootstrap(skipDelay: true);
     await controller.connect(url: 'http://192.168.1.74:2606');
@@ -64,7 +62,6 @@ void main() {
     final controller = AppController(
       store: MemorySecureStore(),
       api: OpenChamberApi(transport: opened.client),
-      dictation: MemoryDictation(),
     );
     await controller.bootstrap(skipDelay: true);
     await controller.connect(url: 'http://192.168.1.74:2606', label: 'relay');

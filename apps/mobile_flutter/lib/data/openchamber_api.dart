@@ -694,14 +694,6 @@ class OpenChamberApi {
     return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.behaviorAgentsMd), bearer);
   }
 
-  Future<Object?> getDictationStatus({required Uri base, String? bearer}) {
-    return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.dictationStatus), bearer);
-  }
-
-  Future<Object?> getTtsStatus({required Uri base, String? bearer}) {
-    return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.ttsStatus), bearer);
-  }
-
   Future<String?> mintUrlToken({required Uri base, String? bearer}) async {
     final response = await transport.send(
       base,
@@ -712,38 +704,6 @@ class OpenChamberApi {
     }
     final token = response.map['token']?.toString().trim() ?? '';
     return token.isEmpty ? null : token;
-  }
-
-  Future<List<int>> speakTts({
-    required Uri base,
-    String? bearer,
-    required String text,
-    String voice = 'nova',
-    double speed = 0.9,
-  }) async {
-    final response = await transport.send(
-      base,
-      OpenChamberRequest(
-        method: 'POST',
-        path: OpenChamberPaths.ttsSpeak,
-        bearer: bearer,
-        rawResponse: true,
-        body: {
-          'text': text.trim(),
-          'voice': voice,
-          'speed': speed,
-          'summarize': false,
-        },
-        timeout: const Duration(seconds: 30),
-      ),
-    );
-    if (!response.ok) {
-      throw OpenChamberHttpException(response.status, OpenChamberPaths.ttsSpeak);
-    }
-    final body = response.body;
-    if (body is List<int>) return body;
-    if (body is String) return utf8.encode(body);
-    return const [];
   }
 
   Future<Object?> getSmallModel({required Uri base, String? bearer}) {
@@ -1031,8 +991,6 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   Object? magicPrompts = defaultTestMagicPrompts;
   Object? gitIdentities = defaultTestGitIdentities;
   Object? agentsMd = const {'content': 'Use official APIs. Do not invent endpoints.'};
-  Object? dictationStatus = defaultTestDictation;
-  Object? ttsStatus = const {'available': true};
   Object? smallModel = defaultTestSmallModel;
   Map<String, Object?> quotas = Map<String, Object?>.from(defaultTestQuotas);
 
@@ -1432,12 +1390,6 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
     {'id': 'git-1', 'name': 'Work', 'userName': 'Yee', 'userEmail': 'dev@example.com'},
   ];
 
-  static const Map<String, Object?> defaultTestDictation = {
-    'models': [
-      {'id': 'whisper-small', 'installed': true},
-    ],
-  };
-
   static const Map<String, Object?> defaultTestSmallModel = {
     'callableModels': {
       'anthropic': ['claude-haiku-4-5'],
@@ -1582,14 +1534,8 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         return OpenChamberResponse(status: catalogStatus, body: gitIdentities);
       case OpenChamberPaths.behaviorAgentsMd:
         return OpenChamberResponse(status: catalogStatus, body: agentsMd);
-      case OpenChamberPaths.dictationStatus:
-        return OpenChamberResponse(status: catalogStatus, body: dictationStatus);
-      case OpenChamberPaths.ttsStatus:
-        return OpenChamberResponse(status: catalogStatus, body: ttsStatus);
       case OpenChamberPaths.authUrlToken:
         return OpenChamberResponse(status: catalogStatus, body: {'token': 'oc_url_test', 'expiresAt': DateTime.now().millisecondsSinceEpoch + 60000});
-      case OpenChamberPaths.ttsSpeak:
-        return OpenChamberResponse(status: catalogStatus, body: utf8.encode('ID3fake-tts'));
       case OpenChamberPaths.smallModel:
         return OpenChamberResponse(status: catalogStatus, body: smallModel);
       default:

@@ -15,8 +15,6 @@ class ChatTranscriptRow extends StatelessWidget {
     required this.messageId,
     required this.reverseIndex,
     required this.busy,
-    required this.speakingId,
-    this.onSpeak,
     this.onPermission,
   });
 
@@ -24,8 +22,6 @@ class ChatTranscriptRow extends StatelessWidget {
   final String messageId;
   final int reverseIndex;
   final ValueNotifier<bool> busy;
-  final ValueNotifier<String?> speakingId;
-  final void Function(ChatMessage message)? onSpeak;
   final void Function(String requestId, String reply)? onPermission;
 
   @override
@@ -34,7 +30,7 @@ class ChatTranscriptRow extends StatelessWidget {
       valueListenable: controller.slotFor(messageId),
       builder: (context, message, _) {
         return ListenableBuilder(
-          listenable: Listenable.merge([busy, speakingId]),
+          listenable: busy,
           builder: (context, _) {
             ChatRebuildCounters.recordRowSlot(message.id);
             final isLastAssistant = !message.isUser && controller.isNewestAssistant(reverseIndex);
@@ -61,7 +57,6 @@ class ChatTranscriptRow extends StatelessWidget {
                           isLastAssistant: isLastAssistant,
                           isTurnLive: isTurnLive,
                           isStreaming: isStreamingAssistant,
-                          isSpeaking: speakingId.value == message.id,
                         ),
                       ),
                       UserTurnToolbar(message: message),
@@ -78,8 +73,6 @@ class ChatTranscriptRow extends StatelessWidget {
                 isLastAssistant: isLastAssistant,
                 isTurnLive: isTurnLive,
                 isStreaming: isStreamingAssistant,
-                isSpeaking: speakingId.value == message.id,
-                onSpeak: onSpeak == null ? null : () => onSpeak!(message),
                 onPermission: onPermission,
               ),
             );

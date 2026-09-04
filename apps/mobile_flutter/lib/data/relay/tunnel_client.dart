@@ -175,7 +175,7 @@ class MemoryRelayHost {
     lastWsQuery = payload is Map ? payload['query']?.toString() : null;
     _wsPaths[frame.streamId] = path;
     _sendFrame(encodeTunnelFrame(TunnelFrameType.wsOpened, frame.streamId, encodeJsonPayload({})));
-    if (path == OpenChamberPaths.dictationWs || path == OpenChamberPaths.globalEventWs) {
+    if (path == OpenChamberPaths.globalEventWs) {
       _sendFrame(
         encodeTunnelFrame(
           TunnelFrameType.wsText,
@@ -183,8 +183,6 @@ class MemoryRelayHost {
           Uint8List.fromList(utf8.encode(jsonEncode({'type': 'ready'}))),
         ),
       );
-    }
-    if (path == OpenChamberPaths.globalEventWs) {
       _sendFrame(
         encodeTunnelFrame(
           TunnelFrameType.wsText,
@@ -205,49 +203,14 @@ class MemoryRelayHost {
   }
 
   Future<void> _handleWsText(TunnelFrame frame) async {
-    final path = _wsPaths[frame.streamId];
     final text = utf8.decode(frame.payload);
-    if (path != OpenChamberPaths.dictationWs) {
-      _sendFrame(
-        encodeTunnelFrame(
-          TunnelFrameType.wsText,
-          frame.streamId,
-          Uint8List.fromList(utf8.encode('echo:$text')),
-        ),
-      );
-      return;
-    }
-    Map<String, Object?> message;
-    try {
-      final decoded = jsonDecode(text);
-      if (decoded is! Map) return;
-      message = Map<String, Object?>.from(decoded);
-    } catch (_) {
-      return;
-    }
-    final type = message['type']?.toString();
-    final id = message['dictationId']?.toString() ?? '';
-    if (type == 'start') {
-      _sendFrame(
-        encodeTunnelFrame(
-          TunnelFrameType.wsText,
-          frame.streamId,
-          Uint8List.fromList(utf8.encode(jsonEncode({'type': 'ack', 'dictationId': id}))),
-        ),
-      );
-    } else if (type == 'finish') {
-      _sendFrame(
-        encodeTunnelFrame(
-          TunnelFrameType.wsText,
-          frame.streamId,
-          Uint8List.fromList(utf8.encode(jsonEncode({
-            'type': 'final',
-            'dictationId': id,
-            'text': 'tunneled transcript',
-          }))),
-        ),
-      );
-    }
+    _sendFrame(
+      encodeTunnelFrame(
+        TunnelFrameType.wsText,
+        frame.streamId,
+        Uint8List.fromList(utf8.encode('echo:$text')),
+      ),
+    );
   }
 
   Future<void> _handleRequest(_HostHttp pending) async {
@@ -350,7 +313,7 @@ class TunnelWebSocket {
 
   final void Function(String text) _sendText;
   final Future<void> Function() _close;
-  // Non-broadcast so dictation `ready` is not dropped before OfficialDictationClient listens.
+  // Non-broadcast so the first `ready` is not dropped before the event client listens.
   final _incoming = StreamController<String>();
   final opened = Completer<void>();
 

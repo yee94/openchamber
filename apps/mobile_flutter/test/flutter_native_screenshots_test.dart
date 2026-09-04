@@ -17,7 +17,6 @@ import 'package:openchamber/features/shell/secondary_chrome.dart';
 import 'package:openchamber/features/shell/tab_scaffold.dart';
 import 'package:openchamber/features/splash/splash_screen.dart';
 import 'package:openchamber/l10n/app_strings.dart';
-import 'package:openchamber/data/dictation.dart';
 import 'package:openchamber/mobile/mobile_surface.dart';
 import 'package:openchamber/mobile/mobile_tab_page_header.dart';
 import 'package:openchamber/theme/app_theme.dart';
@@ -56,7 +55,6 @@ void main() {
     final controller = AppController(
       store: MemorySecureStore({localeStorageKey: 'zh-CN'}),
       api: OpenChamberApi(transport: transport),
-      dictation: UnavailableDictation(),
     );
     await controller.bootstrap(skipDelay: true);
     expect(controller.locale.languageCode, 'zh');
@@ -216,6 +214,7 @@ void main() {
     expect(find.byKey(const Key('settings-search')), findsOneWidget);
     expect(find.byType(MobileTabPageHeader), findsOneWidget);
     expect(find.byKey(const Key('settings-slug-appearance')), findsOneWidget);
+    expect(find.byKey(const Key('settings-slug-voice'), skipOffstage: false), findsNothing);
     expect(find.byKey(const Key('settings-slug-iosNativeUi'), skipOffstage: false), findsNothing);
     expect(find.textContaining('语言与主题'), findsNothing);
     expect(
@@ -289,6 +288,8 @@ void main() {
     expect(find.byKey(const Key('composer-send')), findsOneWidget);
     expect(tester.getSize(find.byKey(const Key('composer-send'))), const Size(OcOptical.sendRing, OcOptical.sendRing));
     expect(find.byKey(const Key('composer-dictate')), findsNothing);
+    expect(find.byKey(const Key('chat-tts-m-asst'), skipOffstage: false), findsNothing);
+    expect(find.text('朗读'), findsNothing);
     expect(find.text('Grok 4.6'), findsWidgets);
     expect(find.byKey(const Key('chat-role-badge')), findsWidgets);
     expect(find.text('Orchestrator'), findsWidgets);
