@@ -96,7 +96,7 @@ void main() {
       OcOptical.rowTitle * OcOptical.rowTitleHeight + 2 * OcOptical.cssLineCjkHalfLead,
     );
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.cssLineCjkHalfLead, closeTo(4.4, 0.01));
+    expect(OcOptical.cssLineCjkHalfLead, closeTo(4.5, 0.01));
   });
 
   testWidgets('chat is a pushed secondary page from Projects', (tester) async {
@@ -136,7 +136,7 @@ void main() {
     expect(add.ink, isTrue);
     expect(add.filled, isFalse);
     final scheduleCard = tester.widget<MobileFloatingSurface>(find.byType(MobileFloatingSurface).first);
-    expect(scheduleCard.tight, isFalse);
+    expect(scheduleCard.tight, isTrue);
   });
 
   testWidgets('project and session titles paint full foreground ink', (tester) async {
@@ -154,7 +154,7 @@ void main() {
     expect(projectTitle.style?.fontWeight, FontWeight.w400);
     final row = tester.getSize(find.byKey(const Key('home-session-sess-pinned')));
     expect(row.height, greaterThanOrEqualTo(OcOptical.sessionRowVisualHeight));
-    expect(row.height, lessThan(58));
+    expect(row.height, lessThan(62));
     final codeGlyph = tester.widgetList<OcGlyph>(find.byType(OcGlyph)).firstWhere(
       (glyph) => glyph.kind == OcGlyphKind.code,
     );

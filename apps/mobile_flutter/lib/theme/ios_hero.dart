@@ -24,8 +24,8 @@ class OcOptical {
   static const double rowTitleTracking = 1.35;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
-  /// Official project-shell row is 40. 4.4px CJK half-lead (per side)
-  /// opens Regular that still packed at 4.25. 40 + 4×4.4 = 57.6 —
+  /// Official project-shell row is 40. 4.5px CJK half-lead (per side)
+  /// opens Regular that still packed at 4.4. 40 + 4×4.5 = 58 —
   /// not 7.5 half-lead / 70px rows. No more tracking knobs.
   static const double sessionRowVisualHeight = 40 + 4 * cssLineCjkHalfLead;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
@@ -49,14 +49,14 @@ class OcOptical {
   /// 12px on authored foreground. Stem 2.0 / shade 0.6 + round join
   /// bloated a gray halo (~L84) around L32 cores. 1.05 / 0.22 + miter
   /// keeps Regular on foreground without the heavier 1.2 brick. Card
-  /// frost must sit behind the child. Half-lead 4.4 is title-band air
+  /// frost must sit behind the child. Half-lead 4.5 is title-band air
   /// (no more tracking knobs; no Medium CJK on review/CI).
   static const double sessionTitleStem = 1.05;
   static const double sessionTitleShade = 0.22;
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
-  /// 4.4 extra Flutter pixels open Regular CJK that still packed at 4.25.
-  static const double cssLineCjkHalfLead = 4.4;
+  /// 4.5 extra Flutter pixels open Regular CJK that still packed at 4.4.
+  static const double cssLineCjkHalfLead = 4.5;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
@@ -298,17 +298,17 @@ class OcOptical {
 
   /// Official scheduled status uses the project-shell glass disc (2.375rem).
   static const double scheduleStatus = leadingCircle;
-  /// Hit stays official 38. Paint 28 so leading check/pause is not a
-  /// massy coin beside the title (wake-1625).
-  static const double scheduleStatusVisual = 28;
+  /// Hit stays official 38. Paint 24 so leading check/pause is not a
+  /// massy coin beside the title (wake-1726).
+  static const double scheduleStatusVisual = 24;
   /// Official non-tab scheduled glyph is `size-3.5`; residual optical
-  /// paints 10 so the badge does not outweigh the segment track.
-  static const double scheduleStatusGlyph = 10;
+  /// paints 9 so the badge does not outweigh the segment track.
+  static const double scheduleStatusGlyph = 9;
   /// Schedule overflow `more-2` — slimmer than session 12.
   static const double scheduleMore = 10;
-  /// Quiet status polish: 12px check/pause at header visual stroke so
-  /// the 38 disc does not outweigh the card title.
-  static const double scheduleStatusGlyphStroke = headerGlyphStrokeVisual;
+  /// Quiet status polish: check/pause at dock visual stroke so the
+  /// 38 disc does not outweigh the card title.
+  static const double scheduleStatusGlyphStroke = dockGlyphStrokeVisual;
 
   /// Official `FileTypeIcon` mobile size `h-3 w-3` (12px).
   static const double fileTypeSize = 12;
