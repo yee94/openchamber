@@ -46,8 +46,8 @@ StrutStyle? ocCssLineBox(TextStyle? style) {
 /// Official CSS line-height: ink occupies `font-size`; extra half-leading
 /// sits above/below inside `font-size * line-height`. Flutter CJK paints
 /// past `font-size` into that half-leading, so [OcOptical.cssLineCjkHalfLead]
-/// is added each side (metric compensation). Title↔subtitle gap is
-/// [OcOptical.sessionTitleSubtitleGap].
+/// is added each side (metric compensation). Official 16/12 tokens and
+/// `gap-0.5` stay; do not invent gap.
 class OcCssLine extends StatelessWidget {
   const OcCssLine({
     super.key,

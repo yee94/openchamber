@@ -82,7 +82,7 @@ void main() {
     );
     expect(tester.getSize(find.byType(OcCssLine)).height, OcCssLine.boxHeight(title));
     expect(OcCssLine.boxHeight(title), OcOptical.rowTitle * OcOptical.rowTitleHeight + 2 * OcOptical.cssLineCjkHalfLead);
-    expect(OcOptical.sessionTitleSubtitleGap, 4);
+    expect(OcOptical.sessionTitleSubtitleGap, 2);
   });
 
   testWidgets('chat is a pushed secondary page from Projects', (tester) async {

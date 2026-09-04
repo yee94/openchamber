@@ -12,7 +12,7 @@ class OcOptical {
 
   /// Official `.oc-mobile-session-title` is 0.75rem / 1rem / −0.012em.
   /// `.oc-mobile-project-shell` sets `--oc-mobile-session-row-height` to
-  /// 2.5rem (40). Flutter CJK air uses [sessionRowVisualHeight] (48).
+  /// 2.5rem (40). Flutter CJK air uses [sessionRowVisualHeight].
   /// Ink is `font-size`; strut is `line-height`. Do not faux-bold CJK.
   static const double rowTitle = 12;
   /// Official CSS is −0.012em. Flutter letterSpacing packs CJK tighter than
@@ -21,12 +21,12 @@ class OcOptical {
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   /// Project-shell CSS min-height is 2.5rem (40). Flutter CJK paints past
-  /// `font-size` into the CSS half-leading, so the visual row is the
-  /// official root 2.875rem (46) plus the opened title↔subtitle gap.
+  /// `font-size` into the CSS half-leading, so the visual row is official
+  /// pads + 16/12 boxes + [cssLineCjkHalfLead] + `gap-0.5`.
   static const double sessionRowVisualHeight = 48;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
-  /// 5 + 19 + 4 + 15 + 5 = 48. Extra 3/line is [cssLineCjkHalfLead].
-  /// Do not grow icons.
+  /// 5 + 20 + 2 + 16 + 5 = 48. Extra 4/line is [cssLineCjkHalfLead].
+  /// Do not grow icons. Do not invent gap.
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
   static const double groupHeaderPadV = 10;
@@ -40,18 +40,18 @@ class OcOptical {
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
-  /// Official title/subtitle column is `gap-0.5` (2) between CSS line
-  /// boxes. Flutter CJK overflow ate that 2, so wake-0827 opens to
-  /// `gap-1` (4) — same as the project title column — after [OcCssLine]
-  /// half-leading still read Material-tight.
+  /// Official title/subtitle column is `gap-0.5` (2). Wake-0831 keeps
+  /// this; CJK air is [cssLineCjkHalfLead] inside the official 16/12
+  /// boxes, not an invented gap.
   /// Official title is `font-medium` / unread `font-semibold`. The review
   /// CJK face is Regular-only, so paint Regular — do not faux-bold.
-  static const double sessionTitleSubtitleGap = 4;
+  static const double sessionTitleSubtitleGap = 2;
   /// Extra half-leading each side of [OcCssLine] so Flutter CJK, which
   /// paints past `font-size` into the CSS 2px/1px half-leading, keeps
-  /// ink-to-box air. Official CSS box stays `fontSize × line-height`;
-  /// this is metric compensation (1.5 × 2 = 3px / line), not a new size.
-  static const double cssLineCjkHalfLead = 1.5;
+  /// ink-to-box air. Official CSS tokens stay 16/12; this is metric
+  /// compensation (2.0 × 2 = 4px / line). Wake-0831: tune half-leading
+  /// only — do not open gap-0.5.
+  static const double cssLineCjkHalfLead = 2.0;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].

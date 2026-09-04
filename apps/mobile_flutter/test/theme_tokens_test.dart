@@ -116,8 +116,8 @@ void main() {
     expect(OcOptical.projectTriggerGap, 7);
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
-    expect(OcOptical.sessionTitleSubtitleGap, 4);
-    expect(OcOptical.cssLineCjkHalfLead, 1.5);
+    expect(OcOptical.sessionTitleSubtitleGap, 2);
+    expect(OcOptical.cssLineCjkHalfLead, 2.0);
     expect(OcOptical.sessionLineLeading, closeTo(0.57, 0.001));
     expect(OcOptical.sessionLineLeading, greaterThan(0.48));
     expect(OcOptical.sessionLineLeading, lessThan(0.58));
