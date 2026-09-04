@@ -149,8 +149,7 @@ class MobileAssistantCard extends StatelessWidget {
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(1),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
+                      child: ClipOval(
                         child: AgentIdenticon(
                           seed: seed ?? name,
                           size: OcOptical.assistantAvatarVisual,
