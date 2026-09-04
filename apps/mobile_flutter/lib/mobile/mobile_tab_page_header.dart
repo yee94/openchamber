@@ -136,9 +136,8 @@ class MobileTabPageHeader extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: OcOptical.largeTitle,
-                                // Official is semibold. Review CJK is Regular-only —
-                                // w600 fills the 32px title into a blob.
-                                fontWeight: FontWeight.w400,
+                                // Official `.oc-mobile-root-page-title` is font-semibold.
+                                fontWeight: FontWeight.w600,
                                 letterSpacing: OcOptical.rootTitleTracking(t),
                                 height: OcOptical.largeTitleHeight,
                                 color: Theme.of(context).colorScheme.onSurface,

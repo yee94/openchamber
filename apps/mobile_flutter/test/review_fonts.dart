@@ -21,17 +21,12 @@ Future<void> loadReviewFonts() async {
       '/home/ubuntu/development/flutter/bin/cache/artifacts/material_fonts/Roboto-Medium.ttf',
     ],
   ]);
-  // DroidSansFallback Regular at 12px AA-washes to ~RGB 150 on cream
-  // (row-box p5 218–240, zero lum<120). WenQuanYi Micro Hei is still a
-  // Regular cut but has a real stem — PIL 12px: 263 lum<120 vs Droid 185.
-  // Official font-medium is PingFang/Noto Medium on device; goldens cannot
-  // invent that cut. Prefer Micro Hei, then Droid.
-  await _loadFamily('ReviewCjk', [
-    '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
-    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
-    '/usr/share/fonts/noto-cjk/NotoSansCJKsc-Regular.otf',
-    '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
-  ]);
+  // Official session titles are `font-medium` (PingFang / Noto Medium).
+  // Prefer Noto Sans CJK SC Regular+Medium+Bold so w500/w600 are real
+  // cuts — not a miter stem and not a synthesized blob on Micro Hei.
+  // Recapture hosts: `fonts-noto-cjk` + `fonts-noto-cjk-extra`.
+  // Fallback is WenQuanYi Regular, then Droid.
+  await _loadCjkFaces();
   await _loadFamily('RobotoReal', [
     '$flutterRoot/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
   ]);
@@ -55,6 +50,38 @@ Future<void> loadReviewFonts() async {
     await _loadBytes('CupertinoIcons', bundled);
     await _loadBytes('packages/cupertino_icons/CupertinoIcons', bundled);
   } catch (_) {}
+}
+
+const _cjkRegularCandidates = [
+  '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+  '/usr/share/fonts/noto-cjk/NotoSansCJKsc-Regular.otf',
+  '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
+  '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
+];
+
+const _cjkMediumCandidates = [
+  '/usr/share/fonts/opentype/noto/NotoSansCJK-Medium.ttc',
+  '/usr/share/fonts/noto-cjk/NotoSansCJKsc-Medium.otf',
+];
+
+const _cjkBoldCandidates = [
+  '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',
+  '/usr/share/fonts/noto-cjk/NotoSansCJKsc-Bold.otf',
+];
+
+Future<void> _loadCjkFaces() async {
+  final faces = <List<String>>[_cjkRegularCandidates];
+  if (_cjkMediumCandidates.any((path) => File(path).existsSync())) {
+    faces.add(_cjkMediumCandidates);
+  }
+  if (_cjkBoldCandidates.any((path) => File(path).existsSync())) {
+    faces.add(_cjkBoldCandidates);
+  }
+  if (faces.length > 1) {
+    await _loadFaces('ReviewCjk', faces);
+    return;
+  }
+  await _loadFamily('ReviewCjk', _cjkRegularCandidates);
 }
 
 Future<void> _loadFamily(String family, List<String> candidates) async {
@@ -107,8 +134,61 @@ ByteData _asSfnt(Uint8List raw) {
   return ByteData.sublistView(raw);
 }
 
-Uint8List _extractTtcFace(Uint8List ttc, [int index = 0]) {
+/// Noto CJK TTC packs JP/KR/SC/TC/HK. Goldens are zh-CN — pick SC.
+int _ttcFaceIndex(Uint8List ttc, {String prefer = 'CJK SC'}) {
   final numFonts = _u32(ttc, 8);
+  for (var i = 0; i < numFonts; i++) {
+    final offset = _u32(ttc, 12 + i * 4);
+    if (_ttcName(ttc, offset).contains(prefer)) return i;
+  }
+  return 0;
+}
+
+String _ttcName(Uint8List ttc, int offset) {
+  if (offset + 12 > ttc.length) return '';
+  final numTables = _u16(ttc, offset + 4);
+  for (var i = 0; i < numTables; i++) {
+    final entry = offset + 12 + i * 16;
+    if (entry + 16 > ttc.length) break;
+    final tag = String.fromCharCodes(ttc.sublist(entry, entry + 4));
+    if (tag != 'name') continue;
+    final tableOffset = _u32(ttc, entry + 8);
+    if (tableOffset + 6 > ttc.length) return '';
+    final count = _u16(ttc, tableOffset + 2);
+    final storage = tableOffset + _u16(ttc, tableOffset + 4);
+    final names = StringBuffer();
+    for (var j = 0; j < count; j++) {
+      final rec = tableOffset + 6 + j * 12;
+      if (rec + 12 > ttc.length) break;
+      final platform = _u16(ttc, rec);
+      final nameId = _u16(ttc, rec + 6);
+      final length = _u16(ttc, rec + 8);
+      final nameOffset = _u16(ttc, rec + 10);
+      if (nameId != 1 && nameId != 4 && nameId != 16) continue;
+      if (platform != 0 && platform != 3) continue;
+      final start = storage + nameOffset;
+      final end = start + length;
+      if (end > ttc.length) continue;
+      try {
+        names.write(String.fromCharCodes(_u16beChars(ttc.sublist(start, end))));
+      } catch (_) {}
+    }
+    return names.toString();
+  }
+  return '';
+}
+
+List<int> _u16beChars(Uint8List raw) {
+  final out = <int>[];
+  for (var i = 0; i + 1 < raw.length; i += 2) {
+    out.add((raw[i] << 8) | raw[i + 1]);
+  }
+  return out;
+}
+
+Uint8List _extractTtcFace(Uint8List ttc, [int? index]) {
+  final numFonts = _u32(ttc, 8);
+  index ??= _ttcFaceIndex(ttc);
   if (index >= numFonts) {
     return ttc;
   }

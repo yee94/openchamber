@@ -234,7 +234,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                       stem: OcOptical.sessionTitleStem,
                       style: TextStyle(
                         fontSize: OcOptical.projectTitle,
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.w600,
                         letterSpacing: OcOptical.projectTitleTracking,
                         height: OcOptical.projectTitleHeight,
                         color: context.oc.foreground,

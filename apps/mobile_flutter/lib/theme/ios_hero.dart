@@ -19,8 +19,7 @@ class OcOptical {
   static const double rowTitle = 12;
   /// Official CSS is −0.012em. Flutter Regular CJK still packs tighter
   /// than the WebView — 1.42 opens the 12px band that packed at 1.35.
-  /// Stay under 1.5. Stem/shade stay CJK-only miter. Latin is real Medium.
-  /// No Medium CJK cut on review/CI. Official 16/12 boxes stay.
+  /// Stay under 1.5. Do not pile tracking. Official 16/12 boxes stay.
   static const double rowTitleTracking = 1.42;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
@@ -44,11 +43,10 @@ class OcOptical {
   static const double sessionRowPadRight = 2;
   /// Official title/subtitle column is `gap-0.5` (2). Keep that; do not
   /// invent extra title↔meta gap or 15px empty air per line.
-  /// Official title is `font-medium` / unread `font-semibold`. Review CJK
-  /// has no Medium cut. A same-color miter stem (0.28–1.05) still read
-  /// as a brick vs README light air — fill-only Regular, no stem/shade.
-  /// Latin keeps ReviewSans Medium. Do not pile half-lead.
-  /// Half-lead 4.7 + tracking 1.42 stay (no Medium CJK).
+  /// Official title is `font-medium` / unread `font-semibold`. Fill-only
+  /// at that weight — PingFang/Noto Medium is the cut. Do not revive a
+  /// miter stem and do not pile half-lead. Half-lead 4.7 + tracking 1.42
+  /// stay. Latin is ReviewSans Medium.
   static const double sessionTitleStem = 0;
   static const double sessionTitleShade = 0;
   static const double sessionTitleSubtitleGap = 2;

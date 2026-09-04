@@ -97,9 +97,8 @@ class MobileProjectCard extends StatelessWidget {
                       stem: OcOptical.sessionTitleStem,
                       style: TextStyle(
                         fontSize: compact ? OcOptical.rowTitle : OcOptical.projectTitle,
-                        // Official is font-semibold. Review CJK is Regular-only —
-                        // w600 synthesizes a blob that fills the title box.
-                        fontWeight: FontWeight.w400,
+                        // Official is font-semibold.
+                        fontWeight: FontWeight.w600,
                         letterSpacing: compact ? OcOptical.rowTitleTracking : OcOptical.projectTitleTracking,
                         height: compact ? OcOptical.rowTitleHeight : OcOptical.projectTitleHeight,
                         color: context.oc.foreground,
