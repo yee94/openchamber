@@ -105,7 +105,7 @@ void main() {
     expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
     expect(OcOptical.rowTitleHeight, lessThan(1.42));
     expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);
-    expect(OcOptical.sessionRowVisualHeight, 54);
+    expect(OcOptical.sessionRowVisualHeight, 56);
     expect(OcOptical.sessionRowVisualHeight, greaterThan(OcOptical.sessionRowHeight));
     expect(OcOptical.sessionRowVisualHeight, greaterThanOrEqualTo(36));
     expect(OcOptical.sessionRowPadV, 5);
@@ -117,7 +117,7 @@ void main() {
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.cssLineCjkHalfLead, 3.5);
+    expect(OcOptical.cssLineCjkHalfLead, 4.0);
     expect(OcOptical.sessionLineLeading, closeTo(0.57, 0.001));
     expect(OcOptical.sessionLineLeading, greaterThan(0.48));
     expect(OcOptical.sessionLineLeading, lessThan(0.58));
