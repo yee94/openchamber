@@ -18,9 +18,10 @@ class OcOptical {
   /// Ink is `font-size`; strut is `line-height`. Do not faux-bold CJK.
   static const double rowTitle = 12;
   /// Official CSS is −0.012em. Flutter Regular CJK still packs tighter
-  /// than the WebView at 0 — 0.35 opens the 12px band so stems are not
-  /// a tight mass. Keep the 16/12 CSS boxes.
-  static const double rowTitleTracking = 0.35;
+  /// than the WebView at 0.35 — 0.8 opens the 12px band so stems are
+  /// not a tight mass (~0.067em). Keep the 16/12 CSS boxes. Not more
+  /// stem/shade (that reintroduces the L84 halo).
+  static const double rowTitleTracking = 0.8;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   /// Official project-shell row is 40. 2.5px CJK half-lead (per side)
@@ -94,8 +95,9 @@ class OcOptical {
   static const double entityTitleHeight = 1.25;
   static const double projectTitle = 14;
   /// Official entity title is −0.024em. Flutter Regular CJK packs
-  /// tighter than the WebView — paint 0 (session-row precedent).
-  static const double projectTitleTracking = 0;
+  /// tighter than the WebView at 0 — 0.55 opens 14px card titles
+  /// (session-row precedent). Official 18/14 box unchanged.
+  static const double projectTitleTracking = 0.55;
   static const double projectTitleHeight = 18 / 14;
 
   /// `.oc-mobile-entity-meta` 0.75rem / 0.9375rem.
