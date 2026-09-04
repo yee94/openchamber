@@ -23,9 +23,9 @@ class OcOptical {
   /// Project-shell CSS min-height is 2.5rem (40). Flutter CJK paints past
   /// `font-size` into the CSS half-leading, so the visual row is official
   /// pads + 16/12 boxes + [cssLineCjkHalfLead] + `gap-0.5`.
-  static const double sessionRowVisualHeight = 56;
+  static const double sessionRowVisualHeight = 58;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
-  /// 5 + 24 + 2 + 20 + 5 = 56. Extra 8/line is [cssLineCjkHalfLead].
+  /// 5 + 25 + 2 + 21 + 5 = 58. Extra 9/line is [cssLineCjkHalfLead].
   /// Do not grow icons. Do not invent gap.
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
@@ -49,10 +49,10 @@ class OcOptical {
   /// Extra half-leading each side of [OcCssLine] so Flutter CJK, which
   /// paints past `font-size` into the CSS 2px/1px half-leading, keeps
   /// ink-to-box air. Official CSS tokens stay 16/12; this is metric
-  /// compensation (4.0 × 2 = 8px / line). Wake-0854: still tight after
-  /// 3.5 — tune half-leading only, keep gap-0.5. Search glyph-only.
+  /// compensation (4.5 × 2 = 9px / line). Wake-0902: still packed after
+  /// 4.0 — tune half-leading only, keep gap-0.5. Search glyph-only.
   /// Dock stays /55 mix-only.
-  static const double cssLineCjkHalfLead = 4.0;
+  static const double cssLineCjkHalfLead = 4.5;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
