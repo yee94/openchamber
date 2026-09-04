@@ -669,8 +669,10 @@ THEME OK. Do **not** pile session half-lead 3.2, card 3.0, tracking
 1.46, or stroke 0.28. Do **not** re-widen. Do **not** nibble plates
 **28** / glyphs **14**. Far stays official **10/24/-6 @ 10%**. Hits
 **40**. `+` stays official 40. Search frost plate **36 → 34** (disc
-scale; not the 32 vanish, not a glass clone). Recapture 02
-(+scrolled/dark); 04 only if schedule chrome moves.
+scale; not the 32 vanish, not a glass clone). Recapture MAE vs
+`04783aa92` ~0.004 / 0.004 / 0.09 — below tester noise; goldens
+unrestored (`02=f493f9d6` / scrolled `a50c1d20` / dark `46822d2d`).
+04 unrestored. WidgetTester cannot prove the 2px plate.
 **Not 精致.**
 
 | File | Screen |
