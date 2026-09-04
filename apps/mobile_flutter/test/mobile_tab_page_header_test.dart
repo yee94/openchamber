@@ -36,6 +36,7 @@ void main() {
 
     expect(find.byType(MobileTabPageHeader), findsOneWidget);
     expect(find.byKey(const Key('mobile-tab-page-header-slot')), findsOneWidget);
+    expect(find.byKey(const Key('mobile-tab-page-header-leading-gap')), findsOneWidget);
     expect(find.byKey(const Key('mobile-tab-page-header-spacer')), findsOneWidget);
     expect(find.byKey(const Key('projects-attention-strip')), findsNothing);
 
@@ -45,17 +46,17 @@ void main() {
       tester.getSize(find.byKey(const Key('mobile-tab-page-header-slot'))).height,
       expanded.height,
     );
+    expect(tester.getSize(find.byKey(const Key('mobile-tab-page-header-leading-gap'))).height, OcTokens.pageGap);
     expect(tester.getSize(find.byKey(const Key('mobile-tab-page-header-spacer'))).height, OcOptical.collapsingExpandShift);
     expect(tester.getSize(find.byKey(const Key('mobile-tab-page-header-clearance'))).height, OcTokens.pageGap);
+    expect(MobileTabPageHeader.titleBandAir, 50);
     expect(OcOptical.headerRestPeek, 0);
 
     final headerRect = tester.getRect(find.byType(MobileTabPageHeader));
     final rowAtRest = tester.getTopLeft(find.text('row-0')).dy;
     expect(
       rowAtRest,
-      greaterThanOrEqualTo(
-        headerRect.bottom + OcOptical.collapsingExpandShift + MobileTabPageHeader.titleClearanceHeight - 0.5,
-      ),
+      greaterThanOrEqualTo(headerRect.bottom + MobileTabPageHeader.titleBandAir - 0.5),
     );
 
     final titleAtRest = tester.widget<Transform>(find.byKey(const Key('mobile-tab-page-title')));
@@ -112,6 +113,13 @@ void main() {
 
     expect(OcOptical.headerRestPeek, 0);
     expect(OcOptical.headerRestPeek, greaterThanOrEqualTo(0));
+    final leadingGaps = tester.widgetList<SizedBox>(
+      find.byKey(const Key('mobile-tab-page-header-leading-gap')),
+    );
+    expect(leadingGaps.length, 4);
+    for (final gap in leadingGaps) {
+      expect(gap.height, OcTokens.pageGap);
+    }
     final spacers = tester.widgetList<SizedBox>(
       find.byKey(const Key('mobile-tab-page-header-spacer')),
     );
@@ -127,6 +135,7 @@ void main() {
       expect(clearance.height, OcTokens.pageGap);
       expect(clearance.height, greaterThan(OcOptical.headerRestPeek));
     }
+    expect(MobileTabPageHeader.titleBandAir, OcTokens.pageGap + OcOptical.collapsingExpandShift + OcTokens.pageGap);
   });
 
   testWidgets('detail nav consumes viewPadding.top and keeps a 56px band', (tester) async {

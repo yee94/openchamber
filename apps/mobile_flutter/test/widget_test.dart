@@ -60,6 +60,13 @@ void main() {
     for (final spacer in spacers) {
       expect(spacer.height, OcOptical.collapsingExpandShift);
     }
+    final leadingGaps = tester.widgetList<SizedBox>(
+      find.byKey(const Key('mobile-tab-page-header-leading-gap'), skipOffstage: false),
+    );
+    expect(leadingGaps.length, 4);
+    for (final gap in leadingGaps) {
+      expect(gap.height, OcTokens.pageGap);
+    }
     expect(OcOptical.headerRestPeek, 0);
     expect(find.byKey(const Key('dock-capsule')), findsOneWidget);
     final capsule = tester.getSize(find.byKey(const Key('dock-capsule')));
@@ -104,7 +111,7 @@ void main() {
       OcCssLine.boxHeight(title),
       OcOptical.rowTitle * OcOptical.rowTitleHeight + 2 * OcOptical.cssLineCjkHalfLead,
     );
-    expect(OcOptical.sessionTitleSubtitleGap, 28);
+    expect(OcOptical.sessionTitleSubtitleGap, 2);
     expect(OcOptical.cssLineCjkHalfLead, closeTo(4.7, 0.01));
   });
 

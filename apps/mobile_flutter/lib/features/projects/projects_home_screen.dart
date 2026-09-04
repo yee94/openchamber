@@ -132,8 +132,8 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
           ),
           children: [
             // Large-title 空档 is shared on MobileTabPageScaffold
-            // (expand-shift spacer + official page-gap). pageProjectGap
-            // is card-stack spacing on each project surface, not here.
+            // (20 + 10 + 20). pageProjectGap is card-stack spacing on
+            // each project surface, not here.
             if (_searchOpen)
               Padding(
                 padding: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 12),

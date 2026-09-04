@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openchamber/mobile/mobile_tab_page_header.dart';
 import 'package:openchamber/theme/app_theme.dart';
 import 'package:openchamber/theme/ios_chrome.dart';
 import 'package:openchamber/theme/ios_hero.dart';
@@ -143,7 +144,7 @@ void main() {
     expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
     expect(OcOptical.rowTitleHeight, lessThan(1.42));
     expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);
-    expect(OcOptical.sessionRowVisualHeight, closeTo(84.8, 0.01));
+    expect(OcOptical.sessionRowVisualHeight, closeTo(58.8, 0.01));
     expect(OcOptical.sessionRowVisualHeight, greaterThanOrEqualTo(40));
     expect(OcOptical.sessionRowVisualHeight, lessThan(OcOptical.sessionRowVisualHeight + 1));
     expect(OcOptical.sessionRowPadV, 5);
@@ -154,7 +155,7 @@ void main() {
     expect(OcOptical.projectTriggerGap, 7);
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
-    expect(OcOptical.sessionTitleSubtitleGap, 28);
+    expect(OcOptical.sessionTitleSubtitleGap, 2);
     expect(OcOptical.sessionTitleStem, 0);
     expect(OcOptical.sessionTitleStem, lessThan(0.15));
     expect(OcOptical.sessionTitleShade, 0);
@@ -345,6 +346,11 @@ void main() {
     expect(OcOptical.headerRestPeek, 0);
     expect(OcOptical.headerRestPeek, lessThan(OcOptical.collapsingExpandShift));
     expect(OcTokens.pageGap, 20);
+    expect(MobileTabPageHeader.titleBandAir, 50);
+    expect(
+      OcTokens.pageGap + OcOptical.collapsingExpandShift + OcTokens.pageGap,
+      MobileTabPageHeader.titleBandAir,
+    );
     expect(OcOptical.settingsGroupRadius, 16);
     expect(OcOptical.settingsRowMinHeight, 52);
     expect(OcOptical.settingsSearchMinHeight, 44);

@@ -24,9 +24,9 @@ class OcOptical {
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   /// Official project-shell row is 40. 4.7px CJK half-lead (per side)
-  /// plus title↔subtitle air. Wake-0114 tightened 34→28 toward README
-  /// session-row density (official column is still gap-0.5).
-  /// 40 + 4×4.7 + 26 = 84.8 — gap residual, not 7.5 half-lead / 70.
+  /// plus official title↔subtitle `gap-0.5` (2). Wake-0123 resets the
+  /// inflate loop — do not invent 28/40/52 subtitle air.
+  /// 40 + 4×4.7 + 0 = 58.8.
   static const double sessionRowVisualHeight =
       40 + 4 * cssLineCjkHalfLead + (sessionTitleSubtitleGap - 2);
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
@@ -44,18 +44,17 @@ class OcOptical {
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
-  /// Official title/subtitle column is `gap-0.5` (2). Wake-0114 tightened
-  /// 34→28 toward README session-row density without jumping to official
-  /// 2. Do not re-widen. Do not touch project/schedule title↔meta 54.
-  /// Far stays 10/24 @ 10% with WidgetTester spread -2. Do not invent
-  /// Material shadows. Do not pile another +2. Not a half-lead pile
-  /// and not 7.5/70.
+  /// Official title/subtitle column is `gap-0.5` (2). Wake-0123 resets
+  /// the inflate loop to that official 2. Do not re-widen. Do not touch
+  /// project/schedule title↔meta 54. Far stays 10/24 @ 10% with
+  /// WidgetTester spread -2. Do not invent Material shadows. Not a
+  /// half-lead pile and not 7.5/70.
   /// Official title is `font-medium` / unread `font-semibold`. Fill-only
   /// at that weight. Do not revive a miter stem. Half-lead 4.7 + tracking
   /// 1.42 stay. Latin is ReviewSans Medium.
   static const double sessionTitleStem = 0;
   static const double sessionTitleShade = 0;
-  static const double sessionTitleSubtitleGap = 28;
+  static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
   /// 4.7 extra Flutter pixels open Regular CJK that still packed at 4.6.
   /// Stay under the 4.75 ceiling — do not invent 7.5/70.
@@ -78,8 +77,8 @@ class OcOptical {
   static const double projectGroupGap = 10;
   /// Card-stack gap between project shells. Official `MobileProjectsHome`
   /// `gap-5` is 20; 24 is `gap-6` between cards only. Large-title 空档 is
-  /// the shared expand-shift spacer + [OcTokens.pageGap] on
-  /// [MobileTabPageScaffold] — do not use this as title clearance.
+  /// shared 20+10+20 on [MobileTabPageScaffold] — do not use this as
+  /// title clearance.
   static const double pageProjectGap = 24;
   /// `.oc-mobile-entity-meta` gap 0.3125rem.
   static const double entityMetaGap = 5;

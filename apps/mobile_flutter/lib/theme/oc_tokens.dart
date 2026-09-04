@@ -382,8 +382,8 @@ class OcTokens extends ThemeExtension<OcTokens> {
   static const double projectActionSize = 36;
 
   /// Root `--oc-mobile-session-row-height` = 2.875rem. Project-shell CSS
-  /// is 2.5rem (40); [OcOptical.sessionRowVisualHeight] is 84.8 with a
-  /// 4.7px CJK half-lead plus Medium title↔subtitle air — gap residual,
+  /// is 2.5rem (40); [OcOptical.sessionRowVisualHeight] is 58.8 with a
+  /// 4.7px CJK half-lead plus official title↔subtitle `gap-0.5` (2),
   /// not 7.5 half-lead / 70.
   static const double sessionRowHeight = 46;
 

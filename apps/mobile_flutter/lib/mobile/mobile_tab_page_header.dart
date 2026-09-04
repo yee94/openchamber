@@ -47,6 +47,16 @@ class MobileTabPageHeader extends StatelessWidget {
     height: expandShift,
   );
 
+  /// Official `MobileTabPageHeader` is a fragment (sticky header + 10px
+  /// spacer). `MobileProjectsHome` / `.oc-mobile-tab-page` `gap-5` (20)
+  /// sits between each flattened flex item: header → 20 → spacer → 20 →
+  /// content. Structural air after the header box is 20+10+20 = 50.
+  /// [OcOptical.pageProjectGap] is card-stack only. `headerRestPeek` stays 0.
+  static const leadingPageGap = SizedBox(
+    key: Key('mobile-tab-page-header-leading-gap'),
+    height: OcTokens.pageGap,
+  );
+
   /// Official `.oc-mobile-tab-page` / Projects `gap-5` after the spacer
   /// (`--oc-mobile-page-gap` = 1.25rem). Shared large-title 空档 for every
   /// root tab — not [OcOptical.pageProjectGap] card-stack spacing.
@@ -56,6 +66,9 @@ class MobileTabPageHeader extends StatelessWidget {
     key: Key('mobile-tab-page-header-clearance'),
     height: titleClearanceHeight,
   );
+
+  /// Official flattened fragment + `gap-5`: 20 + 10 + 20.
+  static const double titleBandAir = OcTokens.pageGap + expandShift + OcTokens.pageGap;
 
   static double fadeHeight(double safeAreaTop) => OcHeaderFade.heightFor(safeAreaTop);
 
