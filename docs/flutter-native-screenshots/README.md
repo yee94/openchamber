@@ -911,3 +911,16 @@ recapture note. Tip-tree goldens already BYTE-IDENTICAL to
 wake-0622 (`03=3a881f07`). No second recapture. Header stays
 official transparent `MobileTabPageHeader`. Press DONE.
 **精致: 还没有.**
+
+**2026-09-04 wake-0634 (identical `7599aff50` pixels):**
+STRUCTURE PASS. THEME OK. Yee bars (type tight / icons large /
+search/+ umbra / dock glass-shadow) score unread goldens.
+Official knobs already locked: session `gap-0.5` **2**, title↔meta
+**4**, Latin −0.012em/−0.024em, CJK 1.46/1.02 only, search glyph
+**14** (size-5 was tester-invisible), discs 34/28/24, search
+through **0.16** / no 8/20 (that coined the plate), dock
+glass-shadow near-pair only (8/20 was a cream stadium), far
+**10/24/-6 @ 10%**. Do **not** rewind. Do **not** invent gap /
+tracking / umbra / frost clones. Press DONE. No recapture.
+Honest leftover is live PingFang + UIKit `UIGlassEffect`.
+**精致: 还没有.**
