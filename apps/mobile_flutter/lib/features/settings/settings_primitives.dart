@@ -144,7 +144,7 @@ class SettingsNavRow extends StatelessWidget {
                 OcGlyph(
                   icon!,
                   size: OcOptical.settingsNavIcon,
-                  strokeWidth: OcOptical.listGlyphStroke,
+                  strokeWidth: OcOptical.settingsGlyphStrokeVisual,
                   color: tokens.foreground,
                 ),
                 const SizedBox(width: OcOptical.settingsRowGap),
@@ -180,7 +180,8 @@ class SettingsNavRow extends StatelessWidget {
               trailing ??
                   OcGlyph(
                     OcGlyphKind.chevronRight,
-                    size: 16,
+                    size: OcOptical.settingsNavIcon,
+                    strokeWidth: OcOptical.settingsGlyphStrokeVisual,
                     color: tokens.mutedForeground.withValues(alpha: 0.6),
                   ),
             ],
@@ -226,7 +227,12 @@ class SettingsSearchField extends StatelessWidget {
               hintStyle: TextStyle(color: tokens.mutedForeground.withValues(alpha: 0.7)),
               prefixIcon: Padding(
                 padding: const EdgeInsets.only(left: 10, right: 4),
-                child: OcGlyph(OcGlyphKind.search, size: OcOptical.searchFieldGlyph, color: tokens.mutedForeground),
+                child: OcGlyph(
+                  OcGlyphKind.search,
+                  size: OcOptical.searchFieldGlyph,
+                  strokeWidth: OcOptical.settingsGlyphStrokeVisual,
+                  color: tokens.mutedForeground,
+                ),
               ),
               prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 18),
               suffixIcon: query.isEmpty
@@ -234,7 +240,12 @@ class SettingsSearchField extends StatelessWidget {
                   : IconButton(
                       tooltip: t(context, 'settings.search.clear'),
                       onPressed: onClear,
-                      icon: OcGlyph(OcGlyphKind.xmark, size: 14, color: tokens.mutedForeground),
+                      icon: OcGlyph(
+                        OcGlyphKind.xmark,
+                        size: 14,
+                        strokeWidth: OcOptical.settingsGlyphStrokeVisual,
+                        color: tokens.mutedForeground,
+                      ),
                     ),
               filled: false,
               fillColor: Colors.transparent,

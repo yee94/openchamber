@@ -373,6 +373,7 @@ class _EntityEditorSettingsPageState extends State<EntityEditorSettingsPage> {
                   leading: OcGlyph(
                     OcGlyphKind.plus,
                     size: OcOptical.settingsNavIcon,
+                    strokeWidth: OcOptical.settingsGlyphStrokeVisual,
                     color: context.oc.foreground,
                   ),
                   title: Text(t(context, 'settings.editor.create')),

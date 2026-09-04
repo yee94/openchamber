@@ -18,16 +18,16 @@ class OcOptical {
   /// Ink is `font-size`; strut is `line-height`. Do not faux-bold CJK.
   static const double rowTitle = 12;
   /// Official CSS is −0.012em. Flutter Regular CJK still packs tighter
-  /// than the WebView at 1.25 — 1.35 opens the 12px band (~0.113em).
-  /// Keep the 16/12 CSS boxes. Stem/shade stay CJK-only miter (Latin
-  /// is real Medium). Row stays 51 — do not add more half-lead.
+  /// than the WebView — tracking stays 1.35 (do not chase more letter-
+  /// spacing). Stem/shade stay CJK-only miter. Latin is real Medium.
+  /// No Medium CJK cut on review/CI; open half-lead instead of tracking.
   static const double rowTitleTracking = 1.35;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
-  /// Official project-shell row is 40. 2.75px CJK half-lead (per side)
-  /// opens 12px title/subtitle without leaving the 40-class — never
-  /// 7.5 half-lead / 70px rows.
-  static const double sessionRowVisualHeight = 51;
+  /// Official project-shell row is 40. 3.5px CJK half-lead (per side)
+  /// opens the still-cramped Regular title band. 40 + 4×3.5 = 54 —
+  /// not 7.5 half-lead / 70px rows.
+  static const double sessionRowVisualHeight = 54;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
@@ -50,13 +50,14 @@ class OcOptical {
   /// bloated a gray halo (~L84) around L32 cores. 1.2 / 0.28 + miter
   /// is the Medium-weight family without fake-bold bloom. Card frost
   /// must sit behind the child — wrapping ink in `floatSurface` 0.45
-  /// floors cores at ~L 129. Not more half-lead (row already 51).
+  /// floors cores at ~L 129. Half-lead 3.5 is the residual title-band
+  /// air (no more tracking knobs).
   static const double sessionTitleStem = 1.2;
   static const double sessionTitleShade = 0.28;
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
-  /// 2.75 extra Flutter pixels open Regular CJK without leaving ~40 density.
-  static const double cssLineCjkHalfLead = 2.75;
+  /// 3.5 extra Flutter pixels open Regular CJK that still packed at 2.75.
+  static const double cssLineCjkHalfLead = 3.5;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
@@ -201,6 +202,9 @@ class OcOptical {
   static const double settingsSearchMinHeight = 44;
   /// Official nav `Icon` `h-4 w-4`.
   static const double settingsNavIcon = 16;
+  /// Official settings stroke is 1.5. Flutter round-cap dpr-3 bloom;
+  /// paint the header visual so 16px nav glyphs are not chunky bricks.
+  static const double settingsGlyphStrokeVisual = headerGlyphStrokeVisual;
 
   /// `.oc-mobile-root-page-title` letter-spacing: −0.04em + 0.02em × collapse.
   static double rootTitleTracking(double collapse) =>
@@ -217,15 +221,14 @@ class OcOptical {
   /// Flutter round-cap bloom at dpr 3; paint under 2 so slim filled-medium
   /// 23px stays delicate — not bricks, not hairlines.
   static const double dockGlyphStroke = 2;
-  /// Official medium is 2; Flutter round-cap bloom at dpr 3. Paint under
-  /// 1 so calendar/gear stay filled-medium sprites, not bricks.
-  static const double dockGlyphStrokeVisual = 0.56;
-  /// Folder / sparkles stay official medium stroke but paint lighter
-  /// than calendar/gear so the 23px outline is not a brick.
-  static const double dockStrokeGlyphStrokeVisual = 0.50;
-  /// Official filled-medium 23px sprites: folder / sparkles / calendar
-  /// grid / holed gear. Not hairline outlines and not brick mass.
-  static const bool dockGlyphFillBodies = true;
+  /// Official medium is 2; Flutter round-cap bloom at dpr 3. Paint the
+  /// header visual so 23px outline-medium is slim, not a brick.
+  static const double dockGlyphStrokeVisual = 0.48;
+  /// Folder / sparkles stay a hair lighter than calendar/gear.
+  static const double dockStrokeGlyphStrokeVisual = 0.44;
+  /// Official dock `Icon weight="medium"` is outline, not filled bodies.
+  /// Filling calendar/gear at dpr 3 reads as chunky bricks.
+  static const bool dockGlyphFillBodies = false;
   static const bool dockSelectedFullSlot = true;
   /// Official selected class is `bg-interactive-selection/55`.
   /// Mix only (no nested frost) so the 58×r29 cell is a through-wash.
@@ -308,8 +311,10 @@ class OcOptical {
   /// Flutter round-cap bloom at 12px; paint under official 1.5.
   static const double fileTypeStrokeVisual = headerGlyphStrokeVisual;
   static const double fileTypeMark = 7;
-  static const double fileRowPadV = 3;
-  static const double fileRowHeight = 24;
+  /// Official mobile turn-changes row is `h-6` (24) / `leading-none`.
+  /// WidgetTester packs that band — open toward desktop `h-7` (28).
+  static const double fileRowPadV = 5;
+  static const double fileRowHeight = 28;
   static const double fileChrome = 11;
 
   /// Official mobile composer textarea `py-2.5` (10).

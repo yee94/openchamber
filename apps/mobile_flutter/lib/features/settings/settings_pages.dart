@@ -170,6 +170,7 @@ class InstancesSettingsPage extends StatelessWidget {
                         ? OcGlyph(
                             OcGlyphKind.check,
                             size: OcOptical.settingsNavIcon,
+                            strokeWidth: OcOptical.settingsGlyphStrokeVisual,
                             color: context.oc.foreground,
                           )
                         : null,
@@ -181,6 +182,7 @@ class InstancesSettingsPage extends StatelessWidget {
                 leading: OcGlyph(
                   OcGlyphKind.plus,
                   size: OcOptical.settingsNavIcon,
+                  strokeWidth: OcOptical.settingsGlyphStrokeVisual,
                   color: context.oc.foreground,
                 ),
                 title: Text(t(context, 'settings.instances.add')),
@@ -191,6 +193,7 @@ class InstancesSettingsPage extends StatelessWidget {
                 leading: OcGlyph(
                   OcGlyphKind.qr,
                   size: OcOptical.settingsNavIcon,
+                  strokeWidth: OcOptical.settingsGlyphStrokeVisual,
                   color: context.oc.foreground,
                 ),
                 title: Text(t(context, 'connect.scanQr')),

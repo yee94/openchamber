@@ -16,7 +16,7 @@ class HighlightedText extends StatelessWidget {
   final String text;
   final String query;
   final TextStyle? style;
-  /// Session 16/12 rows keep the pinned 2.75 CJK half-lead. Project /
+  /// Session 16/12 rows keep the pinned 3.5 CJK half-lead. Project /
   /// schedule 14/18 titles pass 0 so the official CSS box is not inflated.
   final double? halfLead;
   /// Same-color miter stem under Regular CJK so 12px titles reach
