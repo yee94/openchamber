@@ -879,3 +879,11 @@ invent frost/umbra or unlock discs 34/28/24 / glyph **14**. README
 MAE ~27 is cream/PingFang/UIKit glass. Press DONE. No second
 recapture — live pixels already include the unread 03 delta.
 **精致: 还没有.**
+
+**2026-09-04 wake-0620 (stale dart `f9bcc8eed`, 0 PNG):**
+Watch scored the AgentAvatar dart before recapture, so tip-tree
+goldens still looked like wake-0611 `03=2bd63bf8`. Recapture
+already landed on `7599aff50`: kept 03 `3a881f07` (MAE ~0.61).
+02/04/05/07 SAME. Header stays official transparent
+`MobileTabPageHeader`. Do not rewind. Press DONE.
+**精致: 还没有.**
