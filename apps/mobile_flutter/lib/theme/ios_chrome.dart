@@ -203,9 +203,9 @@ class OcGlassChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Page-bleed mobileGlass. BackdropFilter stays; fill is
-    // glassChipFill (0.24), not official 0.68 and not a 0.30 coin.
-    // Chip near-pair shadow — no hairline rim, no 8/20 umbra.
+    // mobileGlass frost plate. BackdropFilter + official saturate.
+    // Fill is glassChipFill 0.34, not official 0.68 coin. Chip
+    // near-pair shadow — no hairline rim, no 8/20 umbra.
     return DecoratedBox(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -215,6 +215,7 @@ class OcGlassChip extends StatelessWidget {
         child: OcFrosted(
           fill: context.oc.glassChipFill,
           sigma: OcOptical.chipBleedBlur,
+          saturate: OcOptical.glassSaturate,
           child: SizedBox(
             width: size,
             height: size,
