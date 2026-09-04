@@ -96,7 +96,7 @@ void main() {
       OcOptical.rowTitle * OcOptical.rowTitleHeight + 2 * OcOptical.cssLineCjkHalfLead,
     );
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.cssLineCjkHalfLead, closeTo(4, 0.01));
+    expect(OcOptical.cssLineCjkHalfLead, closeTo(4.25, 0.01));
   });
 
   testWidgets('chat is a pushed secondary page from Projects', (tester) async {

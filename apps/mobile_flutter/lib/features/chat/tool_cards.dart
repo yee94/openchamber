@@ -458,9 +458,10 @@ class UserTurnToolbar extends StatelessWidget {
   }
 }
 
-/// Official mobile `FileTypeIcon` is `h-3` outline, not a filled brand
-/// tile. Residual filled flap still read as a generic blue square.
-/// Paint the shared `OcGlyph.file` outline in a type tint.
+/// Official mobile `FileTypeIcon` is `h-3` per-language silhouette
+/// (seti), not one tinted document for every path.
+enum _FileKind { markdown, react, script, dart, other }
+
 class _FileTypeMark extends StatelessWidget {
   const _FileTypeMark({required this.path});
 
@@ -470,24 +471,111 @@ class _FileTypeMark extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = OcTokens.of(context);
     final lower = path.toLowerCase();
+    final _FileKind kind;
     final Color tint;
     if (lower.endsWith('.md')) {
+      kind = _FileKind.markdown;
       tint = tokens.chart1;
     } else if (lower.endsWith('.tsx') || lower.endsWith('.jsx')) {
+      kind = _FileKind.react;
       tint = tokens.chart5;
     } else if (lower.endsWith('.ts') || lower.endsWith('.js')) {
+      kind = _FileKind.script;
       tint = tokens.chart1;
     } else if (lower.endsWith('.dart')) {
+      kind = _FileKind.dart;
       tint = tokens.chart4;
     } else {
+      kind = _FileKind.other;
       tint = tokens.mutedForeground;
     }
-    return OcGlyph(
-      OcGlyphKind.file,
-      size: OcOptical.fileTypeSize,
-      strokeWidth: OcOptical.fileTypeStrokeVisual,
-      color: tint,
+    return CustomPaint(
+      size: const Size.square(OcOptical.fileTypeSize),
+      painter: _FileTypeSpritePainter(kind: kind, tint: tint),
     );
+  }
+}
+
+class _FileTypeSpritePainter extends CustomPainter {
+  const _FileTypeSpritePainter({required this.kind, required this.tint});
+
+  final _FileKind kind;
+  final Color tint;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final stroke = Paint()
+      ..color = tint
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = OcOptical.fileTypeStrokeVisual
+      ..strokeJoin = StrokeJoin.miter
+      ..strokeCap = StrokeCap.butt;
+    final fill = Paint()..color = tint;
+    switch (kind) {
+      case _FileKind.markdown:
+        final file = Path()
+          ..moveTo(w * 0.28, h * 0.12)
+          ..lineTo(w * 0.60, h * 0.12)
+          ..lineTo(w * 0.78, h * 0.30)
+          ..lineTo(w * 0.78, h * 0.88)
+          ..lineTo(w * 0.22, h * 0.88)
+          ..lineTo(w * 0.22, h * 0.12)
+          ..close();
+        canvas.drawPath(file, stroke);
+        canvas.drawLine(Offset(w * 0.60, h * 0.12), Offset(w * 0.60, h * 0.32), stroke);
+        canvas.drawLine(Offset(w * 0.60, h * 0.32), Offset(w * 0.78, h * 0.32), stroke);
+        canvas.drawLine(Offset(w * 0.38, h * 0.48), Offset(w * 0.50, h * 0.68), stroke);
+        canvas.drawLine(Offset(w * 0.50, h * 0.68), Offset(w * 0.62, h * 0.48), stroke);
+      case _FileKind.react:
+        canvas.save();
+        canvas.translate(w * 0.5, h * 0.5);
+        canvas.drawCircle(Offset.zero, w * 0.08, fill);
+        for (var i = 0; i < 3; i++) {
+          canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: w * 0.86, height: h * 0.32), stroke);
+          canvas.rotate(1.047);
+        }
+        canvas.restore();
+      case _FileKind.script:
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.16, h * 0.16, w * 0.68, h * 0.68),
+            Radius.circular(w * 0.16),
+          ),
+          stroke,
+        );
+        canvas.drawLine(Offset(w * 0.32, h * 0.38), Offset(w * 0.52, h * 0.38), stroke);
+        canvas.drawLine(Offset(w * 0.42, h * 0.38), Offset(w * 0.42, h * 0.66), stroke);
+        canvas.drawLine(Offset(w * 0.54, h * 0.46), Offset(w * 0.70, h * 0.46), stroke);
+        canvas.drawLine(Offset(w * 0.54, h * 0.58), Offset(w * 0.68, h * 0.58), stroke);
+      case _FileKind.dart:
+        final diamond = Path()
+          ..moveTo(w * 0.50, h * 0.10)
+          ..lineTo(w * 0.86, h * 0.50)
+          ..lineTo(w * 0.50, h * 0.90)
+          ..lineTo(w * 0.14, h * 0.50)
+          ..close();
+        canvas.drawPath(diamond, stroke);
+        canvas.drawCircle(Offset(w * 0.50, h * 0.50), w * 0.10, fill);
+      case _FileKind.other:
+        final file = Path()
+          ..moveTo(w * 0.30, h * 0.14)
+          ..lineTo(w * 0.62, h * 0.14)
+          ..lineTo(w * 0.78, h * 0.32)
+          ..lineTo(w * 0.78, h * 0.86)
+          ..lineTo(w * 0.22, h * 0.86)
+          ..lineTo(w * 0.22, h * 0.14)
+          ..close();
+        canvas.drawPath(file, stroke);
+        canvas.drawLine(Offset(w * 0.62, h * 0.14), Offset(w * 0.62, h * 0.34), stroke);
+        canvas.drawLine(Offset(w * 0.62, h * 0.34), Offset(w * 0.78, h * 0.34), stroke);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _FileTypeSpritePainter oldDelegate) {
+    return oldDelegate.kind != kind || oldDelegate.tint != tint;
   }
 }
 

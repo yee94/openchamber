@@ -24,10 +24,10 @@ class OcOptical {
   static const double rowTitleTracking = 1.35;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
-  /// Official project-shell row is 40. 4px CJK half-lead (per side)
-  /// opens Regular that still packed at 3.5. 40 + 4×4 = 56 —
+  /// Official project-shell row is 40. 4.25px CJK half-lead (per side)
+  /// opens Regular that still packed at 4. 40 + 4×4.25 = 57 —
   /// not 7.5 half-lead / 70px rows. No more tracking knobs.
-  static const double sessionRowVisualHeight = 56;
+  static const double sessionRowVisualHeight = 57;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
@@ -49,14 +49,14 @@ class OcOptical {
   /// 12px on authored foreground. Stem 2.0 / shade 0.6 + round join
   /// bloated a gray halo (~L84) around L32 cores. 1.05 / 0.22 + miter
   /// keeps Regular on foreground without the heavier 1.2 brick. Card
-  /// frost must sit behind the child. Half-lead 4 is title-band air
+  /// frost must sit behind the child. Half-lead 4.25 is title-band air
   /// (no more tracking knobs; no Medium CJK on review/CI).
   static const double sessionTitleStem = 1.05;
   static const double sessionTitleShade = 0.22;
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
-  /// 4 extra Flutter pixels open Regular CJK that still packed at 3.5.
-  static const double cssLineCjkHalfLead = 4;
+  /// 4.25 extra Flutter pixels open Regular CJK that still packed at 4.
+  static const double cssLineCjkHalfLead = 4.25;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
