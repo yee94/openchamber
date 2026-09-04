@@ -493,7 +493,21 @@ void main() {
       closeTo(0.34, 0.001),
     );
     expect(OcElevation.cardFor(OcTokens.dark).last.color.red, 0);
-    expect(OcElevation.dockFor(OcTokens.dark), isEmpty);
+    expect(OcElevation.dockFor(OcTokens.dark).length, 2);
+    expect(OcElevation.dockFor(OcTokens.dark).first.blurRadius, 2);
+    expect(OcElevation.dockFor(OcTokens.dark).last.blurRadius, 12);
+    expect(
+      OcElevation.dockFor(OcTokens.dark).first.color.a,
+      closeTo(0.30, 0.001),
+    );
+    expect(
+      OcElevation.dockFor(OcTokens.dark).last.color.a,
+      closeTo(0.28, 0.001),
+    );
+    expect(
+      OcElevation.dockFor(OcTokens.dark).every((s) => s.offset == Offset.zero),
+      isTrue,
+    );
     expect(OcElevation.controlFor(OcTokens.dark), isEmpty);
   });
 

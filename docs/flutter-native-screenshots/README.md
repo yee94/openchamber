@@ -754,6 +754,16 @@ Do **not** pile frost 0.16 / search/+ discs / schedule 24 / dock
 (MAE ~0.53). Restored light 02/04 (MAE ~0.02) and 01/03/05/06/07/08.
 **Not 精致.**
 
+**2026-09-04 wake-0412 residual (after `08f2d280b`):**
+Watch scored live recapture tip. STRUCTURE PASS. THEME OK.
+Do **not** pile Regular / 3.2 / 3.0 / 1.46 / frost 0.16 / disc 24 /
+search plate 34. Dark card far stays **0.34**. Light far stays
+**10/24/-6 @ 10%**. Press DONE. Official dark dock uses
+`--oc-mobile-glass-shadow` near pair `0.30` / `0.28`; Flutter
+painted none. No 8/20 umbra. Recapture dark frames after this dart;
+restore light if MAE stays below noise.
+**Not 精致.**
+
 | File | Screen |
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |

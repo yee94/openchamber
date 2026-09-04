@@ -98,13 +98,18 @@ class OcElevation {
 
   static List<BoxShadow> groupedFor(OcTokens tokens) => cardFor(tokens);
 
-  /// Dock capsule — official `--oc-mobile-glass-shadow` near pair
-  /// (`0 0 2px / 0.05` + `0 0 12px / 0.06`). No 8/20 umbra (that
-  /// painted a cream stadium) and no inset sheen (same).
+  /// Dock capsule — official `--oc-mobile-glass-shadow` near pair.
+  /// Light `0 0 2px / 0.05` + `0 0 12px / 0.06`. Dark `0.30` / `0.28`.
+  /// No 8/20 umbra (that painted a cream stadium) and no inset sheen.
   static List<BoxShadow> dock(BuildContext context) => dockFor(OcTokens.of(context));
 
   static List<BoxShadow> dockFor(OcTokens tokens) {
-    if (tokens.isDark) return const [];
+    if (tokens.isDark) {
+      return const [
+        BoxShadow(color: Color.fromRGBO(0, 0, 0, 0.30), blurRadius: 2),
+        BoxShadow(color: Color.fromRGBO(0, 0, 0, 0.28), blurRadius: 12),
+      ];
+    }
     return const [
       BoxShadow(color: Color(0x0D000000), blurRadius: 2),
       BoxShadow(color: Color(0x0F000000), blurRadius: 12),
