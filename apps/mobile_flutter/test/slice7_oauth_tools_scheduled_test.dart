@@ -239,7 +239,8 @@ void main() {
 
     await tester.tap(find.byKey(const Key('tab-projects')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('New Session'));
+    // Session titles paint fill + stem (two Texts). Tap the row key.
+    await tester.tap(find.byKey(const Key('home-session-sess-catalog')));
     await tester.pumpAndSettle();
     expect(find.byType(ChatScreen), findsOneWidget);
     expect(find.byKey(const Key('chat-tool-diff-edit-1')), findsOneWidget);
