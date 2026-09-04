@@ -267,15 +267,16 @@ void main() {
     expect(OcOptical.chevron, 14);
     expect(OcOptical.footerGlyph, 14);
     expect(OcOptical.scheduleStatus, OcOptical.leadingCircle);
-    expect(OcOptical.scheduleStatusVisual, OcOptical.scheduleStatus);
-    expect(OcOptical.scheduleStatusVisual, 38);
+    expect(OcOptical.scheduleStatusVisual, lessThan(OcOptical.scheduleStatus));
+    expect(OcOptical.scheduleStatusVisual, 32);
     expect(OcOptical.scheduleStatusGlyph, 12);
     expect(OcOptical.scheduleStatusGlyphStroke, OcOptical.headerGlyphStrokeVisual);
     expect(OcOptical.scheduleStatusGlyphStroke, lessThan(OcOptical.listGlyphStroke));
     expect(OcOptical.overflow, 16);
     expect(OcOptical.chatChip, 40);
     expect(OcOptical.chatChip, OcOptical.headerDisc);
-    expect(OcOptical.chatChipGlyph, 16);
+    expect(OcOptical.chatChipGlyph, 14);
+    expect(OcOptical.chatChipGlyph, lessThan(16));
     expect(OcOptical.activityExpandedGap, 10);
     expect(OcOptical.activityExpandedIndent, 20);
     expect(OcOptical.activityChildIndent, 12);
@@ -285,6 +286,7 @@ void main() {
     expect(OcOptical.sessionBulletReadAlpha, closeTo(0.55, 0.01));
     expect(OcOptical.sessionBulletReadAlpha, greaterThan(0.35));
     expect(OcOptical.fileTypeSize, 12);
+    expect(OcOptical.fileTypeStrokeVisual, OcOptical.headerGlyphStrokeVisual);
     expect(OcOptical.fileTypeMark, 7);
     expect(OcOptical.fileRowPadV, 3);
     expect(OcOptical.fileRowHeight, 24);
@@ -295,6 +297,8 @@ void main() {
     expect(OcOptical.composerPlus, 18);
     expect(OcOptical.composerPlusStroke, 1.25);
     expect(OcOptical.footerGlyphStroke, 2);
+    expect(OcOptical.footerGlyphStrokeVisual, closeTo(0.64, 0.01));
+    expect(OcOptical.footerGlyphStrokeVisual, lessThan(OcOptical.footerGlyphStroke));
     expect(OcOptical.footerMeta, 11);
     expect(OcOptical.sendRing, 32);
     expect(OcOptical.sendRingStroke, closeTo(1.0, 0.01));

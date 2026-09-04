@@ -278,12 +278,15 @@ class OcOptical {
   /// the 56px detail band — paint the official hit so back / busy / more
   /// are chips, not oversized coins.
   static const double chatChip = 40;
-  static const double chatChipGlyph = 16;
+  /// Official chip glyph is `size-4` (16). Flutter bloom; paint 14 so
+  /// back / ··· stay thin in the 40 frost disc.
+  static const double chatChipGlyph = 14;
 
   /// Official scheduled status uses the project-shell glass disc (2.375rem).
   static const double scheduleStatus = leadingCircle;
-  /// Painted plate is the official 38 shell — not a 28 inset coin.
-  static const double scheduleStatusVisual = 38;
+  /// Hit stays official 38. Paint the same 32 plate as project leading
+  /// so the status disc is not a massy coin on the card.
+  static const double scheduleStatusVisual = 32;
   /// Official non-tab scheduled glyph is `size-3.5`; residual optical
   /// paints 12 so the badge does not outweigh the segment track.
   static const double scheduleStatusGlyph = 12;
@@ -293,6 +296,8 @@ class OcOptical {
 
   /// Official `FileTypeIcon` mobile size `h-3 w-3` (12px).
   static const double fileTypeSize = 12;
+  /// Flutter round-cap bloom at 12px; paint under official 1.5.
+  static const double fileTypeStrokeVisual = headerGlyphStrokeVisual;
   static const double fileTypeMark = 7;
   static const double fileRowPadV = 3;
   static const double fileRowHeight = 24;
@@ -329,6 +334,9 @@ class OcOptical {
   /// Official `MESSAGE_ACTION_ICON_CLASS` `size-3.5` / medium stroke.
   static const double footerGlyph = 14;
   static const double footerGlyphStroke = 2;
+  /// Official medium is 2; Flutter bloom at dpr 3. Paint under 2 so
+  /// copy / fork / clock stay filled-medium, not chunky bricks.
+  static const double footerGlyphStrokeVisual = 0.64;
   /// Official ProgressiveGroup expanded rail: header must not sit flush
   /// on the first skill/terminal row (Yee P0 2026-09-04).
   static const double activityExpandedGap = 10;

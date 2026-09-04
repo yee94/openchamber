@@ -286,7 +286,7 @@ class _FileChangeCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              OcGlyph(OcGlyphKind.file, size: OcOptical.fileTypeSize, strokeWidth: OcOptical.listGlyphStroke, color: OcTokens.of(context).mutedForeground),
+              OcGlyph(OcGlyphKind.file, size: OcOptical.fileTypeSize, strokeWidth: OcOptical.fileTypeStrokeVisual, color: OcTokens.of(context).mutedForeground),
               const SizedBox(width: 4),
               Flexible(
                 child: Text(
@@ -374,7 +374,7 @@ class _FileChangeCard extends StatelessWidget {
                       color: OcTokens.of(context).mutedForeground,
                     ),
                   ),
-                  OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.fileTypeSize, strokeWidth: OcOptical.listGlyphStroke, color: OcTokens.of(context).mutedForeground),
+                  OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.fileTypeSize, strokeWidth: OcOptical.fileTypeStrokeVisual, color: OcTokens.of(context).mutedForeground),
                 ],
               ),
             ),
@@ -397,7 +397,7 @@ class UserTurnToolbar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (message.completedClock != null) ...[
-            OcGlyph(OcGlyphKind.clock, size: OcOptical.footerGlyph, strokeWidth: OcOptical.footerGlyphStroke, color: context.oc.mutedForeground),
+            OcGlyph(OcGlyphKind.clock, size: OcOptical.footerGlyph, strokeWidth: OcOptical.footerGlyphStrokeVisual, color: context.oc.mutedForeground),
             const SizedBox(width: 3),
             Text(
               message.completedClock!,
@@ -434,7 +434,7 @@ class UserTurnToolbar extends StatelessWidget {
         onTap: () {},
         child: Padding(
           padding: const EdgeInsets.all(3),
-          child: OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.footerGlyphStroke, color: context.oc.mutedForeground),
+          child: OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.footerGlyphStrokeVisual, color: context.oc.mutedForeground),
         ),
       ),
     );
@@ -583,7 +583,7 @@ class _TurnFooter extends StatelessWidget {
         key: key,
         mainAxisSize: MainAxisSize.min,
         children: [
-          OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.footerGlyphStroke, color: OcTokens.of(context).mutedForeground),
+          OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.footerGlyphStrokeVisual, color: OcTokens.of(context).mutedForeground),
           const SizedBox(width: 4),
           Text(
             label,
@@ -613,7 +613,7 @@ class _TurnFooter extends StatelessWidget {
         onTap: onPressed ?? () {},
         child: Padding(
           padding: const EdgeInsets.all(3),
-          child: OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.footerGlyphStroke, color: OcTokens.of(context).mutedForeground),
+          child: OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.footerGlyphStrokeVisual, color: OcTokens.of(context).mutedForeground),
         ),
       ),
     );

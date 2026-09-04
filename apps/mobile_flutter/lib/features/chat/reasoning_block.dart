@@ -129,7 +129,7 @@ class _ReasoningTraceBlockState extends State<ReasoningTraceBlock>
                   OcGlyph(
                     _expanded ? OcGlyphKind.chevronDown : OcGlyphKind.sparkles,
                     size: OcOptical.footerGlyph,
-                    strokeWidth: OcOptical.listGlyphStroke,
+                    strokeWidth: OcOptical.footerGlyphStrokeVisual,
                     color: tokens.mutedForeground,
                   ),
                   const SizedBox(width: 6),

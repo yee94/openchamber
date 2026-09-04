@@ -604,8 +604,8 @@ class SegmentedPill extends StatelessWidget {
                                   if (icons != null) ...[
                                     OcGlyph(
                                       icons![i],
-                                      size: 16,
-                                      strokeWidth: OcOptical.listGlyphStroke,
+                                      size: OcOptical.headerGlyph,
+                                      strokeWidth: OcOptical.headerGlyphStrokeVisual,
                                       color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
                                     ),
                                     const SizedBox(width: 6),
