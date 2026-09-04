@@ -68,6 +68,22 @@ void main() {
     expect(capsule.width, lessThan(tester.view.physicalSize.width / tester.view.devicePixelRatio));
   });
 
+  testWidgets('OcCssLine keeps official CSS line boxes', (tester) async {
+    const title = TextStyle(fontSize: OcOptical.rowTitle, height: OcOptical.rowTitleHeight);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: OcCssLine(
+            style: title,
+            child: Text('会话标题', style: TextStyle(fontSize: OcOptical.rowTitle, height: 1)),
+          ),
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byType(OcCssLine)).height, OcOptical.rowTitle * OcOptical.rowTitleHeight);
+    expect(OcOptical.sessionTitleSubtitleGap, 2);
+  });
+
   testWidgets('chat is a pushed secondary page from Projects', (tester) async {
     await pumpConnected(tester);
     await tester.tap(find.byKey(const Key('home-session-sess-pinned')));

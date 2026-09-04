@@ -111,19 +111,22 @@ class MobileSessionRow extends StatelessWidget {
                     if (formatRelativeTime(row.updated) != null)
                       Padding(
                         padding: const EdgeInsets.only(left: OcOptical.sessionTimeGap),
-                        child: Text(
-                          formatRelativeTime(row.updated)!,
-                          strutStyle: ocCssLineBox(const TextStyle(
+                        child: OcCssLine(
+                          expand: false,
+                          style: const TextStyle(
                             fontSize: OcOptical.sessionTime,
                             height: OcOptical.sessionTimeHeight,
-                          )),
-                          style: ocCssInk(TextStyle(
-                            fontSize: OcOptical.sessionTime,
-                            fontWeight: FontWeight.w400,
-                            letterSpacing: OcOptical.sessionTimeTracking,
-                            height: OcOptical.sessionTimeHeight,
-                            color: context.oc.mutedForeground,
-                          )),
+                          ),
+                          child: Text(
+                            formatRelativeTime(row.updated)!,
+                            style: ocCssInk(TextStyle(
+                              fontSize: OcOptical.sessionTime,
+                              fontWeight: FontWeight.w400,
+                              letterSpacing: OcOptical.sessionTimeTracking,
+                              height: OcOptical.sessionTimeHeight,
+                              color: context.oc.mutedForeground,
+                            )),
+                          ),
                         ),
                       ),
                   ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openchamber/theme/app_theme.dart';
+import 'package:openchamber/theme/ios_chrome.dart';
 import 'package:openchamber/theme/ios_hero.dart';
 import 'package:openchamber/theme/oc_elevation.dart';
 import 'package:openchamber/theme/oklch.dart';
@@ -130,6 +131,20 @@ void main() {
           OcOptical.sessionTitleSubtitleGap +
           OcOptical.sessionSubtitle * OcOptical.sessionSubtitleHeight,
       OcOptical.sessionRowVisualHeight,
+    );
+    expect(
+      OcCssLine.boxHeight(const TextStyle(
+        fontSize: OcOptical.rowTitle,
+        height: OcOptical.rowTitleHeight,
+      )),
+      OcOptical.rowTitle * OcOptical.rowTitleHeight,
+    );
+    expect(
+      OcCssLine.boxHeight(const TextStyle(
+        fontSize: OcOptical.sessionSubtitle,
+        height: OcOptical.sessionSubtitleHeight,
+      )),
+      OcOptical.sessionSubtitle * OcOptical.sessionSubtitleHeight,
     );
     expect(OcOptical.sessionStatus, 12);
     expect(OcOptical.sessionRowMainGap, 8);

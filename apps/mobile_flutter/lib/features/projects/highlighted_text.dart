@@ -15,7 +15,15 @@ class HighlightedText extends StatelessWidget {
     final needle = query.trim();
     final paint = ocCssInk(style);
     if (needle.isEmpty) {
-      return Text(text, style: paint, strutStyle: ocCssLineBox(style));
+      return OcCssLine(
+        style: style,
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: paint,
+        ),
+      );
     }
     final lower = text.toLowerCase();
     final match = needle.toLowerCase();
@@ -36,9 +44,13 @@ class HighlightedText extends StatelessWidget {
       );
       start = index + needle.length;
     }
-    return Text.rich(
-      TextSpan(style: paint, children: spans),
-      strutStyle: ocCssLineBox(style),
+    return OcCssLine(
+      style: style,
+      child: Text.rich(
+        TextSpan(style: paint, children: spans),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 }

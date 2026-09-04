@@ -323,36 +323,41 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
             ),
             const SizedBox(width: OcOptical.worktreeLabelGap),
             Expanded(
-              child: Text(
-                tree.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: ocCssInk(TextStyle(
-                  fontSize: OcOptical.rowTitle,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: OcOptical.rowTitleTracking,
-                  height: OcOptical.rowTitleHeight,
-                  color: context.oc.foreground,
-                )),
-                strutStyle: ocCssLineBox(const TextStyle(
+              child: OcCssLine(
+                style: const TextStyle(
                   fontSize: OcOptical.rowTitle,
                   height: OcOptical.rowTitleHeight,
-                )),
+                ),
+                child: Text(
+                  tree.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: ocCssInk(TextStyle(
+                    fontSize: OcOptical.rowTitle,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: OcOptical.rowTitleTracking,
+                    height: OcOptical.rowTitleHeight,
+                    color: context.oc.foreground,
+                  )),
+                ),
               ),
             ),
-            Text(
-              tree.sessionCount == 1
-                  ? t(context, 'projects.sessionsCount.one')
-                  : t(context, 'projects.sessionsCount', {'count': '${tree.sessionCount}'}),
-              style: ocCssInk(TextStyle(
+            OcCssLine(
+              expand: false,
+              style: const TextStyle(
                 fontSize: OcOptical.meta,
                 height: OcOptical.metaHeight,
-                color: context.oc.mutedForeground,
-              )),
-              strutStyle: ocCssLineBox(const TextStyle(
-                fontSize: OcOptical.meta,
-                height: OcOptical.metaHeight,
-              )),
+              ),
+              child: Text(
+                tree.sessionCount == 1
+                    ? t(context, 'projects.sessionsCount.one')
+                    : t(context, 'projects.sessionsCount', {'count': '${tree.sessionCount}'}),
+                style: ocCssInk(TextStyle(
+                  fontSize: OcOptical.meta,
+                  height: OcOptical.metaHeight,
+                  color: context.oc.mutedForeground,
+                )),
+              ),
             ),
             const SizedBox(width: 6),
             OcGlyph(

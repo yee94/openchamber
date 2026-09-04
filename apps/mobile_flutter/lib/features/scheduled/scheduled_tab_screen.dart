@@ -220,36 +220,44 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      task.name.isEmpty ? task.id : task.name,
-                      strutStyle: ocCssLineBox(const TextStyle(
+                    OcCssLine(
+                      style: const TextStyle(
                         fontSize: OcOptical.projectTitle,
                         height: OcOptical.projectTitleHeight,
-                      )),
-                      style: ocCssInk(TextStyle(
-                        fontSize: OcOptical.projectTitle,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: OcOptical.projectTitleTracking,
-                        height: OcOptical.projectTitleHeight,
-                        color: context.oc.foreground,
-                      )),
+                      ),
+                      child: Text(
+                        task.name.isEmpty ? task.id : task.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: ocCssInk(TextStyle(
+                          fontSize: OcOptical.projectTitle,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: OcOptical.projectTitleTracking,
+                          height: OcOptical.projectTitleHeight,
+                          color: context.oc.foreground,
+                        )),
+                      ),
                     ),
                     const SizedBox(height: OcOptical.scheduleTitleMetaGap),
-                    Text(
-                      paused
-                          ? [_humanSchedule(context, task), '—'].join(' · ')
-                          : _taskSubtitle(context, task),
-                      strutStyle: ocCssLineBox(const TextStyle(
+                    OcCssLine(
+                      style: const TextStyle(
                         fontSize: OcOptical.meta,
                         height: OcOptical.metaHeight,
-                      )),
-                      style: ocCssInk(TextStyle(
-                        fontSize: OcOptical.meta,
-                        fontWeight: FontWeight.w400,
-                        letterSpacing: OcOptical.metaTracking,
-                        height: OcOptical.metaHeight,
-                        color: context.oc.mutedForeground,
-                      )),
+                      ),
+                      child: Text(
+                        paused
+                            ? [_humanSchedule(context, task), '—'].join(' · ')
+                            : _taskSubtitle(context, task),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: ocCssInk(TextStyle(
+                          fontSize: OcOptical.meta,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: OcOptical.metaTracking,
+                          height: OcOptical.metaHeight,
+                          color: context.oc.mutedForeground,
+                        )),
+                      ),
                     ),
                   ],
                 ),

@@ -45,7 +45,6 @@ class MobileProjectCard extends StatelessWidget {
       color: context.oc.mutedForeground,
     );
     final metaInk = ocCssInk(metaStyle)!;
-    final metaBox = ocCssLineBox(metaStyle);
     return Pressable(
       haptic: HapticStrength.light,
       onPressed: onToggle,
@@ -94,44 +93,43 @@ class MobileProjectCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: OcOptical.groupTitleMetaGap),
-                    Row(
-                      children: [
-                        Text(
-                          count == 1
-                              ? t(context, 'projects.sessionsCount.one')
-                              : t(context, 'projects.sessionsCount', {'count': '$count'}),
-                          style: metaInk,
-                          strutStyle: metaBox,
-                        ),
-                        if (activity != null && activity!.isNotEmpty) ...[
-                          const SizedBox(width: OcOptical.entityMetaGap),
+                    OcCssLine(
+                      style: metaStyle,
+                      child: Row(
+                        children: [
                           Text(
-                            '·',
-                            style: metaInk.copyWith(color: context.oc.mutedForeground.withValues(alpha: 0.5)),
-                            strutStyle: metaBox,
+                            count == 1
+                                ? t(context, 'projects.sessionsCount.one')
+                                : t(context, 'projects.sessionsCount', {'count': '$count'}),
+                            style: metaInk,
                           ),
-                          const SizedBox(width: OcOptical.entityMetaGap),
-                          Text(activity!, style: metaInk, strutStyle: metaBox),
-                        ],
-                        if (pathHint != null && pathHint!.isNotEmpty) ...[
-                          const SizedBox(width: OcOptical.entityMetaGap),
-                          Text(
-                            '·',
-                            style: metaInk.copyWith(color: context.oc.mutedForeground.withValues(alpha: 0.5)),
-                            strutStyle: metaBox,
-                          ),
-                          const SizedBox(width: OcOptical.entityMetaGap),
-                          Expanded(
-                            child: Text(
-                              pathHint!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: metaInk,
-                              strutStyle: metaBox,
+                          if (activity != null && activity!.isNotEmpty) ...[
+                            const SizedBox(width: OcOptical.entityMetaGap),
+                            Text(
+                              '·',
+                              style: metaInk.copyWith(color: context.oc.mutedForeground.withValues(alpha: 0.5)),
                             ),
-                          ),
+                            const SizedBox(width: OcOptical.entityMetaGap),
+                            Text(activity!, style: metaInk),
+                          ],
+                          if (pathHint != null && pathHint!.isNotEmpty) ...[
+                            const SizedBox(width: OcOptical.entityMetaGap),
+                            Text(
+                              '·',
+                              style: metaInk.copyWith(color: context.oc.mutedForeground.withValues(alpha: 0.5)),
+                            ),
+                            const SizedBox(width: OcOptical.entityMetaGap),
+                            Expanded(
+                              child: Text(
+                                pathHint!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: metaInk,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ],
                 ),

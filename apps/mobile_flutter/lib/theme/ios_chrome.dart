@@ -28,6 +28,8 @@ TextStyle? ocCssInk(TextStyle? style) {
 /// Official CSS `line-height` boxes (session title 16, subtitle/time 12).
 /// Move [OcOptical.sessionLineLeading] of that box into strut leading so
 /// CJK ink sits with official single-line air. Total height is unchanged.
+/// This review CJK face ignores strut `leading` for glyph placement
+/// (0.52–0.57 goldens stayed byte-identical). Prefer [OcCssLine].
 StrutStyle? ocCssLineBox(TextStyle? style) {
   if (style?.fontSize == null || style?.height == null) return null;
   final box = style!.height!;
@@ -39,6 +41,43 @@ StrutStyle? ocCssLineBox(TextStyle? style) {
     forceStrutHeight: true,
     leadingDistribution: TextLeadingDistribution.even,
   );
+}
+
+/// Official CSS line-height: ink occupies `font-size`; extra half-leading
+/// sits above/below inside `font-size * line-height`. Gap between title
+/// and subtitle stays official `gap-0.5` (2). Does not grow the 40 box.
+class OcCssLine extends StatelessWidget {
+  const OcCssLine({
+    super.key,
+    required this.style,
+    required this.child,
+    this.expand = true,
+  });
+
+  final TextStyle? style;
+  final Widget child;
+  /// Full-width in a column / [Expanded]. Trailing time / counts stay tight.
+  final bool expand;
+
+  static double? boxHeight(TextStyle? style) {
+    if (style?.fontSize == null || style?.height == null) return null;
+    return style!.fontSize! * style.height!;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final font = style?.fontSize;
+    final box = boxHeight(style);
+    if (font == null || box == null) return child;
+    return SizedBox(
+      height: box,
+      width: expand ? double.infinity : null,
+      child: Align(
+        alignment: expand ? Alignment.centerLeft : Alignment.center,
+        child: SizedBox(height: font, width: expand ? double.infinity : null, child: child),
+      ),
+    );
+  }
 }
 
 /// Geometry aliases of official `--oc-mobile-*` tokens.
@@ -760,41 +799,45 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          title,
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          strutStyle: ocCssLineBox(const TextStyle(
+                        OcCssLine(
+                          style: const TextStyle(
                             fontSize: OcOptical.chatTitle,
                             height: OcOptical.chatTitleHeight,
-                          )),
-                          style: ocCssInk(TextStyle(
-                            fontSize: OcOptical.chatTitle,
-                            fontWeight: FontWeight.lerp(FontWeight.w600, FontWeight.w700, 0.5),
-                            letterSpacing: OcOptical.chatTitleTracking,
-                            height: OcOptical.chatTitleHeight,
-                            color: tokens.foreground,
-                          )),
-                        ),
-                        if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
-                          const SizedBox(height: OcOptical.detailSubtitleGap),
-                          Text(
-                            key: const Key('chat-header-subtitle'),
-                            subtitle!,
+                          ),
+                          child: Text(
+                            title,
                             textAlign: TextAlign.center,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            strutStyle: ocCssLineBox(const TextStyle(
-                              fontSize: OcOptical.detailSubtitle,
-                              height: OcOptical.detailSubtitleHeight,
-                            )),
                             style: ocCssInk(TextStyle(
-                              fontSize: OcOptical.detailSubtitle,
-                              fontWeight: FontWeight.w400,
-                              height: OcOptical.detailSubtitleHeight,
-                              color: tokens.mutedForeground,
+                              fontSize: OcOptical.chatTitle,
+                              fontWeight: FontWeight.lerp(FontWeight.w600, FontWeight.w700, 0.5),
+                              letterSpacing: OcOptical.chatTitleTracking,
+                              height: OcOptical.chatTitleHeight,
+                              color: tokens.foreground,
                             )),
+                          ),
+                        ),
+                        if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                          const SizedBox(height: OcOptical.detailSubtitleGap),
+                          OcCssLine(
+                            style: const TextStyle(
+                              fontSize: OcOptical.detailSubtitle,
+                              height: OcOptical.detailSubtitleHeight,
+                            ),
+                            child: Text(
+                              key: const Key('chat-header-subtitle'),
+                              subtitle!,
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: ocCssInk(TextStyle(
+                                fontSize: OcOptical.detailSubtitle,
+                                fontWeight: FontWeight.w400,
+                                height: OcOptical.detailSubtitleHeight,
+                                color: tokens.mutedForeground,
+                              )),
+                            ),
                           ),
                         ],
                       ],
