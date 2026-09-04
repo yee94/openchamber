@@ -162,7 +162,11 @@ class OcOptical {
   /// cards keep [floatCardStackGap] 16.
   static const double assistantCatalogGap = 14;
 
-  /// `.oc-mobile-entity-meta` 0.75rem / 0.9375rem.
+  /// Root `--oc-mobile-entity-meta` 0.8125rem / 1rem. Assistant cards
+  /// are not inside `.oc-mobile-project-shell`. Do not use [meta] 12/15.
+  static const double entityMeta = 13;
+  static const double entityMetaHeight = 16 / 13;
+  /// Project-shell / scheduled `--oc-mobile-entity-meta` 0.75rem / 0.9375rem.
   static const double meta = 12;
   static const double metaTracking = 0;
   static const double metaHeight = 15 / 12;

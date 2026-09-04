@@ -192,6 +192,20 @@ class OcTokens extends ThemeExtension<OcTokens> {
   Color get selectedTabWash =>
       interactiveSelection.withValues(alpha: interactiveSelection.a * OcOptical.dockIconWashAlpha);
 
+  /// Official `getAgentColor` palette stand-in. Syntax-token hues are
+  /// not on OcTokens yet — keep official hash/index, paint existing
+  /// status/chart/primary inks. Geometry is the official 5×5 identicon.
+  List<Color> get agentPalette => [
+        statusSuccess,
+        primary,
+        chart1,
+        chart3,
+        destructive,
+        statusInfo,
+        chart3,
+        mutedForeground,
+      ];
+
   /// `--oc-mobile-header-fade` = surface-background 85%.
   Color get headerFade => background.withValues(alpha: 0.85);
 

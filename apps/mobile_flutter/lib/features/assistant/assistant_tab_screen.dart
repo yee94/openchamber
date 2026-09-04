@@ -96,6 +96,7 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
               for (final item in snapshot.assistants)
                 MobileAssistantCard(
                   pressKey: Key('assistant-item-${item.id}'),
+                  seed: item.id,
                   name: item.name,
                   modeLabel: _modeLabel(context, item),
                   summary: _summary(context, item),

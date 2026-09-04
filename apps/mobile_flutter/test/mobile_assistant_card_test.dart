@@ -11,6 +11,7 @@ void main() {
         theme: materialTheme(Brightness.light),
         home: MobileAssistantCard(
           pressKey: const Key('assistant-item-asst-1'),
+          seed: 'asst-1',
           name: '首页助理',
           modeLabel: '连续模式',
           summary: '一段持续的长对话，处理首页和通知。',
@@ -29,7 +30,9 @@ void main() {
     expect(name.style?.letterSpacing, closeTo(OcOptical.assistantNameTrackingOfficial, 0.01));
 
     final mode = tester.widget<Text>(find.text('连续模式'));
-    expect(mode.style?.fontSize, OcOptical.meta);
+    expect(mode.style?.fontSize, OcOptical.entityMeta);
+    expect(find.byType(AgentIdenticon), findsOneWidget);
+    expect(find.text('首'), findsNothing);
 
     final summary = tester.widget<Text>(find.text('一段持续的长对话，处理首页和通知。'));
     expect(summary.style?.fontSize, OcTokens.textMicro);

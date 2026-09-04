@@ -201,6 +201,10 @@ void main() {
     expect(OcOptical.assistantName, lessThan(OcOptical.entityTitle));
     expect(OcOptical.assistantNameTrackingOfficial, closeTo(15 * -0.02, 0.01));
     expect(OcOptical.assistantNameHeight, closeTo(20 / 15, 0.01));
+    expect(OcOptical.entityMeta, 13);
+    expect(OcOptical.entityMeta, OcTokens.entityMetaSize);
+    expect(OcOptical.entityMetaHeight, closeTo(16 / 13, 0.01));
+    expect(OcOptical.meta, 12);
     expect(
       OcCssLine.boxHeight(
         const TextStyle(
