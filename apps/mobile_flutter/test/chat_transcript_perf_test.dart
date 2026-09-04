@@ -66,6 +66,12 @@ void main() {
       lessThan(2500),
       reason: 'first frames after 500-message mount took ${mountPump.elapsedMilliseconds}ms (CI CPU budget, not 16ms phone frames)',
     );
+    debugPrint(
+      'chat-perf mount: messages=${fixture.length} markdownBuilds=$afterMount '
+      'listBuilds=${ChatRebuildCounters.listStructureBuilds} '
+      'rowWidgets=${ChatRebuildCounters.rowWidgetBuilds} '
+      'ms=${mountPump.elapsedMilliseconds}',
+    );
 
     final list = find.byKey(const Key('reverse-chat-list'));
     final scrollWatch = Stopwatch()..start();
@@ -89,6 +95,9 @@ void main() {
       afterFling,
       lessThan(80),
       reason: 'scroll must hydrate a window, not O(n=${fixture.length}) Markdown trees (got $afterFling)',
+    );
+    debugPrint(
+      'chat-perf fling: markdownBuilds=$afterFling settleMs=${scrollWatch.elapsedMilliseconds}',
     );
 
     final position = tester.widget<ListView>(list).controller!.position;
@@ -210,6 +219,11 @@ void main() {
     expect(ChatMarkdownBuildCounters.builds, markdownBefore + 1);
     expect(ChatRebuildCounters.rowSlotBuildsFor('settled'), settledSlots);
     expect(find.textContaining('Hello!!!!!!!!'), findsWidgets);
+    debugPrint(
+      'chat-perf sse: liveSlotTicks=$liveSlotTicks settledSlotTicks=$settledSlotTicks '
+      'listBuilds=${ChatRebuildCounters.listStructureBuilds - listBefore} '
+      'markdownDelta=${ChatMarkdownBuildCounters.builds - markdownBefore}',
+    );
   });
 
   testWidgets('reasoning expand/collapse does not rebuild unrelated rows and still matches official motion', (tester) async {
@@ -288,6 +302,12 @@ void main() {
     expect(ChatRebuildCounters.listStructureBuilds, listBefore);
     expect(ChatRebuildCounters.rowSlotBuildsFor('other'), otherSlots);
     expect(ChatRebuildCounters.reasoningBuildsFor('other-think'), otherReasoning);
+    debugPrint(
+      'chat-perf reasoning: listDelta=${ChatRebuildCounters.listStructureBuilds - listBefore} '
+      'otherSlotDelta=${ChatRebuildCounters.rowSlotBuildsFor('other') - otherSlots} '
+      'otherReasoningDelta=${ChatRebuildCounters.reasoningBuildsFor('other-think') - otherReasoning} '
+      'markdownDelta=${ChatMarkdownBuildCounters.builds - markdownBefore}',
+    );
   });
 }
 
