@@ -150,7 +150,7 @@ class OcTokens extends ThemeExtension<OcTokens> {
   /// Delicate chip fill — well under official glass 0.68 so search /
   /// chat discs are glass plates, not cream coins (wake-0905).
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.20 : 0.22);
+      .withValues(alpha: isDark ? 0.16 : 0.16);
 
   /// Official `--oc-mobile-glass-highlight` is white / 0.60
   /// (dark 0.18). Inset sheen on the elevated plate.
