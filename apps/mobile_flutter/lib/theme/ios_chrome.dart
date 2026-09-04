@@ -16,7 +16,7 @@ export 'oc_elevation.dart' show OcElevation;
 export 'oc_tokens.dart' show OcProductChrome, OcTokens, OcTokensContext;
 
 /// CSS `font-size` is ink. Official `line-height` is the strut — do not
-/// also multiply Flutter `TextStyle.height` or CJK packs the 40px box.
+/// also multiply Flutter `TextStyle.height` or CJK packs the line box.
 TextStyle? ocCssInk(TextStyle? style) {
   if (style == null) return null;
   return style.copyWith(
@@ -44,8 +44,10 @@ StrutStyle? ocCssLineBox(TextStyle? style) {
 }
 
 /// Official CSS line-height: ink occupies `font-size`; extra half-leading
-/// sits above/below inside `font-size * line-height`. Gap between title
-/// and subtitle stays official `gap-0.5` (2). Does not grow the 40 box.
+/// sits above/below inside `font-size * line-height`. Flutter CJK paints
+/// past `font-size` into that half-leading, so [OcOptical.cssLineCjkHalfLead]
+/// is added each side (metric compensation). Title↔subtitle gap is
+/// [OcOptical.sessionTitleSubtitleGap].
 class OcCssLine extends StatelessWidget {
   const OcCssLine({
     super.key,
@@ -61,7 +63,7 @@ class OcCssLine extends StatelessWidget {
 
   static double? boxHeight(TextStyle? style) {
     if (style?.fontSize == null || style?.height == null) return null;
-    return style!.fontSize! * style.height!;
+    return style!.fontSize! * style.height! + 2 * OcOptical.cssLineCjkHalfLead;
   }
 
   @override

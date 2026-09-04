@@ -12,18 +12,21 @@ class OcOptical {
 
   /// Official `.oc-mobile-session-title` is 0.75rem / 1rem / −0.012em.
   /// `.oc-mobile-project-shell` sets `--oc-mobile-session-row-height` to
-  /// 2.5rem (40). 40 ≥ 36 touch min, so hit == visual.
+  /// 2.5rem (40). Flutter CJK air uses [sessionRowVisualHeight] (48).
   /// Ink is `font-size`; strut is `line-height`. Do not faux-bold CJK.
   static const double rowTitle = 12;
   /// Official CSS is −0.012em. Flutter letterSpacing packs CJK tighter than
-  /// the WebView, so paint 0 and keep the 16/12 strut + 40px box.
+  /// the WebView, so paint 0 and keep the 16/12 CSS boxes.
   static const double rowTitleTracking = 0;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
-  static const double sessionRowVisualHeight = 40;
+  /// Project-shell CSS min-height is 2.5rem (40). Flutter CJK paints past
+  /// `font-size` into the CSS half-leading, so the visual row is the
+  /// official root 2.875rem (46) plus the opened title↔subtitle gap.
+  static const double sessionRowVisualHeight = 48;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
-  /// 5 + 16 + 2 + 12 + 5 keeps the 40 box with official `gap-0.5`.
-  /// Air lives in [sessionLineLeading]. Do not grow icons.
+  /// 5 + 19 + 4 + 15 + 5 = 48. Extra 3/line is [cssLineCjkHalfLead].
+  /// Do not grow icons.
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
   static const double groupHeaderPadV = 10;
@@ -37,17 +40,21 @@ class OcOptical {
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
-  /// Official title/subtitle column is `gap-0.5` (2). Do not invent 3.
-  /// Air lives in [sessionLineLeading] inside the 16/12 struts.
+  /// Official title/subtitle column is `gap-0.5` (2) between CSS line
+  /// boxes. Flutter CJK overflow ate that 2, so wake-0827 opens to
+  /// `gap-1` (4) — same as the project title column — after [OcCssLine]
+  /// half-leading still read Material-tight.
   /// Official title is `font-medium` / unread `font-semibold`. The review
   /// CJK face is Regular-only, so paint Regular — do not faux-bold.
-  static const double sessionTitleSubtitleGap = 2;
-  /// Fraction of the CSS line-height moved into strut `leading` so CJK
-  /// glyphs do not fill the 16/12 boxes. Total box stays official —
-  /// [ocCssLineBox] must not floor `height` at 1.0 or leading grows the
-  /// row instead of opening air inside it. Official gap-0.5 stays 2;
-  /// more air is this leading, not an invented gap. Wake-0817 nudges
-  /// 0.57 inside the official 16/12 boxes after 0.56 still read tight.
+  static const double sessionTitleSubtitleGap = 4;
+  /// Extra half-leading each side of [OcCssLine] so Flutter CJK, which
+  /// paints past `font-size` into the CSS 2px/1px half-leading, keeps
+  /// ink-to-box air. Official CSS box stays `fontSize × line-height`;
+  /// this is metric compensation (1.5 × 2 = 3px / line), not a new size.
+  static const double cssLineCjkHalfLead = 1.5;
+  /// Fraction of the CSS line-height moved into strut `leading`. This
+  /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
+  /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
   static const double sessionLineLeading = 0.57;
   /// `.oc-mobile-session-status` 0.75rem; `.oc-mobile-session-row-main` gap 0.5rem.
   static const double sessionStatus = 12;
@@ -96,8 +103,10 @@ class OcOptical {
   static const double sessionSubtitle = sessionTime;
   static const double sessionSubtitleHeight = sessionTimeHeight;
 
-  static const double scheduleCardPadV = 10;
-  /// Official scheduled meta `mt-1` (4).
+  /// Official scheduled task row `p-3` (12).
+  static const double scheduleCardPadV = 12;
+  /// Official scheduled meta `mt-1` (4). Title air is [OcCssLine] extra
+  /// half-leading, not a second invented gap.
   static const double scheduleTitleMetaGap = 4;
 
   /// Official `.oc-mobile-detail-title` 0.9375rem / line-height 1.4 / weight 650.
@@ -252,6 +261,8 @@ class OcOptical {
   static const double fileRowHeight = 24;
   static const double fileChrome = 11;
 
+  /// Official mobile composer textarea `py-2.5` (10).
+  static const double composerFieldPadV = 10;
   static const double composerRadius = 24;
   /// Official composer attach `Icon name="attachment-2" className="size-5"`.
   static const double composerPlus = 20;

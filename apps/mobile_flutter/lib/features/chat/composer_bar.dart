@@ -57,6 +57,12 @@ class ComposerBar extends StatelessWidget {
       maxLines: 6,
       textInputAction: TextInputAction.send,
       onSubmitted: (_) => onSend(),
+      style: TextStyle(
+        fontSize: OcTokens.textMarkdown,
+        letterSpacing: OcOptical.chatBodyTracking,
+        height: OcOptical.chatBodyHeight,
+        color: context.oc.foreground,
+      ),
       decoration: InputDecoration(
         hintText: t(context, 'chat.composer.placeholder'),
         border: InputBorder.none,
@@ -64,7 +70,10 @@ class ComposerBar extends StatelessWidget {
         focusedBorder: InputBorder.none,
         filled: false,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 4,
+          vertical: OcOptical.composerFieldPadV,
+        ),
         hintStyle: TextStyle(
           fontSize: OcTokens.textMarkdown,
           letterSpacing: OcOptical.chatBodyTracking,

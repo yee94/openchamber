@@ -366,8 +366,8 @@ class OcTokens extends ThemeExtension<OcTokens> {
   /// `--oc-mobile-project-action-size` = 2.25rem
   static const double projectActionSize = 36;
 
-  /// Root `--oc-mobile-session-row-height` = 2.875rem. Project-shell home
-  /// lists use [OcOptical.sessionRowVisualHeight] (2.5rem = 40).
+  /// Root `--oc-mobile-session-row-height` = 2.875rem. Project-shell CSS
+  /// is 2.5rem (40); Flutter CJK air uses [OcOptical.sessionRowVisualHeight].
   static const double sessionRowHeight = 46;
 
   static const double groupRadius = surfaceRadius;
