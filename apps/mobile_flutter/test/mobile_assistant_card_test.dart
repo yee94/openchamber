@@ -31,6 +31,15 @@ void main() {
 
     final mode = tester.widget<Text>(find.text('连续模式'));
     expect(mode.style?.fontSize, OcOptical.entityMeta);
+    final modePill = tester.getSize(find.byKey(const Key('assistant-mode')));
+    expect(
+      modePill.height,
+      closeTo(
+        OcOptical.entityMeta * OcOptical.entityMetaHeight +
+            2 * OcOptical.assistantModePadV,
+        0.5,
+      ),
+    );
     expect(find.byType(AgentIdenticon), findsOneWidget);
     expect(find.text('首'), findsNothing);
 

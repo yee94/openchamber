@@ -893,3 +893,10 @@ Same stale 03 `2bd63bf8`. Live goldens already match the
 AgentAvatar dart (`3a881f07`). No second recapture. No banner
 frost. Press DONE.
 **精致: 还没有.**
+
+**2026-09-04 wake-0622 dart:**
+STRUCTURE PASS. THEME OK. Mode tag still collapsed official
+entity-meta 16 via `ocCssInk` (pill ~17 vs name 20). Port
+`OcCssLine` 13/16 + pad 2 so the contact-card tag is 20.
+Do not invent frost/umbra. Press DONE. Recapture 03.
+**精致: 还没有.**

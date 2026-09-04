@@ -166,6 +166,12 @@ class MobileAssistantCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
+                          // Official `.oc-mobile-assistant-card-header` is
+                          // items-center / gap-2. Name is the 20px CSS box;
+                          // mode keeps the official 16px entity-meta box
+                          // plus 2px pad (pill 20) so the tag is not a
+                          // collapsed ink chip.
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Expanded(
                               child: HighlightedText(
@@ -187,6 +193,7 @@ class MobileAssistantCard extends StatelessWidget {
                             ),
                             const SizedBox(width: OcOptical.assistantHeaderGap),
                             DecoratedBox(
+                              key: const Key('assistant-mode'),
                               decoration: BoxDecoration(
                                 color: context.oc.surfaceMuted,
                                 borderRadius: BorderRadius.circular(999),
@@ -196,7 +203,12 @@ class MobileAssistantCard extends StatelessWidget {
                                   horizontal: OcOptical.assistantModePadH,
                                   vertical: OcOptical.assistantModePadV,
                                 ),
-                                child: Text(modeLabel, style: ocCssInk(modeStyle)),
+                                child: OcCssLine(
+                                  expand: false,
+                                  halfLead: 0,
+                                  style: modeStyle,
+                                  child: Text(modeLabel, style: ocCssInk(modeStyle)),
+                                ),
                               ),
                             ),
                           ],
