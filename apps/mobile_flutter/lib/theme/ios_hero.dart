@@ -18,16 +18,16 @@ class OcOptical {
   /// Ink is `font-size`; strut is `line-height`. Do not faux-bold CJK.
   static const double rowTitle = 12;
   /// Official CSS is −0.012em. Flutter Regular CJK still packs tighter
-  /// than the WebView at 0.8 — 1.1 opens the 12px band (~0.092em).
+  /// than the WebView at 1.1 — 1.25 opens the 12px band (~0.104em).
   /// Keep the 16/12 CSS boxes. Stem/shade stay 1.4 / 0.35 miter and
   /// apply to CJK runs only (Latin is real Medium).
-  static const double rowTitleTracking = 1.1;
+  static const double rowTitleTracking = 1.25;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
-  /// Official project-shell row is 40. 2.5px CJK half-lead (per side)
+  /// Official project-shell row is 40. 2.75px CJK half-lead (per side)
   /// opens 12px title/subtitle without leaving the 40-class — never
   /// 7.5 half-lead / 70px rows.
-  static const double sessionRowVisualHeight = 50;
+  static const double sessionRowVisualHeight = 51;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
@@ -55,8 +55,8 @@ class OcOptical {
   static const double sessionTitleShade = 0.35;
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
-  /// 2.5 extra Flutter pixels open Regular CJK without leaving ~40 density.
-  static const double cssLineCjkHalfLead = 2.5;
+  /// 2.75 extra Flutter pixels open Regular CJK without leaving ~40 density.
+  static const double cssLineCjkHalfLead = 2.75;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
@@ -95,9 +95,9 @@ class OcOptical {
   static const double entityTitleHeight = 1.25;
   static const double projectTitle = 14;
   /// Official entity title is −0.024em. Flutter Regular CJK packs
-  /// tighter than the WebView at 0.55 — 0.7 opens 14px card titles.
+  /// tighter than the WebView at 0.7 — 0.85 opens 14px card titles.
   /// Official 18/14 box unchanged.
-  static const double projectTitleTracking = 0.7;
+  static const double projectTitleTracking = 0.85;
   static const double projectTitleHeight = 18 / 14;
 
   /// `.oc-mobile-entity-meta` 0.75rem / 0.9375rem.
