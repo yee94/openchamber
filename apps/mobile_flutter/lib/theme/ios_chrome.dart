@@ -204,7 +204,7 @@ class OcGlassChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // mobileGlass frost plate. BackdropFilter + official saturate.
-    // Fill is glassChipFill 0.34, not official 0.68 coin. Chip
+    // Fill is glassChipFill 0.42, not official 0.68 coin. Chip
     // near-pair shadow — no hairline rim, no 8/20 umbra.
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -339,7 +339,7 @@ class CircularChromeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.oc;
     final hit = size ?? (filled ? OcOptical.addButton : OcOptical.searchButton);
-    // Search keeps the 32 frost plate. Solid primary `+` is official 40.
+    // Search keeps the 36 frost plate. Solid primary `+` is official 40.
     final disc = filled
         ? hit
         : (hit < OcOptical.headerDiscVisual ? hit : OcOptical.headerDiscVisual);
