@@ -277,7 +277,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                     child: OcGlyph(
                       OcGlyphKind.ellipsis,
                       size: OcOptical.sessionMore,
-                      strokeWidth: OcOptical.listGlyphStroke,
+                      strokeWidth: OcOptical.headerGlyphStrokeVisual,
                       color: context.oc.mutedForeground,
                     ),
                   ),

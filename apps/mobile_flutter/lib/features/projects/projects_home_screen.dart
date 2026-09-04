@@ -426,7 +426,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                       ),
                     ),
                     const Spacer(),
-                    OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.chevron, strokeWidth: OcOptical.listGlyphStroke, color: context.oc.mutedForeground),
+                    OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.chevron, strokeWidth: OcOptical.headerGlyphStrokeVisual, color: context.oc.mutedForeground),
                   ],
                 ),
               ),
