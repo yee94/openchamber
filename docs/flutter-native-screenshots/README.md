@@ -870,3 +870,12 @@ the official circle). Do not pile 3.2 / 1.46 or grow search glyph
 **14**. Press DONE. Kept 03 `3a881f07` (MAE ~0.61). 02/04/05/07
 restored. Locked shadows stay.
 **精致: 还没有.**
+
+**2026-09-04 wake-0618 (stale `fedb7ae0c` / parent `eb042e3ad`):**
+Quiet duplicate of wake-0611 goldens (`03=2bd63bf8`). Live tip is
+`7599aff50` with official AgentAvatar + root entity-meta 13/16
+(`03=3a881f07`). Do **not** rewind assistant-name 15/20. Do **not**
+invent frost/umbra or unlock discs 34/28/24 / glyph **14**. README
+MAE ~27 is cream/PingFang/UIKit glass. Press DONE. No second
+recapture — live pixels already include the unread 03 delta.
+**精致: 还没有.**
