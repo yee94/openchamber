@@ -24,8 +24,8 @@ class OcOptical {
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   /// Official project-shell row is 40. 4.7px CJK half-lead (per side)
-  /// plus title↔subtitle air after Medium ate 2 / 4 / 6 / 8.
-  /// 40 + 4×4.7 + 8 = 66.8 — not 7.5 half-lead / 70px.
+  /// plus title↔subtitle air after Medium ate 2 / 4 / 6 / 8 / 10.
+  /// 40 + 4×4.7 + 10 = 68.8 — not 7.5 half-lead / 70px.
   static const double sessionRowVisualHeight =
       40 + 4 * cssLineCjkHalfLead + (sessionTitleSubtitleGap - 2);
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
@@ -37,21 +37,21 @@ class OcOptical {
   /// gap 0.4375rem. Not the standalone trigger padding 0.75rem.
   static const double projectTriggerPad = 10;
   static const double projectTriggerGap = 7;
-  /// Project title column `flex-col gap-1` = 0.25rem. Medium ate that 4
-  /// — 6 is the next 2px of card title↔meta air, not a half-lead pile.
-  static const double groupTitleMetaGap = 6;
+  /// Project title column `flex-col gap-1` = 0.25rem. Medium ate 4 and 6
+  /// — 8 is the next 2px of card title↔meta air, not a half-lead pile.
+  static const double groupTitleMetaGap = 8;
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
   /// Official title/subtitle column is `gap-0.5` (2). Medium ate 2, 4,
-  /// 6, and 8. 10 is the next 2px of column air — not a half-lead pile
-  /// and not 15px empty air.
+  /// 6, 8, and 10. 12 is the next 2px of column air — not a half-lead
+  /// pile and not 15px empty air.
   /// Official title is `font-medium` / unread `font-semibold`. Fill-only
   /// at that weight. Do not revive a miter stem. Half-lead 4.7 + tracking
   /// 1.42 stay. Latin is ReviewSans Medium.
   static const double sessionTitleStem = 0;
   static const double sessionTitleShade = 0;
-  static const double sessionTitleSubtitleGap = 10;
+  static const double sessionTitleSubtitleGap = 12;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
   /// 4.7 extra Flutter pixels open Regular CJK that still packed at 4.6.
   /// Stay under the 4.75 ceiling — do not invent 7.5/70.
@@ -119,9 +119,9 @@ class OcOptical {
   /// Official scheduled task row `p-3` (12).
   static const double scheduleCardPadV = 12;
   /// Official scheduled meta `mt-1` (4). Title air is the 18px CSS box
-  /// plus [cardTitleHalfLead] — not session 4.7. Medium ate official
-  /// `mt-1` (4) — 6 matches the project card title↔meta residual.
-  static const double scheduleTitleMetaGap = 6;
+  /// plus [cardTitleHalfLead] — not session 4.7. Medium ate 4 and 6 —
+  /// 8 matches the project card title↔meta residual.
+  static const double scheduleTitleMetaGap = 8;
 
   /// Official `.oc-mobile-detail-title` 0.9375rem / line-height 1.4 / weight 650.
   static const double chatTitle = 15;
@@ -225,12 +225,12 @@ class OcOptical {
   /// Flutter round-cap bloom at dpr 3; paint under 2 so slim filled-medium
   /// 23px stays delicate — not bricks, not hairlines.
   static const double dockGlyphStroke = 2;
-  /// Official medium is 2; Flutter bloom at dpr 3. 0.24 still read a
-  /// touch heavy vs README liquid-glass — 0.20 is the optical weight,
+  /// Official medium is 2; Flutter bloom at dpr 3. 0.20 still read a
+  /// touch heavy vs README liquid-glass — 0.16 is the optical weight,
   /// not a size spike (23px box stays).
-  static const double dockGlyphStrokeVisual = 0.20;
+  static const double dockGlyphStrokeVisual = 0.16;
   /// Folder / sparkles share the same slim outline-medium.
-  static const double dockStrokeGlyphStrokeVisual = 0.20;
+  static const double dockStrokeGlyphStrokeVisual = 0.16;
   /// Official dock `Icon weight="medium"` is outline, not filled bodies.
   /// Filling calendar/gear at dpr 3 reads as chunky bricks.
   static const bool dockGlyphFillBodies = false;
@@ -261,8 +261,8 @@ class OcOptical {
   /// `size-3.5` (14). Hit areas (36/40) stay separate from these visuals.
   static const double leadingCircle = 38;
   /// Painted plate inside the official 38 shell so project leading
-  /// discs are not oversized coins. 28 still read large vs README.
-  static const double leadingCircleVisual = 26;
+  /// discs are not oversized coins. 26 still read large vs README.
+  static const double leadingCircleVisual = 24;
   static const double leadingCircleCompact = 22;
   /// Official `.oc-mobile-project-shell .oc-mobile-project-icon-glyph` is
   /// 1.125rem (18). Flutter CustomPaint blooms past the web SVG; paint
@@ -301,17 +301,17 @@ class OcOptical {
 
   /// Official scheduled status uses the project-shell glass disc (2.375rem).
   static const double scheduleStatus = leadingCircle;
-  /// Hit stays official 38. Paint 16 so leading check/pause is not a
+  /// Hit stays official 38. Paint 14 so leading check/pause is not a
   /// massy coin beside the title. Fill is glassChipThrough + inset
   /// highlight — same quiet disc as project leading, not OcGlassChip
   /// frost + chip shadow (that read as a Material badge).
-  static const double scheduleStatusVisual = 16;
+  static const double scheduleStatusVisual = 14;
   /// Official non-tab scheduled glyph is `size-3.5`; residual optical
-  /// paints 7 so the badge does not outweigh the segment track.
-  static const double scheduleStatusGlyph = 7;
+  /// paints 6 so the badge does not outweigh the segment track.
+  static const double scheduleStatusGlyph = 6;
   /// Schedule overflow `more-2` — slimmer than session 12.
   static const double scheduleMore = 10;
-  /// Header now shares dock visual so the 16/7 badge is not a second weight.
+  /// Header now shares dock visual so the 14/6 badge is not a second weight.
   static const double scheduleMoreStroke = dockGlyphStrokeVisual;
   /// Quiet status polish: check/pause at dock visual stroke so the
   /// 38 disc does not outweigh the card title.

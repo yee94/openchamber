@@ -17,11 +17,11 @@ class OcElevation {
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
     // Official `--oc-mobile-float-shadow` far is `0 10px 24px -6px`
-    // rgb(0 0 0 / 0.1). Cream cannot take 10%. 6%/3.5% still read
-    // flat vs README — true-black 8% / tight 4.5%. Trio geometry stays.
+    // rgb(0 0 0 / 0.1). 8%/4.5% still read flat vs README — land the
+    // official 10% / tight 6% as true black. Trio geometry stays.
     // Dock / chips stay near-pair only. No Material 8/20 umbra.
     final far = BoxShadow(
-      color: Color.fromRGBO(0, 0, 0, tight ? 0.045 : 0.08),
+      color: Color.fromRGBO(0, 0, 0, tight ? 0.06 : 0.10),
       offset: const Offset(0, 10),
       blurRadius: 24,
       spreadRadius: -6,
