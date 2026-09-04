@@ -70,7 +70,7 @@ class HighlightedText extends StatelessWidget {
       value,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: paint,
+      style: _shaded(paint),
     );
     if (stem <= 0 || paint.color == null) return fill;
     return Stack(
@@ -101,6 +101,7 @@ class HighlightedText extends StatelessWidget {
       span,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
+      style: _shaded(paint),
     );
     if (stem <= 0 || paint.color == null) return fill;
     return Stack(
@@ -122,6 +123,20 @@ class HighlightedText extends StatelessWidget {
           ),
         ),
         fill,
+      ],
+    );
+  }
+
+  TextStyle _shaded(TextStyle paint) {
+    if (stem <= 0 || paint.color == null) return paint;
+    const d = OcOptical.sessionTitleShade;
+    final ink = paint.color!;
+    return paint.copyWith(
+      shadows: [
+        Shadow(color: ink, offset: const Offset(-d, 0), blurRadius: 0),
+        Shadow(color: ink, offset: const Offset(d, 0), blurRadius: 0),
+        Shadow(color: ink, offset: const Offset(0, -d), blurRadius: 0),
+        Shadow(color: ink, offset: const Offset(0, d), blurRadius: 0),
       ],
     );
   }

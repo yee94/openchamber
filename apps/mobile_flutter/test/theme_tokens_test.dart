@@ -139,6 +139,7 @@ void main() {
     expect(OcOptical.sessionRowPadRight, 2);
     expect(OcOptical.sessionTitleSubtitleGap, 2);
     expect(OcOptical.sessionTitleStem, 2.0);
+    expect(OcOptical.sessionTitleShade, closeTo(0.6, 0.01));
     expect(OcOptical.cssLineCjkHalfLead, closeTo(2.5, 0.01));
     expect(OcOptical.cssLineCjkHalfLead, greaterThan(0));
     expect(OcOptical.cssLineCjkHalfLead, lessThan(3));
