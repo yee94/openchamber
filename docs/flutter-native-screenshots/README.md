@@ -49,7 +49,8 @@ Do not pile half-lead/tracking and do not revive Noto Bold. Title↔subtitle
 gap **2 → 4** (`mt-1` after Medium ate `gap-0.5`); row visual **58.8 → 60.8**.
 Dock/header visual stroke **0.36 → 0.32** (23px box stays). Project leading
 **28 → 26**, schedule status **18 → 16** (glyph 8 → 7); hit 38 stays. Far
-quieter official-black **3% / tight 2%**. Recapture 02/04 after this dart.
+quieter official-black **3% / tight 2%**. Recapture 02 family after this dart;
+04 MAE stayed tester-noise (~0.05) so those frames were restored.
 **Not 精致.**
 
 | File | Screen |
