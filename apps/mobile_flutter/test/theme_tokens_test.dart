@@ -128,7 +128,7 @@ void main() {
       ),
       OcOptical.projectTitle * OcOptical.projectTitleHeight,
     );
-    expect(OcOptical.cardTitleHalfLead, closeTo(2.7, 0.01));
+    expect(OcOptical.cardTitleHalfLead, closeTo(3.0, 0.01));
     expect(OcOptical.cardTitleHalfLead, greaterThan(0));
     expect(OcOptical.cardTitleHalfLead, lessThan(OcOptical.cssLineCjkHalfLead));
     expect(
@@ -248,7 +248,7 @@ void main() {
     expect(OcOptical.addButton, OcOptical.headerDisc);
     expect(OcOptical.addButton, greaterThan(OcOptical.headerDiscVisual));
     expect(OcOptical.headerGlyphStrokeVisual, isNot(OcOptical.dockGlyphStrokeVisual));
-    expect(OcOptical.headerGlyphStrokeVisual, closeTo(0.38, 0.01));
+    expect(OcOptical.headerGlyphStrokeVisual, closeTo(0.28, 0.01));
     expect(OcOptical.headerGlyphStrokeVisual, greaterThan(OcOptical.dockGlyphStrokeVisual));
     expect(OcOptical.headerGlyphStrokeVisual, lessThan(OcOptical.headerGlyphStroke));
     expect(OcOptical.detailSubtitleGap, 2);

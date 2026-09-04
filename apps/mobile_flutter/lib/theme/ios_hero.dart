@@ -111,10 +111,11 @@ class OcOptical {
   /// Official 18/14 box unchanged. Stay under 1.1.
   static const double projectTitleTracking = 1.02;
   static const double projectTitleHeight = 18 / 14;
-  /// Session titles use [sessionTitleHalfLead] (3.2). 14/18 project /
-  /// schedule titles get a smaller CJK band so Regular is not packed
-  /// into the official CSS box — not another session-row bump, not 7.5.
-  static const double cardTitleHalfLead = 2.7;
+  /// Session titles stay [sessionTitleHalfLead] (3.2) — do not pile.
+  /// 14/18 project / worktree / schedule titles still pack Regular CJK
+  /// in the official CSS box at 2.7. 3.0 opens that band toward
+  /// PingFang Medium. Not a session-row bump, not 7.5, not a gap widen.
+  static const double cardTitleHalfLead = 3.0;
 
   /// `.oc-mobile-entity-meta` 0.75rem / 0.9375rem.
   static const double meta = 12;
@@ -186,11 +187,11 @@ class OcOptical {
   static const double headerGlyph = 14;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
-  /// Small chrome still read heavy at 0.50 vs official medium bloom.
-  /// 0.38 is the next optical-weight step — still above dock 0.12,
+  /// Small chrome still read heavy at 0.38 vs official medium bloom.
+  /// 0.28 is the next optical-weight step — still above dock 0.12,
   /// still far under official 1.5. Hit boxes stay 40. Glyphs stay 14.
-  /// Not a hairline and not a plate nibble.
-  static const double headerGlyphStrokeVisual = 0.38;
+  /// Plates stay 28. Not a hairline and not a disc shrink.
+  static const double headerGlyphStrokeVisual = 0.28;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
   static const double listGlyphStroke = 1.5;
   /// Search-field prefix `Icon name="search" className="size-4"`.
@@ -303,8 +304,8 @@ class OcOptical {
   static const double worktreeMeta = 11;
   static const double worktreeMetaHeight = 14 / 11;
   /// Official session `more-2` is `size-3.5` (14). Trailing ··· / chevron
-  /// stay dock visual — not small-chrome 0.38 (that fattened meatballs
-  /// vs README). Search / leading keep 0.38.
+  /// stay dock visual — not small-chrome 0.28 (that fattened meatballs
+  /// vs README). Search / leading keep 0.28.
   static const double sessionMore = 14;
   static const double sessionMoreStroke = dockGlyphStrokeVisual;
   /// Official visible more is `min-w-9` + `mr-1`. Open the trailing air a
