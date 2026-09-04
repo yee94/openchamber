@@ -53,9 +53,11 @@ Future<void> loadReviewFonts() async {
 }
 
 const _cjkRegularCandidates = [
+  // Regular chrome / meta stay Micro Hei so only official medium/semibold
+  // titles pick Noto. Swapping Regular to Noto restyles every CJK glyph.
+  '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
   '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
   '/usr/share/fonts/noto-cjk/NotoSansCJKsc-Regular.otf',
-  '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
   '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
 ];
 
