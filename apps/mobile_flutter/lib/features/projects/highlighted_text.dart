@@ -16,7 +16,7 @@ class HighlightedText extends StatelessWidget {
   final String text;
   final String query;
   final TextStyle? style;
-  /// Session 16/12 rows keep [OcOptical.cssLineCjkHalfLead]. Project /
+  /// Session 16/12 rows use [OcOptical.sessionTitleHalfLead]. Project /
   /// schedule 14/18 titles use [OcOptical.cardTitleHalfLead] (not 0).
   final double? halfLead;
   /// Reserved. Do not revive a miter stem — official `font-medium` is a
