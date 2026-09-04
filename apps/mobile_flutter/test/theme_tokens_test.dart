@@ -226,11 +226,11 @@ void main() {
     expect(OcOptical.addButton, OcOptical.headerDisc);
     expect(OcOptical.addButton, greaterThan(OcOptical.headerDiscVisual));
     expect(OcOptical.headerGlyphStrokeVisual, isNot(OcOptical.dockGlyphStrokeVisual));
-    expect(OcOptical.headerGlyphStrokeVisual, closeTo(0.45, 0.01));
+    expect(OcOptical.headerGlyphStrokeVisual, closeTo(0.62, 0.01));
     expect(OcOptical.headerGlyphStrokeVisual, greaterThan(OcOptical.dockGlyphStrokeVisual));
     expect(OcOptical.headerGlyphStrokeVisual, lessThan(OcOptical.headerGlyphStroke));
     expect(OcOptical.detailSubtitleGap, 2);
-    expect(OcOptical.headerGlyph, 12);
+    expect(OcOptical.headerGlyph, 14);
     expect(OcOptical.headerGlyph, lessThan(OcOptical.searchFieldGlyph));
     expect(OcOptical.headerGlyph, lessThan(20));
     expect(OcOptical.headerGlyphStroke, 1.5);

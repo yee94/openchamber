@@ -7,6 +7,7 @@ import 'package:openchamber/data/settings_catalog.dart';
 import 'package:openchamber/features/shell/secondary_chrome.dart';
 import 'package:openchamber/features/shell/tab_scaffold.dart';
 import 'package:openchamber/features/settings/settings_primitives.dart';
+import 'package:openchamber/mobile/mobile_project_card.dart';
 import 'package:openchamber/mobile/mobile_surface.dart';
 import 'package:openchamber/theme/ios_chrome.dart';
 import 'package:openchamber/theme/oc_glyphs.dart';
@@ -177,6 +178,10 @@ void main() {
     expect(codeGlyph.size, lessThan(OcOptical.leadingGlyph));
     expect(codeGlyph.strokeWidth, OcOptical.headerGlyphStrokeVisual);
     expect(codeGlyph.strokeWidth, lessThan(OcOptical.headerGlyphStroke));
+    final projectRow = tester.widget<Row>(
+      find.descendant(of: find.byType(MobileProjectCard).first, matching: find.byType(Row)).first,
+    );
+    expect(projectRow.crossAxisAlignment, CrossAxisAlignment.start);
     final plusPlate = tester.widgetList<SizedBox>(
       find.descendant(of: find.byKey(const Key('projects-plus-menu')), matching: find.byType(SizedBox)),
     ).firstWhere((box) => box.width == OcOptical.addButton && box.height == OcOptical.addButton);

@@ -170,16 +170,16 @@ class OcOptical {
   /// `glassChipThrough` 0.22 / σ14, not a 0.68 coin and not a 22 bleed
   /// glyph. Solid primary `+` paints the full 40 hit. No 8/20 umbra.
   static const double headerDiscVisual = 36;
-  /// Official `size-5` is 20. Shrink-to-death 5 vanished in the 36
-  /// plate vs README search. 12 is the optical restore — still under
-  /// the 16 field glyph and official 20. Not a 22 bleed coin.
-  static const double headerGlyph = 12;
+  /// Official `size-5` is 20. Wake-2341 restored 5→12. 14 is the
+  /// next step toward README search — still under the 16 field glyph
+  /// and official 20. Not a 22 bleed coin. Plates stay 28.
+  static const double headerGlyph = 14;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
-  /// Small chrome (search / leading / schedule) needs more than dock
-  /// 0.12 or a 12px glyph stays a sub-pixel hairline at dpr 3. 0.45
-  /// is still far under official 1.5. Dock 23px stays 0.12.
-  static const double headerGlyphStrokeVisual = 0.45;
+  /// Small chrome still read thin at 0.45 vs README. 0.62 is the
+  /// optical weight step — still far under official 1.5. Dock 23px
+  /// stays 0.12. Not a brick.
+  static const double headerGlyphStrokeVisual = 0.62;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
   static const double listGlyphStroke = 1.5;
   /// Search-field prefix `Icon name="search" className="size-4"`.

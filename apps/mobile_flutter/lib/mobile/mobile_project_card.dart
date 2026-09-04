@@ -60,6 +60,10 @@ class MobileProjectCard extends StatelessWidget {
             compact ? OcOptical.groupHeaderPadVCompact : OcOptical.projectTriggerPad,
           ),
           child: Row(
+            // Official trigger is center with gap-1 meta. Our title↔meta
+            // residual is 54 — center parked the 28 disc in the air gap.
+            // Start keeps `</>` / chevron / ··· on the title row (README).
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
                 width: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
