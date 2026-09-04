@@ -161,7 +161,7 @@ void main() {
     expect(projectTitle.style?.fontWeight, FontWeight.w600);
     final row = tester.getSize(find.byKey(const Key('home-session-sess-pinned')));
     expect(row.height, greaterThanOrEqualTo(OcOptical.sessionRowVisualHeight));
-    expect(row.height, lessThan(89));
+    expect(row.height, lessThan(OcOptical.sessionRowVisualHeight + 1));
     final codeGlyph = tester.widgetList<OcGlyph>(find.byType(OcGlyph)).firstWhere(
       (glyph) => glyph.kind == OcGlyphKind.code,
     );
