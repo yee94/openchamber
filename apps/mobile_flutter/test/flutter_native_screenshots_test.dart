@@ -88,6 +88,8 @@ void main() {
     expect(find.byKey(const Key('home-project-stack-openchamber')), findsOneWidget);
     final restHeader = tester.getRect(find.byType(MobileTabPageHeader));
     final restCard = tester.getRect(find.byKey(const Key('home-project-openchamber')));
+    final titleToCardGap = restCard.top - restHeader.bottom;
+    expect(titleToCardGap, closeTo(MobileTabPageHeader.titleBandAir, 1));
     expect(
       restCard.top,
       greaterThanOrEqualTo(restHeader.bottom + MobileTabPageHeader.titleBandAir - 0.5),
