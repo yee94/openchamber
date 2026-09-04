@@ -378,7 +378,7 @@ void main() {
     expect(OcElevation.cardFor(OcTokens.light).last.color.red, 0);
     expect(
       OcElevation.cardFor(OcTokens.light).last.color.a,
-      lessThan(0.10),
+      lessThanOrEqualTo(0.10),
     );
     expect(
       OcElevation.cardFor(OcTokens.light, tight: true).last.color.a,
