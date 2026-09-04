@@ -20,10 +20,10 @@ class OcOptical {
   static const double rowTitleTracking = 0;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
-  /// Official project-shell row is 40. One-pixel CJK half-lead (1/side)
-  /// adds 4px total so Flutter Regular CJK is not flush in the 16/12
+  /// Official project-shell row is 40. 1.25px CJK half-lead (per side)
+  /// adds 5px total so Flutter Regular CJK is not flush in the 16/12
   /// boxes. Stay in the 40-class — never 7.5 half-lead / 70px rows.
-  static const double sessionRowVisualHeight = 44;
+  static const double sessionRowVisualHeight = 45;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
@@ -44,8 +44,8 @@ class OcOptical {
   /// CJK face is Regular-only, so paint Regular — do not faux-bold.
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
-  /// One extra Flutter pixel un-cramps CJK without leaving ~40 density.
-  static const double cssLineCjkHalfLead = 1.0;
+  /// 1.25 extra Flutter pixels un-cramp CJK without leaving ~40 density.
+  static const double cssLineCjkHalfLead = 1.25;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
@@ -145,7 +145,9 @@ class OcOptical {
   /// 0.34/σ14, not a 22 page-bleed glyph and not a 0.68/36 cream coin. Solid
   /// primary `+` paints the full 40 hit. No 8/20 umbra. No UIKit clone.
   static const double headerDiscVisual = 32;
-  static const double headerGlyph = 16;
+  /// Official `size-5` is 20. Flutter round-cap bloom; paint 15 in the
+  /// 32 frost plate so search / ink glyphs are not massy coins.
+  static const double headerGlyph = 15;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
   /// Flutter round-cap bloom at dpr 3; paint under official 1.5 so search
@@ -242,13 +244,13 @@ class OcOptical {
   /// 1.125rem (18). Flutter CustomPaint blooms past the web SVG; paint
   /// [leadingGlyphVisual] inside the official 38/32 hit/plate.
   static const double leadingGlyph = 18;
-  static const double leadingGlyphVisual = 17;
+  static const double leadingGlyphVisual = 16;
   static const double leadingGlyphCompact = 14;
   static const double worktreeIconBox = 18;
   /// Official worktree `git-branch` is `size-3.5` (14). Paint [worktreeGlyphVisual]
   /// inside the 18 box so the sprite matches the web scale.
   static const double worktreeGlyph = 14;
-  static const double worktreeGlyphVisual = 13;
+  static const double worktreeGlyphVisual = 12;
   /// Session / worktree `more-2` `size-3.5`. Project action is `size-4`.
   static const double sessionMore = 12;
   /// Official visible more is `min-w-9` + `mr-1`. Open the trailing air a

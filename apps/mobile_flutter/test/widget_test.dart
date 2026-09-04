@@ -88,7 +88,7 @@ void main() {
       OcOptical.rowTitle * OcOptical.rowTitleHeight + 2 * OcOptical.cssLineCjkHalfLead,
     );
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.cssLineCjkHalfLead, 1.0);
+    expect(OcOptical.cssLineCjkHalfLead, closeTo(1.25, 0.01));
   });
 
   testWidgets('chat is a pushed secondary page from Projects', (tester) async {
@@ -146,6 +146,8 @@ void main() {
     );
     expect(codeGlyph.size, OcOptical.leadingGlyphVisual);
     expect(codeGlyph.size, lessThan(OcOptical.leadingGlyph));
+    expect(codeGlyph.strokeWidth, OcOptical.headerGlyphStrokeVisual);
+    expect(codeGlyph.strokeWidth, lessThan(OcOptical.headerGlyphStroke));
     final plusPlate = tester.widgetList<SizedBox>(
       find.descendant(of: find.byKey(const Key('projects-plus-menu')), matching: find.byType(SizedBox)),
     ).firstWhere((box) => box.width == OcOptical.addButton && box.height == OcOptical.addButton);

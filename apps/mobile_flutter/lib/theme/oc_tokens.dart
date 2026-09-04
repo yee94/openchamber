@@ -372,7 +372,7 @@ class OcTokens extends ThemeExtension<OcTokens> {
 
   /// Root `--oc-mobile-session-row-height` = 2.875rem. Project-shell CSS
   /// is 2.5rem (40); [OcOptical.sessionRowVisualHeight] stays in that
-  /// class with a tiny CJK half-lead (42).
+  /// class with a 1.25px CJK half-lead (45).
   static const double sessionRowHeight = 46;
 
   static const double groupRadius = surfaceRadius;

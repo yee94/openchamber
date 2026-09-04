@@ -111,7 +111,7 @@ void main() {
     expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
     expect(OcOptical.rowTitleHeight, lessThan(1.42));
     expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);
-    expect(OcOptical.sessionRowVisualHeight, 44);
+    expect(OcOptical.sessionRowVisualHeight, 45);
     expect(OcOptical.sessionRowVisualHeight, lessThan(OcOptical.sessionRowHeight));
     expect(OcOptical.sessionRowVisualHeight, greaterThanOrEqualTo(40));
     expect(OcOptical.sessionRowVisualHeight, lessThan(46));
@@ -124,7 +124,7 @@ void main() {
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.cssLineCjkHalfLead, 1.0);
+    expect(OcOptical.cssLineCjkHalfLead, closeTo(1.25, 0.01));
     expect(OcOptical.cssLineCjkHalfLead, greaterThan(0));
     expect(OcOptical.cssLineCjkHalfLead, lessThan(2));
     expect(OcOptical.sessionLineLeading, closeTo(0.57, 0.001));
@@ -192,7 +192,8 @@ void main() {
     expect(OcOptical.headerGlyphStrokeVisual, closeTo(0.70, 0.01));
     expect(OcOptical.headerGlyphStrokeVisual, lessThan(OcOptical.headerGlyphStroke));
     expect(OcOptical.detailSubtitleGap, 2);
-    expect(OcOptical.headerGlyph, 16);
+    expect(OcOptical.headerGlyph, 15);
+    expect(OcOptical.headerGlyph, lessThan(OcOptical.searchFieldGlyph));
     expect(OcOptical.headerGlyphStroke, 1.5);
     expect(OcOptical.collapsingActionSize, 40);
     expect(OcOptical.collapsingTitleCompactSize, 20);
@@ -239,12 +240,12 @@ void main() {
     expect(OcOptical.leadingCircleVisual, 32);
     expect(OcOptical.leadingCircleVisual, lessThan(OcOptical.leadingCircle));
     expect(OcOptical.leadingGlyph, 18);
-    expect(OcOptical.leadingGlyphVisual, 17);
+    expect(OcOptical.leadingGlyphVisual, 16);
     expect(OcOptical.leadingGlyphVisual, lessThan(OcOptical.leadingGlyph));
     expect(OcOptical.leadingGlyphCompact, 14);
     expect(OcOptical.worktreeIconBox, 18);
     expect(OcOptical.worktreeGlyph, 14);
-    expect(OcOptical.worktreeGlyphVisual, 13);
+    expect(OcOptical.worktreeGlyphVisual, 12);
     expect(OcOptical.worktreeGlyphVisual, lessThan(OcOptical.worktreeGlyph));
     expect(OcOptical.sessionMore, 12);
     expect(OcOptical.chevron, 14);

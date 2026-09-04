@@ -77,7 +77,7 @@ class MobileProjectCard extends StatelessWidget {
                     child: OcGlyph(
                       glyph,
                       size: compact ? OcOptical.leadingGlyphCompact : OcOptical.leadingGlyphVisual,
-                      strokeWidth: OcOptical.headerGlyphStroke,
+                      strokeWidth: OcOptical.headerGlyphStrokeVisual,
                       color: context.oc.mutedForeground,
                     ),
                   ),

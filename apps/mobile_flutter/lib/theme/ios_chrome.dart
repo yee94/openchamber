@@ -61,7 +61,7 @@ class OcCssLine extends StatelessWidget {
   final Widget child;
   /// Full-width in a column / [Expanded]. Trailing time / counts stay tight.
   final bool expand;
-  /// Default is [OcOptical.cssLineCjkHalfLead] (1.0). The 56px chat
+  /// Default is [OcOptical.cssLineCjkHalfLead] (1.25). The 56px chat
   /// detail band also passes `halfLead: 0` so title + subtitle + gap-0.5
   /// still fit.
   final double? halfLead;
