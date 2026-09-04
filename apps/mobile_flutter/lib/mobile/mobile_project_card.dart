@@ -61,20 +61,26 @@ class MobileProjectCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Container(
+              SizedBox(
                 width: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
                 height: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
-                decoration: BoxDecoration(
-                  color: context.oc.glassChipFill,
-                  shape: BoxShape.circle,
-                  boxShadow: OcElevation.glassHighlight(context),
-                ),
-                alignment: Alignment.center,
-                child: OcGlyph(
-                  glyph,
-                  size: compact ? OcOptical.leadingGlyphCompact : OcOptical.leadingGlyph,
-                  strokeWidth: OcOptical.headerGlyphStroke,
-                  color: context.oc.mutedForeground,
+                child: Center(
+                  child: Container(
+                    width: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircleVisual,
+                    height: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircleVisual,
+                    decoration: BoxDecoration(
+                      color: context.oc.glassChipFill,
+                      shape: BoxShape.circle,
+                      boxShadow: OcElevation.glassHighlight(context),
+                    ),
+                    alignment: Alignment.center,
+                    child: OcGlyph(
+                      glyph,
+                      size: compact ? OcOptical.leadingGlyphCompact : OcOptical.leadingGlyph,
+                      strokeWidth: OcOptical.headerGlyphStroke,
+                      color: context.oc.mutedForeground,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: OcOptical.projectTriggerGap),

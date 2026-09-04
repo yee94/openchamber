@@ -23,9 +23,9 @@ class OcOptical {
   /// Project-shell CSS min-height is 2.5rem (40). Flutter CJK paints past
   /// `font-size` into the CSS half-leading, so the visual row is official
   /// pads + 16/12 boxes + [cssLineCjkHalfLead] + `gap-0.5`.
-  static const double sessionRowVisualHeight = 58;
+  static const double sessionRowVisualHeight = 60;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
-  /// 5 + 25 + 2 + 21 + 5 = 58. Extra 9/line is [cssLineCjkHalfLead].
+  /// 5 + 26 + 2 + 22 + 5 = 60. Extra 10/line is [cssLineCjkHalfLead].
   /// Do not grow icons. Do not invent gap.
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
@@ -49,10 +49,9 @@ class OcOptical {
   /// Extra half-leading each side of [OcCssLine] so Flutter CJK, which
   /// paints past `font-size` into the CSS 2px/1px half-leading, keeps
   /// ink-to-box air. Official CSS tokens stay 16/12; this is metric
-  /// compensation (4.5 × 2 = 9px / line). Wake-0902: still packed after
-  /// 4.0 — tune half-leading only, keep gap-0.5. Search glyph-only.
-  /// Dock stays /55 mix-only.
-  static const double cssLineCjkHalfLead = 4.5;
+  /// compensation (5.0 × 2 = 10px / line). Wake-0905: still denser than
+  /// official after 4.5 — tune half-leading only, keep gap-0.5.
+  static const double cssLineCjkHalfLead = 5.0;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
@@ -148,16 +147,16 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  /// Official hit is 40 (`mobileIcon`). Painted plate is 36. Search is
-  /// page-bleed + contact-only (no inset, no umbra, no disc frost).
-  /// `+` stays primary. No primary + glow.
-  static const double headerDiscVisual = 36;
-  static const double headerGlyph = 20;
+  /// Official hit is 40 (`mobileIcon`). Painted plate is 32 — smaller
+  /// than the 36/40 coin so search/+ read as a delicate glass disc.
+  /// `+` stays primary. No primary + glow. No 8/20 umbra.
+  static const double headerDiscVisual = 32;
+  static const double headerGlyph = 16;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
-  /// Flutter round-cap bloom at dpr 3; paint under official 1.5 so 20px
+  /// Flutter round-cap bloom at dpr 3; paint under official 1.5 so 16px
   /// header glyphs stay thin vs `size-5` medium, not massy coins.
-  static const double headerGlyphStrokeVisual = 1.20;
+  static const double headerGlyphStrokeVisual = 1.10;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
   static const double listGlyphStroke = 1.5;
   /// Search-field prefix `Icon name="search" className="size-4"`.
@@ -195,28 +194,30 @@ class OcOptical {
   /// Flutter round-cap bloom at dpr 3; paint under 2 so slim filled-medium
   /// 23px stays delicate — not bricks, not hairlines.
   static const double dockGlyphStroke = 2;
-  /// Slimmer than 1.55 so calendar/gear read filled-medium, not bricks
-  /// (wake-0809). Folder / sparkles stay [dockStrokeGlyphStrokeVisual].
-  static const double dockGlyphStrokeVisual = 1.42;
+  /// Slimmer than 1.42 so calendar/gear read filled-medium, not bricks
+  /// (wake-0905). Folder / sparkles stay [dockStrokeGlyphStrokeVisual].
+  static const double dockGlyphStrokeVisual = 1.28;
   /// Folder / sparkles stay official medium stroke but paint lighter
-  /// than calendar/gear so the 23px outline is not a brick (wake-0741).
-  static const double dockStrokeGlyphStrokeVisual = 1.32;
+  /// than calendar/gear so the 23px outline is not a brick (wake-0905).
+  static const double dockStrokeGlyphStrokeVisual = 1.18;
   /// Official filled-medium 23px sprites: folder / sparkles / calendar
   /// grid / holed gear. Not hairline outlines and not brick mass.
   static const bool dockGlyphFillBodies = true;
   static const bool dockSelectedFullSlot = true;
   /// Official selected class is `bg-interactive-selection/55`.
-  /// [OcTokens.selectedTabWash] multiplies authored alpha by this.
-  static const double dockIconWashAlpha = 0.55;
+  /// WidgetTester /55 through-mix still reads as a heavy cream/orange
+  /// capsule — paint 0.38 so the slot is a lighter wash, not opaque.
+  static const double dockIconWashAlpha = 0.38;
   /// Official selected tab is `bg-interactive-selection/55` on already-
   /// frosted dock glass — no second BackdropFilter. Nested sigma painted
   /// a cream plate that hid the list. 0 = mix only so rows show through.
   static const double dockWashBlur = 0;
   /// Official `--oc-mobile-glass-blur` on the 36 `mobileGlass` disc.
   static const double chipBlur = 20;
-  /// WidgetTester cream + [chipBlur] paints a solid disc. 0 = page bleed
-  /// through a clear chip. No contact rim — that read as a painted disc.
-  static const double chipBleedBlur = 0;
+  /// Chip frost sigma. Official [chipBlur] is 20; WidgetTester cream +
+  /// 20 paints a coin. 10 keeps the BackdropFilter path without a
+  /// solid plate. Search/+ stay delicate glass, not glyph-only.
+  static const double chipBleedBlur = 10;
   /// Official `.oc-mobile-floating-surface` `blur(22px) saturate(1.35)`.
   /// Distinct from control-scale [chipBlur] / [glassSaturate].
   static const double floatBlur = 22;
@@ -228,13 +229,16 @@ class OcOptical {
   /// Worktree label: `.oc-mobile-group-label-icon` 1.125rem box + `git-branch`
   /// `size-3.5` (14). Hit areas (36/40) stay separate from these visuals.
   static const double leadingCircle = 38;
+  /// Painted plate inside the official 38 shell so project leading
+  /// discs are not oversized coins (wake-0905).
+  static const double leadingCircleVisual = 32;
   static const double leadingCircleCompact = 22;
-  static const double leadingGlyph = 18;
+  static const double leadingGlyph = 16;
   static const double leadingGlyphCompact = 14;
   static const double worktreeIconBox = 18;
   static const double worktreeGlyph = 14;
   /// Session / worktree `more-2` `size-3.5`. Project action is `size-4`.
-  static const double sessionMore = 14;
+  static const double sessionMore = 12;
   /// Official visible more is `min-w-9` + `mr-1`. Open the trailing air a
   /// hair past that so time + ellipsis do not crowd the card edge.
   static const double sessionMoreHit = 36;
@@ -246,16 +250,20 @@ class OcOptical {
   static const double sessionBullet = 5;
   static const double overflow = 16;
   static const double chevron = 14;
-  /// Official `Button` `mobileIcon` = `size-10` (40). Same disc as header actions.
-  static const double chatChip = 40;
+  /// Chat detail-nav circular glass chips. Official mobileIcon is 40;
+  /// README / residual optical wants a 44 plate so back / busy / more
+  /// are discs, not flat glyphs.
+  static const double chatChip = 44;
+  static const double chatChipGlyph = 18;
 
   /// Official scheduled status uses the project-shell glass disc, with a
   /// quieter `size-4` glyph so the row does not out-weigh the segment track.
   static const double scheduleStatus = leadingCircle;
   /// Painted plate sits inside the 38 shell so WidgetTester frost is not a coin.
-  static const double scheduleStatusVisual = 32;
-  /// Official non-tab scheduled glyph is `size-3.5`; shell disc stays 38.
-  static const double scheduleStatusGlyph = 14;
+  static const double scheduleStatusVisual = 28;
+  /// Official non-tab scheduled glyph is `size-3.5`; residual optical
+  /// paints 12 so the badge does not outweigh the segment track.
+  static const double scheduleStatusGlyph = 12;
 
   /// Official `FileTypeIcon` mobile size `h-3 w-3` (12px).
   static const double fileTypeSize = 12;
@@ -270,8 +278,8 @@ class OcOptical {
   static const double composerPillPadV = 8;
   static const double composerRadius = 24;
   /// Official composer attach `Icon name="attachment-2" className="size-5"`.
-  static const double composerPlus = 20;
-  static const double composerPlusStroke = 1.5;
+  static const double composerPlus = 18;
+  static const double composerPlusStroke = 1.25;
   /// Official send/stop: `size-8` hit. Idle empty is `send-plane-2` `size-4`
   /// inside the pill (no filled disc). Ready is `SendCircleIcon` `size-6`.
   static const double sendRing = 32;
@@ -283,7 +291,7 @@ class OcOptical {
   static const double sendArrow = 13;
   static const double scrollFab = 36;
   static const double scrollChevron = 16;
-  static const double scrollChevronStroke = 2.4;
+  static const double scrollChevronStroke = 1.8;
   static const double glassBlur = 20;
   /// Official `--oc-mobile-glass-saturate` (light 1.25).
   static const double glassSaturate = 1.25;

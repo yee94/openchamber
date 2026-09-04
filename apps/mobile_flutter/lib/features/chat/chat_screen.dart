@@ -396,13 +396,14 @@ class _ChatScreenState extends State<ChatScreen> {
                     highlight: false,
                     onPressed: () {},
                     child: SizedBox(
-                      width: OcOptical.headerDisc,
-                      height: OcOptical.headerDisc,
+                      width: OcOptical.chatChip,
+                      height: OcOptical.chatChip,
                       child: Center(
                         child: OcGlassChip(
+                          size: OcOptical.chatChip,
                           child: OcGlyph(
                             OcGlyphKind.ellipsis,
-                            size: OcOptical.headerGlyph,
+                            size: OcOptical.chatChipGlyph,
                             strokeWidth: OcOptical.headerGlyphStrokeVisual,
                             color: context.oc.foreground,
                           ),

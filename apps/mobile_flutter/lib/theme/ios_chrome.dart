@@ -54,22 +54,28 @@ class OcCssLine extends StatelessWidget {
     required this.style,
     required this.child,
     this.expand = true,
+    this.halfLead,
   });
 
   final TextStyle? style;
   final Widget child;
   /// Full-width in a column / [Expanded]. Trailing time / counts stay tight.
   final bool expand;
+  /// Session rows use [OcOptical.cssLineCjkHalfLead]. The 56px chat
+  /// detail band keeps official CSS boxes (`halfLead: 0`) so title +
+  /// subtitle + gap-0.5 still fit.
+  final double? halfLead;
 
-  static double? boxHeight(TextStyle? style) {
+  static double? boxHeight(TextStyle? style, {double? halfLead}) {
     if (style?.fontSize == null || style?.height == null) return null;
-    return style!.fontSize! * style.height! + 2 * OcOptical.cssLineCjkHalfLead;
+    final extra = halfLead ?? OcOptical.cssLineCjkHalfLead;
+    return style!.fontSize! * style.height! + 2 * extra;
   }
 
   @override
   Widget build(BuildContext context) {
     final font = style?.fontSize;
-    final box = boxHeight(style);
+    final box = boxHeight(style, halfLead: halfLead);
     if (font == null || box == null) return child;
     return SizedBox(
       height: box,
@@ -197,13 +203,25 @@ class OcGlassChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Page-bleed glyph only (wake-0802). No OcFrosted plate — even α0
-    // fill is not official frost glass. No contact rim, no ClipOval.
-    // `+` keeps OcElevation.chip. WidgetTester ≠ UIGlassEffect.
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Center(child: child),
+    // Delicate glass plate (wake-0905). BackdropFilter stays; fill is
+    // glassChipFill 0.22, not official 0.68. Contact-only chip shadow —
+    // no hairline rim, no 8/20 umbra. WidgetTester ≠ UIGlassEffect.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: OcElevation.chip(context),
+      ),
+      child: ClipOval(
+        child: OcFrosted(
+          fill: context.oc.glassChipFill,
+          sigma: OcOptical.chipBleedBlur,
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Center(child: child),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -741,10 +759,10 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
         : OcOptical.detailActionEdgeInset;
     final fadeH = OcHeaderFade.heightFor(view.top);
     final bandH = view.top + OcOptical.detailNavigationHeight;
-    final disc = OcOptical.headerDisc;
+    final disc = OcOptical.chatChip;
 
     Widget actionDisc({required Widget child, Key? key, VoidCallback? onPressed}) {
-      final chip = OcGlassChip(size: OcOptical.headerDiscVisual, child: child);
+      final chip = OcGlassChip(size: OcOptical.chatChip, child: child);
       final hit = SizedBox(
         width: disc,
         height: disc,
@@ -789,7 +807,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                           onPressed: () => Navigator.of(context).maybePop(),
                           child: OcGlyph(
                             OcGlyphKind.chevronBack,
-                            size: OcOptical.headerGlyph,
+                            size: OcOptical.chatChipGlyph,
                             strokeWidth: OcOptical.headerGlyphStrokeVisual,
                             color: tokens.foreground,
                           ),
@@ -802,6 +820,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         OcCssLine(
+                          halfLead: 0,
                           style: const TextStyle(
                             fontSize: OcOptical.chatTitle,
                             height: OcOptical.chatTitleHeight,
@@ -823,6 +842,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                         if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
                           const SizedBox(height: OcOptical.detailSubtitleGap),
                           OcCssLine(
+                            halfLead: 0,
                             style: const TextStyle(
                               fontSize: OcOptical.detailSubtitle,
                               height: OcOptical.detailSubtitleHeight,
@@ -859,7 +879,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                             height: disc,
                             child: Center(
                               child: OcGlassChip(
-                                size: OcOptical.headerDiscVisual,
+                                size: OcOptical.chatChip,
                                 child: SizedBox(
                                   key: const Key('chat-busy'),
                                   width: 16,

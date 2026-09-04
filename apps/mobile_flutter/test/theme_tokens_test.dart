@@ -35,9 +35,9 @@ void main() {
     expect(OcTokens.light.glassFill.g, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassFill.b, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassFill, isNot(OcTokens.light.surfaceElevated));
-    expect(OcTokens.light.glassChipFill.a, closeTo(0, 0.005));
+    expect(OcTokens.light.glassChipFill.a, closeTo(0.22, 0.01));
     expect(OcTokens.light.glassChipFill.a, lessThan(OcTokens.light.glassFill.a));
-    expect(OcTokens.dark.glassChipFill.a, closeTo(0, 0.005));
+    expect(OcTokens.dark.glassChipFill.a, closeTo(0.20, 0.01));
     expect(OcTokens.light.glassChipFill.r, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassHighlight.a, closeTo(0.60, 0.01));
     expect(OcTokens.dark.glassHighlight.a, closeTo(0.18, 0.01));
@@ -49,7 +49,7 @@ void main() {
     );
     expect(OcTokens.light.selectedTabWash.a, lessThan(OcTokens.light.interactiveSelection.a));
     expect(OcTokens.light.selectedTabWash.a, greaterThan(0.03));
-    expect(OcOptical.dockIconWashAlpha, closeTo(0.55, 0.01));
+    expect(OcOptical.dockIconWashAlpha, closeTo(0.38, 0.01));
     expect(
       (OcTokens.light.selectedTabWash.r - OcTokens.light.primary.r).abs(),
       greaterThan(0.15),
@@ -105,7 +105,7 @@ void main() {
     expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
     expect(OcOptical.rowTitleHeight, lessThan(1.42));
     expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);
-    expect(OcOptical.sessionRowVisualHeight, 58);
+    expect(OcOptical.sessionRowVisualHeight, 60);
     expect(OcOptical.sessionRowVisualHeight, greaterThan(OcOptical.sessionRowHeight));
     expect(OcOptical.sessionRowVisualHeight, greaterThanOrEqualTo(36));
     expect(OcOptical.sessionRowPadV, 5);
@@ -117,7 +117,7 @@ void main() {
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.cssLineCjkHalfLead, 4.5);
+    expect(OcOptical.cssLineCjkHalfLead, 5.0);
     expect(OcOptical.sessionLineLeading, closeTo(0.57, 0.001));
     expect(OcOptical.sessionLineLeading, greaterThan(0.48));
     expect(OcOptical.sessionLineLeading, lessThan(0.58));
@@ -176,12 +176,12 @@ void main() {
     expect(OcOptical.searchButton, 40);
     expect(OcOptical.addButton, 40);
     expect(OcOptical.headerDisc, OcOptical.searchButton);
-    expect(OcOptical.headerDiscVisual, 36);
+    expect(OcOptical.headerDiscVisual, 32);
     expect(OcOptical.headerDiscVisual, lessThan(OcOptical.headerDisc));
-    expect(OcOptical.headerGlyphStrokeVisual, closeTo(1.20, 0.01));
+    expect(OcOptical.headerGlyphStrokeVisual, closeTo(1.10, 0.01));
     expect(OcOptical.headerGlyphStrokeVisual, lessThan(OcOptical.headerGlyphStroke));
     expect(OcOptical.detailSubtitleGap, 2);
-    expect(OcOptical.headerGlyph, 20);
+    expect(OcOptical.headerGlyph, 16);
     expect(OcOptical.headerGlyphStroke, 1.5);
     expect(OcOptical.collapsingActionSize, 40);
     expect(OcOptical.collapsingTitleCompactSize, 20);
@@ -198,17 +198,18 @@ void main() {
     expect(OcOptical.dockGlyph, 23);
     expect(OcOptical.dockGlyphVisual, OcOptical.dockGlyph);
     expect(OcOptical.dockGlyphStrokeVisual, lessThan(OcOptical.dockGlyphStroke));
-    expect(OcOptical.dockGlyphStrokeVisual, closeTo(1.42, 0.01));
-    expect(OcOptical.dockGlyphStrokeVisual, greaterThan(1.4));
-    expect(OcOptical.dockStrokeGlyphStrokeVisual, closeTo(1.32, 0.01));
+    expect(OcOptical.dockGlyphStrokeVisual, closeTo(1.28, 0.01));
+    expect(OcOptical.dockGlyphStrokeVisual, greaterThan(1.2));
+    expect(OcOptical.dockStrokeGlyphStrokeVisual, closeTo(1.18, 0.01));
     expect(OcOptical.dockStrokeGlyphStrokeVisual, lessThan(OcOptical.dockGlyphStrokeVisual));
     expect(OcOptical.dockStrokeGlyphStrokeVisual, greaterThan(1.15));
     expect(OcOptical.dockGlyphFillBodies, isTrue);
     expect(OcOptical.dockWashBlur, 0);
     expect(OcOptical.dockWashBlur, lessThan(OcOptical.glassBlur));
     expect(OcOptical.chipBlur, OcOptical.glassBlur);
-    expect(OcOptical.chipBleedBlur, 0);
+    expect(OcOptical.chipBleedBlur, 10);
     expect(OcOptical.chipBleedBlur, lessThan(OcOptical.chipBlur));
+    expect(OcOptical.chipBleedBlur, greaterThan(0));
     expect(OcOptical.glassSaturate, closeTo(1.25, 0.01));
     expect(OcOptical.floatBlur, 22);
     expect(OcOptical.floatSaturate, closeTo(1.35, 0.01));
@@ -219,25 +220,28 @@ void main() {
     expect(OcOptical.dockLabelHeight, 1.0);
     expect(OcOptical.dockGap, 3);
     expect(OcOptical.dockSelectedFullSlot, isTrue);
-    expect(OcOptical.dockIconWashAlpha, closeTo(0.55, 0.01));
+    expect(OcOptical.dockIconWashAlpha, closeTo(0.38, 0.01));
     expect(OcOptical.dockGlyphStroke, 2);
     expect(OcOptical.listGlyphStroke, OcOptical.headerGlyphStroke);
     expect(OcOptical.searchFieldGlyph, 16);
     expect(OcOptical.leadingCircle, 38);
-    expect(OcOptical.leadingGlyph, 18);
+    expect(OcOptical.leadingCircleVisual, 32);
+    expect(OcOptical.leadingCircleVisual, lessThan(OcOptical.leadingCircle));
+    expect(OcOptical.leadingGlyph, 16);
     expect(OcOptical.leadingGlyphCompact, 14);
     expect(OcOptical.worktreeIconBox, 18);
     expect(OcOptical.worktreeGlyph, 14);
-    expect(OcOptical.sessionMore, 14);
+    expect(OcOptical.sessionMore, 12);
     expect(OcOptical.chevron, 14);
     expect(OcOptical.footerGlyph, 14);
     expect(OcOptical.scheduleStatus, OcOptical.leadingCircle);
-    expect(OcOptical.scheduleStatusVisual, 32);
+    expect(OcOptical.scheduleStatusVisual, 28);
     expect(OcOptical.scheduleStatusVisual, lessThan(OcOptical.scheduleStatus));
-    expect(OcOptical.scheduleStatusGlyph, 14);
+    expect(OcOptical.scheduleStatusGlyph, 12);
     expect(OcOptical.overflow, 16);
-    expect(OcOptical.chatChip, 40);
-    expect(OcOptical.chatChip, OcOptical.headerDisc);
+    expect(OcOptical.chatChip, 44);
+    expect(OcOptical.chatChip, greaterThan(OcOptical.headerDisc));
+    expect(OcOptical.chatChipGlyph, 18);
     expect(OcOptical.sessionBullet, 5);
     expect(OcOptical.fileTypeSize, 12);
     expect(OcOptical.fileTypeMark, 7);
@@ -247,8 +251,8 @@ void main() {
     expect(OcOptical.composerFieldPadV, 10);
     expect(OcOptical.composerPillPadV, 8);
     expect(OcOptical.composerRadius, 24);
-    expect(OcOptical.composerPlus, 20);
-    expect(OcOptical.composerPlusStroke, 1.5);
+    expect(OcOptical.composerPlus, 18);
+    expect(OcOptical.composerPlusStroke, 1.25);
     expect(OcOptical.footerGlyphStroke, 2);
     expect(OcOptical.footerMeta, 11);
     expect(OcOptical.sendRing, 32);
@@ -280,7 +284,7 @@ void main() {
     expect(OcElevation.cardFor(OcTokens.light).last.spreadRadius, -6);
     expect(
       (OcElevation.cardFor(OcTokens.light).last.color.a * 255).round(),
-      closeTo(0x1A, 1),
+      closeTo(0x12, 1),
     );
     expect(
       OcElevation.cardFor(OcTokens.light, tight: true),

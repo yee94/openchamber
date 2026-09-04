@@ -157,11 +157,19 @@ void main() {
     final circular = discs.where((box) {
       final decoration = box.decoration;
       return decoration is BoxDecoration && decoration.shape == BoxShape.circle;
-    });
-    expect(circular, isEmpty);
+    }).toList();
+    expect(circular, isNotEmpty);
+    for (final box in circular) {
+      final decoration = box.decoration as BoxDecoration;
+      expect(decoration.border, isNull);
+    }
     expect(find.descendant(
       of: find.byKey(const Key('projects-search-toggle')),
       matching: find.byType(OcGlassChip),
+    ), findsOneWidget);
+    expect(find.descendant(
+      of: find.byKey(const Key('projects-search-toggle')),
+      matching: find.byType(OcFrosted),
     ), findsOneWidget);
   });
 

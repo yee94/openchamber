@@ -76,7 +76,7 @@ class MobileTabPageHeader extends StatelessWidget {
               child: Opacity(
                 opacity: 0.55 + (0.25 * t),
                 child: OcFrosted(
-                  fill: tokens.glassFill.withValues(alpha: tokens.isDark ? 0.42 : 0.34),
+                  fill: tokens.glassFill.withValues(alpha: tokens.isDark ? 0.32 : 0.26),
                   child: const SizedBox.expand(),
                 ),
               ),

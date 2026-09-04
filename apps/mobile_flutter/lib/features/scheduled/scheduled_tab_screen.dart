@@ -200,17 +200,14 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                 width: OcOptical.scheduleStatus,
                 height: OcOptical.scheduleStatus,
                 child: Center(
-                  child: SizedBox(
-                    width: OcOptical.scheduleStatusVisual,
-                    height: OcOptical.scheduleStatusVisual,
-                    child: Center(
-                      child: OcGlyph(
-                        paused ? OcGlyphKind.pause : OcGlyphKind.check,
-                        size: OcOptical.scheduleStatusGlyph,
-                        strokeWidth: OcOptical.listGlyphStroke,
-                        filled: false,
-                        color: paused ? context.oc.mutedForeground : context.oc.statusSuccess,
-                      ),
+                  child: OcGlassChip(
+                    size: OcOptical.scheduleStatusVisual,
+                    child: OcGlyph(
+                      paused ? OcGlyphKind.pause : OcGlyphKind.check,
+                      size: OcOptical.scheduleStatusGlyph,
+                      strokeWidth: OcOptical.listGlyphStroke,
+                      filled: false,
+                      color: paused ? context.oc.mutedForeground : context.oc.statusSuccess,
                     ),
                   ),
                 ),

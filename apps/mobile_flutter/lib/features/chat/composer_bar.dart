@@ -138,28 +138,18 @@ class ComposerBar extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: Padding(
                 padding: const EdgeInsets.only(right: 22, bottom: 6),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: context.oc.background.withValues(alpha: 0.95),
-                    boxShadow: OcElevation.chip(context),
-                  ),
-                  child: Pressable(
-                    key: const Key('chat-scroll-to-bottom'),
-                    haptic: HapticStrength.light,
-                    highlight: false,
-                    onPressed: onScrollToBottom,
-                    child: SizedBox(
-                      width: OcOptical.scrollFab,
-                      height: OcOptical.scrollFab,
-                      child: Center(
-                        child: OcGlyph(
-                          OcGlyphKind.chevronDown,
-                          size: OcOptical.scrollChevron,
-                          strokeWidth: OcOptical.scrollChevronStroke,
-                          color: context.oc.foreground,
-                        ),
-                      ),
+                child: Pressable(
+                  key: const Key('chat-scroll-to-bottom'),
+                  haptic: HapticStrength.light,
+                  highlight: false,
+                  onPressed: onScrollToBottom,
+                  child: OcGlassChip(
+                    size: OcOptical.scrollFab,
+                    child: OcGlyph(
+                      OcGlyphKind.chevronDown,
+                      size: OcOptical.scrollChevron,
+                      strokeWidth: OcOptical.scrollChevronStroke,
+                      color: context.oc.foreground,
                     ),
                   ),
                 ),
