@@ -193,6 +193,10 @@ void main() {
       find.descendant(of: find.byType(MobileProjectCard).first, matching: find.byType(Row)).first,
     );
     expect(projectRow.crossAxisAlignment, CrossAxisAlignment.center);
+    final sessionRow = tester.widget<Row>(
+      find.descendant(of: find.byKey(const Key('home-session-sess-pinned')), matching: find.byType(Row)).first,
+    );
+    expect(sessionRow.crossAxisAlignment, CrossAxisAlignment.center);
     final plusPlate = tester.widgetList<SizedBox>(
       find.descendant(of: find.byKey(const Key('projects-plus-menu')), matching: find.byType(SizedBox)),
     ).firstWhere((box) => box.width == OcOptical.addButton && box.height == OcOptical.addButton);
