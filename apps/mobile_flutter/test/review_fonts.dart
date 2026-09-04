@@ -22,10 +22,9 @@ Future<void> loadReviewFonts() async {
     ],
   ]);
   // Official session titles are `font-medium` (PingFang / Noto Medium).
-  // Prefer Noto Sans CJK SC Regular+Medium+Bold so w500/w600 are real
-  // cuts — not a miter stem and not a synthesized blob on Micro Hei.
+  // Regular chrome stays Micro Hei. Medium titles load Noto Sans CJK SC
+  // Medium — not a miter stem. Do not load Noto Bold (700 bricks 32px).
   // Recapture hosts: `fonts-noto-cjk` + `fonts-noto-cjk-extra`.
-  // Fallback is WenQuanYi Regular, then Droid.
   await _loadCjkFaces();
   await _loadFamily('RobotoReal', [
     '$flutterRoot/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
