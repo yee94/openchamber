@@ -20,6 +20,7 @@ class ChatTranscriptBody extends StatelessWidget {
     this.onSpeak,
     this.isLastAssistant = false,
     this.isTurnLive = false,
+    this.isStreaming = false,
     this.isSpeaking = false,
   });
 
@@ -28,6 +29,9 @@ class ChatTranscriptBody extends StatelessWidget {
   final VoidCallback? onSpeak;
   final bool isLastAssistant;
   final bool isTurnLive;
+  /// Busy last-assistant turn. Independent of a running tool so text-only
+  /// SSE tokens still debounce Markdown and auto-expand live reasoning.
+  final bool isStreaming;
   final bool isSpeaking;
 
   @override
@@ -79,8 +83,9 @@ class ChatTranscriptBody extends StatelessWidget {
         out.add(Padding(
           padding: const EdgeInsets.only(top: 8),
           child: ReasoningTraceBlock(
+            key: ValueKey<String>('reasoning-widget-${part.id}'),
             part: part,
-            isLive: isTurnLive && part.status != 'completed',
+            isLive: isStreaming && part.status != 'completed',
           ),
         ));
       } else if (part.kind == ChatPartKind.text && (part.body ?? '').trim().isNotEmpty) {
@@ -98,7 +103,7 @@ class ChatTranscriptBody extends StatelessWidget {
             ChatMarkdownBody(
               cacheKey: '${message.id}-${part.id}',
               text: part.body!.trim(),
-              isLive: isTurnLive && isLastAssistant,
+              isLive: isStreaming && isLastAssistant,
             ),
           );
           paintedText = true;
@@ -139,7 +144,7 @@ class ChatTranscriptBody extends StatelessWidget {
         ChatMarkdownBody(
           cacheKey: '${message.id}-body',
           text: message.body.trim(),
-          isLive: isTurnLive && isLastAssistant,
+          isLive: isStreaming && isLastAssistant,
         ),
       );
     }

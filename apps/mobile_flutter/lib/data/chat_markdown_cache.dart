@@ -19,7 +19,7 @@ class ChatMarkdownBuildCounters {
 class ChatMarkdownSourceCache {
   ChatMarkdownSourceCache._();
 
-  static const int maxEntries = 128;
+  static const int maxEntries = 512;
   static final List<String> _order = [];
   static final Set<String> _keys = {};
 

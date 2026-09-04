@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/chat_rebuild_counters.dart';
 import '../../data/chat_timeline.dart';
 import '../../data/context_tool_grouping.dart';
 import '../../theme/ios_chrome.dart';
@@ -35,8 +36,10 @@ class ChatTranscriptRow extends StatelessWidget {
         return ListenableBuilder(
           listenable: Listenable.merge([busy, speakingId]),
           builder: (context, _) {
+            ChatRebuildCounters.recordRowSlot(message.id);
             final isLastAssistant = !message.isUser && controller.isNewestAssistant(reverseIndex);
-            final isTurnLive = busy.value && isLastAssistant && messageHasRunningTool(message);
+            final isStreamingAssistant = busy.value && isLastAssistant;
+            final isTurnLive = isStreamingAssistant && messageHasRunningTool(message);
             if (message.isUser) {
               return Align(
                 alignment: Alignment.centerRight,
@@ -57,6 +60,7 @@ class ChatTranscriptRow extends StatelessWidget {
                           message: message,
                           isLastAssistant: isLastAssistant,
                           isTurnLive: isTurnLive,
+                          isStreaming: isStreamingAssistant,
                           isSpeaking: speakingId.value == message.id,
                         ),
                       ),
@@ -73,6 +77,7 @@ class ChatTranscriptRow extends StatelessWidget {
                 message: message,
                 isLastAssistant: isLastAssistant,
                 isTurnLive: isTurnLive,
+                isStreaming: isStreamingAssistant,
                 isSpeaking: speakingId.value == message.id,
                 onSpeak: onSpeak == null ? null : () => onSpeak!(message),
                 onPermission: onPermission,

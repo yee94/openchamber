@@ -2,14 +2,14 @@ import 'chat_timeline.dart';
 
 /// Deterministic long-context transcript for scroll / Markdown stress tests.
 ///
-/// Default: 160 turns (320 messages). Each assistant body is multi-KB GFM
+/// Default: 250 turns (500 messages). Each assistant body is multi-KB GFM
 /// with headings, emphasis, lists, blockquotes, links, and fenced code.
-/// Several turns also carry reasoning + a tool card so mixed rows are real.
+/// Many turns also carry a long collapsed reasoning block + a tool card.
 class LongContextFixture {
   const LongContextFixture._();
 
-  static const int defaultTurns = 160;
-  static const int codeLinesPerAssistant = 80;
+  static const int defaultTurns = 250;
+  static const int codeLinesPerAssistant = 100;
 
   static List<ChatMessage> build({int turns = defaultTurns}) {
     final out = <ChatMessage>[];
@@ -21,7 +21,7 @@ class LongContextFixture {
           isUser: true,
         ),
       );
-      final mixed = i % 5 == 0;
+      final mixed = i % 3 == 0 || i == turns - 1;
       final aborted = i == turns - 3;
       final empty = i == turns - 2;
       out.add(
@@ -88,9 +88,16 @@ class LongContextFixture {
   }
 
   static String reasoningMarkdown(int seed) {
-    return 'First thought about turn $seed and how to approach the long context.\n'
+    final buffer = StringBuffer()
+      ..writeln('First thought about turn $seed and how to approach the long context.')
+      ..writeln(
         'Second line goes deeper so the collapsed header summary truncates '
-        'before this hidden detail $seed.';
+        'before this hidden detail $seed.',
+      );
+    for (var line = 0; line < 12; line += 1) {
+      buffer.writeln('Hidden reasoning paragraph $line for turn $seed — not in the 80-char summary.');
+    }
+    return buffer.toString();
   }
 
   static int estimatedLineCount({int turns = defaultTurns}) {

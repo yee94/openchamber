@@ -340,30 +340,27 @@ class _ChatScreenState extends State<ChatScreen> {
       backgroundColor: context.oc.pageBackground,
       body: Stack(
         children: [
-          ListenableBuilder(
-            listenable: _timeline,
-            builder: (context, _) {
+          ReverseChatList(
+            controller: _timeline,
+            scrollController: _scroll,
+            paddingBuilder: (length) {
               final composerReserve = composerListReserve(
                 ios: ios,
                 viewBottom: view.bottom,
                 insetBottom: inset.bottom,
-                showScrollToBottom: _timeline.length >= 2,
+                showScrollToBottom: length >= 2,
               );
-              return ReverseChatList(
+              return EdgeInsets.fromLTRB(12, navH, 12, composerReserve + 12);
+            },
+            itemBuilder: (context, message, reverseIndex) {
+              return ChatTranscriptRow(
                 controller: _timeline,
-                scrollController: _scroll,
-                padding: EdgeInsets.fromLTRB(12, navH, 12, composerReserve + 12),
-                itemBuilder: (context, message, reverseIndex) {
-                  return ChatTranscriptRow(
-                    controller: _timeline,
-                    messageId: message.id,
-                    reverseIndex: reverseIndex,
-                    busy: _busy,
-                    speakingId: _speakingMessageId,
-                    onSpeak: widget.appController == null ? null : _speak,
-                    onPermission: widget.appController == null ? null : _replyPermission,
-                  );
-                },
+                messageId: message.id,
+                reverseIndex: reverseIndex,
+                busy: _busy,
+                speakingId: _speakingMessageId,
+                onSpeak: widget.appController == null ? null : _speak,
+                onPermission: widget.appController == null ? null : _replyPermission,
               );
             },
           ),

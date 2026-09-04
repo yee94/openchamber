@@ -36,6 +36,9 @@ class ChatMarkdownBody extends StatefulWidget {
 class _ChatMarkdownBodyState extends State<ChatMarkdownBody> {
   late String _committed = widget.text;
   String? _builtIdentity;
+  Widget? _builtBody;
+  MarkdownStyleSheet? _styleSheet;
+  Brightness? _styleBrightness;
   Timer? _pace;
 
   @override
@@ -63,26 +66,36 @@ class _ChatMarkdownBodyState extends State<ChatMarkdownBody> {
     super.dispose();
   }
 
+  MarkdownStyleSheet _sheetFor(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    if (_styleSheet != null && _styleBrightness == brightness) {
+      return _styleSheet!;
+    }
+    _styleBrightness = brightness;
+    _styleSheet = ocMarkdownStyleSheet(context);
+    return _styleSheet!;
+  }
+
   @override
   Widget build(BuildContext context) {
     final source = _committed;
     if (source.trim().isEmpty) return const SizedBox.shrink();
     final identity = '${widget.cacheKey ?? ''}#${source.hashCode}:${Theme.of(context).brightness}';
-    if (_builtIdentity == identity) {
+    if (_builtIdentity == identity && _builtBody != null) {
       ChatMarkdownBuildCounters.reuseHits += 1;
-    } else {
-      ChatMarkdownBuildCounters.builds += 1;
-      ChatMarkdownSourceCache.remember(identity);
-      _builtIdentity = identity;
+      return _builtBody!;
     }
-    return MarkdownBody(
+    ChatMarkdownBuildCounters.builds += 1;
+    ChatMarkdownSourceCache.remember(identity);
+    _builtIdentity = identity;
+    _builtBody = MarkdownBody(
       key: Key('chat-markdown-${widget.cacheKey ?? 'anon'}'),
       data: source,
       shrinkWrap: true,
       fitContent: true,
       softLineBreak: true,
       selectable: false,
-      styleSheet: ocMarkdownStyleSheet(context),
+      styleSheet: _sheetFor(context),
       onTapLink: (text, href, title) {
         final url = href?.trim() ?? '';
         if (url.isEmpty) return;
@@ -90,6 +103,7 @@ class _ChatMarkdownBodyState extends State<ChatMarkdownBody> {
         unawaited(opener.open(url).catchError((Object _) {}));
       },
     );
+    return _builtBody!;
   }
 }
 

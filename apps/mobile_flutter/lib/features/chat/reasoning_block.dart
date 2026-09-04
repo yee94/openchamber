@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../data/chat_rebuild_counters.dart';
 import '../../data/chat_timeline.dart';
 import '../../l10n/app_strings.dart';
 import '../../motion/oc_motion.dart';
@@ -96,6 +97,7 @@ class _ReasoningTraceBlockState extends State<ReasoningTraceBlock>
 
   @override
   Widget build(BuildContext context) {
+    ChatRebuildCounters.recordReasoning(widget.part.id);
     final text = widget.part.body ?? '';
     if (text.trim().isEmpty) return const SizedBox.shrink();
     final tokens = OcTokens.of(context);

@@ -76,6 +76,23 @@ void main() {}
     expect(find.textContaining('已跑:'), findsWidgets);
   });
 
+  testWidgets('live tokens coalesce to one Markdown commit after 64ms', (tester) async {
+    await tester.pumpWidget(_wrap(const ChatMarkdownBody(cacheKey: 'pace', text: 'Hello', isLive: true)));
+    final builds = ChatMarkdownBuildCounters.builds;
+    expect(builds, greaterThan(0));
+
+    for (var i = 1; i <= 6; i += 1) {
+      await tester.pumpWidget(_wrap(ChatMarkdownBody(cacheKey: 'pace', text: 'Hello${'!' * i}', isLive: true)));
+      await tester.pump();
+    }
+    expect(ChatMarkdownBuildCounters.builds, builds, reason: 'tokens inside the 64ms window must not parse');
+
+    await tester.pump(ChatMarkdownBody.livePace);
+    await tester.pump();
+    expect(ChatMarkdownBuildCounters.builds, builds + 1);
+    expect(find.textContaining('Hello!!!!!!'), findsWidgets);
+  });
+
   testWidgets('identical source rebuilds hit the Markdown cache', (tester) async {
     await tester.pumpWidget(_wrap(const ChatMarkdownBody(cacheKey: 'cache', text: 'Hello **world**')));
     final builds = ChatMarkdownBuildCounters.builds;

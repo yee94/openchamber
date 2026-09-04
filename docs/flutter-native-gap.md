@@ -526,26 +526,51 @@ Yee device walk on the v2 debug APK: assistant/user bodies were plain `Text` (on
 |---|---|
 | Markdown package | **`flutter_markdown_plus` ^1.0.7** — maintained successor to discontinued `flutter_markdown`. Newest release that resolves on the CI pin **Flutter 3.32.8 / Dart 3.8.1** (`1.0.12` needs a newer SDK). `MarkdownBody` shrink-wraps inside the reverse list. `gpt_markdown` adds LaTeX/chrome we do not need; `markdown_widget`'s default `MarkdownWidget` is its own scroller (nested scrollables). |
 | Typography | Official mobile `--text-markdown` 15 / `OcOptical.chatBodyHeight` 1.45. Headings stay the same size (official `--markdown-hN-font-size: var(--text-markdown)`), weight 600. Code is `monospace` / `--text-code` 13 on `surfaceSubtle`. Colors from `OcTokens`. |
-| Streaming | Live bodies debounce at official `streamingRenderCadence.markdownPaceMs` **64ms**. Incomplete fences / unclosed emphasis must not throw. |
-| List | Still `ListView.builder(reverse: true)` (LegendList behaviour, not TanStack Virtual). `ReverseChatController` is a `ChangeNotifier` for **structure only** (ids/order/length). Per-message `ValueNotifier` slots update the live tail. `findChildIndexCallback` keeps element identity. `addAutomaticKeepAlives: false`. |
+| Streaming | Live bodies debounce at official `streamingRenderCadence.markdownPaceMs` **64ms**. Incomplete fences / unclosed emphasis must not throw. **`isStreaming` is busy + newest assistant**, not “has a running tool”. Tool-only `isTurnLive` still owns Activity lock-open. |
+| List | Still `ListView.builder(reverse: true)` (LegendList behaviour, not TanStack Virtual). `ReverseChatController` is a `ChangeNotifier` for **structure only** (ids/order/length). Per-message `ValueNotifier` slots update the live tail. `findChildIndexCallback` keeps element identity. `addAutomaticKeepAlives: false`. `ChatScreen` does **not** re-subscribe to structure; padding that depends on length is computed inside `ReverseChatList`. |
 | Stick-to-bottom | Reverse offset `0` is the live edge. Transcript reloads **never** `jumpTo`. Scrolled-up (`offset > 24`) readers stay put when tokens arrive. `chat-scroll-to-bottom` jumps to 0. |
-| Reasoning | Official `type: 'reasoning'` (also `thinking` / `redacted_reasoning`). Default **collapsed** (`ReasoningPart.test.tsx`). Motion from `ReasoningPart.tsx`: height **200ms `easeOut`**, inner fade **180ms `easeOut`**, Markdown **unmounts 200ms** after collapse (`EXPANDED_CONTENT_UNMOUNT_DELAY_MS`). Streaming auto-expands while `time.end` is missing. Header summary is 80 chars, markdown-stripped. |
+| Reasoning | Official `type: 'reasoning'` (also `thinking` / `redacted_reasoning`). Default **collapsed** (`ReasoningPart.test.tsx`). Motion from `ReasoningPart.tsx`: height **200ms `easeOut`**, inner fade **180ms `easeOut`**, Markdown **unmounts 200ms** after collapse (`EXPANDED_CONTENT_UNMOUNT_DELAY_MS`). Streaming auto-expands while `status != completed`. Header summary is 80 chars, markdown-stripped. Collapsed traces do not keep a mounted Markdown tree. |
 
-### Long-context stress test (local)
+### Long-context acceptance (CI)
+
+`Flutter Mobile CI` → `analyze-test` → `flutter test` already runs `test/chat_transcript_perf_test.dart` on Linux (Flutter 3.32.8). That is the performance gate. There is **no** `integration_test` / `flutter drive` job: Linux has no phone GPU, and the macos-15 job only compiles the iOS simulator app. A second simulator-run job would be an unreliable extra 15+ minutes without proving Impeller/Skia jank.
 
 ```bash
 cd apps/mobile_flutter
-flutter test test/chat_transcript_perf_test.dart
+flutter test test/chat_transcript_perf_test.dart test/chat_markdown_body_test.dart test/reasoning_block_test.dart
 ```
 
-Fixture: `LongContextFixture.build()` — **160 turns / 320 messages**, each assistant body is multi-KB GFM (headings, lists, blockquotes, links, 80-line dart fences). Estimated **≥ 10k lines**. The widget test mounts `ChatScreen`, flings + jumps the reverse list, and asserts Markdown `builds` stay in a visible window (`< 40` on mount, `< 80` after fling) and that `applyMessages` of the same ids does not notify structure or rematerialize Markdown.
+Fixture: `LongContextFixture.build()` — **250 turns / 500 messages**, 100-line dart fences, reasoning on every 3rd turn plus the live tail. Estimated **≥ 25k lines**. Assertions:
 
-Related: `flutter test test/chat_markdown_body_test.dart test/reasoning_block_test.dart test/chat_boundary_cases_test.dart`.
+| Gate | Bound |
+|---|---|
+| Mount Markdown parses | `< 40` (viewport window, not O(n)) |
+| First frames after mount | `< 2500ms` wall (CI CPU budget; **not** a 16ms phone frame) |
+| Fling + `pumpAndSettle` | `< 3000ms` wall, Markdown parses `< 80` |
+| Identical `applyMessages` | 0 structure notifies, 0 list rebuilds, 0 extra Markdown parses |
+| 8 SSE tokens on the live tail | 0 list rebuilds, 0 neighbor slot/reasoning rebuilds, **1** Markdown parse after 64ms |
+| Reasoning expand/collapse | neighbor row + neighbor reasoning rebuild counts unchanged; Markdown unmounts after 200ms |
+
+Related: `flutter test test/chat_boundary_cases_test.dart`.
+
+### Local Timeline (not CI — needs a profile device or simulator)
+
+Widget tests do not record Impeller/Skia GPU frames. To take a Timeline on a machine that has a device:
+
+```bash
+cd apps/mobile_flutter
+flutter run --profile -d <device-or-sim>
+# DevTools → Performance → start recording
+# Open a long session, fling the reverse list, watch a text-only stream,
+# expand/collapse a settled reasoning block, then stop.
+```
+
+Budget on a real device: settled scroll should stay near 16ms UI frames; a live Markdown commit at the 64ms pace may spike. That path is **not** claimed 真机过.
 
 ### Remaining known gaps (chat body / list only)
 
 1. No Shiki / syntax colors inside fences (official web uses a worker). Mono + horizontal overflow is the Flutter floor.
 2. Reasoning is a first-class body disclosure (official **live** path). Sorted-mode Activity projection of reasoning rows is not a second copy.
 3. Encrypted/redacted reasoning with empty text stays hidden (same as official empty-text hide). No placeholder “encrypted thinking” chip.
-4. `WidgetTester` scroll counters are not a systrace on a mid-range Android phone. Device jank still needs a v2 APK walk.
+4. `WidgetTester` rebuild counters and CI CPU budgets are not a systrace on a mid-range Android phone. Phone-only residual: Impeller raster, glyph cache, and large-fence decode on a physical GPU.
 5. Pixel/golden chrome (composer glass, dock, goldens) stays on the Flutter UI track. This slice did not recapture `docs/flutter-native-screenshots/*`.
