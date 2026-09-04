@@ -835,11 +835,13 @@ stay. Kept 02 `f4b67cc2` / dark `60d8ba3b` (MAE ~0.22 / 0.34),
 Press DONE.
 **精致: 还没有.**
 
-**2026-09-04 wake-0602 dart:**
+**2026-09-04 wake-0602 residual (after dart `63b62e7f8`):**
 STRUCTURE PASS. THEME OK. Port official `.oc-mobile-assistant-name`
 15/20 / −0.02em — Flutter still invented root `oc-mobile-entity-title`
 16/20 / −0.024em on `MobileAssistantCard`. Do not pile 3.2 / 1.46.
 Locked 20+10+20, session gap **2**, title↔meta **4**, discs 34/28/24,
 search glyph **14**, frost through **0.16**, official float-shadow,
-Latin −0.012em/−0.024em stay. Press DONE. Recapture 03 only.
+Latin −0.012em/−0.024em stay. Press DONE.
+Kept 03 `2bd63bf8` (MAE ~0.29). Restored scrolled / 05-dark / 06 / 07
+(MAE ≤ 0.09). 02/04/05 light SAME.
 **精致: 还没有.**
