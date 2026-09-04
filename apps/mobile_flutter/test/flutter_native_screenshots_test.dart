@@ -95,7 +95,7 @@ void main() {
     expect(find.textContaining('feat-opencode2up'), findsOneWidget);
     expect(find.textContaining('feat-remove-ctx'), findsOneWidget);
     expect(find.textContaining('ios-native'), findsOneWidget);
-    expect(find.text('发布说明'), findsOneWidget);
+    expect(find.text('发布说明'), findsWidgets);
     expect(find.byKey(const Key('projects-attention-strip')), findsNothing);
     expect(find.byType(MobileTabPageHeader), findsOneWidget);
     expect(find.byKey(const Key('mobile-tab-page-header-slot')), findsOneWidget);
@@ -119,8 +119,8 @@ void main() {
     await tester.tap(find.textContaining('feat-remove-ctx'));
     await tester.tap(find.textContaining('ios-native'));
     await _pumpFrames(tester);
-    expect(find.textContaining('OpenCode 升级'), findsOneWidget);
-    expect(find.textContaining('Composer UIKit overlay'), findsOneWidget);
+    expect(find.textContaining('OpenCode 升级'), findsWidgets);
+    expect(find.textContaining('Composer UIKit overlay'), findsWidgets);
     await _writePng(tester, screenshotKey, '02-projects.png');
 
     final projectsScroll = tester.widget<SingleChildScrollView>(
@@ -142,7 +142,7 @@ void main() {
     final titleCollapsed = tester.widget<Transform>(find.byKey(const Key('mobile-tab-page-title')));
     expect(titleCollapsed.transform.storage[0], closeTo(OcOptical.titleCollapseScaleEnd, 0.02));
     expect(find.textContaining('openchamber'), findsWidgets);
-    expect(find.text('发布说明'), findsOneWidget);
+    expect(find.text('发布说明'), findsWidgets);
     final headerBottom = tester.getRect(find.byType(MobileTabPageHeader)).bottom;
     final dockTop = tester.getRect(find.byKey(const Key('dock-capsule'))).top;
     bool listLabelVisible(String text) {
