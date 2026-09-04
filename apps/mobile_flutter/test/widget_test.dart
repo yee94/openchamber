@@ -74,7 +74,7 @@ void main() {
     final pageTitle = tester.widget<Text>(
       find.descendant(of: find.byKey(const Key('mobile-tab-page-title')), matching: find.byType(Text)),
     );
-    expect(pageTitle.style?.fontWeight, FontWeight.w400);
+    expect(pageTitle.style?.fontWeight, FontWeight.w600);
     expect(capsule.width, lessThan(tester.view.physicalSize.width / tester.view.devicePixelRatio));
   });
 
@@ -158,7 +158,7 @@ void main() {
       (title) => title.style?.color != null,
     );
     expect(projectTitle.style?.color, OcTokens.light.foreground);
-    expect(projectTitle.style?.fontWeight, FontWeight.w400);
+    expect(projectTitle.style?.fontWeight, FontWeight.w600);
     final row = tester.getSize(find.byKey(const Key('home-session-sess-pinned')));
     expect(row.height, greaterThanOrEqualTo(OcOptical.sessionRowVisualHeight));
     expect(row.height, lessThan(62));
