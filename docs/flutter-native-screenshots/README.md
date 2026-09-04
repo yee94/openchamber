@@ -643,7 +643,9 @@ jump half-lead to 0. Gap **2**, 20+10+20, title↔meta **4**, far
 No frost clone. Port official `MobileSessionRow` `items-center`
 (drop README-trace `start` from the 114.8-air era). Small-chrome
 stroke **0.50 → 0.38** (search / leading optical weight; not a
-hit-box grow, not a hairline). Recapture 02 (+scrolled/dark).
+hit-box grow, not a hairline). Recapture 02 (+scrolled/dark) after
+`dbefa98ee`: `02=ed32cf05` / scrolled `80646f23` / dark `3756afa6`.
+MAE vs `dfca2cec9` ~0.41 / 0.38 / 0.36. 03/04/05/07 SAME.
 **Not 精致.**
 
 | File | Screen |
