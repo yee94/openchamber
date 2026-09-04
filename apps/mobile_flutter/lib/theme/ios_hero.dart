@@ -24,8 +24,8 @@ class OcOptical {
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   /// Official project-shell row is 40. 4.7px CJK half-lead (per side)
-  /// plus title↔subtitle air after Medium ate 2 / 4 / 6 / 8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 / 24 / 26 / 28 / 30 / 32 / 34 / 36.
-  /// 40 + 4×4.7 + 36 = 94.8 — gap residual, not 7.5 half-lead / 70.
+  /// plus title↔subtitle air after Medium ate 2 / 4 / 6 / 8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 / 24 / 26 / 28 / 30 / 32 / 34 / 36 / 38.
+  /// 40 + 4×4.7 + 38 = 96.8 — gap residual, not 7.5 half-lead / 70.
   static const double sessionRowVisualHeight =
       40 + 4 * cssLineCjkHalfLead + (sessionTitleSubtitleGap - 2);
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
@@ -38,20 +38,20 @@ class OcOptical {
   static const double projectTriggerPad = 10;
   static const double projectTriggerGap = 7;
   /// Project title column `flex-col gap-1` = 0.25rem. Medium ate 4 / 6 / 8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 / 24 / 26 / 28
-  /// — 34 is the next 2px of card title↔meta air, not a half-lead pile.
-  static const double groupTitleMetaGap = 34;
+  /// — 36 is the next 2px of card title↔meta air, not a half-lead pile.
+  static const double groupTitleMetaGap = 36;
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
   /// Official title/subtitle column is `gap-0.5` (2). Medium ate 2, 4,
-  /// 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, and 36. 38 is the next 2px of column air —
+  /// 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, and 38. 40 is the next 2px of column air —
   /// not a half-lead pile and not 7.5/70.
   /// Official title is `font-medium` / unread `font-semibold`. Fill-only
   /// at that weight. Do not revive a miter stem. Half-lead 4.7 + tracking
   /// 1.42 stay. Latin is ReviewSans Medium.
   static const double sessionTitleStem = 0;
   static const double sessionTitleShade = 0;
-  static const double sessionTitleSubtitleGap = 38;
+  static const double sessionTitleSubtitleGap = 40;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
   /// 4.7 extra Flutter pixels open Regular CJK that still packed at 4.6.
   /// Stay under the 4.75 ceiling — do not invent 7.5/70.
@@ -122,9 +122,9 @@ class OcOptical {
   /// Official scheduled task row `p-3` (12).
   static const double scheduleCardPadV = 12;
   /// Official scheduled meta `mt-1` (4). Title air is the 18px CSS box
-  /// plus [cardTitleHalfLead] — not session 4.7. Medium ate 4 / 6 / 8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 / 24 / 26 / 28 / 30 / 32 —
-  /// 34 matches the project card title↔meta residual.
-  static const double scheduleTitleMetaGap = 34;
+  /// plus [cardTitleHalfLead] — not session 4.7. Medium ate 4 / 6 / 8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 / 24 / 26 / 28 / 30 / 32 / 34 —
+  /// 36 matches the project card title↔meta residual.
+  static const double scheduleTitleMetaGap = 36;
 
   /// Official `.oc-mobile-detail-title` 0.9375rem / line-height 1.4 / weight 650.
   static const double chatTitle = 15;
@@ -272,7 +272,7 @@ class OcOptical {
   /// 1.125rem (18). Flutter CustomPaint blooms past the web SVG; paint
   /// [leadingGlyphVisual] inside the official 38/32 hit/plate.
   static const double leadingGlyph = 18;
-  static const double leadingGlyphVisual = 2;
+  static const double leadingGlyphVisual = 1;
   static const double leadingGlyphCompact = 14;
   static const double worktreeIconBox = 18;
   /// Official worktree `git-branch` is `size-3.5` (14). Paint [worktreeGlyphVisual]
@@ -311,8 +311,8 @@ class OcOptical {
   /// frost + chip shadow (that read as a Material badge).
   static const double scheduleStatusVisual = 2;
   /// Official non-tab scheduled glyph is `size-3.5`; residual optical
-  /// paints 2 so the badge does not outweigh the segment track.
-  static const double scheduleStatusGlyph = 2;
+  /// paints 1 so the 2px plate is not a filled coin beside the title.
+  static const double scheduleStatusGlyph = 1;
   /// Schedule overflow `more-2` — slimmer than session 12.
   static const double scheduleMore = 10;
   /// Header now shares dock visual so the 4/2 badge is not a second weight.

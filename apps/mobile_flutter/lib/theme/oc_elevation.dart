@@ -18,13 +18,13 @@ class OcElevation {
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
     // Official `--oc-mobile-float-shadow` far is `0 10px 24px -6px`
     // rgb(0 0 0 / 0.1). Alpha stays 10%. Soften blur/spread so cream
-    // reads official lift — 10/112/-28, not a darker umbra. Near pair
+    // reads official lift — 10/120/-30, not a darker umbra. Near pair
     // stays quieter on tight. Dock / chips stay near-pair only.
     final far = BoxShadow(
       color: Color.fromRGBO(0, 0, 0, 0.10),
       offset: const Offset(0, 10),
-      blurRadius: 112,
-      spreadRadius: -28,
+      blurRadius: 120,
+      spreadRadius: -30,
     );
     if (tokens.isDark) {
       if (tight) {
