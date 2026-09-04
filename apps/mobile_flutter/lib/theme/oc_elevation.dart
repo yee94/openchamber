@@ -17,16 +17,17 @@ class OcElevation {
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
     // Official `--oc-mobile-float-shadow` far is `0 10px 24px -6px`
-    // rgb(0 0 0 / 0.1). Alpha stays 10%. Wake-2214…2325 widened
-    // blur/spread to 192/-48; the negative spread ate the umbra and
-    // cards read flatter than README MobileFloatingSurface. Restore
-    // official 10/24/-6. Not a darker umbra. Not another +2 air.
-    // Near pair stays quieter on tight. Dock / chips stay near-pair only.
+    // rgb(0 0 0 / 0.1). Alpha stays 10%. Offset/blur stay official
+    // 10/24 — do not invent Material 8/20 or re-widen to 192/-48
+    // (that negative spread ate the umbra). Wake-0037 measured the
+    // official -6 spread still timid on cream in WidgetTester; -2
+    // lets the 10% umbra sit under the card. Near pair stays quieter
+    // on tight. Dock / chips stay near-pair only.
     final far = BoxShadow(
       color: Color.fromRGBO(0, 0, 0, 0.10),
       offset: const Offset(0, 10),
       blurRadius: 24,
-      spreadRadius: -6,
+      spreadRadius: -2,
     );
     if (tokens.isDark) {
       if (tight) {
