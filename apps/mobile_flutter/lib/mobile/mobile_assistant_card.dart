@@ -92,15 +92,16 @@ class MobileAssistantCard extends StatelessWidget {
                               child: HighlightedText(
                                 name,
                                 query: '',
-                                // Official root `oc-mobile-entity-title` is 16/20.
+                                // Official `.oc-mobile-assistant-name` is
+                                // 15/20 / −0.02em (overrides entity-title).
                                 // CJK fills Regular Micro Hei on WidgetTester.
                                 // Live iOS keeps official Semibold. Not a 3.2 / 1.46 pile.
                                 halfLead: 0,
                                 style: TextStyle(
-                                  fontSize: OcOptical.entityTitle,
+                                  fontSize: OcOptical.assistantName,
                                   fontWeight: FontWeight.w600,
-                                  letterSpacing: OcOptical.entityTitleTrackingOfficial,
-                                  height: OcOptical.entityTitleHeight,
+                                  letterSpacing: OcOptical.assistantNameTrackingOfficial,
+                                  height: OcOptical.assistantNameHeight,
                                   color: context.oc.foreground,
                                 ),
                               ),

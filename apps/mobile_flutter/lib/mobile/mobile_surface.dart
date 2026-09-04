@@ -82,8 +82,8 @@ class MobileLabeledSurfaceGroup extends StatelessWidget {
 /// card-stack spacing after this shared clearance. Children stay a built
 /// [Column] (not a lazy sliver)
 /// so settings slugs remain hittable via `ensureVisible`.
-/// WidgetTester / Android paint header frost via [MobileTabPageHeader].
-/// Real iOS still keeps live glass on the UIKit `UITabBar` overlay.
+/// Official header is transparent plus fade-on-collapse. WidgetTester
+/// cannot prove live UIKit `UIGlassEffect` on the iOS `UITabBar`.
 class MobileTabPageScaffold extends StatefulWidget {
   const MobileTabPageScaffold({
     super.key,

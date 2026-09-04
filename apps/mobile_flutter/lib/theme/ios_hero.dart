@@ -138,10 +138,15 @@ class OcOptical {
 
   /// Official `.oc-mobile-assistant-avatar` is 2.5rem. Visual AgentAvatar
   /// is 38 inside a 1px muted ring. Flutter `CircleAvatar` radius 22 (44)
-  /// + primary wash was unofficial and large. Name stays root
-  /// `oc-mobile-entity-title` 16/20 Regular — do not pile 3.2 / 1.46.
+  /// + primary wash was unofficial and large.
   static const double assistantAvatar = 40;
   static const double assistantAvatarVisual = 38;
+  /// Official `.oc-mobile-assistant-name` overrides entity-title:
+  /// 0.9375rem / 1.25rem / −0.02em. Root 16/20 / −0.024em was invented
+  /// here. Do not pile 3.2 / 1.46 onto 15.
+  static const double assistantName = 15;
+  static const double assistantNameTrackingOfficial = assistantName * -0.02;
+  static const double assistantNameHeight = 20 / 15;
   /// Official `.oc-mobile-assistant-card` padding 1rem / gap 0.75rem /
   /// min-height 7rem. Header `gap-2`. Summary `mt-2.5` / `--text-micro`
   /// / line-height 1.45 / clamp 3. Mode is entity-meta in a muted pill.

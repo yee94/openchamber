@@ -828,5 +828,18 @@ Wake-0601 re-locks glyph **14** (icons too large). Goldens unrestored.
 STRUCTURE PASS. THEME OK. Drop invented header OcFrosted — official
 `.oc-mobile-collapsing-header` is transparent; fade `::after` only
 on collapse. Search glyph **14**. Locked gaps/discs/frost/float-shadow
-stay. Press DONE.
+stay. Kept 02 `f4b67cc2` / dark `60d8ba3b` (MAE ~0.22 / 0.34),
+03 `516861d0` (~0.23), 04 `07cd0f96` / 04-dark `2b06be36`
+(~0.23 / 0.35), 05 `a24a0c47` (~0.23). Restored scrolled
+(MAE ~0.06), 05-dark (~0.06), and 01/06/07/08.
+Press DONE.
+**精致: 还没有.**
+
+**2026-09-04 wake-0602 dart:**
+STRUCTURE PASS. THEME OK. Port official `.oc-mobile-assistant-name`
+15/20 / −0.02em — Flutter still invented root `oc-mobile-entity-title`
+16/20 / −0.024em on `MobileAssistantCard`. Do not pile 3.2 / 1.46.
+Locked 20+10+20, session gap **2**, title↔meta **4**, discs 34/28/24,
+search glyph **14**, frost through **0.16**, official float-shadow,
+Latin −0.012em/−0.024em stay. Press DONE. Recapture 03 only.
 **精致: 还没有.**
