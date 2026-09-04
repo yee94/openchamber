@@ -102,7 +102,9 @@ class OcChrome {
 }
 
 /// Official `--oc-mobile-glass-fill` + blur 20 + saturate 1.25.
-/// WidgetTester paints [BackdropFilter]; this is not a `UIGlassEffect` clone.
+/// iOS 26 chrome is UIKit `UIGlassEffect` (`OpenChamberTabBarView` /
+/// composer). This widget is the Android / WidgetTester degrade:
+/// clipped [BackdropFilter] through-plates. Not a Flutter glass clone.
 class OcFrosted extends StatelessWidget {
   const OcFrosted({
     super.key,
@@ -208,7 +210,7 @@ class OcGlassChip extends StatelessWidget {
   final Widget child;
   final double size;
   /// Default is [OcTokens.glassChipFill] 0.34. Search passes
-  /// [OcTokens.glassChipThrough] so the 32 plate is frost, not a coin.
+  /// [OcTokens.glassChipThrough] so the 36 plate is frost, not a coin.
   final Color? fill;
 
   @override
@@ -349,7 +351,7 @@ class CircularChromeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.oc;
     final hit = size ?? (filled ? OcOptical.addButton : OcOptical.searchButton);
-    // Search keeps the 32 frost plate. Solid primary `+` is official 40.
+    // Search keeps the 36 frost plate. Solid primary `+` is official 40.
     final disc = filled
         ? hit
         : (hit < OcOptical.headerDiscVisual ? hit : OcOptical.headerDiscVisual);

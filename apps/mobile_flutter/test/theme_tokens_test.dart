@@ -201,7 +201,7 @@ void main() {
     expect(OcOptical.searchButton, 40);
     expect(OcOptical.addButton, 40);
     expect(OcOptical.headerDisc, OcOptical.searchButton);
-    expect(OcOptical.headerDiscVisual, 32);
+    expect(OcOptical.headerDiscVisual, 36);
     expect(OcOptical.headerDiscVisual, lessThan(OcOptical.headerDisc));
     expect(OcOptical.addButton, OcOptical.headerDisc);
     expect(OcOptical.addButton, greaterThan(OcOptical.headerDiscVisual));
@@ -328,23 +328,24 @@ void main() {
   });
 
   test('OcElevation ports official float-shadow and chip near-pair lift', () {
-    expect(OcElevation.cardFor(OcTokens.light), hasLength(3));
+    expect(OcElevation.cardFor(OcTokens.light), hasLength(2));
     expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, 2);
     expect(OcElevation.cardFor(OcTokens.light)[1].blurRadius, 12);
-    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, 24);
-    expect(OcElevation.cardFor(OcTokens.light).last.offset.dy, 10);
-    expect(OcElevation.cardFor(OcTokens.light).last.spreadRadius, -6);
     expect(
-      (OcElevation.cardFor(OcTokens.light).last.color.a * 255).round(),
-      closeTo(0x1A, 1),
+      OcElevation.cardFor(OcTokens.light).every((s) => s.offset == Offset.zero),
+      isTrue,
     );
     expect(
-      OcElevation.cardFor(OcTokens.light, tight: true).last.blurRadius,
-      lessThan(OcElevation.cardFor(OcTokens.light).last.blurRadius),
+      OcElevation.cardFor(OcTokens.light).every((s) => s.spreadRadius == 0),
+      isTrue,
+    );
+    expect(
+      (OcElevation.cardFor(OcTokens.light).last.color.a * 255).round(),
+      closeTo(0x0D, 1),
     );
     expect(
       (OcElevation.cardFor(OcTokens.light, tight: true).last.color.a * 255).round(),
-      lessThan(0x1A),
+      lessThan((OcElevation.cardFor(OcTokens.light).last.color.a * 255).round()),
     );
     expect(OcElevation.groupedFor(OcTokens.light), OcElevation.cardFor(OcTokens.light));
     expect(OcElevation.composerFor(OcTokens.light), isEmpty);
@@ -386,8 +387,8 @@ void main() {
       (OcElevation.controlFor(OcTokens.light).last.color.a * 255).round(),
       lessThanOrEqualTo(0x1F),
     );
-    expect(OcElevation.cardFor(OcTokens.dark), hasLength(3));
-    expect(OcElevation.cardFor(OcTokens.dark).last.offset.dy, 10);
+    expect(OcElevation.cardFor(OcTokens.dark), hasLength(2));
+    expect(OcElevation.cardFor(OcTokens.dark).last.offset.dy, 0);
     expect(OcElevation.dockFor(OcTokens.dark), isEmpty);
     expect(OcElevation.controlFor(OcTokens.dark), isEmpty);
   });

@@ -158,7 +158,7 @@ class OcTokens extends ThemeExtension<OcTokens> {
 
   /// Search header frost. 0.34 reads as a cream coin on the collapsing
   /// header (nothing behind to blur). 0.22 is through-frost — still a
-  /// 32 plate + σ14, not page-bleed and not a 0.68 coin.
+  /// 36 plate + σ14, not page-bleed and not a 0.68 coin.
   Color get glassChipThrough => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: 0.22);
 

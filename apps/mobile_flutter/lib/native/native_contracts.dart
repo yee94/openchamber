@@ -22,7 +22,7 @@ const List<NativeContract> flutterNativeContracts = [
   NativeContract(
     id: 'four-tab-dock',
     status: 'landed',
-    summary: 'Projects / Assistant / Scheduled / Settings. Chat is a pushed page. iOS UIKit UITabBar / Android Material 3.',
+    summary: 'Projects / Assistant / Scheduled / Settings. Chat is a pushed page. iOS 26 UIKit UITabBar + UIGlassEffect; older iOS system translucent bar; Android / WidgetTester clipped BackdropFilter through-plates (degrade, not a Flutter glass clone).',
   ),
   NativeContract(
     id: 'settings-home',

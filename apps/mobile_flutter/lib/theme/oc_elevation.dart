@@ -16,58 +16,36 @@ class OcElevation {
       cardFor(OcTokens.of(context), tight: tight);
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
-    // Official `--oc-mobile-float-shadow`: 2 / 12 / 10-24/-6.
-    // [tight] is a softer schedule-card lift — same family, less umbra.
+    // Official `--oc-mobile-float-shadow` near pair only (2 + 12).
+    // The CSS far 10/24/-6 reads as a contact umbra on WidgetTester
+    // cream. Inset highlight stays on the clipped fill. [tight] keeps
+    // the same 2+12 family, quieter alphas.
     if (tokens.isDark) {
       if (tight) {
         return const [
           BoxShadow(color: Color(0x2E000000), blurRadius: 2),
-          BoxShadow(color: Color(0x2A000000), blurRadius: 10),
-          BoxShadow(
-            color: Color(0x3D000000),
-            offset: Offset(0, 8),
-            blurRadius: 18,
-            spreadRadius: -6,
-          ),
+          BoxShadow(color: Color(0x2A000000), blurRadius: 12),
         ];
       }
       return const [
         BoxShadow(color: Color(0x42000000), blurRadius: 2),
         BoxShadow(color: Color(0x3D000000), blurRadius: 12),
-        BoxShadow(
-          color: Color(0x57000000),
-          offset: Offset(0, 10),
-          blurRadius: 24,
-          spreadRadius: -6,
-        ),
       ];
     }
     if (tight) {
       return const [
         BoxShadow(color: Color(0x08000000), blurRadius: 2),
-        BoxShadow(color: Color(0x0A000000), blurRadius: 10),
-        BoxShadow(
-          color: Color(0x12000000),
-          offset: Offset(0, 8),
-          blurRadius: 18,
-          spreadRadius: -6,
-        ),
+        BoxShadow(color: Color(0x0A000000), blurRadius: 12),
       ];
     }
     return const [
       BoxShadow(color: Color(0x0A000000), blurRadius: 2),
       BoxShadow(color: Color(0x0D000000), blurRadius: 12),
-      BoxShadow(
-        color: Color(0x1A000000),
-        offset: Offset(0, 10),
-        blurRadius: 24,
-        spreadRadius: -6,
-      ),
     ];
   }
 
   /// Official `inset 0 1px 0 var(--oc-mobile-glass-highlight)` for
-  /// elevated plates. The 32 search disc stays [chip] (wake-0706).
+  /// elevated plates. The 36 search disc stays [chip] (wake-1440).
   static List<BoxShadow> glassHighlight(BuildContext context) =>
       glassHighlightFor(OcTokens.of(context));
 

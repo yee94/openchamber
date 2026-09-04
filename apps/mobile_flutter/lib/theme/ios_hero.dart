@@ -1,7 +1,9 @@
 /// Official `packages/ui/src/styles/mobile.css` rem tokens, in px at 16.
 ///
 /// Colors stay on [OcTokens] (design-system orange / sand). Do not free-tune
-/// these knobs. WidgetTester cannot paint `UIGlassEffect`.
+/// these knobs. Live iOS 26 dock/composer use UIKit `UIGlassEffect`.
+/// WidgetTester and Android paint [BackdropFilter] through-plates — a
+/// degrade, not a Flutter `UIGlassEffect` clone.
 class OcOptical {
   const OcOptical._();
 
@@ -150,12 +152,12 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  /// Official hit is 40 (`mobileIcon`). Search frost plate is 32 — mobileGlass
-  /// 0.34/σ14, not a 22 page-bleed glyph and not a 0.68/36 cream coin. Solid
-  /// primary `+` paints the full 40 hit. No 8/20 umbra. No UIKit clone.
-  static const double headerDiscVisual = 32;
+  /// Official hit is 40 (`mobileIcon`). Search frost plate is 36 — through
+  /// `glassChipThrough` 0.22 / σ14, not a 0.68 coin and not a 22 bleed
+  /// glyph. Solid primary `+` paints the full 40 hit. No 8/20 umbra.
+  static const double headerDiscVisual = 36;
   /// Official `size-5` is 20. Flutter round-cap bloom; paint 14 in the
-  /// 32 frost plate so search / ink glyphs are not massy coins.
+  /// 36 frost plate so search / ink glyphs are not massy coins.
   static const double headerGlyph = 14;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
