@@ -118,7 +118,8 @@ class OcElevation {
 
   /// Official `--oc-mobile-glass-shadow` near pair + 8/20/-6 umbra.
   /// Header discs do not use this — the 8px drop paints a second circle.
-  /// Search / `+` use [chip] (near pair, no umbra).
+  /// Search stays through-frost with no outer lift. Projects `+` uses
+  /// [primaryAdd] (official primary 10/22 @ 22%), not this black trio.
   static List<BoxShadow> control(BuildContext context) => controlFor(OcTokens.of(context));
 
   static List<BoxShadow> controlFor(OcTokens tokens) {
@@ -136,8 +137,25 @@ class OcElevation {
   }
 
   /// Official glass-shadow near pair: `0 0 2px / 0.05` + `0 0 12px / 0.06`.
-  /// Soft lift for search / `+` — no 8/20 umbra (that paints a second circle).
+  /// Chat frost discs may lift. Search / solid `+` do not use this —
+  /// near-pair ringed those plates. Projects `+` is [primaryAdd].
   static List<BoxShadow> chip(BuildContext context) => chipFor(OcTokens.of(context));
+
+  /// Official Projects `+` (`Button` `mobileIcon` + primary fill):
+  /// `shadow-[0_10px_22px_color-mix(in_srgb,var(--primary-base)_22%,transparent)]`.
+  /// Not black near-pair and not 8/20 control umbra.
+  static List<BoxShadow> primaryAdd(BuildContext context) =>
+      primaryAddFor(OcTokens.of(context));
+
+  static List<BoxShadow> primaryAddFor(OcTokens tokens) {
+    return [
+      BoxShadow(
+        color: tokens.primary.withValues(alpha: 0.22),
+        offset: const Offset(0, 10),
+        blurRadius: 22,
+      ),
+    ];
+  }
 
   static List<BoxShadow> chipFor(OcTokens tokens) {
     if (tokens.isDark) return const [];

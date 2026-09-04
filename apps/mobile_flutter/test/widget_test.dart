@@ -215,7 +215,7 @@ void main() {
     expect(find.byKey(const Key('home-session-sess-busy')), findsNothing);
   });
 
-  testWidgets('projects plus disc is contact-only, not control umbra', (tester) async {
+  testWidgets('projects plus disc is official primary glow, not control umbra', (tester) async {
     await pumpConnected(tester);
     final discs = tester.widgetList<DecoratedBox>(
       find.descendant(
@@ -228,7 +228,13 @@ void main() {
       return decoration is BoxDecoration && decoration.shape == BoxShape.circle;
     });
     final decoration = plus.decoration as BoxDecoration;
-    expect(decoration.boxShadow == null || decoration.boxShadow!.isEmpty, isTrue);
+    final glow = OcElevation.primaryAddFor(OcTokens.light).single;
+    expect(decoration.boxShadow, hasLength(1));
+    expect(decoration.boxShadow!.single.blurRadius, glow.blurRadius);
+    expect(decoration.boxShadow!.single.offset, glow.offset);
+    expect(decoration.boxShadow!.single.color.a, closeTo(0.22, 0.01));
+    expect(decoration.boxShadow!.single.color.r, closeTo(OcTokens.light.primary.r, 0.02));
+    expect(decoration.boxShadow!.single.spreadRadius, isNot(-6));
   });
 
   testWidgets('projects search chip has no painted disc rim', (tester) async {

@@ -371,8 +371,9 @@ class CircularChromeButton extends StatelessWidget {
             decoration: BoxDecoration(
               color: ink ? tokens.foreground : tokens.primary,
               shape: BoxShape.circle,
-              // No near-pair halo — that ringed the 40 `+` into a
-              // second circle. Official control umbra is worse.
+              // Official Projects `+` is primary 10/22 @ 22%.
+              // Ink / scheduled stay contact-only. Not black near-pair.
+              boxShadow: filled && !ink ? OcElevation.primaryAdd(context) : const [],
             ),
             child: SizedBox(
               width: disc,

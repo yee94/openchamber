@@ -538,6 +538,16 @@ void main() {
       isTrue,
     );
     expect(OcElevation.controlFor(OcTokens.dark), isEmpty);
+    expect(OcElevation.primaryAddFor(OcTokens.light), hasLength(1));
+    expect(OcElevation.primaryAddFor(OcTokens.light).single.blurRadius, 22);
+    expect(OcElevation.primaryAddFor(OcTokens.light).single.offset.dy, 10);
+    expect(OcElevation.primaryAddFor(OcTokens.light).single.color.a, closeTo(0.22, 0.01));
+    expect(
+      OcElevation.primaryAddFor(OcTokens.light).single.color.r,
+      closeTo(OcTokens.light.primary.r, 0.02),
+    );
+    expect(OcElevation.primaryAddFor(OcTokens.dark).single.blurRadius, 22);
+    expect(OcElevation.primaryAddFor(OcTokens.dark).single.color.a, closeTo(0.22, 0.01));
   });
 
   test('resolveOcBrightness honors Light / Dark / System', () {

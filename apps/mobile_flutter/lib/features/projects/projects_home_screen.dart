@@ -108,7 +108,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                         decoration: BoxDecoration(
                           color: context.oc.primary,
                           shape: BoxShape.circle,
-                          // No near-pair halo — that ringed the 40 `+`.
+                          boxShadow: OcElevation.primaryAdd(context),
                         ),
                         child: SizedBox(
                           width: OcOptical.addButton,
