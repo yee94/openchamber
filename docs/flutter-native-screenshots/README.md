@@ -939,18 +939,3 @@ no iOS Simulator, and no connected self-hosted Mac worker.
 size-5 / umbra / Noto-weight knobs to fake 精致 here. No
 recapture — pixels stay `7599aff50`. Press DONE.
 **精致: 还没有.** (needs a real iPhone or Mac Simulator)
-
-**2026-09-04 live PingFang / UIKit residual (blocked, no Mac pool):**
-STRUCTURE PASS. THEME OK. VISUAL still REJECT on WidgetTester
-goldens — that is expected. Live path is already wired:
-`ocLiveIosType` keeps official Medium/Semibold for PingFang SC
-(`Platform.isIOS`); iOS dock is `IosTabBarHost` →
-`OpenChamberTabBarView` `UITabBar` + `UIGlassEffect` (iOS 26);
-composer is `IosComposerHost` runtime `UIGlassEffect`. Android /
-WidgetTester stay Regular CJK + clipped `BackdropFilter` (honest
-degrade, not a Flutter glass clone). This Linux VM has no Xcode,
-no iOS Simulator, and no connected self-hosted Mac worker.
-`serve-sim` needs macOS. Do **not** invent gap / tracking /
-size-5 / umbra / Noto-weight knobs to fake 精致 here. No
-recapture — pixels stay `7599aff50`. Press DONE.
-**精致: 还没有.** (needs a real iPhone or Mac Simulator)
