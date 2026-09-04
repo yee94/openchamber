@@ -235,12 +235,6 @@ void main() {
     expect(decoration.boxShadow!.single.color.a, closeTo(0.22, 0.01));
     expect(decoration.boxShadow!.single.color.r, closeTo(OcTokens.light.primary.r, 0.02));
     expect(decoration.boxShadow!.single.spreadRadius, isNot(-6));
-    final plusGlyph = tester.widget<OcGlyph>(find.descendant(
-      of: find.byKey(const Key('projects-plus-menu')),
-      matching: find.byType(OcGlyph),
-    ));
-    expect(plusGlyph.size, OcOptical.headerActionGlyph);
-    expect(plusGlyph.size, 20);
   });
 
   testWidgets('projects search chip has no painted disc rim', (tester) async {
@@ -268,12 +262,6 @@ void main() {
     expect(searchChip.size, OcOptical.headerDiscVisual);
     expect(searchChip.lift, isFalse);
     expect(searchChip.fill!.a, closeTo(0.16, 0.01));
-    final searchGlyph = tester.widget<OcGlyph>(find.descendant(
-      of: find.byKey(const Key('projects-search-toggle')),
-      matching: find.byType(OcGlyph),
-    ));
-    expect(searchGlyph.size, OcOptical.headerActionGlyph);
-    expect(searchGlyph.size, 20);
     expect(find.descendant(
       of: find.byKey(const Key('projects-search-toggle')),
       matching: find.byType(OcFrosted),

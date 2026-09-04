@@ -223,12 +223,8 @@ class OcOptical {
   /// (not the 32 vanish). Solid primary `+` paints the full 40 hit.
   /// No 8/20 umbra. Hits stay 40. Leading plates stay 28.
   static const double headerDiscVisual = 34;
-  /// Official search / Projects `+` `Icon` is `size-5` (20). Catalog
-  /// [headerGlyph] stays 14 so leading / segment chrome do not jump.
-  /// Plate stays [headerDiscVisual] 34 / through 0.16 / lift false.
-  static const double headerActionGlyph = 20;
-  /// Small header chrome (segments, not search/+). Official action
-  /// glyph is [headerActionGlyph] 20.
+  /// Official `size-5` is 20. Wake-0601 re-locks optical 14 so search/+
+  /// do not read as large Material icons. Plate stays 34.
   static const double headerGlyph = 14;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;

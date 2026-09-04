@@ -364,7 +364,7 @@ class CircularChromeButton extends StatelessWidget {
         : (hit < OcOptical.headerDiscVisual ? hit : OcOptical.headerDiscVisual);
     final glyphWidget = OcGlyph(
       glyph,
-      size: ink ? OcOptical.leadingGlyphCompact : OcOptical.headerActionGlyph,
+      size: ink ? OcOptical.leadingGlyphCompact : OcOptical.headerGlyph,
       strokeWidth: OcOptical.headerGlyphStrokeVisual,
       color: !filled && !ink ? tokens.foreground : tokens.primaryForeground,
     );

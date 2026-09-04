@@ -92,21 +92,9 @@ class MobileTabPageHeader extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: headerH,
-            child: IgnorePointer(
-              child: Opacity(
-                opacity: 0.55 + (0.25 * t),
-                child: OcFrosted(
-                  fill: tokens.glassFill.withValues(alpha: tokens.isDark ? 0.32 : 0.26),
-                  child: const SizedBox.expand(),
-                ),
-              ),
-            ),
-          ),
+          // Official `.oc-mobile-collapsing-header` is `background:
+          // transparent`. Fade `::after` only follows collapse. An
+          // always-on OcFrosted plate was invented banner chrome.
           Positioned(
             top: 0,
             left: 0,

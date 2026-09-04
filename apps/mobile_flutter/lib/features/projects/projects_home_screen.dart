@@ -116,7 +116,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                           child: Center(
                             child: OcGlyph(
                               OcGlyphKind.plus,
-                              size: OcOptical.headerActionGlyph,
+                              size: OcOptical.headerGlyph,
                               strokeWidth: OcOptical.headerGlyphStrokeVisual,
                               color: context.oc.primaryForeground,
                             ),

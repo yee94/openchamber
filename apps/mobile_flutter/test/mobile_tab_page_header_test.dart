@@ -35,6 +35,14 @@ void main() {
     await tester.pump();
 
     expect(find.byType(MobileTabPageHeader), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('mobile-tab-page-header')),
+        matching: find.byType(OcFrosted),
+      ),
+      findsNothing,
+    );
+    expect(find.byType(OcHeaderFade), findsOneWidget);
     expect(find.byKey(const Key('mobile-tab-page-header-slot')), findsOneWidget);
     expect(find.byKey(const Key('mobile-tab-page-header-leading-gap')), findsOneWidget);
     expect(find.byKey(const Key('mobile-tab-page-header-spacer')), findsOneWidget);
