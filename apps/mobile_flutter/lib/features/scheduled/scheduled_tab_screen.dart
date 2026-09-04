@@ -198,10 +198,9 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, OcOptical.scheduleCardPadV, 8, OcOptical.scheduleCardPadV),
           child: Row(
-            // Same as MobileProjectCard: 54 title↔meta + center parked
-            // the 28 status disc mid-card. Start keeps check/pause on
-            // the title row vs README mobile_schedules.png.
-            crossAxisAlignment: CrossAxisAlignment.start,
+            // Official scheduled row is items-center with meta `mt-1` (4).
+            // Start was only for the 54 inflate.
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               SizedBox(
                 width: OcOptical.scheduleStatus,

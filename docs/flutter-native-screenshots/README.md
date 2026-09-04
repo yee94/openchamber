@@ -529,17 +529,21 @@ Recapture 02 (+scrolled/dark; 04 only if schedule rows change).
 
 **2026-09-04 wake-0123 residual (after `c1a4e06aa`):**
 Yee 01:23 CST: spacing still wrong. Two real knobs — stop the
-session-air inflate loop. Large-title 空档 was **30** (spacer 10 +
-page-gap 20) vs official flattened fragment + `gap-5`:
-**20 + 10 + 20 = 50**. Shared scaffold now inserts the missing
-leading `gap-5` after the header slot. `headerRestPeek` stays **0**.
-`pageProjectGap` stays card-stack only. Session title↔subtitle
-resets **28 → 2** (official `gap-0.5`); row **84.8 → 58.8**
-(`40 + 4×4.7 + 0`). Do **not** re-widen that gap. Do **not** pile
-+2 project/schedule title↔meta (meta **54** stays). Plates **28**;
-glyphs **14**; search **14**; small-chrome stroke **0.62**; dock
-**0.12**. Far stays official **10/24** at **10%** with WidgetTester
-spread **-2**. Recapture 02 (+scrolled/dark), 03, 04 (+dark), 05.
+session-air inflate loop. Large-title 空档 was **30** vs official
+**20 + 10 + 20 = 50**. Session title↔subtitle **28 → 2**; row
+**84.8 → 58.8**. Recapture 02/03/04/05.
+**Not 精致.**
+
+**2026-09-04 wake-0135 residual (after `a9480cc11`):**
+Watch scored live `a9480cc11` / `02=8144be73`. STRUCTURE PASS.
+Do **not** undo 20+10+20 or session gap **2**. Plates **28**; glyphs
+**14**; search **14**; stroke **0.62**; dock **0.12**; session
+start-align; unread semibold; more 14. Far stays official **10/24**
+at **10%** spread **-2**. Project/schedule title↔meta was the same
+invented inflate as the old session gap — reset **54 → 4**
+(official `gap-1` / `mt-1`). Restore project/schedule
+`items-center`. Do not re-widen. Recapture 02 (+scrolled/dark) and
+04 (+dark).
 **Not 精致.**
 
 | File | Screen |

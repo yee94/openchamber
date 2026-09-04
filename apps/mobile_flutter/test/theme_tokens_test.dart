@@ -150,7 +150,7 @@ void main() {
     expect(OcOptical.sessionRowPadV, 5);
     expect(OcOptical.metaHeight, 1.25);
     expect(OcOptical.entityTitleHeight, 1.25);
-    expect(OcOptical.groupTitleMetaGap, 54);
+    expect(OcOptical.groupTitleMetaGap, 4);
     expect(OcOptical.projectTriggerPad, 10);
     expect(OcOptical.projectTriggerGap, 7);
     expect(OcOptical.sessionRowPadH, 16);
@@ -209,7 +209,7 @@ void main() {
     expect(OcOptical.worktreeLabelPadRight, 2);
     expect(OcOptical.floatCardStackGap, 16);
     expect(OcOptical.scheduleCardPadV, 12);
-    expect(OcOptical.scheduleTitleMetaGap, 54);
+    expect(OcOptical.scheduleTitleMetaGap, 4);
     expect(OcOptical.chatBodyHeight, closeTo(1.625, 0.001));
     expect(OcOptical.chatBodyHeight, greaterThan(1.50));
     expect(OcOptical.chatTitle, 15);

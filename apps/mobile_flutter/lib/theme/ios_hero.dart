@@ -38,17 +38,18 @@ class OcOptical {
   /// gap 0.4375rem. Not the standalone trigger padding 0.75rem.
   static const double projectTriggerPad = 10;
   static const double projectTriggerGap = 7;
-  /// Project title column `flex-col gap-1` = 0.25rem. Medium ate 4 / 6 / 8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 / 24 / 26 / 28
-  /// — 54 is the next 2px of card title↔meta air, not a half-lead pile.
-  static const double groupTitleMetaGap = 54;
+  /// Official project title column `flex-col gap-1` = 0.25rem (4).
+  /// Wake-0135 resets the card title↔meta inflate loop — do not
+  /// re-widen. Session title↔subtitle stays official 2.
+  static const double groupTitleMetaGap = 4;
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
   /// Official title/subtitle column is `gap-0.5` (2). Wake-0123 resets
-  /// the inflate loop to that official 2. Do not re-widen. Do not touch
-  /// project/schedule title↔meta 54. Far stays 10/24 @ 10% with
-  /// WidgetTester spread -2. Do not invent Material shadows. Not a
-  /// half-lead pile and not 7.5/70.
+  /// the inflate loop to that official 2. Do not re-widen. Project /
+  /// schedule title↔meta is official 4 (`gap-1` / `mt-1`). Far stays
+  /// 10/24 @ 10% with WidgetTester spread -2. Do not invent Material
+  /// shadows. Not a half-lead pile and not 7.5/70.
   /// Official title is `font-medium` / unread `font-semibold`. Fill-only
   /// at that weight. Do not revive a miter stem. Half-lead 4.7 + tracking
   /// 1.42 stay. Latin is ReviewSans Medium.
@@ -125,9 +126,9 @@ class OcOptical {
   /// Official scheduled task row `p-3` (12).
   static const double scheduleCardPadV = 12;
   /// Official scheduled meta `mt-1` (4). Title air is the 18px CSS box
-  /// plus [cardTitleHalfLead] — not session 4.7. Medium ate 4 / 6 / 8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 / 24 / 26 / 28 / 30 / 32 / 34 / 36 / 38 / 40 / 42 / 44 / 46 / 48 / 50 / 52 —
-  /// 54 matches the project card title↔meta residual.
-  static const double scheduleTitleMetaGap = 54;
+  /// plus [cardTitleHalfLead] — not session 4.7. Wake-0135 resets the
+  /// inflate loop to that official 4. Do not re-widen.
+  static const double scheduleTitleMetaGap = 4;
 
   /// Official `.oc-mobile-detail-title` 0.9375rem / line-height 1.4 / weight 650.
   static const double chatTitle = 15;
