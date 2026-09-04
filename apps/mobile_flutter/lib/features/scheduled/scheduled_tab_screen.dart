@@ -125,7 +125,9 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                 trailing: CircularChromeButton(
                   key: const Key('scheduled-add'),
                   glyph: OcGlyphKind.plus,
-                  // Official scheduled add is mobileGlass, not an ink disc.
+                  // Official scheduled `+` is a dark disc (gap matrix:
+                  // primary/ink 40). Glass-through reads as a pale coin.
+                  ink: true,
                   size: OcTokens.formControlHeight,
                   tooltip: t(context, 'scheduled.add'),
                   onPressed: () {},
@@ -269,7 +271,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   child: Center(
                     child: OcGlyph(
                       OcGlyphKind.ellipsis,
-                      size: OcOptical.sessionMore,
+                      size: OcOptical.scheduleMore,
                       strokeWidth: OcOptical.headerGlyphStrokeVisual,
                       color: context.oc.mutedForeground,
                     ),

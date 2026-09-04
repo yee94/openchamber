@@ -96,7 +96,7 @@ void main() {
       OcOptical.rowTitle * OcOptical.rowTitleHeight + 2 * OcOptical.cssLineCjkHalfLead,
     );
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.cssLineCjkHalfLead, closeTo(3.5, 0.01));
+    expect(OcOptical.cssLineCjkHalfLead, closeTo(4, 0.01));
   });
 
   testWidgets('chat is a pushed secondary page from Projects', (tester) async {
@@ -109,16 +109,16 @@ void main() {
     final idleSend = tester.widget<OcGlyph>(
       find.descendant(of: find.byKey(const Key('composer-send')), matching: find.byType(OcGlyph)),
     );
-    expect(idleSend.kind, OcGlyphKind.sendPlane);
-    expect(idleSend.size, OcOptical.sendPlane);
+    expect(idleSend.kind, OcGlyphKind.arrowUp);
+    expect(idleSend.size, OcOptical.sendArrow);
     expect(idleSend.strokeWidth, OcOptical.headerGlyphStrokeVisual);
-    final idleRing = tester.widgetList<DecoratedBox>(
+    final idleDisc = tester.widgetList<DecoratedBox>(
       find.descendant(of: find.byKey(const Key('composer-send')), matching: find.byType(DecoratedBox)),
     ).map((box) => box.decoration).whereType<BoxDecoration>().firstWhere(
-      (decoration) => decoration.shape == BoxShape.circle && decoration.border != null,
+      (decoration) => decoration.shape == BoxShape.circle && decoration.color != null,
     );
-    expect(idleRing.border!.top.width, OcOptical.sendRingStroke);
-    expect(idleRing.border!.top.color.a, closeTo(OcOptical.sendRingIdleAlpha, 0.01));
+    expect(idleDisc.color, OcTokens.light.foreground);
+    expect(idleDisc.border, isNull);
     expect(find.byKey(const Key('chat-back')), findsOneWidget);
     expect(find.text('Release notes'), findsOneWidget);
     expect(find.text('Open a session from Projects.'), findsOneWidget);
@@ -133,7 +133,7 @@ void main() {
     expect(find.byKey(const Key('dock-selected-projects')), findsNothing);
     expect(find.byKey(const Key('tab-projects')), findsOneWidget);
     final add = tester.widget<CircularChromeButton>(find.byKey(const Key('scheduled-add')));
-    expect(add.ink, isFalse);
+    expect(add.ink, isTrue);
     expect(add.filled, isFalse);
     final scheduleCard = tester.widget<MobileFloatingSurface>(find.byType(MobileFloatingSurface).first);
     expect(scheduleCard.tight, isFalse);
@@ -154,7 +154,7 @@ void main() {
     expect(projectTitle.style?.fontWeight, FontWeight.w400);
     final row = tester.getSize(find.byKey(const Key('home-session-sess-pinned')));
     expect(row.height, greaterThanOrEqualTo(OcOptical.sessionRowVisualHeight));
-    expect(row.height, lessThan(56));
+    expect(row.height, lessThan(58));
     final codeGlyph = tester.widgetList<OcGlyph>(find.byType(OcGlyph)).firstWhere(
       (glyph) => glyph.kind == OcGlyphKind.code,
     );

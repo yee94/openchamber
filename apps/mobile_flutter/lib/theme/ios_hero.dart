@@ -24,10 +24,10 @@ class OcOptical {
   static const double rowTitleTracking = 1.35;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
-  /// Official project-shell row is 40. 3.5px CJK half-lead (per side)
-  /// opens the still-cramped Regular title band. 40 + 4×3.5 = 54 —
-  /// not 7.5 half-lead / 70px rows.
-  static const double sessionRowVisualHeight = 54;
+  /// Official project-shell row is 40. 4px CJK half-lead (per side)
+  /// opens Regular that still packed at 3.5. 40 + 4×4 = 56 —
+  /// not 7.5 half-lead / 70px rows. No more tracking knobs.
+  static const double sessionRowVisualHeight = 56;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
@@ -47,17 +47,16 @@ class OcOptical {
   /// Official title is `font-medium` / unread `font-semibold`. Review CJK
   /// has no Medium cut; a same-color stem + cardinal shade keep Regular
   /// 12px on authored foreground. Stem 2.0 / shade 0.6 + round join
-  /// bloated a gray halo (~L84) around L32 cores. 1.2 / 0.28 + miter
-  /// is the Medium-weight family without fake-bold bloom. Card frost
-  /// must sit behind the child — wrapping ink in `floatSurface` 0.45
-  /// floors cores at ~L 129. Half-lead 3.5 is the residual title-band
-  /// air (no more tracking knobs).
-  static const double sessionTitleStem = 1.2;
-  static const double sessionTitleShade = 0.28;
+  /// bloated a gray halo (~L84) around L32 cores. 1.05 / 0.22 + miter
+  /// keeps Regular on foreground without the heavier 1.2 brick. Card
+  /// frost must sit behind the child. Half-lead 4 is title-band air
+  /// (no more tracking knobs; no Medium CJK on review/CI).
+  static const double sessionTitleStem = 1.05;
+  static const double sessionTitleShade = 0.22;
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
-  /// 3.5 extra Flutter pixels open Regular CJK that still packed at 2.75.
-  static const double cssLineCjkHalfLead = 3.5;
+  /// 4 extra Flutter pixels open Regular CJK that still packed at 3.5.
+  static const double cssLineCjkHalfLead = 4;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
@@ -296,12 +295,14 @@ class OcOptical {
 
   /// Official scheduled status uses the project-shell glass disc (2.375rem).
   static const double scheduleStatus = leadingCircle;
-  /// Hit stays official 38. Paint the same 32 plate as project leading
-  /// so the status disc is not a massy coin on the card.
-  static const double scheduleStatusVisual = 32;
+  /// Hit stays official 38. Paint 28 so leading check/pause is not a
+  /// massy coin beside the title (wake-1625).
+  static const double scheduleStatusVisual = 28;
   /// Official non-tab scheduled glyph is `size-3.5`; residual optical
-  /// paints 12 so the badge does not outweigh the segment track.
-  static const double scheduleStatusGlyph = 12;
+  /// paints 10 so the badge does not outweigh the segment track.
+  static const double scheduleStatusGlyph = 10;
+  /// Schedule overflow `more-2` — slimmer than session 12.
+  static const double scheduleMore = 10;
   /// Quiet status polish: 12px check/pause at header visual stroke so
   /// the 38 disc does not outweigh the card title.
   static const double scheduleStatusGlyphStroke = headerGlyphStrokeVisual;
@@ -325,14 +326,14 @@ class OcOptical {
   /// Official composer attach `Icon name="attachment-2" className="size-5"`.
   static const double composerPlus = 18;
   static const double composerPlusStroke = 1.25;
-  /// Official send/stop: `size-8` hit. Idle empty is `send-plane-2` `size-4`
-  /// inside the pill (no filled disc). Ready is `SendCircleIcon` `size-6`.
+  /// Official send/stop: `size-8` hit. `SendCircleIcon` is a solid
+  /// `bg-foreground` disc (`size-6` on mobile) with `arrow-up` 56%.
+  /// Idle WidgetTester used an orange outlined plane — that is not the
+  /// official circle. Always paint the dark disc.
   static const double sendRing = 32;
   static const double sendRingDisc = 24;
   static const double sendRingStroke = 1.0;
-  /// Official idle send is the plane only (`size-4`, no disc). Keep a
-  /// faint 24 ring so the hit reads as a control, not a massy coin.
-  static const double sendRingIdleAlpha = 0.32;
+  static const double sendRingIdleAlpha = 1.0;
   static const double sendPlane = 16;
   /// Official stop square is 38% of the disc with 20% radius.
   static const double sendStop = 9;
@@ -350,7 +351,7 @@ class OcOptical {
   static const double footerGlyphStroke = 2;
   /// Official medium is 2; Flutter bloom at dpr 3. Paint under 2 so
   /// copy / fork / clock stay filled-medium, not chunky bricks.
-  static const double footerGlyphStrokeVisual = 0.56;
+  static const double footerGlyphStrokeVisual = 0.44;
   /// Official ProgressiveGroup expanded rail: header must not sit flush
   /// on the first skill/terminal row (Yee P0 2026-09-04).
   static const double activityExpandedGap = 10;

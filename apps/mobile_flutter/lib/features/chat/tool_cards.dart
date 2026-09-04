@@ -466,28 +466,56 @@ String _fileTypeMark(String lower) {
   return '';
 }
 
-/// Compact FileTypeIcon analogue — filled 12px brand tile, not a document outline.
+/// Compact FileTypeIcon analogue — folded page + type fold, not a
+/// solid brand square (those read as generic blue tiles).
 class _FileTypeSpritePainter extends CustomPainter {
-  const _FileTypeSpritePainter({required this.tint, required this.mark});
+  const _FileTypeSpritePainter({
+    required this.tint,
+    required this.mark,
+    required this.page,
+    required this.edge,
+  });
 
   final Color tint;
   final String mark;
+  final Color page;
+  final Color edge;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final r = RRect.fromRectAndRadius(
-      Offset.zero & size,
-      Radius.circular(size.width * 0.18),
+    final w = size.width;
+    final h = size.height;
+    final fold = w * 0.34;
+    final pagePath = Path()
+      ..moveTo(w * 0.10, h * 0.08)
+      ..lineTo(w - fold, h * 0.08)
+      ..lineTo(w * 0.90, h * 0.08 + fold)
+      ..lineTo(w * 0.90, h * 0.92)
+      ..lineTo(w * 0.10, h * 0.92)
+      ..close();
+    canvas.drawPath(pagePath, Paint()..color = page);
+    canvas.drawPath(
+      pagePath,
+      Paint()
+        ..color = edge
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = OcOptical.fileTypeStrokeVisual
+        ..strokeJoin = StrokeJoin.miter,
     );
-    canvas.drawRRect(r, Paint()..color = tint);
+    final flap = Path()
+      ..moveTo(w - fold, h * 0.08)
+      ..lineTo(w * 0.90, h * 0.08 + fold)
+      ..lineTo(w - fold, h * 0.08 + fold)
+      ..close();
+    canvas.drawPath(flap, Paint()..color = tint);
     if (mark.isEmpty) return;
     final tp = TextPainter(
       text: TextSpan(
         text: mark,
         style: TextStyle(
-          color: Colors.white,
-          fontSize: size.width * 0.42,
-          fontWeight: FontWeight.w700,
+          color: edge,
+          fontSize: size.width * 0.28,
+          fontWeight: FontWeight.w600,
           height: 1,
         ),
       ),
@@ -495,13 +523,16 @@ class _FileTypeSpritePainter extends CustomPainter {
     )..layout(maxWidth: size.width);
     tp.paint(
       canvas,
-      Offset((size.width - tp.width) / 2, (size.height - tp.height) / 2),
+      Offset((size.width - tp.width) / 2, h * 0.52 - tp.height / 2),
     );
   }
 
   @override
   bool shouldRepaint(covariant _FileTypeSpritePainter oldDelegate) {
-    return oldDelegate.tint != tint || oldDelegate.mark != mark;
+    return oldDelegate.tint != tint ||
+        oldDelegate.mark != mark ||
+        oldDelegate.page != page ||
+        oldDelegate.edge != edge;
   }
 }
 
@@ -528,7 +559,12 @@ class _FileTypeMark extends StatelessWidget {
     }
     return CustomPaint(
       size: const Size.square(OcOptical.fileTypeSize),
-      painter: _FileTypeSpritePainter(tint: tint, mark: _fileTypeMark(lower)),
+      painter: _FileTypeSpritePainter(
+        tint: tint,
+        mark: _fileTypeMark(lower),
+        page: tokens.background,
+        edge: tokens.mutedForeground,
+      ),
     );
   }
 }

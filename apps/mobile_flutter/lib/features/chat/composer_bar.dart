@@ -210,46 +210,27 @@ class ComposerBar extends StatelessWidget {
                                         ),
                                       ),
                                     )
-                                  : sendReady
-                                      ? DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: context.oc.foreground,
-                                          ),
-                                          child: SizedBox(
-                                            width: OcOptical.sendRingDisc,
-                                            height: OcOptical.sendRingDisc,
-                                            child: Center(
-                                              child: OcGlyph(
-                                                OcGlyphKind.arrowUp,
-                                                size: OcOptical.sendArrow,
-                                                strokeWidth: OcOptical.dockGlyphStroke,
-                                                color: context.oc.background,
-                                              ),
-                                            ),
-                                          ),
-                                        )
-                                      : DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color: context.oc.primary.withValues(alpha: OcOptical.sendRingIdleAlpha),
-                                              width: OcOptical.sendRingStroke,
-                                            ),
-                                          ),
-                                          child: SizedBox(
-                                            width: OcOptical.sendRingDisc,
-                                            height: OcOptical.sendRingDisc,
-                                            child: Center(
-                                              child: OcGlyph(
-                                                OcGlyphKind.sendPlane,
-                                                size: OcOptical.sendPlane,
-                                                strokeWidth: OcOptical.headerGlyphStrokeVisual,
-                                                color: context.oc.primary,
-                                              ),
+                                  : Opacity(
+                                      opacity: sendReady ? 1 : 0.55,
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: context.oc.foreground,
+                                        ),
+                                        child: SizedBox(
+                                          width: OcOptical.sendRingDisc,
+                                          height: OcOptical.sendRingDisc,
+                                          child: Center(
+                                            child: OcGlyph(
+                                              OcGlyphKind.arrowUp,
+                                              size: OcOptical.sendArrow,
+                                              strokeWidth: OcOptical.headerGlyphStrokeVisual,
+                                              color: context.oc.background,
                                             ),
                                           ),
                                         ),
+                                      ),
+                                    ),
                             ),
                           ),
                         ),
