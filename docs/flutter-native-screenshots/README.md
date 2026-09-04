@@ -433,8 +433,8 @@ shrink-to-death icon optics vs README `mobile_projects.png` /
 `mobile_schedules.png`: search glyph **5 → 12**; small-chrome stroke
 **0.12 → 0.45** (dock 23px stays **0.12**); leading/status plates
 **2 → 28**; leading/status glyphs **1 → 14**; worktree compact box
-**2 → 18** (official). `headerRestPeek` 0. Shared spacer 10 + page-gap
-20. Recapture 02/03/04 after this dart.
+**2 → 18** (official). Settings nav stays dock **0.12**. `headerRestPeek`
+0. Shared spacer 10 + page-gap 20. Recapture 02/04 after this dart.
 **Not 精致.**
 
 | File | Screen |
