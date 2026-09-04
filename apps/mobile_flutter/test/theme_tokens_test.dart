@@ -111,12 +111,12 @@ void main() {
     expect(OcOptical.largeTitleTracking, closeTo(-1.28, 0.01));
     expect(OcOptical.largeTitleHeight, 1.2);
     expect(OcOptical.rowTitle, 12);
-    expect(OcOptical.rowTitleTracking, closeTo(0.8, 0.01));
-    expect(OcOptical.rowTitleTracking, greaterThan(0.5));
-    expect(OcOptical.rowTitleTracking, lessThan(1.2));
-    expect(OcOptical.projectTitleTracking, closeTo(0.55, 0.01));
-    expect(OcOptical.projectTitleTracking, greaterThan(0));
-    expect(OcOptical.projectTitleTracking, lessThan(0.8));
+    expect(OcOptical.rowTitleTracking, closeTo(1.1, 0.01));
+    expect(OcOptical.rowTitleTracking, greaterThan(0.8));
+    expect(OcOptical.rowTitleTracking, lessThan(1.4));
+    expect(OcOptical.projectTitleTracking, closeTo(0.7, 0.01));
+    expect(OcOptical.projectTitleTracking, greaterThan(0.5));
+    expect(OcOptical.projectTitleTracking, lessThan(1.0));
     expect(
       OcCssLine.boxHeight(
         const TextStyle(

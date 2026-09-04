@@ -21,7 +21,7 @@ class HighlightedText extends StatelessWidget {
   final double? halfLead;
   /// Same-color miter stem under Regular CJK so 12px titles reach
   /// authored foreground without a round-join halo. ReviewCjk has no
-  /// Medium cut; 0 = off.
+  /// Medium cut; Latin uses ReviewSans Medium. 0 = off.
   final double stem;
 
   @override
@@ -37,24 +37,29 @@ class HighlightedText extends StatelessWidget {
       return OcCssLine(
         style: style,
         halfLead: halfLead,
-        child: _inkText(text, paint),
+        child: _inkPlain(text, paint),
       );
     }
     final lower = text.toLowerCase();
     final match = needle.toLowerCase();
-    final spans = <TextSpan>[];
+    final spans = <InlineSpan>[];
     var start = 0;
     while (true) {
       final index = lower.indexOf(match, start);
       if (index < 0) {
-        spans.add(TextSpan(text: text.substring(start)));
+        spans.addAll(_scriptFillSpans(text.substring(start), paint));
         break;
       }
-      if (index > start) spans.add(TextSpan(text: text.substring(start, index)));
-      spans.add(
-        TextSpan(
-          text: text.substring(index, index + needle.length),
-          style: TextStyle(fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.primary),
+      if (index > start) {
+        spans.addAll(_scriptFillSpans(text.substring(start, index), paint));
+      }
+      spans.addAll(
+        _scriptFillSpans(
+          text.substring(index, index + needle.length),
+          paint.copyWith(
+            fontWeight: FontWeight.w700,
+            color: Theme.of(context).colorScheme.primary,
+          ),
         ),
       );
       start = index + needle.length;
@@ -62,72 +67,80 @@ class HighlightedText extends StatelessWidget {
     return OcCssLine(
       style: style,
       halfLead: halfLead,
-      child: _inkRich(TextSpan(style: paint, children: spans), paint),
+      child: _inkRich(spans, paint),
     );
   }
 
-  Widget _inkText(String value, TextStyle paint) {
-    final fill = Text(
-      value,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: _shaded(paint),
-    );
-    if (stem <= 0 || paint.color == null) return fill;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        ExcludeSemantics(
-          child: Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: paint.copyWith(
-              color: null,
-              foreground: Paint()
-                ..color = paint.color!
-                ..style = PaintingStyle.stroke
-                ..strokeWidth = stem
-                ..strokeCap = StrokeCap.butt
-                ..strokeJoin = StrokeJoin.miter,
-            ),
-          ),
-        ),
-        fill,
-      ],
-    );
+  Widget _inkPlain(String value, TextStyle paint) {
+    return _inkRich(_scriptFillSpans(value, paint), paint);
   }
 
-  Widget _inkRich(InlineSpan span, TextStyle paint) {
+  Widget _inkRich(List<InlineSpan> fillSpans, TextStyle paint) {
     final fill = Text.rich(
-      span,
+      TextSpan(style: paint, children: fillSpans),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: _shaded(paint),
     );
-    if (stem <= 0 || paint.color == null) return fill;
+    final visible = textFromSpans(fillSpans);
+    if (stem <= 0 || paint.color == null || !scriptRuns(visible).any((run) => run.cjk)) {
+      return fill;
+    }
     return Stack(
       clipBehavior: Clip.none,
       children: [
         ExcludeSemantics(
           child: Text.rich(
-            span,
+            TextSpan(
+              style: paint.copyWith(color: Colors.transparent),
+              children: _scriptStemSpans(visible, paint),
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: paint.copyWith(
-              color: null,
-              foreground: Paint()
-                ..color = paint.color!
-                ..style = PaintingStyle.stroke
-                ..strokeWidth = stem
-                ..strokeCap = StrokeCap.butt
-                ..strokeJoin = StrokeJoin.miter,
-            ),
           ),
         ),
         fill,
       ],
     );
+  }
+
+  /// Highlighted search rebuilds spans; stem layout must use the same
+  /// visible string as the fill, not the raw [text] (query can split it).
+  static String textFromSpans(List<InlineSpan> spans) {
+    final buf = StringBuffer();
+    for (final span in spans) {
+      if (span is TextSpan && span.text != null) buf.write(span.text);
+    }
+    return buf.toString();
+  }
+
+  List<InlineSpan> _scriptFillSpans(String value, TextStyle paint) {
+    if (value.isEmpty) return const [];
+    return [
+      for (final run in scriptRuns(value))
+        TextSpan(
+          text: run.text,
+          style: run.cjk ? _shaded(paint) : paint,
+        ),
+    ];
+  }
+
+  List<InlineSpan> _scriptStemSpans(String value, TextStyle paint) {
+    if (value.isEmpty || paint.color == null) return const [];
+    final stroke = Paint()
+      ..color = paint.color!
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stem
+      ..strokeCap = StrokeCap.butt
+      ..strokeJoin = StrokeJoin.miter;
+    return [
+      for (final run in scriptRuns(value))
+        TextSpan(
+          text: run.text,
+          style: run.cjk
+              ? paint.copyWith(color: null, foreground: stroke)
+              : const TextStyle(color: Colors.transparent),
+        ),
+    ];
   }
 
   TextStyle _shaded(TextStyle paint) {
@@ -143,4 +156,33 @@ class HighlightedText extends StatelessWidget {
       ],
     );
   }
+}
+
+/// CJK / kana / hangul vs Latin-digit runs. Stem/shade stay on CJK —
+/// Latin already has ReviewSans Medium (`font-medium`).
+@visibleForTesting
+List<({String text, bool cjk})> scriptRuns(String value) {
+  if (value.isEmpty) return const [];
+  final runs = <({String text, bool cjk})>[];
+  final buf = StringBuffer();
+  bool? cjk;
+  for (final rune in value.runes) {
+    final next = _looksCjk(rune);
+    if (cjk != null && next != cjk) {
+      runs.add((text: buf.toString(), cjk: cjk));
+      buf.clear();
+    }
+    cjk = next;
+    buf.writeCharCode(rune);
+  }
+  runs.add((text: buf.toString(), cjk: cjk ?? false));
+  return runs;
+}
+
+bool _looksCjk(int rune) {
+  return (rune >= 0x2E80 && rune <= 0x9FFF) ||
+      (rune >= 0xF900 && rune <= 0xFAFF) ||
+      (rune >= 0xFE30 && rune <= 0xFE4F) ||
+      (rune >= 0x3040 && rune <= 0x30FF) ||
+      (rune >= 0xAC00 && rune <= 0xD7AF);
 }
