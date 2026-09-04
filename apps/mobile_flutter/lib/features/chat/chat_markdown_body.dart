@@ -7,7 +7,7 @@ import '../../data/chat_markdown_cache.dart';
 import '../../native/external_browser.dart';
 import '../../theme/ios_chrome.dart';
 
-/// Official mobile chat Markdown (`--text-markdown` / 15 / 1.45).
+/// Official mobile chat Markdown (`--text-markdown` / 15 / 1.625).
 ///
 /// Uses `flutter_markdown_plus.MarkdownBody` (shrink-wrap, no nested
 /// scrollable). Streaming updates are debounced at the official Markdown

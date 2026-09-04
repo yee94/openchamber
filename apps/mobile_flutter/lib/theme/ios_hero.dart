@@ -133,7 +133,9 @@ class OcOptical {
   static const double headerFadeExtra = 28;
   static const double headerFadeMidStop = 0.35;
   static const double chatHeaderButton = 28;
-  static const double chatBodyHeight = 1.45;
+  /// Official `--markdown-body-line-height` / `leading-relaxed` is 1.625.
+  /// Residual 1.45 packed CJK transcript vs README `mobile_chat.png`.
+  static const double chatBodyHeight = 1.625;
   static const double chatBodyTracking = 0;
 
   /// Official `.oc-mobile-tab-button` 0.75rem / line-height 0.75rem / tracking-tight.

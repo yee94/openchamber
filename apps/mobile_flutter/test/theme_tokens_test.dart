@@ -197,7 +197,8 @@ void main() {
     expect(OcOptical.floatCardStackGap, 16);
     expect(OcOptical.scheduleCardPadV, 12);
     expect(OcOptical.scheduleTitleMetaGap, 4);
-    expect(OcOptical.chatBodyHeight, lessThan(1.50));
+    expect(OcOptical.chatBodyHeight, closeTo(1.625, 0.001));
+    expect(OcOptical.chatBodyHeight, greaterThan(1.50));
     expect(OcOptical.chatTitle, 15);
     expect(OcOptical.chatBodyTracking, 0);
     expect(OcOptical.chatTitleHeight, 1.4);
