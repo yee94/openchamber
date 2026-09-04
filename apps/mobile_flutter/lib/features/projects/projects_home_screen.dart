@@ -16,7 +16,6 @@ import '../../mobile/mobile_surface.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
 import '../chat/chat_screen.dart';
-import 'highlighted_text.dart';
 import 'project_groups.dart';
 
 class ProjectsHomeScreen extends StatefulWidget {
