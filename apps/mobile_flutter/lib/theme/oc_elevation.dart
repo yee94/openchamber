@@ -91,8 +91,8 @@ class OcElevation {
   static List<BoxShadow> dockFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x05000000), blurRadius: 2),
-      BoxShadow(color: Color(0x07000000), blurRadius: 12),
+      BoxShadow(color: Color(0x04000000), blurRadius: 2),
+      BoxShadow(color: Color(0x06000000), blurRadius: 12),
     ];
   }
 

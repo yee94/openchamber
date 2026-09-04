@@ -23,9 +23,9 @@ class OcOptical {
   /// Project-shell CSS min-height is 2.5rem (40). Flutter CJK paints past
   /// `font-size` into the CSS half-leading, so the visual row is official
   /// pads + 16/12 boxes + [cssLineCjkHalfLead] + `gap-0.5`.
-  static const double sessionRowVisualHeight = 64;
+  static const double sessionRowVisualHeight = 66;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
-  /// 5 + 28 + 2 + 24 + 5 = 64. Extra 12/line is [cssLineCjkHalfLead].
+  /// 5 + 29 + 2 + 25 + 5 = 66. Extra 13/line is [cssLineCjkHalfLead].
   /// Do not grow icons. Do not invent gap.
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
@@ -49,9 +49,9 @@ class OcOptical {
   /// Extra half-leading each side of [OcCssLine] so Flutter CJK, which
   /// paints past `font-size` into the CSS 2px/1px half-leading, keeps
   /// ink-to-box air. Official CSS tokens stay 16/12; this is metric
-  /// compensation (6.0 × 2 = 12px / line). Wake-0918: session/plan
-  /// title air still tight — tune half-leading only, keep gap-0.5.
-  static const double cssLineCjkHalfLead = 6.0;
+  /// compensation (6.5 × 2 = 13px / line). Wake-0923: title↔meta still
+  /// tight vs official — tune half-leading only, keep gap-0.5.
+  static const double cssLineCjkHalfLead = 6.5;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
@@ -147,16 +147,16 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  /// Official hit is 40 (`mobileIcon`). Painted plate is 28 — smaller
-  /// than the 30/36 coin so search/+ read as a delicate glass disc.
+  /// Official hit is 40 (`mobileIcon`). Painted plate is 26 — smaller
+  /// than the 28/36 coin so search/+ read as a delicate glass disc.
   /// `+` stays primary. No primary + glow. No 8/20 umbra.
-  static const double headerDiscVisual = 28;
-  static const double headerGlyph = 15;
+  static const double headerDiscVisual = 26;
+  static const double headerGlyph = 14;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
-  /// Flutter round-cap bloom at dpr 3; paint under official 1.5 so 15px
+  /// Flutter round-cap bloom at dpr 3; paint under official 1.5 so 14px
   /// header glyphs stay thin vs `size-5` medium, not massy coins.
-  static const double headerGlyphStrokeVisual = 0.96;
+  static const double headerGlyphStrokeVisual = 0.90;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
   static const double listGlyphStroke = 1.5;
   /// Search-field prefix `Icon name="search" className="size-4"`.
@@ -194,20 +194,20 @@ class OcOptical {
   /// Flutter round-cap bloom at dpr 3; paint under 2 so slim filled-medium
   /// 23px stays delicate — not bricks, not hairlines.
   static const double dockGlyphStroke = 2;
-  /// Slimmer than 1.18 so calendar/gear read filled-medium, not bricks
-  /// (wake-0918). Folder / sparkles stay [dockStrokeGlyphStrokeVisual].
-  static const double dockGlyphStrokeVisual = 1.12;
+  /// Slimmer than 1.12 so calendar/gear read filled-medium, not bricks
+  /// (wake-0923). Folder / sparkles stay [dockStrokeGlyphStrokeVisual].
+  static const double dockGlyphStrokeVisual = 1.06;
   /// Folder / sparkles stay official medium stroke but paint lighter
-  /// than calendar/gear so the 23px outline is not a brick (wake-0918).
-  static const double dockStrokeGlyphStrokeVisual = 1.04;
+  /// than calendar/gear so the 23px outline is not a brick (wake-0923).
+  static const double dockStrokeGlyphStrokeVisual = 0.98;
   /// Official filled-medium 23px sprites: folder / sparkles / calendar
   /// grid / holed gear. Not hairline outlines and not brick mass.
   static const bool dockGlyphFillBodies = true;
   static const bool dockSelectedFullSlot = true;
   /// Official selected class is `bg-interactive-selection/55`.
   /// WidgetTester /55 through-mix still reads as a high-contrast
-  /// capsule — paint 0.28 so the slot is an official-soft pill.
-  static const double dockIconWashAlpha = 0.28;
+  /// capsule — paint 0.22 so the slot is an official-soft pill.
+  static const double dockIconWashAlpha = 0.22;
   /// Official selected tab is `bg-interactive-selection/55` on already-
   /// frosted dock glass — no second BackdropFilter. Nested sigma painted
   /// a cream plate that hid the list. 0 = mix only so rows show through.
