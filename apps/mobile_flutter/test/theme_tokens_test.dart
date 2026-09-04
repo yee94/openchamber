@@ -155,9 +155,9 @@ void main() {
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.sessionTitleStem, closeTo(0.48, 0.01));
-    expect(OcOptical.sessionTitleStem, greaterThan(0.3));
-    expect(OcOptical.sessionTitleStem, lessThan(0.72));
+    expect(OcOptical.sessionTitleStem, closeTo(0.28, 0.01));
+    expect(OcOptical.sessionTitleStem, greaterThan(0.15));
+    expect(OcOptical.sessionTitleStem, lessThan(0.48));
     expect(OcOptical.sessionTitleShade, 0);
     expect(OcOptical.sessionTitleShade, lessThan(0.10));
     expect(OcOptical.cssLineCjkHalfLead, closeTo(4.7, 0.01));
@@ -276,7 +276,7 @@ void main() {
     expect(OcOptical.listGlyphStroke, OcOptical.headerGlyphStroke);
     expect(OcOptical.searchFieldGlyph, 16);
     expect(OcOptical.leadingCircle, 38);
-    expect(OcOptical.leadingCircleVisual, 32);
+    expect(OcOptical.leadingCircleVisual, 28);
     expect(OcOptical.leadingCircleVisual, lessThan(OcOptical.leadingCircle));
     expect(OcOptical.leadingGlyph, 18);
     expect(OcOptical.leadingGlyphVisual, 14);
@@ -291,8 +291,8 @@ void main() {
     expect(OcOptical.footerGlyph, 14);
     expect(OcOptical.scheduleStatus, OcOptical.leadingCircle);
     expect(OcOptical.scheduleStatusVisual, lessThan(OcOptical.scheduleStatus));
-    expect(OcOptical.scheduleStatusVisual, 22);
-    expect(OcOptical.scheduleStatusGlyph, 9);
+    expect(OcOptical.scheduleStatusVisual, 18);
+    expect(OcOptical.scheduleStatusGlyph, 8);
     expect(OcOptical.scheduleMore, 10);
     expect(OcOptical.scheduleMore, lessThan(OcOptical.sessionMore));
     expect(OcOptical.scheduleMoreStroke, OcOptical.dockGlyphStrokeVisual);
@@ -374,12 +374,18 @@ void main() {
     );
     expect(
       OcElevation.cardFor(OcTokens.light).last.color.a,
-      closeTo(0.02, 0.001),
+      closeTo(0.04, 0.001),
     );
+    expect(OcElevation.cardFor(OcTokens.light).last.color.red, 0);
     expect(
       OcElevation.cardFor(OcTokens.light).last.color.a,
-      lessThan(0.04),
+      lessThan(0.10),
     );
+    expect(
+      OcElevation.cardFor(OcTokens.light, tight: true).last.color.a,
+      closeTo(0.025, 0.001),
+    );
+    expect(OcElevation.cardFor(OcTokens.light, tight: true).last.color.red, 0);
     expect(
       OcElevation.cardFor(OcTokens.light, tight: true).last.color.a,
       lessThan(OcElevation.cardFor(OcTokens.light).last.color.a),

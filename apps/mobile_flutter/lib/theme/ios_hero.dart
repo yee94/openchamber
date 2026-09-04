@@ -45,10 +45,10 @@ class OcOptical {
   /// Official title/subtitle column is `gap-0.5` (2). Keep that; do not
   /// invent extra title↔meta gap or 15px empty air per line.
   /// Official title is `font-medium` / unread `font-semibold`. Review CJK
-  /// has no Medium cut. Cardinal shade fattened Regular into a brick —
-  /// stem-only 0.48 miter reaches foreground. No shade halo. Do not pile
-  /// half-lead. Half-lead 4.7 + tracking 1.42 stay (no Medium CJK).
-  static const double sessionTitleStem = 0.48;
+  /// has no Medium cut. Stem 0.48 still read heavy vs README light
+  /// single-line air — 0.28 miter only, no shade. Do not pile half-lead.
+  /// Half-lead 4.7 + tracking 1.42 stay (no Medium CJK).
+  static const double sessionTitleStem = 0.28;
   static const double sessionTitleShade = 0;
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
@@ -259,8 +259,8 @@ class OcOptical {
   /// `size-3.5` (14). Hit areas (36/40) stay separate from these visuals.
   static const double leadingCircle = 38;
   /// Painted plate inside the official 38 shell so project leading
-  /// discs are not oversized coins (wake-0905).
-  static const double leadingCircleVisual = 32;
+  /// discs are not oversized coins. 32 still read large vs README.
+  static const double leadingCircleVisual = 28;
   static const double leadingCircleCompact = 22;
   /// Official `.oc-mobile-project-shell .oc-mobile-project-icon-glyph` is
   /// 1.125rem (18). Flutter CustomPaint blooms past the web SVG; paint
@@ -299,17 +299,17 @@ class OcOptical {
 
   /// Official scheduled status uses the project-shell glass disc (2.375rem).
   static const double scheduleStatus = leadingCircle;
-  /// Hit stays official 38. Paint 22 so leading check/pause is not a
+  /// Hit stays official 38. Paint 18 so leading check/pause is not a
   /// massy coin beside the title. Fill is glassChipThrough + inset
   /// highlight — same quiet disc as project leading, not OcGlassChip
   /// frost + chip shadow (that read as a Material badge).
-  static const double scheduleStatusVisual = 22;
+  static const double scheduleStatusVisual = 18;
   /// Official non-tab scheduled glyph is `size-3.5`; residual optical
-  /// paints 9 so the badge does not outweigh the segment track.
-  static const double scheduleStatusGlyph = 9;
+  /// paints 8 so the badge does not outweigh the segment track.
+  static const double scheduleStatusGlyph = 8;
   /// Schedule overflow `more-2` — slimmer than session 12.
   static const double scheduleMore = 10;
-  /// Header now shares dock visual so the 22/9 badge is not a second weight.
+  /// Header now shares dock visual so the 18/8 badge is not a second weight.
   static const double scheduleMoreStroke = dockGlyphStrokeVisual;
   /// Quiet status polish: check/pause at dock visual stroke so the
   /// 38 disc does not outweigh the card title.

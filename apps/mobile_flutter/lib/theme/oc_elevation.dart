@@ -16,12 +16,12 @@ class OcElevation {
       cardFor(OcTokens.of(context), tight: tight);
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
-    // Official `--oc-mobile-float-shadow` trio: near 2+12 plus far
-    // `0 10px 24px -6px`. Far is a 2% / 1% foreground lift — 4%/3%
-    // still read as a cream umbra vs README soft float. Not rgb(0 0 0
-    // / 0.1). Dock / chips stay near-pair only.
+    // Official `--oc-mobile-float-shadow` far is `0 10px 24px -6px`
+    // rgb(0 0 0 / 0.1). Foreground-tinted 2% read as a warm umbra on
+    // cream. Keep the official black far at a quieter alpha (0.04 /
+    // 0.025) so the trio stays soft. Dock / chips stay near-pair only.
     final far = BoxShadow(
-      color: tokens.foreground.withValues(alpha: tight ? 0.01 : 0.02),
+      color: Color.fromRGBO(0, 0, 0, tight ? 0.025 : 0.04),
       offset: const Offset(0, 10),
       blurRadius: 24,
       spreadRadius: -6,
