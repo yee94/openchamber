@@ -458,84 +458,9 @@ class UserTurnToolbar extends StatelessWidget {
   }
 }
 
-String _fileTypeMark(String lower) {
-  if (lower.endsWith('.tsx') || lower.endsWith('.jsx')) return 'TX';
-  if (lower.endsWith('.ts') || lower.endsWith('.js')) return 'TS';
-  if (lower.endsWith('.dart')) return 'DT';
-  if (lower.endsWith('.md')) return 'MD';
-  return '';
-}
-
-/// Compact FileTypeIcon analogue — folded page + type fold, not a
-/// solid brand square (those read as generic blue tiles).
-class _FileTypeSpritePainter extends CustomPainter {
-  const _FileTypeSpritePainter({
-    required this.tint,
-    required this.mark,
-    required this.page,
-    required this.edge,
-  });
-
-  final Color tint;
-  final String mark;
-  final Color page;
-  final Color edge;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final fold = w * 0.34;
-    final pagePath = Path()
-      ..moveTo(w * 0.10, h * 0.08)
-      ..lineTo(w - fold, h * 0.08)
-      ..lineTo(w * 0.90, h * 0.08 + fold)
-      ..lineTo(w * 0.90, h * 0.92)
-      ..lineTo(w * 0.10, h * 0.92)
-      ..close();
-    canvas.drawPath(pagePath, Paint()..color = page);
-    canvas.drawPath(
-      pagePath,
-      Paint()
-        ..color = edge
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = OcOptical.fileTypeStrokeVisual
-        ..strokeJoin = StrokeJoin.miter,
-    );
-    final flap = Path()
-      ..moveTo(w - fold, h * 0.08)
-      ..lineTo(w * 0.90, h * 0.08 + fold)
-      ..lineTo(w - fold, h * 0.08 + fold)
-      ..close();
-    canvas.drawPath(flap, Paint()..color = tint);
-    if (mark.isEmpty) return;
-    final tp = TextPainter(
-      text: TextSpan(
-        text: mark,
-        style: TextStyle(
-          color: edge,
-          fontSize: size.width * 0.28,
-          fontWeight: FontWeight.w600,
-          height: 1,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: size.width);
-    tp.paint(
-      canvas,
-      Offset((size.width - tp.width) / 2, h * 0.52 - tp.height / 2),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _FileTypeSpritePainter oldDelegate) {
-    return oldDelegate.tint != tint ||
-        oldDelegate.mark != mark ||
-        oldDelegate.page != page ||
-        oldDelegate.edge != edge;
-  }
-}
-
+/// Official mobile `FileTypeIcon` is `h-3` outline, not a filled brand
+/// tile. Residual filled flap still read as a generic blue square.
+/// Paint the shared `OcGlyph.file` outline in a type tint.
 class _FileTypeMark extends StatelessWidget {
   const _FileTypeMark({required this.path});
 
@@ -549,22 +474,19 @@ class _FileTypeMark extends StatelessWidget {
     if (lower.endsWith('.md')) {
       tint = tokens.chart1;
     } else if (lower.endsWith('.tsx') || lower.endsWith('.jsx')) {
-      tint = const Color(0xFF61DAFB);
+      tint = tokens.chart5;
     } else if (lower.endsWith('.ts') || lower.endsWith('.js')) {
-      tint = const Color(0xFF3178C6);
+      tint = tokens.chart1;
     } else if (lower.endsWith('.dart')) {
-      tint = const Color(0xFF0175C2);
+      tint = tokens.chart4;
     } else {
       tint = tokens.mutedForeground;
     }
-    return CustomPaint(
-      size: const Size.square(OcOptical.fileTypeSize),
-      painter: _FileTypeSpritePainter(
-        tint: tint,
-        mark: _fileTypeMark(lower),
-        page: tokens.background,
-        edge: tokens.mutedForeground,
-      ),
+    return OcGlyph(
+      OcGlyphKind.file,
+      size: OcOptical.fileTypeSize,
+      strokeWidth: OcOptical.fileTypeStrokeVisual,
+      color: tint,
     );
   }
 }
