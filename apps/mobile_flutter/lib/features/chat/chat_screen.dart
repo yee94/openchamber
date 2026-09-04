@@ -158,22 +158,21 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _attach() async {
     try {
       final picked = await _media.pickImages();
-      final ready = <AttachmentDraft>[];
-      for (final draft in picked) {
-        var next = draft;
-        if (next.isHeic) {
-          next = await _media.transcodeHeic(next);
-        }
-        if (next.bytes.length > maxPromptAttachmentBytes) {
-          if (mounted) _errorKey.value = 'chat.error.attachmentTooLarge';
-          continue;
-        }
-        await _media.publishVirtualAsset(next);
-        ready.add(next);
+      final prepared = await prepareComposerAttachments(
+        picked: picked,
+        transcodeHeic: _media.transcodeHeic,
+      );
+      if (!mounted) return;
+      if (prepared.ready.isEmpty) {
+        if (prepared.errorKey != null) _errorKey.value = prepared.errorKey;
+        return;
       }
-      if (!mounted || ready.isEmpty) return;
+      for (final draft in prepared.ready) {
+        await _media.publishVirtualAsset(draft);
+      }
+      if (!mounted) return;
       setState(() {
-        _attachments.addAll(ready);
+        _attachments.addAll(prepared.ready);
       });
       _errorKey.value = null;
     } on PromptAttachmentUploadError {

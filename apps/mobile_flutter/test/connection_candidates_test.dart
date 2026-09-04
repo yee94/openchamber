@@ -260,10 +260,15 @@ void main() {
         'server': {'label': 'Studio'},
       };
     final hostKeys = generateEcdhKeyPair();
+    var waited = false;
     final controller = AppController(
       store: MemorySecureStore(),
       api: OpenChamberApi(transport: http),
       relayRaceHeadstart: const Duration(seconds: 5),
+      relayRaceWait: (duration) async {
+        waited = true;
+        await Future<void>.delayed(duration);
+      },
       openRelayTunnel: (relay) => _openMemoryTunnel(http, hostKeys),
     );
     await controller.bootstrap(skipDelay: true);
@@ -284,8 +289,10 @@ void main() {
     final started = Stopwatch()..start();
     expect(await controller.connect(pairingLink: encoded), isTrue);
     started.stop();
-    expect(started.elapsed, lessThan(const Duration(milliseconds: 1500)));
+    expect(waited, isFalse);
+    expect(started.elapsed, lessThan(const Duration(milliseconds: 500)));
     expect(controller.connectErrorKey, isNull);
+    expect(controller.connectErrorKey, isNot(equals('connect.error.unreachable')));
     expect(controller.activeTransportKind, ActiveTransportKind.relay);
     expect(controller.activeConnectionStatusKey, 'mobile.instances.status.connectedRelay');
     expect(
@@ -299,6 +306,13 @@ void main() {
     expect(controller.activeConnectionStatusKey, isNot(contains('connectedDirect')));
     expect(controller.activeInstance?.url, 'relay://srv_test');
     expect(directCandidatesOf(controller.activeInstance!.transportCandidates), isEmpty);
+    expect(http.calls.any((call) => call.path == OpenChamberPaths.pairingRedeem), isTrue);
+    expect(
+      http.calls.any((call) => call.path == OpenChamberPaths.pairingRedeem && call.body?['pairingId'] == 'pair_relay_only_walk'),
+      isTrue,
+    );
+    expect(http.bases.any((base) => base.host.startsWith('192.168.')), isFalse);
+    expect(http.bases.any((base) => base.host == '127.0.0.1' || base.host == 'localhost'), isFalse);
   });
 }
 
