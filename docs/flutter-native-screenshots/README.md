@@ -71,7 +71,7 @@ or revive Noto Bold. Title↔subtitle gap **6 → 8** (Medium still ate 6);
 row visual **62.8 → 64.8**. Dock/header visual stroke **0.28 → 0.24**
 (23px box stays). Far true-black **6% / tight 3.5%** (4%/2.5% still flat
 vs README lift; cream still cannot take official 10%; trio geometry stays).
-Recapture 02 family after this dart.
+Recapture 02 family after this dart; 04 light MAE~0.16 kept (far/lift).
 **Not 精致.**
 
 | File | Screen |
