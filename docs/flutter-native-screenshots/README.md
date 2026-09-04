@@ -894,9 +894,13 @@ AgentAvatar dart (`3a881f07`). No second recapture. No banner
 frost. Press DONE.
 **精致: 还没有.**
 
-**2026-09-04 wake-0622 dart:**
+**2026-09-04 wake-0622 (live `7599aff50` / dart `d48bdbed0`):**
 STRUCTURE PASS. THEME OK. Mode tag still collapsed official
 entity-meta 16 via `ocCssInk` (pill ~17 vs name 20). Port
 `OcCssLine` 13/16 + pad 2 so the contact-card tag is 20.
-Do not invent frost/umbra. Press DONE. Recapture 03.
+Recapture MAE ~0.024 vs `03=3a881f07` — RESTORED (same class
+as wake-0556 size-5). Goldens stay `7599aff50`. Do **not**
+recapture again for this dart. Do not invent frost/umbra or
+unlock discs 34/28/24 / glyph **14**. Press DONE. Honest
+leftover is live PingFang + UIKit `UIGlassEffect`.
 **精致: 还没有.**
