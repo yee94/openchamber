@@ -122,7 +122,23 @@ class OcElevation {
   static List<BoxShadow> control(BuildContext context) => controlFor(OcTokens.of(context));
 
   static List<BoxShadow> controlFor(OcTokens tokens) {
-    if (tokens.isDark) return const [];
+    // Official `.oc-mobile-settings-search-field` uses
+    // `--oc-mobile-glass-shadow` in both themes. Light already had
+    // the trio. Dark was empty (same miss as dock before 0412).
+    // Dock stays near-pair only (8/20 stadium). Settings search is
+    // a field, not a disc — paint the official dark 8/20 @ 0.40.
+    if (tokens.isDark) {
+      return const [
+        BoxShadow(color: Color.fromRGBO(0, 0, 0, 0.30), blurRadius: 2),
+        BoxShadow(color: Color.fromRGBO(0, 0, 0, 0.28), blurRadius: 12),
+        BoxShadow(
+          color: Color.fromRGBO(0, 0, 0, 0.40),
+          offset: Offset(0, 8),
+          blurRadius: 20,
+          spreadRadius: -6,
+        ),
+      ];
+    }
     return const [
       BoxShadow(color: Color(0x0D000000), blurRadius: 2),
       BoxShadow(color: Color(0x0F000000), blurRadius: 12),

@@ -776,6 +776,18 @@ Recapture after `18fa0439b`: kept `03-assistant` `1299800a` (MAE ~1.61).
 02/04/05 dark SAME. Restored light 02/04 (MAE ~0.02) and 01/06/07/08.
 **Not 精致.**
 
+**2026-09-04 wake-0424 residual (after `7d272b86f`):**
+Watch scored live 03 Regular goldens. STRUCTURE PASS. THEME OK.
+Do **not** pile Regular / 3.2 / 3.0 / 1.46 / frost 0.16 / disc 24 /
+search plate 34. Dark far **0.34**, dock near pair, and assistant
+entity-title Regular stay. Press DONE. Official
+`.oc-mobile-settings-search-field` uses `--oc-mobile-glass-shadow`;
+Flutter `OcElevation.control` was empty in dark. Port official dark
+trio (near 0.30/0.28 + 8/20 @ 0.40). Dock stays near-pair only.
+Recapture 05-dark after this dart; restore others if MAE stays
+below noise.
+**Not 精致.**
+
 | File | Screen |
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |
