@@ -171,13 +171,13 @@ class OcTokens extends ThemeExtension<OcTokens> {
   /// control-scale `blur(20) saturate(1.25)`. WidgetTester cannot paint
   /// live glass. A plain card@0.30 wash reads as a muddy cream slab.
   /// Mix official glass milk over a lighter elevated wash so the stadium
-  /// is frost (list still reads through). 0.14/0.22 still read muted on
-  /// cream WidgetTester — 0.12/0.18 still stacked a muddy selected pill.
-  /// 0.10/0.15 keeps elevated frost; selected `/55` stays mix-only.
+  /// is frost (list still reads through). 0.12/0.18 and 0.10/0.15 still
+  /// stacked a muddy selected pill on cream. 0.08/0.12 keeps elevated
+  /// frost; selected `/55` stays mix-only.
   Color get dockPlate => Color.alphaBlend(
         (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-            .withValues(alpha: 0.10),
-        card.withValues(alpha: 0.15),
+            .withValues(alpha: 0.08),
+        card.withValues(alpha: 0.12),
       );
 
   /// Legacy alias. Floating chrome uses [glassFill] + blur instead.
