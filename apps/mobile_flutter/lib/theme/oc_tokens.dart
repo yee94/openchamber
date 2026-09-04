@@ -148,7 +148,7 @@ class OcTokens extends ThemeExtension<OcTokens> {
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
   /// Page-bleed chip: clear fill. Cream + blur paints a plate; 0.68
-  /// without blur is a coin. No contact rim / ClipOval (wake-0759).
+  /// without blur is a coin. OcGlassChip is glyph-only (wake-0802).
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: 0);
 

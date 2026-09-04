@@ -187,8 +187,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
 
   Widget _taskCard(BuildContext context, ScheduledTaskRecord task) {
     final paused = !task.enabled;
-    final card = GroupedInsetCard(
-      tight: true,
+    final card = MobileFloatingSurface(
       child: Pressable(
         key: Key('scheduled-task-${task.id}'),
         haptic: HapticStrength.light,
@@ -204,18 +203,13 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   child: SizedBox(
                     width: OcOptical.scheduleStatusVisual,
                     height: OcOptical.scheduleStatusVisual,
-                    child: ClipOval(
-                      child: OcFrosted(
-                        fill: context.oc.glassChipFill,
-                        child: Center(
-                          child: OcGlyph(
-                            paused ? OcGlyphKind.pause : OcGlyphKind.check,
-                            size: OcOptical.scheduleStatusGlyph,
-                            strokeWidth: OcOptical.listGlyphStroke,
-                            filled: false,
-                            color: paused ? context.oc.mutedForeground : context.oc.statusSuccess,
-                          ),
-                        ),
+                    child: Center(
+                      child: OcGlyph(
+                        paused ? OcGlyphKind.pause : OcGlyphKind.check,
+                        size: OcOptical.scheduleStatusGlyph,
+                        strokeWidth: OcOptical.listGlyphStroke,
+                        filled: false,
+                        color: paused ? context.oc.mutedForeground : context.oc.statusSuccess,
                       ),
                     ),
                   ),
