@@ -331,8 +331,10 @@ class OcOptical {
   static const double scheduleMore = 10;
   /// Header now shares dock visual so the 4/2 badge is not a second weight.
   static const double scheduleMoreStroke = dockGlyphStrokeVisual;
-  /// Check/pause share small-chrome stroke so 14px glyphs read at dpr 3.
-  static const double scheduleStatusGlyphStroke = headerGlyphStrokeVisual;
+  /// Official schedule check/pause is the same slim medium as
+  /// schedule `more-2` / dock 14px chrome. Header 0.62 made 14px
+  /// status discs coarse bricks. Do not invent a third weight.
+  static const double scheduleStatusGlyphStroke = dockGlyphStrokeVisual;
 
   /// Official `FileTypeIcon` mobile size `h-3 w-3` (12px).
   static const double fileTypeSize = 12;

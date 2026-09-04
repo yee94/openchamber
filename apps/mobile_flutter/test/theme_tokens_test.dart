@@ -320,7 +320,8 @@ void main() {
     expect(OcOptical.scheduleMore, 10);
     expect(OcOptical.scheduleMore, lessThan(OcOptical.sessionMore));
     expect(OcOptical.scheduleMoreStroke, OcOptical.dockGlyphStrokeVisual);
-    expect(OcOptical.scheduleStatusGlyphStroke, OcOptical.headerGlyphStrokeVisual);
+    expect(OcOptical.scheduleStatusGlyphStroke, OcOptical.dockGlyphStrokeVisual);
+    expect(OcOptical.scheduleStatusGlyphStroke, lessThan(OcOptical.headerGlyphStrokeVisual));
     expect(OcOptical.scheduleStatusGlyphStroke, lessThan(OcOptical.listGlyphStroke));
     expect(OcOptical.overflow, 16);
     expect(OcOptical.chatChip, 40);

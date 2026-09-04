@@ -578,6 +578,16 @@ title stays 16/12 + 4.7. Row **58.8 → 49.4**. Do **not** undo
 stay. Recapture 02 (+scrolled/dark).
 **Not 精致.**
 
+**2026-09-04 wake-0152 residual (after `7c8112a0e`):**
+Watch scored stale `bede83455` / `02=1e4f4546`. Live tip already
+has session subtitle/time official 10/12 (row 49.4). Do **not**
+undo 20+10+20, session gap **2**, title↔meta **4**, meta
+`halfLead: 0`. Search/+/dock stay 14/40/0.62/0.12 — no Flutter
+glass clone. Schedule check/pause stroke **0.62 → 0.12** (same
+slim medium as schedule `more-2`). Far stays official **-6**.
+Recapture 04 (+dark).
+**Not 精致.**
+
 | File | Screen |
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |
