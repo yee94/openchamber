@@ -887,3 +887,9 @@ already landed on `7599aff50`: kept 03 `3a881f07` (MAE ~0.61).
 02/04/05/07 SAME. Header stays official transparent
 `MobileTabPageHeader`. Do not rewind. Press DONE.
 **精致: 还没有.**
+
+**2026-09-04 wake-0621 (delayed dup of `f9bcc8eed` / wake-0620):**
+Same stale 03 `2bd63bf8`. Live goldens already match the
+AgentAvatar dart (`3a881f07`). No second recapture. No banner
+frost. Press DONE.
+**精致: 还没有.**
