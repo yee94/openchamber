@@ -993,6 +993,7 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   Map<String, Object?> quotas = Map<String, Object?>.from(defaultTestQuotas);
 
   final List<OpenChamberRequest> calls = [];
+  final List<Uri> bases = [];
   final List<String> sentPrompts = [];
   final List<List<Map<String, Object?>>> sentPromptParts = [];
   final List<Map<String, Object?>> uploadedAttachments = [];
@@ -1422,6 +1423,7 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   @override
   Future<OpenChamberResponse> send(Uri base, OpenChamberRequest request) async {
     calls.add(request);
+    bases.add(base);
     switch (request.path) {
       case OpenChamberPaths.health:
         final delay = healthDelayByHost[base.host] ?? healthDelay;

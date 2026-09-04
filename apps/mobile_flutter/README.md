@@ -63,7 +63,7 @@ Android uses the same timing/scale. Haptics are `performHapticFeedback` (CLOCK_T
 
 - Smoke (push to `work/flutter-native` only, plus `workflow_dispatch`): `.github/workflows/flutter-mobile-ci.yml`
   - `analyze-test` is the performance gate: `flutter test` includes `test/chat_transcript_perf_test.dart` (500-message fixture, rebuild-count + CI CPU budgets).
-  - Android job uploads `openchamber-flutter-android-debug-apk-<shortsha>` (14-day retention). The file inside is `openchamber-v2-debug-<shortsha>.apk` (`com.yee94.openchamber.debug`). GitHub login required; the zip is not a public Release.
+  - Android job uploads `openchamber-flutter-android-debug-apk-<shortsha>` (14-day retention). The file inside is `openchamber-v2-debug-<shortsha>.apk` (`com.yee94.openchamber.debug`). Latest sideload prerelease: [`flutter-v2-debug-915c22d`](https://github.com/yee94/openchambery/releases/tag/flutter-v2-debug-915c22d).
 - Signed release (`workflow_dispatch`, existing Capacitor secrets): `.github/workflows/flutter-mobile-release.yml`
 - No `integration_test` / `flutter drive` CI job. Linux has no phone GPU; macos-15 only compiles the simulator app. Local Timeline (not claimed 真机过):
 

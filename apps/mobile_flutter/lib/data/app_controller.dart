@@ -53,6 +53,7 @@ class AppController extends ChangeNotifier {
     OpenRelayTunnel? openRelayTunnel,
     ExternalBrowser? browser,
     Duration? relayRaceHeadstart,
+    this.relayRaceWait,
   })  : _store = store,
         _qrScanner = qrScanner ?? QrScanner(),
         _deepLinks = deepLinks ?? DeepLinkListener(),
@@ -85,6 +86,7 @@ class AppController extends ChangeNotifier {
   late final OpenRelayTunnel _openRelayTunnel;
   late final InstanceRepository _repository = InstanceRepository(_store);
   final Duration relayRaceHeadstart;
+  final Future<void> Function(Duration duration)? relayRaceWait;
   bool _candidateRefreshInFlight = false;
 
   AppPhase phase = AppPhase.splash;
@@ -1094,6 +1096,7 @@ class AppController extends ChangeNotifier {
         return await probeRelay(relay);
       },
       headstart: relayRaceHeadstart,
+      wait: relayRaceWait ?? Future<void>.delayed,
     );
   }
 

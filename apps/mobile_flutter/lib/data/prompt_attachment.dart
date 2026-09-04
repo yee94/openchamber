@@ -98,6 +98,35 @@ bool needsHeicTranscode(String mime) {
   return lower == 'image/heic' || lower == 'image/heif';
 }
 
+class PreparedComposerAttachments {
+  const PreparedComposerAttachments({required this.ready, this.errorKey});
+
+  final List<AttachmentDraft> ready;
+  final String? errorKey;
+}
+
+/// Album/picker attach pipeline: HEIC/HEIF → JPEG via [transcodeHeic], then
+/// the official 25 MiB upload cap. Preview publish stays in the composer.
+Future<PreparedComposerAttachments> prepareComposerAttachments({
+  required List<AttachmentDraft> picked,
+  required Future<AttachmentDraft> Function(AttachmentDraft draft) transcodeHeic,
+}) async {
+  final ready = <AttachmentDraft>[];
+  String? errorKey;
+  for (final draft in picked) {
+    var next = draft;
+    if (needsHeicTranscode(next.mime)) {
+      next = await transcodeHeic(next);
+    }
+    if (next.bytes.length > maxPromptAttachmentBytes) {
+      errorKey = 'chat.error.attachmentTooLarge';
+      continue;
+    }
+    ready.add(next);
+  }
+  return PreparedComposerAttachments(ready: ready, errorKey: errorKey);
+}
+
 Future<PromptAttachmentUploadResult> uploadPromptAttachmentBytes({
   required OpenChamberApi api,
   required Uri base,

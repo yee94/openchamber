@@ -72,7 +72,7 @@ Native contracts / shell
 | Appearance `iosNativeUi` | **not present** | Do not rebuild. Native is always on. |
 | Plan mode / project notes / Todo | **not present** | Removed in 1.19.2. Do not rebuild. |
 | Capgo OTA | **not ported** | WebView web-bundle hot update only. Flutter ships IPA/APK. |
-| Flutter CI | landed | `.github/workflows/flutter-mobile-ci.yml` automatic on this track. **#13** `332ad6f82` and **#14** `77baf9b6f` both fully green (analyze + Android APK + iOS simulator). **#15** `10f97ff86` iOS simulator **failed** (`OpenChamberFlutterPlugins.swift:598` missing `await` on MainActor `mime`). **#16** `37074feea` fully green: https://github.com/yee94/openchambery/actions/runs/33715865698. **#17** `1f32bed56` fully green: https://github.com/yee94/openchambery/actions/runs/33716649360. **#18** `74aec2072` fully green: https://github.com/yee94/openchambery/actions/runs/33717269010. **#19** `17d1822bc` cancelled by the next push. **#20** `d740f4164` fully green (analyze + Android debug APK + iOS simulator): https://github.com/yee94/openchambery/actions/runs/33718295396. Linux analyze-test alone is never treated as green. |
+| Flutter CI | landed | `.github/workflows/flutter-mobile-ci.yml` automatic on this track. Linux analyze-test alone is never treated as green. Latest fully green tip: **`915c22dc5`** run **33862397899** (analyze + Android debug APK + iOS simulator): https://github.com/yee94/openchambery/actions/runs/33862397899. Prior fully green: **#16** `37074feea` / **#17** `1f32bed56` / **#18** `74aec2072` / **#20** `d740f4164`. **#15** `10f97ff86` iOS red — do not cite. |
 | Signed release workflow | landed | `.github/workflows/flutter-mobile-release.yml` — existing secret names only |
 
 ## Settings slug checklist (`MOBILE_SETTINGS_PAGE_SLUGS`)
@@ -208,13 +208,22 @@ What still keys off the **base** id / class namespace (not broken by the suffix)
 
 **FCM:** `apps/mobile_flutter/android/app/google-services.json` already lists both `com.yee94.openchamber` and `com.yee94.openchamber.debug` (copied from Capacitor; Firebase project `openchamber-8bf7e`; no new secrets / no second project). The Google Services plugin can select the debug client. The native channel still returns **null** if Firebase init or token fetch fails — not a fake token. If a device walk sees no push token, treat that row as skipped for the v2 debug APK.
 
-**Relay-only:** a pairing payload with no LAN candidate calls `probeRelay` immediately (`hasDirect == false`). No 1.5s headstart, no LAN probe, no “LAN failed” / `connect.error.unreachable` from a missing LAN host. Status is `已连接 · 中继` / `Connected · Relay`. Covered by fake-transport tests in `connection_candidates_test.dart`. Do not run live `wss://` from CI.
+**Relay-only:** a pairing payload with no LAN candidate calls `probeRelay` immediately (`hasDirect == false`). No 1.5s headstart, no LAN probe, no “LAN failed” / `connect.error.unreachable` from a missing LAN host. Status is `已连接 · 中继` / `Connected · Relay`. Covered by fake-transport tests in `connection_candidates_test.dart` and `pairing_payload_test.dart` (including a widget redeem that paints the status string). Injected `relayRaceWait` must stay uncalled. Do not run live `wss://` from CI.
 
 ### Download and install (GitHub login required)
 
+Preferred: the GitHub **prerelease** (no Actions Artifacts UI):
+
+- Tag `flutter-v2-debug-915c22d` (prerelease, not draft): https://github.com/yee94/openchambery/releases/tag/flutter-v2-debug-915c22d
+- APK: https://github.com/yee94/openchambery/releases/download/flutter-v2-debug-915c22d/openchamber-v2-debug-915c22d.apk
+- Built from `915c22dc5` / Flutter Mobile CI [run 33862397899](https://github.com/yee94/openchambery/actions/runs/33862397899) (analyze + Android debug APK + iOS simulator all green)
+- Includes voice UI removal + standard IME keyboard. Side-by-side `com.yee94.openchamber.debug` / **OpenChamber v2**. Relay-first walk — Yee has no LAN.
+
+Actions artifact fallback (14-day retention):
+
 1. Open the Flutter Mobile CI run for this commit (Actions → **Flutter Mobile CI** on `work/flutter-native`, or **Run workflow**).
 2. Wait until **Android debug APK** is green. Heavy concurrency **cancels** older runs on a newer push — if cancelled, re-dispatch instead of installing an older artifact.
-3. Artifacts → `openchamber-flutter-android-debug-apk-<shortsha>` (zip, 14-day retention, not a GitHub Release). **#21** `d13c8f4ac` ([run 33768888525](https://github.com/yee94/openchambery/actions/runs/33768888525)) was cancelled by the next visual push. **#22** `38dba5042` ([run 33769081194](https://github.com/yee94/openchambery/actions/runs/33769081194)) analyze + iOS green; Android debug APK failed on Maven Central **429** (not the new applicationId). Re-dispatch / retry the Android job — do not install from a cancelled or red run.
+3. Artifacts → `openchamber-flutter-android-debug-apk-<shortsha>` (zip). Do not install from a cancelled or red run.
 4. Unzip. Install `openchamber-v2-debug-<shortsha>.apk` (unknown-sources / adb). Official **OpenChamber** stays installed.
 5. Pair with an **Anywhere** / relay (`wss`) payload. Do not require a `192.168.x` host.
 
@@ -361,6 +370,21 @@ Read on main (do not invent): skill grouping is `isSkillGroupTool` + `SkillToolG
 4. Pierre `@pierre/diffs` / `beautiful-mermaid` SVG — will not add packages.
 5. Experimental session-list fallback when index returns 501 — not a 1.19 mobile happy path.
 6. Official nearby is LAN / home network (`mobileConnections.ts`). There is **no** 「附近」 string and **no** Bonjour/mDNS/NWBrowser/NSD — do not add a scanner UI.
+
+## Acceptance board (connect / media — still ❌ 真机过)
+
+Automated coverage on Linux / Flutter 3.32.8 does **not** make a row 真机过. Phone-only rows stay ❌.
+
+| Row | Automated | 真机过 | Evidence / residual |
+|---|---|---|---|
+| Relay-only pair (no LAN candidate) skips 1.5s headstart | ✅ | ❌ | `probeConnectionCandidates(hasDirect: false)` + AppController `relayRaceWait` never called. Fake tunnel only. |
+| Status `已连接 · 中继` / `Connected · Relay` | ✅ | ❌ | Unit + settings Instances widget after v2 redeem. Not a live `wss://` phone. |
+| Pairing v2 redeem happy path | ✅ | ❌ | `POST /api/client-auth/pairing/redeem` on the winning memory tunnel. Widget form submit. |
+| Album HEIC → JPEG + `PUT /api/fs/prompt-attachments` `file://` | ✅ | ❌ | `prepareComposerAttachments` + mocked `transcode` channel + sendPrompt. No PHPicker / Photo Picker on a device. |
+| OAuth external-browser callback URL parse | ✅ | ❌ | Query `code`/`state`/`error`, http(s)-only `open`. Live hosted-provider/MCP browser round-trip still device-only. |
+| IME / voice removal on this APK | ✅ contract | ❌ | Debug APK `915c22d` includes IME Scaffold + no Voice page. Not walked on Yee's phone from this VM. |
+| Home ↔ away relay hot-switch on a phone | ✅ memory | ❌ | Candidates refresh + reprobe are fake-transport only. |
+| iOS Local Network prompt | plist only | ❌ | `NSLocalNetworkUsageDescription` present. Prompt not shown here. |
 
 ## Tenth-slice status
 
@@ -574,3 +598,15 @@ Budget on a real device: settled scroll should stay near 16ms UI frames; a live 
 3. Encrypted/redacted reasoning with empty text stays hidden (same as official empty-text hide). No placeholder “encrypted thinking” chip.
 4. `WidgetTester` rebuild counters and CI CPU budgets are not a systrace on a mid-range Android phone. Phone-only residual: Impeller raster, glyph cache, and large-fence decode on a physical GPU.
 5. Pixel/golden chrome (composer glass, dock, goldens) stays on the Flutter UI track. This slice did not recapture `docs/flutter-native-screenshots/*`.
+
+## Sixteenth-slice status (connect/media acceptance, no 真机过 claim)
+
+Close automated gaps that do not need Yee's phone. Visual goldens / pixel chrome were not retouched.
+
+| Surface | Status | Notes |
+|---|---|---|
+| Relay-only wait skip | landed (memory) | `AppController.relayRaceWait` is uncalled when LAN candidates are absent. Elapsed stays well under 1.5s even with a 5s headstart. |
+| Pairing v2 redeem | landed (memory + widget) | Parse-only-relay payload; `POST /api/client-auth/pairing/redeem`; Instances page shows `Connected · Relay` / `已连接 · 中继`. |
+| HEIC attach plumbing | landed (memory) | `prepareComposerAttachments` owns HEIC→JPEG + 25 MiB cap. Composer still publishes virtual assets. `sendPrompt` keeps official PUT headers + `file://` parts. |
+| OAuth callback URLs | landed (unit) | Query `code`/`state`/`error`; http(s)-only external browser. Live system-browser OAuth remains ❌ 真机过. |
+| Debug APK prerelease | published | `flutter-v2-debug-915c22d` from CI run 33862397899 / `915c22dc5`. |
