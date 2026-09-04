@@ -303,7 +303,9 @@ class OcOptical {
   /// Official scheduled status uses the project-shell glass disc (2.375rem).
   static const double scheduleStatus = leadingCircle;
   /// Hit stays official 38. Paint 24 so leading check/pause is not a
-  /// massy coin beside the title (wake-1726).
+  /// massy coin beside the title. Fill is glassChipThrough + inset
+  /// highlight — same quiet disc as project leading, not OcGlassChip
+  /// frost + chip shadow (that read as a Material badge).
   static const double scheduleStatusVisual = 24;
   /// Official non-tab scheduled glyph is `size-3.5`; residual optical
   /// paints 9 so the badge does not outweigh the segment track.

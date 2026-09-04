@@ -152,7 +152,8 @@ class OcTokens extends ThemeExtension<OcTokens> {
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
   /// mobileGlass frost plate — under official 0.68 coin, above bare
-  /// page-bleed. Chat / schedule discs stay this 0.34 plate.
+  /// page-bleed. Chat discs stay this 0.34 plate. Schedule status
+  /// uses [glassChipThrough] without chip frost.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: isDark ? 0.34 : 0.34);
 

@@ -137,6 +137,13 @@ void main() {
     expect(add.filled, isFalse);
     final scheduleCard = tester.widget<MobileFloatingSurface>(find.byType(MobileFloatingSurface).first);
     expect(scheduleCard.tight, isTrue);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('scheduled-task-cron-1')),
+        matching: find.byType(OcGlassChip),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('project and session titles paint full foreground ink', (tester) async {
