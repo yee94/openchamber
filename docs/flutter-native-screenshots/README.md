@@ -18,7 +18,7 @@ Recapture after restoring Yee-open type (tracking + line-height) on top of the s
 | File | Screen |
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |
-| `02-projects.png` | Light: catalog sand/orange. Overlay collapsing header. One project shell: header + padded session/worktree groups. |
+| `02-projects.png` | Light: catalog sand/orange. Overlay collapsing header. Large title ↔ first card keeps the official expand-shift spacer + `gap-5` air (not a restPeek pull). One project shell: header + padded session/worktree groups. |
 | `02-projects-scrolled.png` | Same Projects list jumped just past the official 48px collapse. Title is compact; cards stay visible under the translucent header (not an emptied mid-scroll). |
 | `02-projects-dark.png` | Same Projects surface after Appearance → Dark (catalog `OcTokens`, not a photo recolor). |
 | `03-assistant.png` | Contact cards (name / mode / summary). No 「启用助理」 toggle. |
