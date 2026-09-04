@@ -37,6 +37,21 @@ enum OcGlyphKind {
   speaker,
   people,
   robot,
+  server,
+  palette,
+  chatAi,
+  notification,
+  chatHistory,
+  aiGenerate,
+  cloud,
+  nodeTree,
+  brain,
+  slashCommands,
+  bookOpen,
+  barChart,
+  information,
+  chatThread,
+  mcp,
   bolt,
   hourglass,
   layers,
@@ -435,6 +450,22 @@ class _OcGlyphPainter extends CustomPainter {
         canvas.drawCircle(Offset(w * 0.36, h * 0.52), w * 0.06, fill);
         canvas.drawCircle(Offset(w * 0.64, h * 0.52), w * 0.06, fill);
         canvas.drawLine(Offset(w * 0.36, h * 0.68), Offset(w * 0.64, h * 0.68), stroke);
+      case OcGlyphKind.server:
+      case OcGlyphKind.palette:
+      case OcGlyphKind.chatAi:
+      case OcGlyphKind.notification:
+      case OcGlyphKind.chatHistory:
+      case OcGlyphKind.aiGenerate:
+      case OcGlyphKind.cloud:
+      case OcGlyphKind.nodeTree:
+      case OcGlyphKind.brain:
+      case OcGlyphKind.slashCommands:
+      case OcGlyphKind.bookOpen:
+      case OcGlyphKind.barChart:
+      case OcGlyphKind.information:
+      case OcGlyphKind.chatThread:
+      case OcGlyphKind.mcp:
+        canvas.drawCircle(Offset(w * 0.5, h * 0.5), w * 0.28, stroke);
     }
   }
 

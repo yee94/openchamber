@@ -6,6 +6,7 @@ import 'package:openchamber/data/secure_store.dart';
 import 'package:openchamber/data/settings_catalog.dart';
 import 'package:openchamber/features/shell/secondary_chrome.dart';
 import 'package:openchamber/features/shell/tab_scaffold.dart';
+import 'package:openchamber/features/settings/settings_primitives.dart';
 import 'package:openchamber/theme/ios_chrome.dart';
 import 'package:openchamber/theme/oc_glyphs.dart';
 
@@ -186,6 +187,18 @@ void main() {
     await tester.tap(find.byKey(const Key('tab-settings')));
     await tester.pumpAndSettle();
 
+    expect(find.textContaining('Language and theme'), findsNothing);
+    expect(find.textContaining('iosNativeUi'), findsNothing);
+    final appearance = tester.widget<SettingsNavRow>(find.byKey(const Key('settings-slug-appearance')));
+    expect(appearance.icon, OcGlyphKind.palette);
+    expect(appearance.subtitle, isNull);
+    for (final page in mobileSettingsPages) {
+      expect(settingsNavIcon(page.slug), isNot(OcGlyphKind.gear), reason: page.slug);
+    }
+    expect(
+      tester.getTopLeft(find.byKey(const Key('settings-search'))).dy,
+      greaterThan(tester.getBottomLeft(find.byKey(const Key('mobile-tab-page-title'))).dy),
+    );
     for (final slug in mobileSettingsPageSlugs) {
       final slugFinder = find.byKey(Key('settings-slug-$slug'), skipOffstage: false);
       expect(slugFinder, findsOneWidget, reason: slug);

@@ -217,6 +217,11 @@ void main() {
     expect(find.byType(MobileTabPageHeader), findsOneWidget);
     expect(find.byKey(const Key('settings-slug-appearance')), findsOneWidget);
     expect(find.byKey(const Key('settings-slug-iosNativeUi'), skipOffstage: false), findsNothing);
+    expect(find.textContaining('语言与主题'), findsNothing);
+    expect(
+      tester.getTopLeft(find.byKey(const Key('settings-search'))).dy,
+      greaterThan(tester.getBottomLeft(find.byKey(const Key('mobile-tab-page-title'))).dy),
+    );
     await _writePng(tester, screenshotKey, '05-settings.png');
 
     await tester.ensureVisible(find.byKey(const Key('settings-slug-appearance')));
@@ -236,6 +241,8 @@ void main() {
 
     await tester.tap(find.byKey(const Key('settings-back')));
     await _pumpFrames(tester);
+    expect(find.byKey(const Key('settings-search')), findsOneWidget);
+    await _writePng(tester, screenshotKey, '05-settings-dark.png');
     await tester.tap(find.byKey(const Key('tab-scheduled')));
     await _pumpUntil(tester, find.byKey(const Key('scheduled-task-cron-1')));
     await _writePng(tester, screenshotKey, '04-scheduled-dark.png');

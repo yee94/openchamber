@@ -26,6 +26,10 @@ void main() {
     expect(OcTokens.light.surfaceBackground, OcTokens.light.background);
     expect(OcTokens.light.surfaceMuted, OcTokens.light.muted);
     expect(OcTokens.dark.pageBackground, isNot(OcTokens.light.pageBackground));
+    expect(OcTokens.light.pageBackground, isNot(const Color(0xFFF2F2F7)));
+    expect(OcTokens.light.pageBackground, isNot(const Color(0xFF000000)));
+    expect(OcTokens.light.colorScheme.surfaceTint, const Color(0x00000000));
+    expect(OcTokens.light.settingsGroupBackground, isNot(OcTokens.light.pageBackground));
     expect(OcTokens.light.floatSurface.a, closeTo(0.45, 0.01));
     expect(OcTokens.dark.floatSurface.a, closeTo(0.45, 0.01));
     expect(OcTokens.light.dockPlate.a, closeTo(0.45, 0.01));
@@ -264,6 +268,10 @@ void main() {
     expect(OcOptical.sendStop, 9);
     expect(OcOptical.sendArrow, 13);
     expect(OcOptical.headerRestPeek, 20);
+    expect(OcOptical.settingsGroupRadius, 16);
+    expect(OcOptical.settingsRowMinHeight, 52);
+    expect(OcOptical.settingsSearchMinHeight, 44);
+    expect(OcOptical.settingsNavIcon, 16);
     expect(OcOptical.sessionMoreHit, 36);
     expect(OcOptical.sessionMoreEdge, 4);
     expect(OcOptical.sessionTimeGap, 6);

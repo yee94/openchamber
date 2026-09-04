@@ -114,8 +114,12 @@ class OcTokens extends ThemeExtension<OcTokens> {
 
   Color get statusInfo => chart1;
 
-  /// `--oc-mobile-page-background`: muted 18% over background
+  /// `--oc-mobile-page-background`: muted 18% over background.
+  /// Warm sand on light (`oklch(0.97 0.02 85)` mix) — not iOS system gray.
   Color get pageBackground => Color.lerp(background, muted, 0.18)!;
+
+  /// `--oc-settings-group-background`: muted 55% over elevated.
+  Color get settingsGroupBackground => Color.lerp(surfaceElevated, muted, 0.55)!;
 
   /// Official `--oc-mobile-float-background`: elevated 45% over transparent.
   /// Pair with [OcFrosted] / `BackdropFilter` — not an opaque Material slab.
@@ -389,6 +393,7 @@ class OcTokens extends ThemeExtension<OcTokens> {
         onSurface: cardForeground,
         outline: border,
         outlineVariant: muted,
+        surfaceTint: const Color(0x00000000),
       );
 
   @override

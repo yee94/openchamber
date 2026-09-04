@@ -23,6 +23,14 @@ void main() {
       'clock',
       'layers',
       'share',
+      'server',
+      'palette',
+      'chatAi',
+      'notification',
+      'chatHistory',
+      'cloud',
+      'slashCommands',
+      'information',
     ]) {
       final sprite = officialSpriteFor(name);
       expect(sprite, isNotNull, reason: name);

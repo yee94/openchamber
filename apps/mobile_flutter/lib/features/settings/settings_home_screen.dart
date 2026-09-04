@@ -5,8 +5,7 @@ import '../../data/settings_catalog.dart';
 import '../../l10n/app_strings.dart';
 import '../../navigation/platform_route.dart';
 import '../../mobile/mobile_surface.dart';
-import '../../theme/ios_chrome.dart';
-import '../../theme/oc_glyphs.dart';
+import '../../theme/oc_tokens.dart';
 import 'settings_pages.dart';
 import 'settings_primitives.dart';
 
@@ -32,48 +31,16 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
 
     return MobileTabPageScaffold(
       title: t(context, 'settings.home.title'),
+      restPeek: 0,
       children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 16),
-              child: TextField(
-                key: const Key('settings-search'),
-                onChanged: (value) => setState(() => _query = value),
-                decoration: InputDecoration(
-                  hintText: t(context, 'settings.search.placeholder'),
-                  prefixIcon: Padding(
-                    padding: const EdgeInsets.only(left: 10, right: 4),
-                    child: OcGlyph(OcGlyphKind.search, size: 16, color: context.oc.mutedForeground),
-                  ),
-                  prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 18),
-                  suffixIcon: _query.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: t(context, 'settings.search.clear'),
-                          onPressed: () => setState(() => _query = ''),
-                          icon: OcGlyph(OcGlyphKind.xmark, size: 16, color: context.oc.mutedForeground),
-                        ),
-                  filled: true,
-                  fillColor: Theme.of(context).colorScheme.surface,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(OcChrome.pillRadius),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(OcChrome.pillRadius),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(OcChrome.pillRadius),
-                    borderSide: BorderSide.none,
-                  ),
-                  floatingLabelBehavior: FloatingLabelBehavior.never,
-                ),
-              ),
+            SettingsSearchField(
+              query: _query,
+              onChanged: (value) => setState(() => _query = value),
+              onClear: () => setState(() => _query = ''),
             ),
             if (groups.isEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: OcChrome.pageGutter),
+                padding: const EdgeInsets.symmetric(horizontal: OcTokens.pageInlineInset),
                 child: Text(t(context, 'settings.search.noResults')),
               )
             else
@@ -84,7 +51,10 @@ class _SettingsHomeScreenState extends State<SettingsHomeScreen> {
                     return SettingsNavRow(
                       key: Key('settings-slug-${page.slug}'),
                       label: t(context, page.titleKey),
-                      subtitle: page.descriptionKey == null ? null : t(context, page.descriptionKey!),
+                      icon: settingsNavIcon(page.slug),
+                      subtitle: _query.trim().isEmpty || page.descriptionKey == null
+                          ? null
+                          : t(context, page.descriptionKey!),
                       onTap: () {
                         Navigator.of(context).push(
                           platformPageRoute<void>(

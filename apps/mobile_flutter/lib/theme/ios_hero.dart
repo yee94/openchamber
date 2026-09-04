@@ -179,6 +179,17 @@ class OcOptical {
   /// the plate or the header reads as a solid cream banner.
   static const double headerRestPeek = 20;
 
+  /// Official `--oc-settings-group-radius` 1rem. Not project 1.5rem.
+  static const double settingsGroupRadius = 16;
+  /// Official `--oc-settings-row-min-height` 3.25rem.
+  static const double settingsRowMinHeight = 52;
+  static const double settingsRowGap = 10;
+  static const double settingsRowInset = 14;
+  /// Official `.oc-mobile-settings-search-field` min-height 2.75rem.
+  static const double settingsSearchMinHeight = 44;
+  /// Official nav `Icon` `h-4 w-4`.
+  static const double settingsNavIcon = 16;
+
   /// `.oc-mobile-root-page-title` letter-spacing: −0.04em + 0.02em × collapse.
   static double rootTitleTracking(double collapse) =>
       largeTitle * (-0.04 + 0.02 * collapse.clamp(0.0, 1.0));

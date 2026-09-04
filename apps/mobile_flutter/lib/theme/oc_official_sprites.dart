@@ -98,6 +98,99 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
           'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8',
         ],
       ),
+    'server' => const OcOfficialSprite(
+        rects: [(2, 2, 20, 8, 2), (2, 14, 20, 8, 2)],
+        circles: [(6, 6, 0.55), (6, 18, 0.55)],
+      ),
+    'palette' => const OcOfficialSprite(
+        paths: [
+          'M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z',
+        ],
+        circles: [(13.5, 6.5, 0.5), (17.5, 10.5, 0.5), (6.5, 12.5, 0.5), (8.5, 7.5, 0.5)],
+      ),
+    'chatAi' => const OcOfficialSprite(
+        paths: [
+          'M12 6V2H8',
+          'M15 11v2',
+          'M2 12h2',
+          'M20 12h2',
+          'M20 16a2 2 0 0 1-2 2H8.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 4 20.286V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z',
+          'M9 11v2',
+        ],
+      ),
+    'notification' => const OcOfficialSprite(
+        paths: [
+          'M10.268 21a2 2 0 0 0 3.464 0',
+          'M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326',
+        ],
+      ),
+    'chatHistory' => const OcOfficialSprite(
+        paths: [
+          'M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8',
+          'M3 3v5h5',
+          'M12 7v5l4 2',
+        ],
+      ),
+    'aiGenerate' => const OcOfficialSprite(
+        paths: [
+          'm21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72',
+          'm14 7 3 3',
+          'M5 6v4',
+          'M19 14v4',
+          'M10 2v2',
+          'M7 8H3',
+          'M21 16h-4',
+          'M11 3H9',
+        ],
+      ),
+    'cloud' => const OcOfficialSprite(
+        paths: ['M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z'],
+      ),
+    'nodeTree' => const OcOfficialSprite(
+        paths: [
+          'M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3',
+          'M12 12V8',
+        ],
+        rects: [(16, 16, 6, 6, 1), (2, 16, 6, 6, 1), (9, 2, 6, 6, 1)],
+      ),
+    'brain' => const OcOfficialSprite(
+        paths: [
+          'M12 18V5',
+          'M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4',
+          'M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5',
+          'M17.997 5.125a4 4 0 0 1 2.526 5.77',
+          'M18 18a4 4 0 0 0 2-7.464',
+          'M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517',
+          'M6 18a4 4 0 0 1-2-7.464',
+          'M6.003 5.125a4 4 0 0 0-2.526 5.77',
+        ],
+      ),
+    'slashCommands' => const OcOfficialSprite(
+        paths: ['M12 19h8', 'm4 17 6-6-6-6'],
+      ),
+    'bookOpen' => const OcOfficialSprite(
+        paths: [
+          'M12 7v14',
+          'M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z',
+        ],
+      ),
+    'barChart' => const OcOfficialSprite(
+        paths: ['M3 3v16a2 2 0 0 0 2 2h16', 'M18 17V9', 'M13 17V5', 'M8 17v-3'],
+      ),
+    'information' => const OcOfficialSprite(
+        paths: ['M12 16v-4', 'M12 8h.01'],
+        circles: [(12, 12, 10)],
+      ),
+    'chatThread' => const OcOfficialSprite(
+        paths: [
+          'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+          'M8 8h8',
+          'M8 12h5',
+        ],
+      ),
+    'mcp' => const OcOfficialSprite(
+        paths: ['M12 19h8', 'm4 17 6-6-6-6'],
+      ),
     _ => null,
   };
 }
