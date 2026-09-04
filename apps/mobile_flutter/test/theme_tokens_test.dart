@@ -155,11 +155,11 @@ void main() {
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.sessionTitleStem, closeTo(1.05, 0.01));
-    expect(OcOptical.sessionTitleStem, greaterThan(1.0));
-    expect(OcOptical.sessionTitleStem, lessThan(1.2));
-    expect(OcOptical.sessionTitleShade, closeTo(0.22, 0.01));
-    expect(OcOptical.sessionTitleShade, lessThan(0.28));
+    expect(OcOptical.sessionTitleStem, closeTo(0.72, 0.01));
+    expect(OcOptical.sessionTitleStem, greaterThan(0.5));
+    expect(OcOptical.sessionTitleStem, lessThan(1.0));
+    expect(OcOptical.sessionTitleShade, closeTo(0.10, 0.01));
+    expect(OcOptical.sessionTitleShade, lessThan(0.22));
     expect(OcOptical.cssLineCjkHalfLead, closeTo(4.7, 0.01));
     expect(OcOptical.cssLineCjkHalfLead, greaterThan(4.4));
     expect(OcOptical.cssLineCjkHalfLead, lessThan(4.75));
@@ -227,7 +227,7 @@ void main() {
     expect(OcOptical.addButton, OcOptical.headerDisc);
     expect(OcOptical.addButton, greaterThan(OcOptical.headerDiscVisual));
     expect(OcOptical.headerGlyphStrokeVisual, OcOptical.dockGlyphStrokeVisual);
-    expect(OcOptical.headerGlyphStrokeVisual, closeTo(0.44, 0.01));
+    expect(OcOptical.headerGlyphStrokeVisual, closeTo(0.36, 0.01));
     expect(OcOptical.headerGlyphStrokeVisual, lessThan(OcOptical.headerGlyphStroke));
     expect(OcOptical.detailSubtitleGap, 2);
     expect(OcOptical.headerGlyph, 14);
@@ -248,11 +248,11 @@ void main() {
     expect(OcOptical.dockGlyph, 23);
     expect(OcOptical.dockGlyphVisual, OcOptical.dockGlyph);
     expect(OcOptical.dockGlyphStrokeVisual, lessThan(OcOptical.dockGlyphStroke));
-    expect(OcOptical.dockGlyphStrokeVisual, closeTo(0.44, 0.01));
-    expect(OcOptical.dockGlyphStrokeVisual, lessThan(0.56));
-    expect(OcOptical.dockStrokeGlyphStrokeVisual, closeTo(0.44, 0.01));
+    expect(OcOptical.dockGlyphStrokeVisual, closeTo(0.36, 0.01));
+    expect(OcOptical.dockGlyphStrokeVisual, lessThan(0.44));
+    expect(OcOptical.dockStrokeGlyphStrokeVisual, closeTo(0.36, 0.01));
     expect(OcOptical.dockStrokeGlyphStrokeVisual, lessThanOrEqualTo(OcOptical.dockGlyphStrokeVisual));
-    expect(OcOptical.dockStrokeGlyphStrokeVisual, greaterThan(0.40));
+    expect(OcOptical.dockStrokeGlyphStrokeVisual, greaterThan(0.30));
     expect(OcOptical.dockGlyphFillBodies, isFalse);
     expect(OcOptical.dockWashBlur, 0);
     expect(OcOptical.dockWashBlur, lessThan(OcOptical.glassBlur));
@@ -312,7 +312,7 @@ void main() {
     expect(OcOptical.sessionBulletReadAlpha, closeTo(0.55, 0.01));
     expect(OcOptical.sessionBulletReadAlpha, greaterThan(0.35));
     expect(OcOptical.fileTypeSize, 12);
-    expect(OcOptical.fileTypeStrokeVisual, closeTo(0.44, 0.01));
+    expect(OcOptical.fileTypeStrokeVisual, closeTo(0.36, 0.01));
     expect(OcOptical.fileTypeStrokeVisual, OcOptical.dockGlyphStrokeVisual);
     expect(OcOptical.fileTypeStrokeVisual, OcOptical.headerGlyphStrokeVisual);
     expect(OcOptical.fileTypeMark, 7);
@@ -326,7 +326,7 @@ void main() {
     expect(OcOptical.composerPlus, 18);
     expect(OcOptical.composerPlusStroke, 1.25);
     expect(OcOptical.footerGlyphStroke, 2);
-    expect(OcOptical.footerGlyphStrokeVisual, closeTo(0.44, 0.01));
+    expect(OcOptical.footerGlyphStrokeVisual, closeTo(0.36, 0.01));
     expect(OcOptical.footerGlyphStrokeVisual, lessThan(OcOptical.footerGlyphStroke));
     expect(OcOptical.footerMeta, 11);
     expect(OcOptical.sendRing, 32);
@@ -374,11 +374,11 @@ void main() {
     );
     expect(
       OcElevation.cardFor(OcTokens.light).last.color.a,
-      closeTo(0.07, 0.001),
+      closeTo(0.04, 0.001),
     );
     expect(
       OcElevation.cardFor(OcTokens.light).last.color.a,
-      lessThan(0.10),
+      lessThan(0.07),
     );
     expect(
       OcElevation.cardFor(OcTokens.light, tight: true).last.color.a,

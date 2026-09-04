@@ -46,13 +46,13 @@ class OcOptical {
   /// invent extra title↔meta gap or 15px empty air per line.
   /// Official title is `font-medium` / unread `font-semibold`. Review CJK
   /// has no Medium cut; a same-color stem + cardinal shade keep Regular
-  /// 12px on authored foreground. Stem 2.0 / shade 0.6 + round join
-  /// bloated a gray halo (~L84) around L32 cores. 1.05 / 0.22 + miter
-  /// keeps Regular on foreground without the heavier 1.2 brick. Card
-  /// frost must sit behind the child. Half-lead 4.7 is title-band air
-  /// (tracking 1.42; no Medium CJK on review/CI).
-  static const double sessionTitleStem = 1.05;
-  static const double sessionTitleShade = 0.22;
+  /// 12px on authored foreground. Stem 1.05 / shade 0.22 still read as a
+  /// brick vs README light single-line air. 0.72 / 0.10 + miter reaches
+  /// foreground without packing the 12px band. Do not pile half-lead.
+  /// Card frost must sit behind the child. Half-lead 4.7 + tracking 1.42
+  /// stay (no Medium CJK on review/CI).
+  static const double sessionTitleStem = 0.72;
+  static const double sessionTitleShade = 0.10;
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
   /// 4.7 extra Flutter pixels open Regular CJK that still packed at 4.6.
@@ -226,12 +226,12 @@ class OcOptical {
   /// Flutter round-cap bloom at dpr 3; paint under 2 so slim filled-medium
   /// 23px stays delicate — not bricks, not hairlines.
   static const double dockGlyphStroke = 2;
-  /// Official medium is 2; Flutter round-cap bloom at dpr 3. Paint all
-  /// four dock glyphs at the folder/sparkles visual so calendar/gear
-  /// are not the coarse pair.
-  static const double dockGlyphStrokeVisual = 0.44;
+  /// Official medium is 2; Flutter round-cap bloom at dpr 3. 0.44 still
+  /// read chunkier than README search/more/chevron/dock — 0.36 is the
+  /// optical weight, not a size spike (23px box stays).
+  static const double dockGlyphStrokeVisual = 0.36;
   /// Folder / sparkles share the same slim outline-medium.
-  static const double dockStrokeGlyphStrokeVisual = 0.44;
+  static const double dockStrokeGlyphStrokeVisual = 0.36;
   /// Official dock `Icon weight="medium"` is outline, not filled bodies.
   /// Filling calendar/gear at dpr 3 reads as chunky bricks.
   static const bool dockGlyphFillBodies = false;
@@ -312,7 +312,7 @@ class OcOptical {
   static const double scheduleStatusGlyph = 9;
   /// Schedule overflow `more-2` — slimmer than session 12.
   static const double scheduleMore = 10;
-  /// Header now shares dock 0.44 so the 22/9 badge is not the slim pair.
+  /// Header now shares dock visual so the 22/9 badge is not a second weight.
   static const double scheduleMoreStroke = dockGlyphStrokeVisual;
   /// Quiet status polish: check/pause at dock visual stroke so the
   /// 38 disc does not outweigh the card title.
@@ -321,8 +321,8 @@ class OcOptical {
   /// Official `FileTypeIcon` mobile size `h-3 w-3` (12px).
   static const double fileTypeSize = 12;
   /// Flutter bloom at 12px; paint at dock visual so silhouettes
-  /// are not header-weight bricks. Header discs share dock 0.44.
-  static const double fileTypeStrokeVisual = 0.44;
+  /// are not header-weight bricks. Header discs share dock visual.
+  static const double fileTypeStrokeVisual = dockGlyphStrokeVisual;
   static const double fileTypeMark = 7;
   /// Official mobile turn-changes row is `h-6` (24) / `leading-none`.
   /// WidgetTester packs that band — open toward desktop `h-7` (28).
@@ -361,9 +361,9 @@ class OcOptical {
   /// Official `MESSAGE_ACTION_ICON_CLASS` `size-3.5` / medium stroke.
   static const double footerGlyph = 14;
   static const double footerGlyphStroke = 2;
-  /// Official medium is 2; Flutter bloom at dpr 3. Paint under 2 so
+  /// Official medium is 2; Flutter bloom at dpr 3. Share dock visual so
   /// copy / fork / clock stay filled-medium, not chunky bricks.
-  static const double footerGlyphStrokeVisual = 0.44;
+  static const double footerGlyphStrokeVisual = dockGlyphStrokeVisual;
   /// Official ProgressiveGroup expanded rail: header must not sit flush
   /// on the first skill/terminal row (Yee P0 2026-09-04).
   static const double activityExpandedGap = 10;
