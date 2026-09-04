@@ -364,9 +364,9 @@ void main() {
     expect(OcElevation.cardFor(OcTokens.light), hasLength(3));
     expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, 2);
     expect(OcElevation.cardFor(OcTokens.light)[1].blurRadius, 12);
-    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, 192);
+    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, 24);
     expect(OcElevation.cardFor(OcTokens.light).last.offset.dy, 10);
-    expect(OcElevation.cardFor(OcTokens.light).last.spreadRadius, -48);
+    expect(OcElevation.cardFor(OcTokens.light).last.spreadRadius, -6);
     expect(
       OcElevation.cardFor(OcTokens.light).take(2).every((s) => s.offset == Offset.zero),
       isTrue,
