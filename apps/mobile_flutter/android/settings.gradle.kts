@@ -12,6 +12,13 @@ pluginManagement {
     repositories {
         google()
         mavenCentral()
+        // GitHub Actions runners sometimes get 403 from
+        // repo.maven.apache.org (kotlin-stdlib POM). GCS is the
+        // public Maven Central mirror — not a third-party cache.
+        maven {
+            name = "MavenCentralGoogle"
+            url = uri("https://maven-central.storage-download.googleapis.com/maven2/")
+        }
         gradlePluginPortal()
     }
 }
