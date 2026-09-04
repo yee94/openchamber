@@ -105,7 +105,7 @@ void main() {
     expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
     expect(OcOptical.rowTitleHeight, lessThan(1.42));
     expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);
-    expect(OcOptical.sessionRowVisualHeight, 48);
+    expect(OcOptical.sessionRowVisualHeight, 50);
     expect(OcOptical.sessionRowVisualHeight, greaterThan(OcOptical.sessionRowHeight));
     expect(OcOptical.sessionRowVisualHeight, greaterThanOrEqualTo(36));
     expect(OcOptical.sessionRowPadV, 5);
@@ -117,7 +117,7 @@ void main() {
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.cssLineCjkHalfLead, 2.0);
+    expect(OcOptical.cssLineCjkHalfLead, 2.5);
     expect(OcOptical.sessionLineLeading, closeTo(0.57, 0.001));
     expect(OcOptical.sessionLineLeading, greaterThan(0.48));
     expect(OcOptical.sessionLineLeading, lessThan(0.58));
@@ -162,6 +162,7 @@ void main() {
     expect(OcOptical.worktreeLabelPadV, 6);
     expect(OcOptical.worktreeLabelPadLeft, 10);
     expect(OcOptical.worktreeLabelPadRight, 2);
+    expect(OcOptical.floatCardStackGap, 16);
     expect(OcOptical.scheduleCardPadV, 12);
     expect(OcOptical.scheduleTitleMetaGap, 4);
     expect(OcOptical.chatBodyHeight, lessThan(1.50));
@@ -244,6 +245,7 @@ void main() {
     expect(OcOptical.fileRowHeight, 24);
     expect(OcOptical.fileChrome, 11);
     expect(OcOptical.composerFieldPadV, 10);
+    expect(OcOptical.composerPillPadV, 8);
     expect(OcOptical.composerRadius, 24);
     expect(OcOptical.composerPlus, 20);
     expect(OcOptical.composerPlusStroke, 1.5);

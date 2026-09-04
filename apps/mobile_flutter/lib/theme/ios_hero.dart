@@ -23,9 +23,9 @@ class OcOptical {
   /// Project-shell CSS min-height is 2.5rem (40). Flutter CJK paints past
   /// `font-size` into the CSS half-leading, so the visual row is official
   /// pads + 16/12 boxes + [cssLineCjkHalfLead] + `gap-0.5`.
-  static const double sessionRowVisualHeight = 48;
+  static const double sessionRowVisualHeight = 50;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
-  /// 5 + 20 + 2 + 16 + 5 = 48. Extra 4/line is [cssLineCjkHalfLead].
+  /// 5 + 21 + 2 + 17 + 5 = 50. Extra 5/line is [cssLineCjkHalfLead].
   /// Do not grow icons. Do not invent gap.
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
@@ -49,9 +49,9 @@ class OcOptical {
   /// Extra half-leading each side of [OcCssLine] so Flutter CJK, which
   /// paints past `font-size` into the CSS 2px/1px half-leading, keeps
   /// ink-to-box air. Official CSS tokens stay 16/12; this is metric
-  /// compensation (2.0 × 2 = 4px / line). Wake-0831: tune half-leading
+  /// compensation (2.5 × 2 = 5px / line). Wake-0838: tune half-leading
   /// only — do not open gap-0.5.
-  static const double cssLineCjkHalfLead = 2.0;
+  static const double cssLineCjkHalfLead = 2.5;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
@@ -103,6 +103,8 @@ class OcOptical {
   static const double sessionSubtitle = sessionTime;
   static const double sessionSubtitleHeight = sessionTimeHeight;
 
+  /// Official scheduled mobile tab `space-y-4` between floating cards.
+  static const double floatCardStackGap = 16;
   /// Official scheduled task row `p-3` (12).
   static const double scheduleCardPadV = 12;
   /// Official scheduled meta `mt-1` (4). Title air is [OcCssLine] extra
@@ -263,6 +265,8 @@ class OcOptical {
 
   /// Official mobile composer textarea `py-2.5` (10).
   static const double composerFieldPadV = 10;
+  /// Pill chrome around the field — not float-shadow (official `none`).
+  static const double composerPillPadV = 8;
   static const double composerRadius = 24;
   /// Official composer attach `Icon name="attachment-2" className="size-5"`.
   static const double composerPlus = 20;

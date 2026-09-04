@@ -175,7 +175,7 @@ class ComposerBar extends StatelessWidget {
               child: ColoredBox(
                 color: context.oc.surfaceSubtle,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                  padding: const EdgeInsets.fromLTRB(8, OcOptical.composerPillPadV, 8, OcOptical.composerPillPadV),
                   child: Row(
                     children: [
                         Tooltip(

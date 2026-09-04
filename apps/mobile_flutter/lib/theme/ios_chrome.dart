@@ -377,7 +377,7 @@ class GroupedInsetCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(OcChrome.cardRadius);
     return Container(
-      margin: margin ?? const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 12),
+      margin: margin ?? const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, OcOptical.floatCardStackGap),
       decoration: BoxDecoration(
         borderRadius: radius,
         boxShadow: OcElevation.card(context, tight: tight),
