@@ -10,6 +10,7 @@ import '../../native/haptics.dart';
 import '../../mobile/mobile_surface.dart';
 import '../../theme/ios_chrome.dart';
 import '../chat/chat_screen.dart';
+import '../projects/highlighted_text.dart';
 
 class AssistantTabScreen extends StatefulWidget {
   const AssistantTabScreen({super.key, required this.controller});
@@ -123,11 +124,20 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
                                 Row(
                                   children: [
                                     Expanded(
-                                      child: Text(
+                                      child: HighlightedText(
                                         item.name,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                        query: '',
+                                        // Official root `oc-mobile-entity-title` is 16/20.
+                                        // CJK fills Regular Micro Hei (same recipe as
+                                        // project/session cards). Not a 3.2 / 1.46 pile.
+                                        halfLead: 0,
+                                        style: TextStyle(
+                                          fontSize: OcOptical.entityTitle,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: OcOptical.entityTitleTracking,
+                                          height: OcOptical.entityTitleHeight,
+                                          color: context.oc.foreground,
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(width: 8),
