@@ -20,10 +20,10 @@ class OcOptical {
   static const double rowTitleTracking = 0;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
-  /// Official project-shell row is 40. Tiny CJK half-lead (0.5/side) adds
-  /// 2px total so Flutter Regular CJK is not flush in the 16/12 boxes.
-  /// Stay in the 40-class — never 7.5 half-lead / 70px rows.
-  static const double sessionRowVisualHeight = 42;
+  /// Official project-shell row is 40. One-pixel CJK half-lead (1/side)
+  /// adds 4px total so Flutter Regular CJK is not flush in the 16/12
+  /// boxes. Stay in the 40-class — never 7.5 half-lead / 70px rows.
+  static const double sessionRowVisualHeight = 44;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
@@ -44,8 +44,8 @@ class OcOptical {
   /// CJK face is Regular-only, so paint Regular — do not faux-bold.
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
-  /// One extra Flutter half-pixel un-cramps CJK without leaving ~40 density.
-  static const double cssLineCjkHalfLead = 0.5;
+  /// One extra Flutter pixel un-cramps CJK without leaving ~40 density.
+  static const double cssLineCjkHalfLead = 1.0;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
