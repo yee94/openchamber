@@ -141,16 +141,16 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  /// Official hit is 40 (`mobileIcon`). Search frost plate is 36 — mobileGlass
-  /// 0.34/σ14, not a 22 page-bleed glyph and not a 0.68 cream coin. Solid
+  /// Official hit is 40 (`mobileIcon`). Search frost plate is 32 — mobileGlass
+  /// 0.34/σ14, not a 22 page-bleed glyph and not a 0.68/36 cream coin. Solid
   /// primary `+` paints the full 40 hit. No 8/20 umbra. No UIKit clone.
-  static const double headerDiscVisual = 36;
+  static const double headerDiscVisual = 32;
   static const double headerGlyph = 16;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
-  /// Flutter round-cap bloom at dpr 3; paint under official 1.5 so 12px
-  /// header glyphs stay thin vs `size-5` medium, not massy coins.
-  static const double headerGlyphStrokeVisual = 0.78;
+  /// Flutter round-cap bloom at dpr 3; paint under official 1.5 so search
+  /// glass stays a thin glyph, not a massy coin.
+  static const double headerGlyphStrokeVisual = 0.70;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
   static const double listGlyphStroke = 1.5;
   /// Search-field prefix `Icon name="search" className="size-4"`.
@@ -200,11 +200,11 @@ class OcOptical {
   /// 23px stays delicate — not bricks, not hairlines.
   static const double dockGlyphStroke = 2;
   /// Official medium is 2; Flutter round-cap bloom at dpr 3. Paint under
-  /// 1.02 so calendar/gear stay filled-medium sprites, not bricks.
-  static const double dockGlyphStrokeVisual = 0.96;
+  /// 1 so calendar/gear stay filled-medium sprites, not bricks.
+  static const double dockGlyphStrokeVisual = 0.92;
   /// Folder / sparkles stay official medium stroke but paint lighter
   /// than calendar/gear so the 23px outline is not a brick.
-  static const double dockStrokeGlyphStrokeVisual = 0.88;
+  static const double dockStrokeGlyphStrokeVisual = 0.84;
   /// Official filled-medium 23px sprites: folder / sparkles / calendar
   /// grid / holed gear. Not hairline outlines and not brick mass.
   static const bool dockGlyphFillBodies = true;
