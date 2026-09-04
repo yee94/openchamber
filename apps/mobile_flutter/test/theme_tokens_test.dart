@@ -170,6 +170,19 @@ void main() {
     expect(OcOptical.sessionRowPadV, 5);
     expect(OcOptical.metaHeight, 1.25);
     expect(OcOptical.entityTitleHeight, 1.25);
+    expect(OcOptical.assistantAvatar, 40);
+    expect(OcOptical.assistantAvatarVisual, 38);
+    expect(OcOptical.assistantAvatar, lessThan(44));
+    expect(OcOptical.assistantCardPad, 16);
+    expect(OcOptical.assistantCardGap, 12);
+    expect(OcOptical.assistantCardMinHeight, 112);
+    expect(OcOptical.assistantHeaderGap, 8);
+    expect(OcOptical.assistantSummaryGap, 10);
+    expect(OcOptical.assistantSummaryHeight, closeTo(1.45, 0.01));
+    expect(OcOptical.assistantModePadV, 2);
+    expect(OcOptical.assistantModePadH, 7);
+    expect(OcOptical.assistantCatalogGap, 14);
+    expect(OcOptical.assistantCatalogGap, lessThan(OcOptical.floatCardStackGap));
     expect(OcOptical.groupTitleMetaGap, 4);
     expect(
       OcCssLine.boxHeight(

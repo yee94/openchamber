@@ -4,13 +4,11 @@ import '../../data/app_controller.dart';
 import '../../data/assistant_scheduled.dart';
 import '../../data/openchamber_http.dart';
 import '../../l10n/app_strings.dart';
-import '../../motion/pressable.dart';
 import '../../navigation/platform_route.dart';
-import '../../native/haptics.dart';
+import '../../mobile/mobile_assistant_card.dart';
 import '../../mobile/mobile_surface.dart';
 import '../../theme/ios_chrome.dart';
 import '../chat/chat_screen.dart';
-import '../projects/highlighted_text.dart';
 
 class AssistantTabScreen extends StatefulWidget {
   const AssistantTabScreen({super.key, required this.controller});
@@ -96,71 +94,12 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
               )
             else if (snapshot != null && snapshot.enabled && snapshot.assistants.isNotEmpty)
               for (final item in snapshot.assistants)
-                MobileFloatingSurface(
-                  child: Pressable(
-                    key: Key('assistant-item-${item.id}'),
-                    haptic: HapticStrength.light,
-                    onPressed: () => _open(item.id),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 22,
-                            backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.14),
-                            child: Text(
-                              item.name.isEmpty ? '?' : item.name.substring(0, 1),
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: HighlightedText(
-                                        item.name,
-                                        query: '',
-                                        // Official root `oc-mobile-entity-title` is 16/20.
-                                        // CJK fills Regular Micro Hei (same recipe as
-                                        // project/session cards). Not a 3.2 / 1.46 pile.
-                                        halfLead: 0,
-                                        style: TextStyle(
-                                          fontSize: OcOptical.entityTitle,
-                                          fontWeight: FontWeight.w600,
-                                          letterSpacing: OcOptical.entityTitleTracking,
-                                          height: OcOptical.entityTitleHeight,
-                                          color: context.oc.foreground,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      _modeLabel(context, item),
-                                      style: TextStyle(fontSize: 13, color: context.oc.mutedForeground),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _summary(context, item),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: 13, color: context.oc.mutedForeground, height: 1.35),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                MobileAssistantCard(
+                  pressKey: Key('assistant-item-${item.id}'),
+                  name: item.name,
+                  modeLabel: _modeLabel(context, item),
+                  summary: _summary(context, item),
+                  onOpen: () => _open(item.id),
                 )
             else if (snapshot != null && !snapshot.enabled)
               MobileFloatingSurface(

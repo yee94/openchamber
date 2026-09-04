@@ -122,6 +122,27 @@ class OcOptical {
   /// PingFang Medium. Not a session-row bump, not 7.5, not a gap widen.
   static const double cardTitleHalfLead = 3.0;
 
+  /// Official `.oc-mobile-assistant-avatar` is 2.5rem. Visual AgentAvatar
+  /// is 38 inside a 1px muted ring. Flutter `CircleAvatar` radius 22 (44)
+  /// + primary wash was unofficial and large. Name stays root
+  /// `oc-mobile-entity-title` 16/20 Regular — do not pile 3.2 / 1.46.
+  static const double assistantAvatar = 40;
+  static const double assistantAvatarVisual = 38;
+  /// Official `.oc-mobile-assistant-card` padding 1rem / gap 0.75rem /
+  /// min-height 7rem. Header `gap-2`. Summary `mt-2.5` / `--text-micro`
+  /// / line-height 1.45 / clamp 3. Mode is entity-meta in a muted pill.
+  static const double assistantCardPad = 16;
+  static const double assistantCardGap = 12;
+  static const double assistantCardMinHeight = 112;
+  static const double assistantHeaderGap = 8;
+  static const double assistantSummaryGap = 10;
+  static const double assistantSummaryHeight = 1.45;
+  static const double assistantModePadV = 2;
+  static const double assistantModePadH = 7;
+  /// Official `.oc-mobile-assistant-catalog` gap 0.875rem. Schedule
+  /// cards keep [floatCardStackGap] 16.
+  static const double assistantCatalogGap = 14;
+
   /// `.oc-mobile-entity-meta` 0.75rem / 0.9375rem.
   static const double meta = 12;
   static const double metaTracking = 0;
