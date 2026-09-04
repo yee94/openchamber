@@ -210,7 +210,7 @@ class OcGlassChip extends StatelessWidget {
   final Widget child;
   final double size;
   /// Default is [OcTokens.glassChipFill] 0.34. Search passes
-  /// [OcTokens.glassChipThrough] so the 36 plate is frost, not a coin.
+  /// [OcTokens.glassChipThrough] so the 34 plate is frost, not a coin.
   final Color? fill;
 
   @override

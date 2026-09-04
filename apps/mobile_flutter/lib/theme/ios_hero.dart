@@ -177,10 +177,12 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  /// Official hit is 40 (`mobileIcon`). Search frost plate is 36 — through
+  /// Official hit is 40 (`mobileIcon`). Search frost plate is 34 — through
   /// `glassChipThrough` 0.22 / σ14, not a 0.68 coin and not a 22 bleed
-  /// glyph. Solid primary `+` paints the full 40 hit. No 8/20 umbra.
-  static const double headerDiscVisual = 36;
+  /// glyph. 36 still read a cream coin; 34 is the next disc-scale step
+  /// (not the 32 vanish). Solid primary `+` paints the full 40 hit.
+  /// No 8/20 umbra. Hits stay 40. Leading plates stay 28.
+  static const double headerDiscVisual = 34;
   /// Official `size-5` is 20. Wake-2341 restored 5→12. 14 is the
   /// next step toward README search — still under the 16 field glyph
   /// and official 20. Not a 22 bleed coin. Plates stay 28.

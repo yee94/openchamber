@@ -243,7 +243,7 @@ void main() {
     expect(OcOptical.searchButton, 40);
     expect(OcOptical.addButton, 40);
     expect(OcOptical.headerDisc, OcOptical.searchButton);
-    expect(OcOptical.headerDiscVisual, 36);
+    expect(OcOptical.headerDiscVisual, 34);
     expect(OcOptical.headerDiscVisual, lessThan(OcOptical.headerDisc));
     expect(OcOptical.addButton, OcOptical.headerDisc);
     expect(OcOptical.addButton, greaterThan(OcOptical.headerDiscVisual));
