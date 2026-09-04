@@ -48,8 +48,8 @@ class OcOptical {
   /// Official title/subtitle column is `gap-0.5` (2). Wake-0123 resets
   /// the inflate loop to that official 2. Do not re-widen. Project /
   /// schedule title↔meta is official 4 (`gap-1` / `mt-1`). Far stays
-  /// 10/24 @ 10% with WidgetTester spread -2. Do not invent Material
-  /// shadows. Not a half-lead pile and not 7.5/70.
+  /// official 10/24/-6 @ 10%. Do not invent Material shadows. Not a
+  /// half-lead pile and not 7.5/70.
   /// Official title is `font-medium` / unread `font-semibold`. Fill-only
   /// at that weight. Do not revive a miter stem. Half-lead 4.7 + tracking
   /// 1.42 stay. Latin is ReviewSans Medium.
