@@ -42,15 +42,19 @@ void main() {
             child: Center(
               child: RepaintBoundary(
                 key: key,
-                child: Text(
-                  '发布说明',
-                  style: TextStyle(
-                    fontFamily: 'ReviewSans',
-                    fontFamilyFallback: const ['ReviewCjk'],
-                    fontSize: OcOptical.rowTitle,
-                    fontWeight: weight,
-                    height: OcOptical.rowTitleHeight,
-                    color: OcTokens.light.foreground,
+                child: SizedBox(
+                  width: 160,
+                  height: 24,
+                  child: Text(
+                    '发布说明',
+                    style: TextStyle(
+                      fontFamily: 'ReviewSans',
+                      fontFamilyFallback: const ['ReviewCjk'],
+                      fontSize: OcOptical.rowTitle,
+                      fontWeight: weight,
+                      height: OcOptical.rowTitleHeight,
+                      color: OcTokens.light.foreground,
+                    ),
                   ),
                 ),
               ),

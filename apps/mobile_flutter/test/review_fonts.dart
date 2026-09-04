@@ -66,19 +66,14 @@ const _cjkMediumCandidates = [
   '/usr/share/fonts/noto-cjk/NotoSansCJKsc-Medium.otf',
 ];
 
-const _cjkBoldCandidates = [
-  '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',
-  '/usr/share/fonts/noto-cjk/NotoSansCJKsc-Bold.otf',
-];
-
 Future<void> _loadCjkFaces() async {
   final faces = <List<String>>[_cjkRegularCandidates];
   if (_cjkMediumCandidates.any((path) => File(path).existsSync())) {
     faces.add(_cjkMediumCandidates);
   }
-  if (_cjkBoldCandidates.any((path) => File(path).existsSync())) {
-    faces.add(_cjkBoldCandidates);
-  }
+  // Do not load Noto Bold. Official page/project semibold is PingFang
+  // Semibold (~600). Noto Bold (700) bricks 32px titles and connect
+  // w700. w600 snaps to Medium — the cut this pass is after.
   if (faces.length > 1) {
     await _loadFaces('ReviewCjk', faces);
     return;
