@@ -19,8 +19,9 @@ class HighlightedText extends StatelessWidget {
   /// Session 16/12 rows keep the pinned 2.5 CJK half-lead. Project /
   /// schedule 14/18 titles pass 0 so the official CSS box is not inflated.
   final double? halfLead;
-  /// Same-color stem under Regular CJK so 12px titles reach
-  /// authored foreground. ReviewCjk has no Medium cut; 0 = off.
+  /// Same-color miter stem under Regular CJK so 12px titles reach
+  /// authored foreground without a round-join halo. ReviewCjk has no
+  /// Medium cut; 0 = off.
   final double stem;
 
   @override
@@ -87,7 +88,8 @@ class HighlightedText extends StatelessWidget {
                 ..color = paint.color!
                 ..style = PaintingStyle.stroke
                 ..strokeWidth = stem
-                ..strokeJoin = StrokeJoin.round,
+                ..strokeCap = StrokeCap.butt
+                ..strokeJoin = StrokeJoin.miter,
             ),
           ),
         ),
@@ -118,7 +120,8 @@ class HighlightedText extends StatelessWidget {
                 ..color = paint.color!
                 ..style = PaintingStyle.stroke
                 ..strokeWidth = stem
-                ..strokeJoin = StrokeJoin.round,
+                ..strokeCap = StrokeCap.butt
+                ..strokeJoin = StrokeJoin.miter,
             ),
           ),
         ),

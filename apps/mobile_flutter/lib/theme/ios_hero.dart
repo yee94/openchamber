@@ -17,9 +17,10 @@ class OcOptical {
   /// 2.5rem (40). Tiny CJK half-lead only — do not invent 7.5/70 air.
   /// Ink is `font-size`; strut is `line-height`. Do not faux-bold CJK.
   static const double rowTitle = 12;
-  /// Official CSS is −0.012em. Flutter letterSpacing packs CJK tighter than
-  /// the WebView, so paint 0 and keep the 16/12 CSS boxes.
-  static const double rowTitleTracking = 0;
+  /// Official CSS is −0.012em. Flutter Regular CJK still packs tighter
+  /// than the WebView at 0 — 0.35 opens the 12px band so stems are not
+  /// a tight mass. Keep the 16/12 CSS boxes.
+  static const double rowTitleTracking = 0.35;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   /// Official project-shell row is 40. 2.5px CJK half-lead (per side)
@@ -43,12 +44,14 @@ class OcOptical {
   /// Official title/subtitle column is `gap-0.5` (2). Keep that; do not
   /// invent extra title↔meta gap or 15px empty air per line.
   /// Official title is `font-medium` / unread `font-semibold`. Review CJK
-  /// has no Medium cut; stem 2.0 + 0.6 cardinal shade keep Regular 12px
-  /// on authored foreground. Card frost must sit behind the child —
-  /// wrapping ink in `floatSurface` 0.45 floors cores at ~L 129. Not a
-  /// 0.02 stem series and not more half-lead.
-  static const double sessionTitleStem = 2.0;
-  static const double sessionTitleShade = 0.6;
+  /// has no Medium cut; a same-color stem + cardinal shade keep Regular
+  /// 12px on authored foreground. Stem 2.0 / shade 0.6 + round join
+  /// bloated a gray halo (~L84) around L32 cores. 1.4 / 0.35 + miter
+  /// stays in the family without fake-bold bloom. Card frost must sit
+  /// behind the child — wrapping ink in `floatSurface` 0.45 floors cores
+  /// at ~L 129. Not a 0.02 stem series and not more half-lead.
+  static const double sessionTitleStem = 1.4;
+  static const double sessionTitleShade = 0.35;
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
   /// 2.5 extra Flutter pixels open Regular CJK without leaving ~40 density.

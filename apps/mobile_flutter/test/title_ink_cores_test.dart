@@ -74,9 +74,9 @@ void main() {
     ink.sort();
     expect(ink, isNotEmpty);
     final p5 = ink[(0.05 * (ink.length - 1)).round()];
-    expect(p5, lessThan(120));
-    expect(ink.first, lessThan(80));
-    expect(ink.where((lum) => lum < 120).length, greaterThan(ink.length ~/ 4));
+    expect(p5, lessThan(50));
+    expect(ink.first, lessThan(40));
+    expect(ink.where((lum) => lum < 50).length, greaterThan(ink.length ~/ 4));
   });
 
   testWidgets('collapsing header frost does not wash session title cores', (tester) async {
