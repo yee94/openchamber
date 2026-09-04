@@ -109,7 +109,7 @@ void main() {
     expect(OcOptical.largeTitleHeight, 1.2);
     expect(OcOptical.rowTitle, 12);
     expect(OcOptical.rowTitleTracking, 0);
-    expect(OcOptical.projectTitleTracking, closeTo(-0.34, 0.01));
+    expect(OcOptical.projectTitleTracking, 0);
     expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
     expect(OcOptical.rowTitleHeight, lessThan(1.42));
     expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);

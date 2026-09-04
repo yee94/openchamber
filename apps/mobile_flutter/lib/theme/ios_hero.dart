@@ -83,7 +83,9 @@ class OcOptical {
   static const double entityTitleTracking = 0.04;
   static const double entityTitleHeight = 1.25;
   static const double projectTitle = 14;
-  static const double projectTitleTracking = -0.336;
+  /// Official entity title is −0.024em. Flutter Regular CJK packs
+  /// tighter than the WebView — paint 0 (session-row precedent).
+  static const double projectTitleTracking = 0;
   static const double projectTitleHeight = 18 / 14;
 
   /// `.oc-mobile-entity-meta` 0.75rem / 0.9375rem.

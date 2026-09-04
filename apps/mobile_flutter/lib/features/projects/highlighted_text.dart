@@ -13,12 +13,12 @@ class HighlightedText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final needle = query.trim();
-    // Keep the CSS line-height box so CJK is not clipped to font-size.
-    // Always paint full warm ink — never inherit a washed DefaultTextStyle.
-    final paint = (style ?? const TextStyle()).copyWith(
+    // Ink is font-size; [OcCssLine] owns the official CSS line box +
+    // pinned CJK half-lead. Multiplying Flutter `height` on the Text
+    // packed Regular CJK inside the 16/12 and 18/14 boxes.
+    final paint = ocCssInk((style ?? const TextStyle()).copyWith(
       color: style?.color ?? context.oc.foreground,
-      leadingDistribution: TextLeadingDistribution.even,
-    );
+    ))!;
     if (needle.isEmpty) {
       return OcCssLine(
         style: style,
