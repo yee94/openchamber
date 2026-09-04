@@ -228,11 +228,7 @@ void main() {
       return decoration is BoxDecoration && decoration.shape == BoxShape.circle;
     });
     final decoration = plus.decoration as BoxDecoration;
-    expect(decoration.boxShadow, OcElevation.chipFor(OcTokens.light));
-    expect(
-      decoration.boxShadow!.every((s) => s.blurRadius <= 12 && s.offset == Offset.zero),
-      isTrue,
-    );
+    expect(decoration.boxShadow == null || decoration.boxShadow!.isEmpty, isTrue);
   });
 
   testWidgets('projects search chip has no painted disc rim', (tester) async {
@@ -258,7 +254,8 @@ void main() {
     ));
     expect(searchChip.fill, OcTokens.light.glassChipThrough);
     expect(searchChip.size, OcOptical.headerDiscVisual);
-    expect(searchChip.fill!.a, closeTo(0.22, 0.01));
+    expect(searchChip.lift, isFalse);
+    expect(searchChip.fill!.a, closeTo(0.16, 0.01));
     expect(find.descendant(
       of: find.byKey(const Key('projects-search-toggle')),
       matching: find.byType(OcFrosted),

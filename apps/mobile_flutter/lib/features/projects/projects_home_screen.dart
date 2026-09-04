@@ -108,9 +108,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                         decoration: BoxDecoration(
                           color: context.oc.primary,
                           shape: BoxShape.circle,
-                          // Near-pair lift — control 8/20 umbra painted a
-                          // second dark circle under the solid primary `+`.
-                          boxShadow: OcElevation.chip(context),
+                          // No near-pair halo — that ringed the 40 `+`.
                         ),
                         child: SizedBox(
                           width: OcOptical.addButton,

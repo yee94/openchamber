@@ -205,6 +205,7 @@ class OcGlassChip extends StatelessWidget {
     required this.child,
     this.size = OcOptical.headerDiscVisual,
     this.fill,
+    this.lift = true,
   });
 
   final Widget child;
@@ -212,6 +213,9 @@ class OcGlassChip extends StatelessWidget {
   /// Default is [OcTokens.glassChipFill] 0.34. Search passes
   /// [OcTokens.glassChipThrough] so the 34 plate is frost, not a coin.
   final Color? fill;
+  /// Header search through-frost skips the near-pair halo (that
+  /// ringed the 34 plate into a coin). Chat discs keep lift.
+  final bool lift;
 
   @override
   Widget build(BuildContext context) {
@@ -221,7 +225,7 @@ class OcGlassChip extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        boxShadow: OcElevation.chip(context),
+        boxShadow: lift ? OcElevation.chip(context) : const [],
       ),
       child: ClipOval(
         child: OcFrosted(
@@ -366,9 +370,8 @@ class CircularChromeButton extends StatelessWidget {
             decoration: BoxDecoration(
               color: ink ? tokens.foreground : tokens.primary,
               shape: BoxShape.circle,
-              // Near-pair lift — official control umbra paints a second
-              // circle under the solid primary `+`.
-              boxShadow: OcElevation.chip(context),
+              // No near-pair halo — that ringed the 40 `+` into a
+              // second circle. Official control umbra is worse.
             ),
             child: SizedBox(
               width: disc,
@@ -379,6 +382,7 @@ class CircularChromeButton extends StatelessWidget {
         : OcGlassChip(
             size: disc,
             fill: tokens.glassChipThrough,
+            lift: false,
             child: glyphWidget,
           );
     final child = SizedBox(

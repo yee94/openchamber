@@ -158,10 +158,11 @@ class OcTokens extends ThemeExtension<OcTokens> {
       .withValues(alpha: isDark ? 0.34 : 0.34);
 
   /// Search header frost. 0.34 reads as a cream coin on the collapsing
-  /// header (nothing behind to blur). 0.22 is through-frost — still a
-  /// 34 plate + σ14, not page-bleed and not a 0.68 coin.
+  /// header (nothing behind to blur). 0.16 is the next through-frost
+  /// step (0.22 still weighted the 34 plate). Still a 34 plate + σ14,
+  /// not page-bleed and not a 0.68 coin.
   Color get glassChipThrough => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: 0.22);
+      .withValues(alpha: 0.16);
 
   /// Official `--oc-mobile-glass-highlight` is white / 0.60
   /// (dark 0.18). Inset sheen on the elevated plate.

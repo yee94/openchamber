@@ -183,7 +183,7 @@ class OcOptical {
   static const double addButton = 40;
   static const double headerDisc = 40;
   /// Official hit is 40 (`mobileIcon`). Search frost plate is 34 — through
-  /// `glassChipThrough` 0.22 / σ14, not a 0.68 coin and not a 22 bleed
+  /// `glassChipThrough` 0.16 / σ14, not a 0.68 coin and not a 22 bleed
   /// glyph. 36 still read a cream coin; 34 is the next disc-scale step
   /// (not the 32 vanish). Solid primary `+` paints the full 40 hit.
   /// No 8/20 umbra. Hits stay 40. Leading plates stay 28.
@@ -340,10 +340,11 @@ class OcOptical {
 
   /// Official scheduled status uses the project-shell glass disc (2.375rem).
   static const double scheduleStatus = leadingCircle;
-  /// Hit stays official 38. Shrink-to-death 2 vanished vs README
-  /// check/pause discs. 28 matches project leading restore. Fill is
-  /// glassChipThrough + inset highlight — not OcGlassChip frost.
-  static const double scheduleStatusVisual = 28;
+  /// Hit stays official 38. 28 still read as a cream coin vs README
+  /// check/pause discs. 24 is the next disc-scale step — not a 38
+  /// hole, not a 2 vanish. Fill is glassChipThrough + inset
+  /// highlight — not OcGlassChip frost.
+  static const double scheduleStatusVisual = 24;
   /// Official non-tab scheduled glyph is `size-3.5` (14). Flutter bloom
   /// at dpr 3; 12 matches project leading visual so check/pause are
   /// not 14 bricks in the 28 plate. Not a 1px speck.

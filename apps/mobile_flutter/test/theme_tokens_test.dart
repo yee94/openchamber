@@ -46,7 +46,7 @@ void main() {
     expect(OcTokens.light.glassFill.b, closeTo(1.0, 0.01));
     expect(OcTokens.light.glassFill, isNot(OcTokens.light.surfaceElevated));
     expect(OcTokens.light.glassChipFill.a, closeTo(0.34, 0.01));
-    expect(OcTokens.light.glassChipThrough.a, closeTo(0.22, 0.01));
+    expect(OcTokens.light.glassChipThrough.a, closeTo(0.16, 0.01));
     expect(OcTokens.light.glassChipThrough.a, lessThan(OcTokens.light.glassChipFill.a));
     expect(OcTokens.light.glassChipFill.a, lessThan(OcTokens.light.glassFill.a));
     expect(OcTokens.dark.glassChipFill.a, closeTo(0.34, 0.01));
@@ -331,7 +331,7 @@ void main() {
     expect(OcOptical.footerGlyph, 14);
     expect(OcOptical.scheduleStatus, OcOptical.leadingCircle);
     expect(OcOptical.scheduleStatusVisual, lessThan(OcOptical.scheduleStatus));
-    expect(OcOptical.scheduleStatusVisual, 28);
+    expect(OcOptical.scheduleStatusVisual, 24);
     expect(OcOptical.scheduleStatusGlyph, 12);
     expect(OcOptical.scheduleStatusGlyph, OcOptical.leadingGlyphVisual);
     expect(OcOptical.scheduleMore, 10);
