@@ -138,6 +138,7 @@ void main() {
     expect(sessionTitle.style?.color!.computeLuminance(), lessThan(0.12));
     final projectTitle = tester.widgetList<Text>(find.text('openchamber')).first;
     expect(projectTitle.style?.color, OcTokens.light.foreground);
+    expect(projectTitle.style?.fontWeight, FontWeight.w400);
     final row = tester.getSize(find.byKey(const Key('home-session-sess-pinned')));
     expect(row.height, greaterThanOrEqualTo(OcOptical.sessionRowVisualHeight));
     expect(row.height, lessThan(48));

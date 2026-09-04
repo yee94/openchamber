@@ -334,7 +334,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: ocCssInk(TextStyle(
                     fontSize: OcOptical.rowTitle,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w400,
                     letterSpacing: OcOptical.rowTitleTracking,
                     height: OcOptical.rowTitleHeight,
                     color: context.oc.foreground,
@@ -363,7 +363,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
             OcGlyph(
               expanded ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
               size: OcOptical.chevron,
-              strokeWidth: OcOptical.listGlyphStroke,
+              strokeWidth: OcOptical.headerGlyphStrokeVisual,
               color: context.oc.mutedForeground,
             ),
             SizedBox(
@@ -373,7 +373,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                 child: OcGlyph(
                   OcGlyphKind.ellipsis,
                   size: OcOptical.sessionMore,
-                  strokeWidth: OcOptical.listGlyphStroke,
+                  strokeWidth: OcOptical.headerGlyphStrokeVisual,
                   color: context.oc.mutedForeground,
                 ),
               ),

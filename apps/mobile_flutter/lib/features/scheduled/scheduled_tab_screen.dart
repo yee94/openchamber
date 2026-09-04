@@ -228,7 +228,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: ocCssInk(TextStyle(
                           fontSize: OcOptical.projectTitle,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                           letterSpacing: OcOptical.projectTitleTracking,
                           height: OcOptical.projectTitleHeight,
                           color: context.oc.foreground,

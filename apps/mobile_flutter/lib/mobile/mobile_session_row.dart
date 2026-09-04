@@ -143,7 +143,7 @@ class MobileSessionRow extends StatelessWidget {
                 child: OcGlyph(
                   OcGlyphKind.ellipsis,
                   size: OcOptical.sessionMore,
-                  strokeWidth: OcOptical.listGlyphStroke,
+                  strokeWidth: OcOptical.headerGlyphStrokeVisual,
                   color: context.oc.mutedForeground,
                 ),
               ),

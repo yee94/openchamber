@@ -93,7 +93,9 @@ class MobileProjectCard extends StatelessWidget {
                       query: highlightQuery,
                       style: TextStyle(
                         fontSize: compact ? OcOptical.rowTitle : OcOptical.projectTitle,
-                        fontWeight: FontWeight.w600,
+                        // Official is font-semibold. Review CJK is Regular-only —
+                        // w600 synthesizes a blob that fills the title box.
+                        fontWeight: FontWeight.w400,
                         letterSpacing: compact ? OcOptical.rowTitleTracking : OcOptical.projectTitleTracking,
                         height: compact ? OcOptical.rowTitleHeight : OcOptical.projectTitleHeight,
                         color: context.oc.foreground,
@@ -144,7 +146,7 @@ class MobileProjectCard extends StatelessWidget {
               OcGlyph(
                 expanded ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
                 size: OcOptical.chevron,
-                strokeWidth: OcOptical.listGlyphStroke,
+                strokeWidth: OcOptical.headerGlyphStrokeVisual,
                 color: context.oc.mutedForeground,
               ),
               Padding(
@@ -156,7 +158,7 @@ class MobileProjectCard extends StatelessWidget {
                     child: OcGlyph(
                       OcGlyphKind.ellipsis,
                       size: OcOptical.overflow,
-                      strokeWidth: OcOptical.listGlyphStroke,
+                      strokeWidth: OcOptical.headerGlyphStrokeVisual,
                       color: context.oc.mutedForeground,
                     ),
                   ),
