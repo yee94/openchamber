@@ -27,7 +27,7 @@ class OcOptical {
   /// Official project-shell row is 40. 4.4px CJK half-lead (per side)
   /// opens Regular that still packed at 4.25. 40 + 4×4.4 = 57.6 —
   /// not 7.5 half-lead / 70px rows. No more tracking knobs.
-  static const double sessionRowVisualHeight = 57.6;
+  static const double sessionRowVisualHeight = 40 + 4 * cssLineCjkHalfLead;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;

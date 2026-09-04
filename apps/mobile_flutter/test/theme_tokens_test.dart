@@ -165,7 +165,7 @@ void main() {
           OcOptical.sessionTitleSubtitleGap +
           OcOptical.sessionSubtitle * OcOptical.sessionSubtitleHeight +
           2 * OcOptical.cssLineCjkHalfLead,
-      OcOptical.sessionRowVisualHeight,
+      closeTo(OcOptical.sessionRowVisualHeight, 0.01),
     );
     expect(
       OcCssLine.boxHeight(const TextStyle(
