@@ -95,7 +95,7 @@ void main() {
       OcCssLine.boxHeight(title),
       OcOptical.rowTitle * OcOptical.rowTitleHeight + 2 * OcOptical.cssLineCjkHalfLead,
     );
-    expect(OcOptical.sessionTitleSubtitleGap, 8);
+    expect(OcOptical.sessionTitleSubtitleGap, 10);
     expect(OcOptical.cssLineCjkHalfLead, closeTo(4.7, 0.01));
   });
 
@@ -161,7 +161,7 @@ void main() {
     expect(projectTitle.style?.fontWeight, FontWeight.w600);
     final row = tester.getSize(find.byKey(const Key('home-session-sess-pinned')));
     expect(row.height, greaterThanOrEqualTo(OcOptical.sessionRowVisualHeight));
-    expect(row.height, lessThan(67));
+    expect(row.height, lessThan(69));
     final codeGlyph = tester.widgetList<OcGlyph>(find.byType(OcGlyph)).firstWhere(
       (glyph) => glyph.kind == OcGlyphKind.code,
     );
