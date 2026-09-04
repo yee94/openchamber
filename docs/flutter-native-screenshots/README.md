@@ -724,8 +724,11 @@ on 12px / 14px DemiLight@500. Session/card CJK fills Regular
 Micro Hei (same recipe as 32px page titles). Latin stays
 official `w500`/`w600`. Half-lead **3.2** / card **3.0** /
 stroke **0.28** / plate **34** / far **10/24/-6 @ 10%** stay.
-Not a Medium/Bold flip. Recapture 02/04 after dart.
-**Not 精致.**
+Not a Medium/Bold flip. Recapture after dart `3fd1a7cb2`:
+`02=64c3192a` / scrolled `5502da00` / dark `14ae4b84`;
+04 `30c34667` / 04-dark `64372546`. MAE vs `977c77570`
+~0.56 / 0.52 / 0.44 on 02; ~0.67 / 0.54 on 04.
+03/05 SAME. Restored 06 / 07 (MAE ≤ 0.09). **Not 精致.**
 
 | File | Screen |
 |---|---|
