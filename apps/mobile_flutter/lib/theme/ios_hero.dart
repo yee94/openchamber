@@ -20,10 +20,10 @@ class OcOptical {
   static const double rowTitleTracking = 0;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
-  /// Official project-shell row is 40. 2px CJK half-lead (per side)
-  /// matches the official 16/12 title half-lead so title/subtitle are
-  /// not flush. Stay in the 40-class — never 7.5 half-lead / 70px rows.
-  static const double sessionRowVisualHeight = 48;
+  /// Official project-shell row is 40. 2.5px CJK half-lead (per side)
+  /// opens 12px title/subtitle without leaving the 40-class — never
+  /// 7.5 half-lead / 70px rows.
+  static const double sessionRowVisualHeight = 50;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
@@ -46,9 +46,8 @@ class OcOptical {
   static const double sessionTitleStem = 1.0;
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
-  /// 2 extra Flutter pixels match that title half-lead so CJK rows breathe
-  /// without leaving the ~40 class.
-  static const double cssLineCjkHalfLead = 2.0;
+  /// 2.5 extra Flutter pixels open Regular CJK without leaving ~40 density.
+  static const double cssLineCjkHalfLead = 2.5;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
@@ -159,7 +158,7 @@ class OcOptical {
   static const double headerGlyphStroke = 1.5;
   /// Flutter round-cap bloom at dpr 3; paint under official 1.5 so search
   /// glass stays a thin glyph, not a massy coin.
-  static const double headerGlyphStrokeVisual = 0.56;
+  static const double headerGlyphStrokeVisual = 0.48;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
   static const double listGlyphStroke = 1.5;
   /// Search-field prefix `Icon name="search" className="size-4"`.
@@ -210,10 +209,10 @@ class OcOptical {
   static const double dockGlyphStroke = 2;
   /// Official medium is 2; Flutter round-cap bloom at dpr 3. Paint under
   /// 1 so calendar/gear stay filled-medium sprites, not bricks.
-  static const double dockGlyphStrokeVisual = 0.64;
+  static const double dockGlyphStrokeVisual = 0.56;
   /// Folder / sparkles stay official medium stroke but paint lighter
   /// than calendar/gear so the 23px outline is not a brick.
-  static const double dockStrokeGlyphStrokeVisual = 0.58;
+  static const double dockStrokeGlyphStrokeVisual = 0.50;
   /// Official filled-medium 23px sprites: folder / sparkles / calendar
   /// grid / holed gear. Not hairline outlines and not brick mass.
   static const bool dockGlyphFillBodies = true;
@@ -336,7 +335,7 @@ class OcOptical {
   static const double footerGlyphStroke = 2;
   /// Official medium is 2; Flutter bloom at dpr 3. Paint under 2 so
   /// copy / fork / clock stay filled-medium, not chunky bricks.
-  static const double footerGlyphStrokeVisual = 0.64;
+  static const double footerGlyphStrokeVisual = 0.56;
   /// Official ProgressiveGroup expanded rail: header must not sit flush
   /// on the first skill/terminal row (Yee P0 2026-09-04).
   static const double activityExpandedGap = 10;
