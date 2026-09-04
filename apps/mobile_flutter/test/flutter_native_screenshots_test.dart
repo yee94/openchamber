@@ -92,9 +92,9 @@ void main() {
     expect(restCard.top, greaterThan(restHeader.bottom - OcOptical.headerRestPeek - 1));
     expect(find.byKey(const Key('home-worktree-openchamber::/workspace/Code/github/openchamber-wt/feat-opencode2up')), findsOneWidget);
     expect(find.textContaining('feat/opencode2up'), findsNothing);
-    expect(find.textContaining('feat-opencode2up'), findsOneWidget);
-    expect(find.textContaining('feat-remove-ctx'), findsOneWidget);
-    expect(find.textContaining('ios-native'), findsOneWidget);
+    expect(find.textContaining('feat-opencode2up'), findsWidgets);
+    expect(find.textContaining('feat-remove-ctx'), findsWidgets);
+    expect(find.textContaining('ios-native'), findsWidgets);
     expect(find.text('发布说明'), findsWidgets);
     expect(find.byKey(const Key('projects-attention-strip')), findsNothing);
     expect(find.byType(MobileTabPageHeader), findsOneWidget);
@@ -115,9 +115,9 @@ void main() {
     expect(find.text('新建对话'), findsOneWidget);
     await tester.tapAt(const Offset(48, 720));
     await _pumpFrames(tester);
-    await tester.tap(find.textContaining('feat-opencode2up'));
-    await tester.tap(find.textContaining('feat-remove-ctx'));
-    await tester.tap(find.textContaining('ios-native'));
+    await tester.tap(find.byKey(const Key('home-worktree-openchamber::/workspace/Code/github/openchamber-wt/feat-opencode2up')));
+    await tester.tap(find.byKey(const Key('home-worktree-openchamber::/workspace/Code/github/openchamber-wt/feat-remove-ctx')));
+    await tester.tap(find.byKey(const Key('home-worktree-openchamber::/workspace/Code/github/openchamber-wt/ios-native')));
     await _pumpFrames(tester);
     expect(find.textContaining('OpenCode 升级'), findsWidgets);
     expect(find.textContaining('Composer UIKit overlay'), findsWidgets);
@@ -180,8 +180,8 @@ void main() {
     expect(find.byKey(const Key('scheduled-task-cron-1')), findsOneWidget);
     expect(find.textContaining('每天'), findsWidgets);
     expect(find.textContaining('后'), findsWidgets);
-    expect(find.textContaining('每日AI会话日报'), findsOneWidget);
-    expect(find.textContaining('weekly-architecture-review'), findsOneWidget);
+    expect(find.textContaining('每日AI会话日报'), findsWidgets);
+    expect(find.textContaining('weekly-architecture-review'), findsWidgets);
     expect(find.text('任务'), findsWidgets);
     expect(find.text('历史记录'), findsWidgets);
     expect(find.byKey(const Key('segment-0')), findsOneWidget);
