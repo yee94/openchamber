@@ -9,6 +9,7 @@ import '../../navigation/platform_route.dart';
 import '../../native/haptics.dart';
 import '../../mobile/mobile_surface.dart';
 import '../../theme/ios_chrome.dart';
+import '../projects/highlighted_text.dart';
 import '../../theme/oc_glyphs.dart';
 import '../chat/chat_screen.dart';
 
@@ -217,25 +218,17 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    OcCssLine(
-                      // Official 14/18 entity box. Session 2.5 half-lead
-                      // inflates schedule titles into a massy band.
+                    HighlightedText(
+                      task.name.isEmpty ? task.id : task.name,
+                      query: '',
                       halfLead: 0,
-                      style: const TextStyle(
+                      stem: OcOptical.sessionTitleStem,
+                      style: TextStyle(
                         fontSize: OcOptical.projectTitle,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: OcOptical.projectTitleTracking,
                         height: OcOptical.projectTitleHeight,
-                      ),
-                      child: Text(
-                        task.name.isEmpty ? task.id : task.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: ocCssInk(TextStyle(
-                          fontSize: OcOptical.projectTitle,
-                          fontWeight: FontWeight.w400,
-                          letterSpacing: OcOptical.projectTitleTracking,
-                          height: OcOptical.projectTitleHeight,
-                          color: context.oc.foreground,
-                        )),
+                        color: context.oc.foreground,
                       ),
                     ),
                     const SizedBox(height: OcOptical.scheduleTitleMetaGap),

@@ -93,6 +93,7 @@ class MobileProjectCard extends StatelessWidget {
                       query: highlightQuery,
                       // 14/18 official CSS box — do not add session 2.5.
                       halfLead: compact ? null : 0,
+                      stem: OcOptical.sessionTitleStem,
                       style: TextStyle(
                         fontSize: compact ? OcOptical.rowTitle : OcOptical.projectTitle,
                         // Official is font-semibold. Review CJK is Regular-only —

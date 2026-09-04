@@ -147,7 +147,9 @@ void main() {
     expect(sessionTitle.style?.color, OcTokens.light.foreground);
     expect(sessionTitle.style?.color!.computeLuminance(), lessThan(0.12));
     expect(sessionTitle.style?.fontWeight, FontWeight.w500);
-    final projectTitle = tester.widgetList<Text>(find.text('openchamber')).first;
+    final projectTitle = tester.widgetList<Text>(find.text('openchamber')).firstWhere(
+      (title) => title.style?.color != null,
+    );
     expect(projectTitle.style?.color, OcTokens.light.foreground);
     expect(projectTitle.style?.fontWeight, FontWeight.w400);
     final row = tester.getSize(find.byKey(const Key('home-session-sess-pinned')));
