@@ -819,9 +819,12 @@ Kept 02 `2df54af6` / scrolled `6bb51dd2` / dark `69a69b02`
 Restored 05-dark saturate (MAE ~0.008) and 01/05/06/07/08.
 **精致: 还没有.**
 
-**2026-09-04 wake-0556 residual (dart on `f2a8f4974`):**
+**2026-09-04 wake-0556 residual (dart `d468b87a3`):**
 STRUCTURE PASS. THEME OK. Do **not** invent gaps or umbra. Do **not**
 nibble 34/28/24 plates. Search / Projects `+` glyphs **14 → 20**
 (official `size-5`). Through 0.16 / lift false / plate 34 stay.
-Leading / schedule discs stay. Dock mix stays `/55`. Press DONE.
+Leading / schedule discs stay. Dock mix stays `/55`. Recapture MAE
+vs `f2a8f4974` ~0.01 on 02 family — below tester noise; goldens
+unrestored (`02=2df54af6` / scrolled `6bb51dd2` / dark `69a69b02`).
+WidgetTester cannot prove the 6px size-5 at stroke 0.28. Press DONE.
 **精致: 还没有.**
