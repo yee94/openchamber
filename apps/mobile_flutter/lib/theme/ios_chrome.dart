@@ -299,7 +299,7 @@ class LargeTitleHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: OcOptical.largeTitle,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w400,
                     letterSpacing: OcOptical.largeTitleTracking,
                     height: OcOptical.largeTitleHeight,
                     color: onSurface,
@@ -837,7 +837,7 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                             overflow: TextOverflow.ellipsis,
                             style: ocCssInk(TextStyle(
                               fontSize: OcOptical.chatTitle,
-                              fontWeight: FontWeight.lerp(FontWeight.w600, FontWeight.w700, 0.5),
+                              fontWeight: FontWeight.w400,
                               letterSpacing: OcOptical.chatTitleTracking,
                               height: OcOptical.chatTitleHeight,
                               color: tokens.foreground,

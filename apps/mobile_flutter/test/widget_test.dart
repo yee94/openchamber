@@ -71,6 +71,10 @@ void main() {
       find.descendant(of: find.byKey(const Key('dock-capsule')), matching: find.text('Projects')),
     );
     expect(dockLabel.style?.fontWeight, FontWeight.w400);
+    final pageTitle = tester.widget<Text>(
+      find.descendant(of: find.byKey(const Key('mobile-tab-page-title')), matching: find.byType(Text)),
+    );
+    expect(pageTitle.style?.fontWeight, FontWeight.w400);
     expect(capsule.width, lessThan(tester.view.physicalSize.width / tester.view.devicePixelRatio));
   });
 
