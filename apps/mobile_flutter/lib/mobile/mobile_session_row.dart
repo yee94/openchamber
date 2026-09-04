@@ -47,7 +47,7 @@ class MobileSessionRow extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: OcOptical.sessionRowVisualHeight),
         child: Row(
           // Official row-main is items-center in a 40 box. Our visual
-          // height is 96.8 (locked 40 gap). Center parked time / ···
+          // height is 90.8 (locked 34 gap). Center parked time / ···
           // in the air. Start keeps them on the title band (README).
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

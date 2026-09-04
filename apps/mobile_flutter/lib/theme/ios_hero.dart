@@ -24,9 +24,9 @@ class OcOptical {
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   /// Official project-shell row is 40. 4.7px CJK half-lead (per side)
-  /// plus title↔subtitle air. Wake-0052 tightened 46→40 toward README
+  /// plus title↔subtitle air. Wake-0106 tightened 40→34 toward README
   /// session-row density (official column is still gap-0.5).
-  /// 40 + 4×4.7 + 38 = 96.8 — gap residual, not 7.5 half-lead / 70.
+  /// 40 + 4×4.7 + 32 = 90.8 — gap residual, not 7.5 half-lead / 70.
   static const double sessionRowVisualHeight =
       40 + 4 * cssLineCjkHalfLead + (sessionTitleSubtitleGap - 2);
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
@@ -44,18 +44,18 @@ class OcOptical {
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
-  /// Official title/subtitle column is `gap-0.5` (2). Wake-0052 tightened
-  /// 46→40 toward README session-row density without jumping to official
+  /// Official title/subtitle column is `gap-0.5` (2). Wake-0106 tightened
+  /// 40→34 toward README session-row density without jumping to official
   /// 2. Do not re-widen. Do not touch project/schedule title↔meta 54.
-  /// Far stays 10/24 @ 10% with WidgetTester spread -2. Do not pile
-  /// another +2 — it re-kills start-align discs. Not a half-lead pile
+  /// Far stays 10/24 @ 10% with WidgetTester spread -2. Do not invent
+  /// Material shadows. Do not pile another +2. Not a half-lead pile
   /// and not 7.5/70.
   /// Official title is `font-medium` / unread `font-semibold`. Fill-only
   /// at that weight. Do not revive a miter stem. Half-lead 4.7 + tracking
   /// 1.42 stay. Latin is ReviewSans Medium.
   static const double sessionTitleStem = 0;
   static const double sessionTitleShade = 0;
-  static const double sessionTitleSubtitleGap = 40;
+  static const double sessionTitleSubtitleGap = 34;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
   /// 4.7 extra Flutter pixels open Regular CJK that still packed at 4.6.
   /// Stay under the 4.75 ceiling — do not invent 7.5/70.
