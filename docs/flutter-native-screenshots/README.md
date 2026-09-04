@@ -743,14 +743,15 @@ tester noise; goldens unrestored (`02=64c3192a` / scrolled
 `64372546`). WidgetTester cannot prove the halo or 4px disc.
 **Not 精致.**
 
-**2026-09-04 wake-0405 residual (after `7b8920736`):**
+**2026-09-04 wake-0405 residual (after dart `05ae9f93c`):**
 Delayed duplicate of tip `7b8920736`. STRUCTURE PASS. THEME OK.
 Do **not** pile frost 0.16 / search/+ discs / schedule 24 / dock
 0.12 / Regular / 3.2 / 3.0 / 1.46. Press DONE. Official dark
 `--oc-mobile-float-shadow` far is `0.34`; Flutter painted light
 `0.10` on dark cards. Geometry stays **10/24/-6**. Light far stays
-**10%**. Recapture dark frames after this dart; restore light if
-MAE stays below noise.
+**10%**. Recapture after `05ae9f93c`: kept `02-projects-dark`
+`53d62271` (MAE ~0.88) and `04-scheduled-dark` `ed188c0f`
+(MAE ~0.53). Restored light 02/04 (MAE ~0.02) and 01/03/05/06/07/08.
 **Not 精致.**
 
 | File | Screen |
