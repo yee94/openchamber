@@ -58,12 +58,12 @@ class OcOptical {
   /// schedule title↔meta is official 4 (`gap-1` / `mt-1`). Far stays
   /// official 10/24/-6 @ 10%. Do not invent Material shadows. Not a
   /// half-lead pile and not 7.5/70.
-  /// Official title is `font-medium` / unread `font-semibold`. Fill-only
-  /// at that weight. Review CJK title face is Noto DemiLight@500
-  /// (PingFang Medium optical — not Noto Medium). Do not revive a
-  /// miter stem. Session title half-lead is [sessionTitleHalfLead]
-  /// (3.2); tracking is [rowTitleTracking] (1.46). Latin is ReviewSans
-  /// Medium.
+  /// Official title is `font-medium` / unread `font-semibold`. Widget
+  /// style stays that weight so Latin keeps ReviewSans Medium. CJK
+  /// fills Regular Micro Hei (DemiLight@500 still bricks 12px / 14px
+  /// vs PingFang Medium air). Do not revive a miter stem. Session
+  /// title half-lead is [sessionTitleHalfLead] (3.2); tracking is
+  /// [rowTitleTracking] (1.46).
   static const double sessionTitleStem = 0;
   static const double sessionTitleShade = 0;
   static const double sessionTitleSubtitleGap = 2;

@@ -27,6 +27,32 @@ void main() {
     expect(scriptRuns('发布说明').every((run) => run.cjk), isTrue);
   });
 
+  testWidgets('session title CJK is Regular; Latin keeps official medium', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: materialTheme(Brightness.light),
+        home: const HighlightedText(
+          '发布 Open',
+          query: '',
+          style: TextStyle(
+            fontSize: OcOptical.rowTitle,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF111111),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final title = tester.widget<Text>(find.byType(Text));
+    expect(title.style?.fontWeight, FontWeight.w500);
+    final runs = (title.textSpan! as TextSpan).children!.whereType<TextSpan>().toList();
+    expect(runs, hasLength(2));
+    expect(runs.first.text, '发布');
+    expect(runs.first.style?.fontWeight, FontWeight.w400);
+    expect(runs.last.text, ' Open');
+    expect(runs.last.style?.fontWeight, FontWeight.w500);
+  });
+
   testWidgets('session titles keep L<120 cores above floating frost', (tester) async {
     tester.view.devicePixelRatio = 3;
     tester.view.physicalSize = const Size(390 * 3, 160 * 3);

@@ -144,11 +144,18 @@ class HighlightedText extends StatelessWidget {
     ];
   }
 
-  /// CJK fill at the incoming official weight. Session `w500` is
-  /// `font-medium`; project/page `w600` is `font-semibold`. Review
-  /// titles use Noto DemiLight remapped to 500 (PingFang Medium
-  /// optical). Noto Medium bricks 12px. Do not clamp to Regular.
-  TextStyle _cjkFill(TextStyle paint) => _shaded(paint);
+  /// Official CSS weight stays on the incoming style (`font-medium` /
+  /// `font-semibold`). 12px / 14px DemiLight@500 still bricks vs
+  /// PingFang Medium air after the 32px page-title Regular step.
+  /// CJK paints Regular Micro Hei. Latin keeps ReviewSans Medium.
+  /// Not a half-lead pile. Not a Medium/Bold flip.
+  TextStyle _cjkFill(TextStyle paint) {
+    final weight = paint.fontWeight;
+    if (weight == FontWeight.w500 || weight == FontWeight.w600) {
+      return _shaded(paint.copyWith(fontWeight: FontWeight.w400));
+    }
+    return _shaded(paint);
+  }
 
   TextStyle _shaded(TextStyle paint) {
     if (stem <= 0 || paint.color == null) return paint;
