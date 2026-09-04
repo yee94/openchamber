@@ -147,6 +147,7 @@ class HighlightedText extends StatelessWidget {
   TextStyle _shaded(TextStyle paint) {
     if (stem <= 0 || paint.color == null) return paint;
     const d = OcOptical.sessionTitleShade;
+    if (d <= 0) return paint;
     final ink = paint.color!;
     return paint.copyWith(
       shadows: [

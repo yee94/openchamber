@@ -155,11 +155,11 @@ void main() {
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.sessionTitleStem, closeTo(0.72, 0.01));
-    expect(OcOptical.sessionTitleStem, greaterThan(0.5));
-    expect(OcOptical.sessionTitleStem, lessThan(1.0));
-    expect(OcOptical.sessionTitleShade, closeTo(0.10, 0.01));
-    expect(OcOptical.sessionTitleShade, lessThan(0.22));
+    expect(OcOptical.sessionTitleStem, closeTo(0.48, 0.01));
+    expect(OcOptical.sessionTitleStem, greaterThan(0.3));
+    expect(OcOptical.sessionTitleStem, lessThan(0.72));
+    expect(OcOptical.sessionTitleShade, 0);
+    expect(OcOptical.sessionTitleShade, lessThan(0.10));
     expect(OcOptical.cssLineCjkHalfLead, closeTo(4.7, 0.01));
     expect(OcOptical.cssLineCjkHalfLead, greaterThan(4.4));
     expect(OcOptical.cssLineCjkHalfLead, lessThan(4.75));
@@ -374,11 +374,11 @@ void main() {
     );
     expect(
       OcElevation.cardFor(OcTokens.light).last.color.a,
-      closeTo(0.04, 0.001),
+      closeTo(0.02, 0.001),
     );
     expect(
       OcElevation.cardFor(OcTokens.light).last.color.a,
-      lessThan(0.07),
+      lessThan(0.04),
     );
     expect(
       OcElevation.cardFor(OcTokens.light, tight: true).last.color.a,

@@ -221,8 +221,10 @@ void paintOfficialSprite({
     ..color = color
     ..style = PaintingStyle.stroke
     ..strokeWidth = strokeWidth
-    ..strokeCap = StrokeCap.round
-    ..strokeJoin = StrokeJoin.round;
+    // Official Remix paths are open strokes. Round caps at dpr 3 bloom
+    // into coins; butt + miter keeps optical weight without a size spike.
+    ..strokeCap = StrokeCap.butt
+    ..strokeJoin = StrokeJoin.miter;
   final fill = Paint()
     ..color = color
     ..style = PaintingStyle.fill;

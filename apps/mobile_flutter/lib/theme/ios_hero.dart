@@ -45,14 +45,11 @@ class OcOptical {
   /// Official title/subtitle column is `gap-0.5` (2). Keep that; do not
   /// invent extra title↔meta gap or 15px empty air per line.
   /// Official title is `font-medium` / unread `font-semibold`. Review CJK
-  /// has no Medium cut; a same-color stem + cardinal shade keep Regular
-  /// 12px on authored foreground. Stem 1.05 / shade 0.22 still read as a
-  /// brick vs README light single-line air. 0.72 / 0.10 + miter reaches
-  /// foreground without packing the 12px band. Do not pile half-lead.
-  /// Card frost must sit behind the child. Half-lead 4.7 + tracking 1.42
-  /// stay (no Medium CJK on review/CI).
-  static const double sessionTitleStem = 0.72;
-  static const double sessionTitleShade = 0.10;
+  /// has no Medium cut. Cardinal shade fattened Regular into a brick —
+  /// stem-only 0.48 miter reaches foreground. No shade halo. Do not pile
+  /// half-lead. Half-lead 4.7 + tracking 1.42 stay (no Medium CJK).
+  static const double sessionTitleStem = 0.48;
+  static const double sessionTitleShade = 0;
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
   /// 4.7 extra Flutter pixels open Regular CJK that still packed at 4.6.

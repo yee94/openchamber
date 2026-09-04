@@ -144,8 +144,8 @@ class _OcGlyphPainter extends CustomPainter {
       ..color = color
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
+      ..strokeCap = StrokeCap.butt
+      ..strokeJoin = StrokeJoin.miter;
     final fill = Paint()
       ..color = color
       ..style = PaintingStyle.fill;
@@ -519,8 +519,8 @@ class _OcGlyphPainter extends CustomPainter {
       ..color = paint.color
       ..style = PaintingStyle.stroke
       ..strokeWidth = paint.strokeWidth > 0 ? paint.strokeWidth : 1.55
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
+      ..strokeCap = StrokeCap.butt
+      ..strokeJoin = StrokeJoin.miter;
     final fill = Paint()
       ..color = paint.color
       ..style = PaintingStyle.fill;
