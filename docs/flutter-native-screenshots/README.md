@@ -207,6 +207,20 @@ Stroke stays **0.12**. Far stays official **10%**; soften blur/spread
 02/04 after this dart.
 **Not 精致.**
 
+**2026-09-04 wake-2145 residual (after `ad533d871`):**
+Watch scored the live recapture (`ad533d871`, 02=`4b5d3112`) and still
+rejected craft vs official `mobile_projects.png` / `mobile_schedules.png`
+(ignore palette). Stem stays **0**. Keep Noto/PingFang Medium. Do not
+pile half-lead, tracking, or Bold. Title↔subtitle gap **28 → 30**; row
+**84.8 → 86.8** (gap residual, not 7.5/70). Project/schedule title↔meta
+**24 → 26**. `pageProjectGap` stays **24**. Search/header glyph stays
+**5**; leading plate **12 → 10** (glyph 6 → 5); schedule status **4** /
+glyph **2** stay; hit 38 / 23px dock / 36 plate / 40 `+` stay. Stroke
+stays **0.12**. Far stays official **10%**; soften blur/spread
+**72/-18 → 80/-20** (no Material umbra). `headerRestPeek` 0. Recapture
+02/04 after this dart.
+**Not 精致.**
+
 | File | Screen |
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |
