@@ -249,25 +249,26 @@ stays **0.12**. Far stays official **10%**; soften blur/spread
 02/04 after this dart.
 **Not 精致.**
 
-**2026-09-04 wake-2210 P0 (after `bf95dea16`):**
+**2026-09-04 wake-2210 P0 recapture (dart `0748b11c5`):**
 Large-title 空档 is universal for 项目 / 助理 / 计划 / 设置. Shared
-`MobileTabPageScaffold` now keeps the official expand-shift spacer
+`MobileTabPageScaffold` keeps the official expand-shift spacer
 (10) plus `--oc-mobile-page-gap` (20) after `layoutSlot`.
 `headerRestPeek` stays **0** — no per-tab peek / negative translate.
 `pageProjectGap` stays card-stack only (Projects leading gap removed).
-Recapture 02 (+scrolled/dark) 03 04 (+dark) 05 after this lock.
+Recaptured 02 (+scrolled/dark) 03 04 (+dark) 05. 01/06/07/08 + 05-dark
+restored (MAE ≤ 0.12).
 **Not 精致.**
 
 | File | Screen |
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |
-| `02-projects.png` | Light: catalog sand/orange. Overlay collapsing header. Large title ↔ first card keeps the official expand-shift spacer + `gap-6` air (not a restPeek pull). One project shell: header + padded session/worktree groups. |
+| `02-projects.png` | Light: catalog sand/orange. Overlay collapsing header. Large title ↔ first card uses shared expand-shift 10 + page-gap 20 (not a restPeek pull; `pageProjectGap` is card-stack after that). One project shell: header + padded session/worktree groups. |
 | `02-projects-scrolled.png` | Same Projects list jumped just past the official 48px collapse. Title is compact; cards stay visible under the translucent header (not an emptied mid-scroll). |
 | `02-projects-dark.png` | Same Projects surface after Appearance → Dark (catalog `OcTokens`, not a photo recolor). |
-| `03-assistant.png` | Contact cards (name / mode / summary). No 「启用助理」 toggle. |
-| `04-scheduled.png` | Light: catalog tokens. Quiet schedule status discs. Soft float cards. Dock 计划 uses the official calendar grid (filled plate + date holes, not calendar-clock). |
+| `03-assistant.png` | Contact cards (name / mode / summary). Shared title 空档 (expand-shift 10 + page-gap 20). No 「启用助理」 toggle. |
+| `04-scheduled.png` | Light: catalog tokens. Shared title 空档 (expand-shift 10 + page-gap 20). Quiet schedule status discs. Soft float cards. Dock 计划 uses the official calendar grid (filled plate + date holes, not calendar-clock). |
 | `04-scheduled-dark.png` | Same Scheduled surface after Appearance → Dark. |
-| `05-settings.png` | Large title, pill search, inset groups. |
+| `05-settings.png` | Large title, pill search, inset groups. Shared title 空档 (expand-shift 10 + page-gap 20). |
 | `06-settings-appearance.png` | Light: language + theme. Latin labels must render. No `iosNativeUi`. |
 | `06-settings-appearance-dark.png` | Appearance after tapping Dark — tokens switch live. |
 | `07-chat.png` | Isolated pushed Chat (light): official 1.625 transcript leading, 40px glass chips, centered title, official attach `size-5`, last-turn footer meta (copy / fork / tok/s / duration / clock), one “已处理”, folded file marks + `+N/-M`. Not UIKit glass. |
