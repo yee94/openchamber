@@ -143,18 +143,18 @@ void main() {
     expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
     expect(OcOptical.rowTitleHeight, lessThan(1.42));
     expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);
-    expect(OcOptical.sessionRowVisualHeight, closeTo(96.8, 0.01));
+    expect(OcOptical.sessionRowVisualHeight, closeTo(98.8, 0.01));
     expect(OcOptical.sessionRowVisualHeight, greaterThanOrEqualTo(40));
     expect(OcOptical.sessionRowVisualHeight, lessThan(OcOptical.sessionRowVisualHeight + 1));
     expect(OcOptical.sessionRowPadV, 5);
     expect(OcOptical.metaHeight, 1.25);
     expect(OcOptical.entityTitleHeight, 1.25);
-    expect(OcOptical.groupTitleMetaGap, 36);
+    expect(OcOptical.groupTitleMetaGap, 38);
     expect(OcOptical.projectTriggerPad, 10);
     expect(OcOptical.projectTriggerGap, 7);
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
-    expect(OcOptical.sessionTitleSubtitleGap, 40);
+    expect(OcOptical.sessionTitleSubtitleGap, 42);
     expect(OcOptical.sessionTitleStem, 0);
     expect(OcOptical.sessionTitleStem, lessThan(0.15));
     expect(OcOptical.sessionTitleShade, 0);
@@ -208,7 +208,7 @@ void main() {
     expect(OcOptical.worktreeLabelPadRight, 2);
     expect(OcOptical.floatCardStackGap, 16);
     expect(OcOptical.scheduleCardPadV, 12);
-    expect(OcOptical.scheduleTitleMetaGap, 36);
+    expect(OcOptical.scheduleTitleMetaGap, 38);
     expect(OcOptical.chatBodyHeight, closeTo(1.625, 0.001));
     expect(OcOptical.chatBodyHeight, greaterThan(1.50));
     expect(OcOptical.chatTitle, 15);
@@ -364,9 +364,9 @@ void main() {
     expect(OcElevation.cardFor(OcTokens.light), hasLength(3));
     expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, 2);
     expect(OcElevation.cardFor(OcTokens.light)[1].blurRadius, 12);
-    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, 120);
+    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, 128);
     expect(OcElevation.cardFor(OcTokens.light).last.offset.dy, 10);
-    expect(OcElevation.cardFor(OcTokens.light).last.spreadRadius, -30);
+    expect(OcElevation.cardFor(OcTokens.light).last.spreadRadius, -32);
     expect(
       OcElevation.cardFor(OcTokens.light).take(2).every((s) => s.offset == Offset.zero),
       isTrue,
