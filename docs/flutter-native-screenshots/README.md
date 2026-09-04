@@ -766,15 +766,14 @@ painted none. No 8/20 umbra. Recapture after `be2eb9a63`: kept
 Restored light 02/04 (MAE ~0.02) and 01/03/05/06/07/08.
 **Not 精致.**
 
-**2026-09-04 wake-0419 residual (after `2f1d7a978`):**
-Watch scored live dark-dock goldens. STRUCTURE PASS. THEME OK.
-Do **not** pile Regular / 3.2 / 3.0 / 1.46 / frost 0.16 / disc 24 /
-search plate 34. Dark far **0.34** and dock near pair stay. Press
-DONE. Assistant card names were raw `w600` Text — leftover DemiLight
-@16 vs PingFang. Port official root `oc-mobile-entity-title` 16/20
-plus HighlightedText CJK Regular (same recipe as project/session).
-Not a half-lead/tracking pile. Recapture 03 after this dart; restore
-02/04/05 if MAE stays below noise.
+**2026-09-04 wake-0419 residual (after dart `18fa0439b`):**
+Watch scored live dark-dock goldens `2f1d7a978`. STRUCTURE PASS.
+THEME OK. Do **not** pile Regular / 3.2 / 3.0 / 1.46 / frost 0.16 /
+disc 24 / search plate 34. Dark far **0.34** and dock near pair stay.
+Press DONE. Assistant card names were raw `w600` Text. Port official
+root `oc-mobile-entity-title` 16/20 plus HighlightedText CJK Regular.
+Recapture after `18fa0439b`: kept `03-assistant` `1299800a` (MAE ~1.61).
+02/04/05 dark SAME. Restored light 02/04 (MAE ~0.02) and 01/06/07/08.
 **Not 精致.**
 
 | File | Screen |
