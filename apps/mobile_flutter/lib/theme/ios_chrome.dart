@@ -130,17 +130,14 @@ class OcGlassChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Page-bleed only (wake-0754 / 96e6e72). Clear fill, chipBleedBlur 0.
-    // No contact rim, no ClipOval, no 203131 disc presence. `+` keeps
+    // Page-bleed glyph only (wake-0750 / 1dcc0a5). No OcFrosted
+    // ColoredBox — even α0 + sigma 0 still lifted a disc vs page.
+    // No fill plate, no contact rim, no ClipOval. `+` keeps
     // OcElevation.chip. WidgetTester ≠ UIGlassEffect.
     return SizedBox(
       width: size,
       height: size,
-      child: OcFrosted(
-        fill: context.oc.glassChipFill,
-        sigma: OcOptical.chipBleedBlur,
-        child: Center(child: child),
-      ),
+      child: Center(child: child),
     );
   }
 }
