@@ -124,7 +124,9 @@ class OcOptical {
 
   /// Official `.oc-mobile-tab-button` 0.75rem / line-height 0.75rem / tracking-tight.
   static const double dockLabel = 12;
-  static const double dockLabelTracking = -0.3;
+  /// Official `tracking-tight`. Flutter Regular CJK packs tighter than
+  /// the WebView — paint 0 so dock labels stay open (session-row precedent).
+  static const double dockLabelTracking = 0;
   static const double dockLabelHeight = 1.0;
   static const double dockLabelGap = 3;
   static const double dockGap = 3;
@@ -267,10 +269,10 @@ class OcOptical {
   static const double sessionBulletReadAlpha = 0.55;
   static const double overflow = 16;
   static const double chevron = 14;
-  /// Chat detail-nav circular glass chips. Official mobileIcon is 40;
-  /// README / residual optical wants a 44 plate so back / busy / more
-  /// are discs, not flat glyphs.
-  static const double chatChip = 44;
+  /// Official `Button` `mobileIcon` disc (40). Residual 44 outweighed
+  /// the 56px detail band — paint the official hit so back / busy / more
+  /// are chips, not oversized coins.
+  static const double chatChip = 40;
   static const double chatChipGlyph = 16;
 
   /// Official scheduled status uses the project-shell glass disc (2.375rem).

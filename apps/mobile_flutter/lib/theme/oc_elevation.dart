@@ -108,16 +108,16 @@ class OcElevation {
 
   static List<BoxShadow> groupedFor(OcTokens tokens) => cardFor(tokens);
 
-  /// Dock capsule — glass-shadow contact + halo only (no 8px umbra).
+  /// Dock capsule — official `--oc-mobile-glass-shadow` near pair
+  /// (`0 0 2px / 0.05` + `0 0 12px / 0.06`). No 8/20 umbra (that
+  /// painted a cream stadium) and no inset sheen (same).
   static List<BoxShadow> dock(BuildContext context) => dockFor(OcTokens.of(context));
 
-  /// Dock sits in the page, not a floating Material stadium. Keep the
-  /// contact + halo from glass-shadow; drop the 8px umbra.
   static List<BoxShadow> dockFor(OcTokens tokens) {
     if (tokens.isDark) return const [];
     return const [
-      BoxShadow(color: Color(0x03000000), blurRadius: 2),
-      BoxShadow(color: Color(0x04000000), blurRadius: 12),
+      BoxShadow(color: Color(0x0D000000), blurRadius: 2),
+      BoxShadow(color: Color(0x0F000000), blurRadius: 12),
     ];
   }
 

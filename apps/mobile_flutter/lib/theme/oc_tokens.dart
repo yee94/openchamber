@@ -161,9 +161,12 @@ class OcTokens extends ThemeExtension<OcTokens> {
   Color get glassHighlight => const Color(0xFFFFFFFF)
       .withValues(alpha: isDark ? 0.18 : 0.60);
 
-  /// Official dock plate is `--oc-mobile-float-background` (elevated 45%)
-  /// plus glass blur — same token as [floatSurface], not glass-fill 0.68.
-  Color get dockPlate => floatSurface;
+  /// Official dock fill is `--oc-mobile-float-background` (45%) plus
+  /// control-scale `blur(20) saturate(1.25)`. WidgetTester cannot paint
+  /// live glass — 45% reads as a cream sausage over the list. Paint a
+  /// lighter elevated wash so the stadium is frost, not a plate.
+  /// Selected chrome stays mix-only `/55` ([OcOptical.dockWashBlur] = 0).
+  Color get dockPlate => card.withValues(alpha: 0.30);
 
   /// Legacy alias. Floating chrome uses [glassFill] + blur instead.
   Color get dockFill => dockPlate;

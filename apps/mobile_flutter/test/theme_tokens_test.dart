@@ -34,7 +34,9 @@ void main() {
     expect(OcTokens.light.settingsGroupBackground, isNot(OcTokens.light.pageBackground));
     expect(OcTokens.light.floatSurface.a, closeTo(0.45, 0.01));
     expect(OcTokens.dark.floatSurface.a, closeTo(0.45, 0.01));
-    expect(OcTokens.light.dockPlate.a, closeTo(0.45, 0.01));
+    expect(OcTokens.light.dockPlate.a, closeTo(0.30, 0.01));
+    expect(OcTokens.dark.dockPlate.a, closeTo(0.30, 0.01));
+    expect(OcTokens.light.dockPlate.a, lessThan(OcTokens.light.floatSurface.a));
     expect(OcTokens.light.glassFill.a, closeTo(0.68, 0.01));
     expect(OcTokens.dark.glassFill.a, closeTo(0.66, 0.01));
     expect(OcTokens.light.glassFill.r, closeTo(1.0, 0.01));
@@ -229,6 +231,7 @@ void main() {
     expect(OcOptical.dockTabHeight, 58);
     expect(OcOptical.dockTabRadius, 29);
     expect(OcOptical.dockLabel, 12);
+    expect(OcOptical.dockLabelTracking, 0);
     expect(OcOptical.dockLabelHeight, 1.0);
     expect(OcOptical.dockGap, 3);
     expect(OcOptical.dockSelectedFullSlot, isTrue);
@@ -257,8 +260,8 @@ void main() {
     expect(OcOptical.scheduleStatusGlyphStroke, OcOptical.headerGlyphStrokeVisual);
     expect(OcOptical.scheduleStatusGlyphStroke, lessThan(OcOptical.listGlyphStroke));
     expect(OcOptical.overflow, 16);
-    expect(OcOptical.chatChip, 44);
-    expect(OcOptical.chatChip, greaterThan(OcOptical.headerDisc));
+    expect(OcOptical.chatChip, 40);
+    expect(OcOptical.chatChip, OcOptical.headerDisc);
     expect(OcOptical.chatChipGlyph, 16);
     expect(OcOptical.activityExpandedGap, 10);
     expect(OcOptical.activityExpandedIndent, 20);
@@ -329,7 +332,21 @@ void main() {
     expect(OcElevation.composerFor(OcTokens.light), isEmpty);
     expect(OcElevation.composerFor(OcTokens.dark), isEmpty);
     expect(OcElevation.dockFor(OcTokens.light).length, 2);
+    expect(OcElevation.dockFor(OcTokens.light).first.blurRadius, 2);
+    expect(OcElevation.dockFor(OcTokens.light).last.blurRadius, 12);
+    expect(
+      (OcElevation.dockFor(OcTokens.light).first.color.a * 255).round(),
+      0x0D,
+    );
+    expect(
+      (OcElevation.dockFor(OcTokens.light).last.color.a * 255).round(),
+      0x0F,
+    );
     expect(OcElevation.dockFor(OcTokens.light).last.blurRadius, lessThanOrEqualTo(12));
+    expect(
+      OcElevation.dockFor(OcTokens.light).every((s) => s.offset == Offset.zero),
+      isTrue,
+    );
     expect(OcElevation.controlFor(OcTokens.light), hasLength(3));
     expect(OcElevation.controlFor(OcTokens.light).last.blurRadius, 20);
     expect(OcElevation.controlFor(OcTokens.light).last.offset.dy, 8);
