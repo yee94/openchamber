@@ -226,7 +226,8 @@ void main() {
     expect(OcOptical.headerDiscVisual, lessThan(OcOptical.headerDisc));
     expect(OcOptical.addButton, OcOptical.headerDisc);
     expect(OcOptical.addButton, greaterThan(OcOptical.headerDiscVisual));
-    expect(OcOptical.headerGlyphStrokeVisual, closeTo(0.48, 0.01));
+    expect(OcOptical.headerGlyphStrokeVisual, OcOptical.dockGlyphStrokeVisual);
+    expect(OcOptical.headerGlyphStrokeVisual, closeTo(0.44, 0.01));
     expect(OcOptical.headerGlyphStrokeVisual, lessThan(OcOptical.headerGlyphStroke));
     expect(OcOptical.detailSubtitleGap, 2);
     expect(OcOptical.headerGlyph, 14);
@@ -313,7 +314,7 @@ void main() {
     expect(OcOptical.fileTypeSize, 12);
     expect(OcOptical.fileTypeStrokeVisual, closeTo(0.44, 0.01));
     expect(OcOptical.fileTypeStrokeVisual, OcOptical.dockGlyphStrokeVisual);
-    expect(OcOptical.fileTypeStrokeVisual, lessThan(OcOptical.headerGlyphStrokeVisual));
+    expect(OcOptical.fileTypeStrokeVisual, OcOptical.headerGlyphStrokeVisual);
     expect(OcOptical.fileTypeMark, 7);
     expect(OcOptical.fileRowPadV, 5);
     expect(OcOptical.fileRowHeight, 28);

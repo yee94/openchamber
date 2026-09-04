@@ -173,9 +173,9 @@ class OcOptical {
   static const double headerGlyph = 14;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
-  /// Flutter round-cap bloom at dpr 3; paint under official 1.5 so search
-  /// glass stays a thin glyph, not a massy coin.
-  static const double headerGlyphStrokeVisual = 0.48;
+  /// Flutter round-cap bloom at dpr 3; paint the dock visual so search
+  /// / more / chevron stay thin in the 36 plate — not header-weight bricks.
+  static const double headerGlyphStrokeVisual = dockGlyphStrokeVisual;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
   static const double listGlyphStroke = 1.5;
   /// Search-field prefix `Icon name="search" className="size-4"`.
@@ -209,7 +209,7 @@ class OcOptical {
   /// Official nav `Icon` `h-4 w-4`.
   static const double settingsNavIcon = 16;
   /// Official settings stroke is 1.5. Flutter round-cap dpr-3 bloom;
-  /// paint the header visual so 16px nav glyphs are not chunky bricks.
+  /// same dock visual as header so 16px nav glyphs are not chunky bricks.
   static const double settingsGlyphStrokeVisual = headerGlyphStrokeVisual;
 
   /// `.oc-mobile-root-page-title` letter-spacing: −0.04em + 0.02em × collapse.
@@ -313,7 +313,7 @@ class OcOptical {
   static const double scheduleStatusGlyph = 9;
   /// Schedule overflow `more-2` — slimmer than session 12.
   static const double scheduleMore = 10;
-  /// Header 0.48 still reads heavy next to the 22/9 badge. Dock visual.
+  /// Header now shares dock 0.44 so the 22/9 badge is not the slim pair.
   static const double scheduleMoreStroke = dockGlyphStrokeVisual;
   /// Quiet status polish: check/pause at dock visual stroke so the
   /// 38 disc does not outweigh the card title.
@@ -322,7 +322,7 @@ class OcOptical {
   /// Official `FileTypeIcon` mobile size `h-3 w-3` (12px).
   static const double fileTypeSize = 12;
   /// Flutter bloom at 12px; paint at dock visual so silhouettes
-  /// are not header-weight bricks. Header discs stay 0.48.
+  /// are not header-weight bricks. Header discs share dock 0.44.
   static const double fileTypeStrokeVisual = 0.44;
   static const double fileTypeMark = 7;
   /// Official mobile turn-changes row is `h-6` (24) / `leading-none`.
