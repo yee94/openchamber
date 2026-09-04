@@ -163,10 +163,14 @@ class OcTokens extends ThemeExtension<OcTokens> {
 
   /// Official dock fill is `--oc-mobile-float-background` (45%) plus
   /// control-scale `blur(20) saturate(1.25)`. WidgetTester cannot paint
-  /// live glass — 45% reads as a cream sausage over the list. Paint a
-  /// lighter elevated wash so the stadium is frost, not a plate.
-  /// Selected chrome stays mix-only `/55` ([OcOptical.dockWashBlur] = 0).
-  Color get dockPlate => card.withValues(alpha: 0.30);
+  /// live glass. A plain card@0.30 wash reads as a muddy cream slab.
+  /// Mix official glass milk over a lighter elevated wash so the stadium
+  /// is frost (list still reads through). Selected stays mix-only `/55`.
+  Color get dockPlate => Color.alphaBlend(
+        (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
+            .withValues(alpha: 0.14),
+        card.withValues(alpha: 0.22),
+      );
 
   /// Legacy alias. Floating chrome uses [glassFill] + blur instead.
   Color get dockFill => dockPlate;
