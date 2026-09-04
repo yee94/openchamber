@@ -409,7 +409,7 @@ class GroupedInsetCard extends StatelessWidget {
   final EdgeInsetsGeometry? margin;
   final EdgeInsetsGeometry? padding;
   /// Soft schedule lift when [tight] is set; project shells keep the
-  /// official black float-shadow far at 4%. Schedule cards use tight.
+  /// official black float-shadow far at 3%. Schedule cards use tight.
   final bool tight;
 
   @override
