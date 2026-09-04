@@ -24,8 +24,8 @@ class OcOptical {
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   /// Official project-shell row is 40. 4.7px CJK half-lead (per side)
-  /// plus title↔subtitle air after Medium ate `gap-0.5` then `mt-1`.
-  /// 40 + 4×4.7 + 4 = 62.8 — not 7.5 half-lead / 70px.
+  /// plus title↔subtitle air after Medium ate `gap-0.5` / `mt-1` / 6.
+  /// 40 + 4×4.7 + 6 = 64.8 — not 7.5 half-lead / 70px.
   static const double sessionRowVisualHeight =
       40 + 4 * cssLineCjkHalfLead + (sessionTitleSubtitleGap - 2);
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
@@ -42,15 +42,15 @@ class OcOptical {
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
-  /// Official title/subtitle column is `gap-0.5` (2). Medium ate that
-  /// and then `mt-1` (4). 6 is the next 2px of column air — not a
-  /// half-lead pile and not 15px empty air.
+  /// Official title/subtitle column is `gap-0.5` (2). Medium ate 2, 4,
+  /// and 6. 8 is the next 2px of column air — not a half-lead pile
+  /// and not 15px empty air.
   /// Official title is `font-medium` / unread `font-semibold`. Fill-only
   /// at that weight. Do not revive a miter stem. Half-lead 4.7 + tracking
   /// 1.42 stay. Latin is ReviewSans Medium.
   static const double sessionTitleStem = 0;
   static const double sessionTitleShade = 0;
-  static const double sessionTitleSubtitleGap = 6;
+  static const double sessionTitleSubtitleGap = 8;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
   /// 4.7 extra Flutter pixels open Regular CJK that still packed at 4.6.
   /// Stay under the 4.75 ceiling — do not invent 7.5/70.
@@ -223,12 +223,12 @@ class OcOptical {
   /// Flutter round-cap bloom at dpr 3; paint under 2 so slim filled-medium
   /// 23px stays delicate — not bricks, not hairlines.
   static const double dockGlyphStroke = 2;
-  /// Official medium is 2; Flutter bloom at dpr 3. 0.32 still read a
-  /// touch heavy vs README liquid-glass — 0.28 is the optical weight,
+  /// Official medium is 2; Flutter bloom at dpr 3. 0.28 still read a
+  /// touch heavy vs README liquid-glass — 0.24 is the optical weight,
   /// not a size spike (23px box stays).
-  static const double dockGlyphStrokeVisual = 0.28;
+  static const double dockGlyphStrokeVisual = 0.24;
   /// Folder / sparkles share the same slim outline-medium.
-  static const double dockStrokeGlyphStrokeVisual = 0.28;
+  static const double dockStrokeGlyphStrokeVisual = 0.24;
   /// Official dock `Icon weight="medium"` is outline, not filled bodies.
   /// Filling calendar/gear at dpr 3 reads as chunky bricks.
   static const bool dockGlyphFillBodies = false;
