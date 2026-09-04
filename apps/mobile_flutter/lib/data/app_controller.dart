@@ -13,8 +13,6 @@ import '../native/platform_channels.dart';
 import '../native/push_registration.dart';
 import '../native/qr_scanner.dart';
 import '../native/share_targeting.dart';
-import '../native/tts_playback.dart';
-import 'dictation.dart';
 import 'event_pipeline.dart';
 import 'oauth.dart';
 import 'assistant_scheduled.dart';
@@ -54,7 +52,6 @@ class AppController extends ChangeNotifier {
     NativePush? push,
     OpenRelayTunnel? openRelayTunnel,
     ExternalBrowser? browser,
-    DictationSession? dictation,
     Duration? relayRaceHeadstart,
   })  : _store = store,
         _qrScanner = qrScanner ?? QrScanner(),
@@ -67,13 +64,6 @@ class AppController extends ChangeNotifier {
         relayRaceHeadstart = relayRaceHeadstart ?? const Duration(milliseconds: 1500) {
     _directTransport = _api.transport;
     _openRelayTunnel = openRelayTunnel ?? _defaultOpenRelay;
-    this.dictation = dictation ??
-        OfficialDictation(
-          resolveBase: () => activeBase,
-          resolveBearer: () => activeBearer,
-          resolveTransport: () => _api.transport,
-          api: _api,
-        );
     remoteSettings = SettingsRemoteStore(
       api: _api,
       base: () => activeBase,
@@ -90,7 +80,6 @@ class AppController extends ChangeNotifier {
   final OpenChamberApi _api;
   final NativePush _push;
   final ExternalBrowser browser;
-  late final DictationSession dictation;
   OAuthCallback? pendingOAuthCallback;
   late final OpenChamberTransport _directTransport;
   late final OpenRelayTunnel _openRelayTunnel;
@@ -1588,30 +1577,6 @@ class AppController extends ChangeNotifier {
           )
           .timeout(const Duration(milliseconds: 80));
     } catch (_) {}
-  }
-
-  Future<void> speakMessage(String text) async {
-    final base = activeBase;
-    if (base == null || text.trim().isEmpty) {
-      throw const OpenChamberHttpException(0, OpenChamberPaths.ttsSpeak, code: 'no_text');
-    }
-    final bytes = await _api.speakTts(base: base, bearer: activeBearer, text: text);
-    if (bytes.isEmpty) {
-      throw const OpenChamberHttpException(0, OpenChamberPaths.ttsSpeak);
-    }
-    try {
-      await TtsPlayback().play(bytes);
-    } on MissingPluginException {
-      // Widget tests and Linux have no audio device. The HTTP speak still happened.
-    }
-  }
-
-  Future<void> stopSpeaking() async {
-    try {
-      await TtsPlayback().stop();
-    } on MissingPluginException {
-      // Widget tests and Linux have no audio plugin.
-    }
   }
 
   SavedInstance? _mostRecentInstance() {

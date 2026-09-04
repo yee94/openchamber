@@ -16,10 +16,8 @@ class ComposerBar extends StatelessWidget {
     required this.controller,
     required this.onSend,
     this.onAttach,
-    this.onDictate,
     this.onStop,
     this.busy = false,
-    this.dictationLabel,
     this.attachments = const [],
     this.onRemoveAttachment,
     this.showScrollToBottom = false,
@@ -29,9 +27,7 @@ class ComposerBar extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
   final VoidCallback? onAttach;
-  final VoidCallback? onDictate;
   final VoidCallback? onStop;
-  final String? dictationLabel;
   final bool busy;
   final List<AttachmentDraft> attachments;
   final ValueChanged<int>? onRemoveAttachment;
@@ -84,9 +80,9 @@ class ComposerBar extends StatelessWidget {
       ),
     );
 
-    final view = MediaQuery.viewPaddingOf(context);
-    final inset = MediaQuery.viewInsetsOf(context).bottom;
-    final bottomSafe = inset > 0 ? 0.0 : view.bottom;
+    // Scaffold already consumed the keyboard via resizeToAvoidBottomInset.
+    // Use the remaining padding (home indicator), not viewInsets.
+    final bottomSafe = MediaQuery.paddingOf(context).bottom;
     return Padding(
       padding: EdgeInsets.only(bottom: bottomSafe),
       child: Column(
@@ -126,12 +122,6 @@ class ComposerBar extends StatelessWidget {
                   );
                 },
               ),
-            ),
-          if (dictationLabel != null)
-            Padding(
-              key: const Key('composer-dictate-status'),
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-              child: Text(dictationLabel!, style: TextStyle(fontSize: OcTokens.textMicro, color: context.oc.mutedForeground)),
             ),
           if (showScrollToBottom)
             Align(
@@ -190,14 +180,6 @@ class ComposerBar extends StatelessWidget {
                           ),
                         ),
                         Expanded(child: field),
-                        if (onDictate != null)
-                          IconButton(
-                            key: const Key('composer-dictate'),
-                            tooltip: t(context, 'chat.dictation.start'),
-                            visualDensity: VisualDensity.compact,
-                            onPressed: onDictate,
-                            icon: OcGlyph(OcGlyphKind.mic, size: OcOptical.toolbarGlyph, strokeWidth: OcOptical.headerGlyphStroke, color: context.oc.mutedForeground),
-                          ),
                         Pressable(
                           key: const Key('composer-send'),
                           haptic: HapticStrength.medium,

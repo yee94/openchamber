@@ -135,9 +135,7 @@ void main() {
 
   testWidgets('single-message SSE token does not rebuild the list or the neighbor row', (tester) async {
     final busy = ValueNotifier(true);
-    final speaking = ValueNotifier<String?>(null);
     addTearDown(busy.dispose);
-    addTearDown(speaking.dispose);
 
     final timeline = ReverseChatController(
       seed: [
@@ -168,7 +166,7 @@ void main() {
     );
     addTearDown(timeline.dispose);
 
-    await tester.pumpWidget(_chatApp(_listHarness(timeline: timeline, busy: busy, speaking: speaking)));
+    await tester.pumpWidget(_chatApp(_listHarness(timeline: timeline, busy: busy)));
     await tester.pump();
     await tester.pump();
 
@@ -228,9 +226,7 @@ void main() {
 
   testWidgets('reasoning expand/collapse does not rebuild unrelated rows and still matches official motion', (tester) async {
     final busy = ValueNotifier(false);
-    final speaking = ValueNotifier<String?>(null);
     addTearDown(busy.dispose);
-    addTearDown(speaking.dispose);
 
     final timeline = ReverseChatController(
       seed: [
@@ -268,7 +264,7 @@ void main() {
     );
     addTearDown(timeline.dispose);
 
-    await tester.pumpWidget(_chatApp(_listHarness(timeline: timeline, busy: busy, speaking: speaking)));
+    await tester.pumpWidget(_chatApp(_listHarness(timeline: timeline, busy: busy)));
     await tester.pump();
     await tester.pump();
 
@@ -324,7 +320,6 @@ Widget _chatApp(Widget home) {
 Widget _listHarness({
   required ReverseChatController timeline,
   required ValueNotifier<bool> busy,
-  required ValueNotifier<String?> speaking,
 }) {
   return Scaffold(
     body: ReverseChatList(
@@ -335,7 +330,6 @@ Widget _listHarness({
           messageId: message.id,
           reverseIndex: reverseIndex,
           busy: busy,
-          speakingId: speaking,
         );
       },
     ),

@@ -46,8 +46,6 @@ OcGlyphKind settingsNavIcon(String slug) {
       return OcGlyphKind.bookOpen;
     case 'usage':
       return OcGlyphKind.barChart;
-    case 'voice':
-      return OcGlyphKind.mic;
     case 'about':
       return OcGlyphKind.information;
     default:

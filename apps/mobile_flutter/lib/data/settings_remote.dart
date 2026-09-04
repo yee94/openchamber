@@ -95,7 +95,6 @@ class SettingsRemoteStore {
   SettingsResource<List<SettingsNamedItem>> magicPrompts = const SettingsResource();
   SettingsResource<List<SettingsNamedItem>> gitIdentities = const SettingsResource();
   SettingsResource<String> agentsMd = const SettingsResource();
-  SettingsResource<List<SettingsNamedItem>> voice = const SettingsResource();
   SettingsResource<List<SettingsNamedItem>> summaryModels = const SettingsResource();
   SettingsResource<List<SettingsNamedItem>> usage = const SettingsResource();
 
@@ -112,7 +111,6 @@ class SettingsRemoteStore {
     magicPrompts = const SettingsResource();
     gitIdentities = const SettingsResource();
     agentsMd = const SettingsResource();
-    voice = const SettingsResource();
     summaryModels = const SettingsResource();
     usage = const SettingsResource();
     onChanged?.call();
@@ -206,16 +204,6 @@ class SettingsRemoteStore {
         current: () => agentsMd,
         assign: (next) => agentsMd = next,
         fetch: () async => parseAgentsMd(await _api.getBehaviorAgentsMd(base: _requireBase(), bearer: _bearer())),
-      );
-
-  Future<void> loadVoice() => _load(
-        current: () => voice,
-        assign: (next) => voice = next,
-        fetch: () async {
-          final dictation = await _api.getDictationStatus(base: _requireBase(), bearer: _bearer());
-          final tts = await _api.getTtsStatus(base: _requireBase(), bearer: _bearer());
-          return parseVoiceStatus(dictation: dictation, tts: tts);
-        },
       );
 
   Future<void> loadSummaryModels() => _load(
@@ -904,24 +892,6 @@ List<SettingsNamedItem> parseProjectEntries(Object? payload) {
 String parseAgentsMd(Object? payload) {
   final root = asObjectMap(payload);
   return root['content']?.toString() ?? '';
-}
-
-List<SettingsNamedItem> parseVoiceStatus({required Object? dictation, required Object? tts}) {
-  final rows = <SettingsNamedItem>[];
-  final dictationMap = asObjectMap(dictation);
-  for (final model in asObjectList(dictationMap['models'])) {
-    final id = model['id']?.toString() ?? '';
-    if (id.isEmpty) continue;
-    final installed = model['installed'] == true ? 'installed' : 'not installed';
-    rows.add(SettingsNamedItem(id: 'stt:$id', title: id, subtitle: installed));
-  }
-  final ttsMap = asObjectMap(tts);
-  rows.add(SettingsNamedItem(
-    id: 'tts',
-    title: 'TTS',
-    subtitle: ttsMap['available'] == true ? 'available' : 'unavailable',
-  ));
-  return rows;
 }
 
 List<SettingsNamedItem> parseSmallModels(Object? payload) {

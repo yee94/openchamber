@@ -17,22 +17,18 @@ class ChatTranscriptBody extends StatelessWidget {
     super.key,
     required this.message,
     this.onPermission,
-    this.onSpeak,
     this.isLastAssistant = false,
     this.isTurnLive = false,
     this.isStreaming = false,
-    this.isSpeaking = false,
   });
 
   final ChatMessage message;
   final void Function(String requestId, String reply)? onPermission;
-  final VoidCallback? onSpeak;
   final bool isLastAssistant;
   final bool isTurnLive;
   /// Busy last-assistant turn. Independent of a running tool so text-only
   /// SSE tokens still debounce Markdown and auto-expand live reasoning.
   final bool isStreaming;
-  final bool isSpeaking;
 
   @override
   Widget build(BuildContext context) {
@@ -168,23 +164,9 @@ class ChatTranscriptBody extends StatelessWidget {
       ));
     }
     if (!message.isUser) {
-      out.add(_TurnFooter(
-        message: message,
-        isSpeaking: isSpeaking,
-        onSpeak: onSpeak,
-        canSpeak: onSpeak != null && _hasSpeakableText,
-      ));
+      out.add(_TurnFooter(message: message));
     }
     return out;
-  }
-
-  bool get _hasSpeakableText {
-    final fromParts = message.parts
-        .where((part) => part.kind == ChatPartKind.text)
-        .map((part) => part.body?.trim() ?? '')
-        .where((text) => text.isNotEmpty)
-        .join('\n');
-    return fromParts.isNotEmpty || message.body.trim().isNotEmpty;
   }
 }
 
@@ -537,15 +519,9 @@ class _FileTypeMark extends StatelessWidget {
 class _TurnFooter extends StatelessWidget {
   const _TurnFooter({
     required this.message,
-    required this.canSpeak,
-    required this.isSpeaking,
-    this.onSpeak,
   });
 
   final ChatMessage message;
-  final bool canSpeak;
-  final bool isSpeaking;
-  final VoidCallback? onSpeak;
 
   @override
   Widget build(BuildContext context) {
@@ -561,14 +537,6 @@ class _TurnFooter extends StatelessWidget {
             children: [
               _footerIcon(context, key: const Key('chat-action-copy'), glyph: OcGlyphKind.copy, tooltip: t(context, 'chat.messageBody.actions.copyAnswer')),
               _footerIcon(context, key: const Key('chat-action-share'), glyph: OcGlyphKind.share, tooltip: t(context, 'chat.messageBody.actions.shareAnswer')),
-              if (canSpeak)
-                _footerIcon(
-                  context,
-                  key: Key('chat-tts-${message.id}'),
-                  glyph: OcGlyphKind.speaker,
-                  tooltip: t(context, isSpeaking ? 'chat.messageBody.tts.stopSpeaking' : 'chat.messageBody.tts.readAloud'),
-                  onPressed: onSpeak,
-                ),
               _footerIcon(
                 context,
                 key: Key('chat-action-fork-${message.id}'),

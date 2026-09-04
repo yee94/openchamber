@@ -40,10 +40,6 @@ abstract final class OpenChamberPaths {
   static const gitGlobalIdentity = '/api/git/global-identity';
   static const behaviorAgentsMd = '/api/behavior/agents-md';
   static const smallModel = '/api/small-model';
-  static const dictationStatus = '/api/dictation/status';
-  static const dictationWs = '/api/dictation/ws';
-  static const ttsStatus = '/api/tts/status';
-  static const ttsSpeak = '/api/tts/speak';
   static const authUrlToken = '/auth/url-token';
   static const assistants = '/api/openchamber/assistants';
   static const assistantsSettings = '/api/openchamber/assistants/settings';
@@ -174,7 +170,7 @@ class OpenChamberRequest {
   final String? bearer;
   final Map<String, String> extraHeaders;
   final bool stream;
-  /// When true, [OpenChamberResponse.body] is raw bytes (TTS audio).
+  /// When true, [OpenChamberResponse.body] is raw bytes.
   final bool rawResponse;
   final Duration timeout;
 }

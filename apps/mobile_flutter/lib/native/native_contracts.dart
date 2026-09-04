@@ -27,7 +27,7 @@ const List<NativeContract> flutterNativeContracts = [
   NativeContract(
     id: 'settings-home',
     status: 'landed',
-    summary: 'All MOBILE_SETTINGS_PAGE_SLUGS with search + drill-in. No iosNativeUi toggle.',
+    summary: 'Mobile Settings slugs with search + drill-in. No iosNativeUi toggle. No Voice page.',
   ),
   NativeContract(
     id: 'qr-pairing',
@@ -37,12 +37,12 @@ const List<NativeContract> flutterNativeContracts = [
   NativeContract(
     id: 'ios-composer',
     status: 'landed',
-    summary: 'Always-on UIKit liquid-glass composer (pill/card, IME, / @ autocomplete stub, attach, Send/Stop, warm-on-home).',
+    summary: 'Always-on UIKit liquid-glass composer (pill/card, IME, / @ autocomplete stub, attach, Send/Stop, warm-on-home). No mic.',
   ),
   NativeContract(
     id: 'android-composer',
     status: 'landed',
-    summary: 'Material composer + solid IME viewInsets. No WebView composer path.',
+    summary: 'Material composer. Scaffold.resizeToAvoidBottomInset owns IME. No WebView keyboard offset. No mic.',
   ),
   NativeContract(
     id: 'ios-liquid-glass-dock',
