@@ -97,6 +97,14 @@ void main() {
     );
     expect(idleSend.kind, OcGlyphKind.sendPlane);
     expect(idleSend.size, OcOptical.sendPlane);
+    expect(idleSend.strokeWidth, OcOptical.headerGlyphStrokeVisual);
+    final idleRing = tester.widgetList<DecoratedBox>(
+      find.descendant(of: find.byKey(const Key('composer-send')), matching: find.byType(DecoratedBox)),
+    ).map((box) => box.decoration).whereType<BoxDecoration>().firstWhere(
+      (decoration) => decoration.shape == BoxShape.circle && decoration.border != null,
+    );
+    expect(idleRing.border!.top.width, OcOptical.sendRingStroke);
+    expect(idleRing.border!.top.color.a, closeTo(OcOptical.sendRingIdleAlpha, 0.01));
     expect(find.byKey(const Key('chat-back')), findsOneWidget);
     expect(find.text('Release notes'), findsOneWidget);
     expect(find.text('Open a session from Projects.'), findsOneWidget);

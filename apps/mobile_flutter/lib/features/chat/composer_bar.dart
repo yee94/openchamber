@@ -251,7 +251,7 @@ class ComposerBar extends StatelessWidget {
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
                                             border: Border.all(
-                                              color: context.oc.primary.withValues(alpha: 0.55),
+                                              color: context.oc.primary.withValues(alpha: OcOptical.sendRingIdleAlpha),
                                               width: OcOptical.sendRingStroke,
                                             ),
                                           ),
