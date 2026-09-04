@@ -35,7 +35,7 @@ void main() {
     expect(OcTokens.light.floatSurface.a, closeTo(0.45, 0.01));
     expect(OcTokens.dark.floatSurface.a, closeTo(0.45, 0.01));
     expect(OcTokens.light.dockPlate.a, closeTo(0.33, 0.02));
-    expect(OcTokens.dark.dockPlate.a, closeTo(0.28, 0.03));
+    expect(OcTokens.dark.dockPlate.a, closeTo(0.33, 0.02));
     expect(OcTokens.light.dockPlate.a, lessThan(OcTokens.light.floatSurface.a));
     expect(OcTokens.light.dockPlate.r, greaterThan(OcTokens.light.card.r * 0.9));
     expect(OcTokens.light.glassFill.a, closeTo(0.68, 0.01));
