@@ -15,9 +15,6 @@ abstract final class OpenChamberChannels {
   static const media = 'openchamber/media';
   static const virtualAsset = 'openchamber/virtual_asset';
   static const externalBrowser = 'openchamber/external_browser';
-  static const dictation = 'openchamber/dictation';
-  static const dictationPcm = 'openchamber/dictation_pcm';
-  static const tts = 'openchamber/tts';
 }
 
 abstract final class OpenChamberPlatformViews {

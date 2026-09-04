@@ -12,7 +12,7 @@ void main() {
     expect(autocompleteStubFor('hello'), isEmpty);
   });
 
-  testWidgets('Android composer sits on a solid viewInset surface', (tester) async {
+  testWidgets('composer uses Scaffold IME inset without a manual keyboard pad', (tester) async {
     tester.view.viewInsets = const FakeViewPadding(bottom: 320);
     addTearDown(tester.view.resetViewInsets);
     final controller = TextEditingController();
@@ -21,13 +21,9 @@ void main() {
         strings: AppStrings.of(AppStrings.en),
         child: MaterialApp(
           home: Scaffold(
-            resizeToAvoidBottomInset: false,
-            body: ColoredBox(
-              color: Colors.white,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 320),
-                child: ComposerBar(controller: controller, onSend: () {}),
-              ),
+            body: Align(
+              alignment: Alignment.bottomCenter,
+              child: ComposerBar(controller: controller, onSend: () {}),
             ),
           ),
         ),
@@ -35,20 +31,22 @@ void main() {
     );
     expect(find.byKey(const Key('composer-field')), findsOneWidget);
     expect(find.byKey(const Key('composer-send')), findsOneWidget);
+    expect(find.byKey(const Key('composer-attach')), findsOneWidget);
+    expect(find.byKey(const Key('composer-dictate')), findsNothing);
     expect(collapsedComposerOccupancy, 56);
   });
 
-  test('list reserve clears the Android composer stack including the scroll FAB', () {
+  test('list reserve uses consumed padding, not keyboard height', () {
     expect(
-      composerListReserve(ios: true, viewBottom: 34, insetBottom: 0, showScrollToBottom: true),
+      composerListReserve(ios: true, paddingBottom: 34, showScrollToBottom: true),
       collapsedComposerOccupancy + 34,
     );
     expect(
-      composerListReserve(ios: false, viewBottom: 34, insetBottom: 0, showScrollToBottom: true),
+      composerListReserve(ios: false, paddingBottom: 34, showScrollToBottom: true),
       collapsedComposerOccupancy + 34 + OcOptical.scrollFab + 6 + composerPillBottomPad,
     );
     expect(
-      composerListReserve(ios: false, viewBottom: 34, insetBottom: 320, showScrollToBottom: false),
+      composerListReserve(ios: false, paddingBottom: 0, showScrollToBottom: false),
       collapsedComposerOccupancy + composerPillBottomPad,
     );
   });

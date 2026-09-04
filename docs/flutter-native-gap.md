@@ -98,7 +98,7 @@ Native contracts / shell
 | `snippets` | content | Real: GET `/api/config/snippets` |
 | `skills.installed` | content | Real: GET `/api/config/skills?summary=true` |
 | `usage` | system | Real: GET `/api/quota/{providerId}` per official id; one failure stays on that row |
-| `voice` | system | Real: `sttProvider` + GET `/api/dictation/status` + GET `/api/tts/status` |
+| `voice` | **removed** | Official metadata still lists Voice; Flutter does not ship working STT/TTS, so the row/page is omitted |
 | `about` | system | App name, native client `1.19.3-beta.5`, instance version separate |
 
 ## Second-slice status (this PR)
@@ -112,7 +112,7 @@ Native contracts / shell
 | Live Activity local MVP | landed (iOS 17+) | One Activity, 5s demo timer, `pushType: nil`, no rebuild after dismiss. Android channel is a no-op |
 | SecureStore | landed | Production `PlatformSecureStore`: iOS Keychain + Android Keystore AES-GCM. Tests still inject `MemorySecureStore`. Never logs values |
 | QR + deep link | landed (thin redeem) | iOS VisionKit `DataScanner` (Apple on-device ML; not a Google ML Kit CocoaPod). Android Google Code Scanner then CameraX + ML Kit. Parses v2 `p=` and persists `relayUrl` / pairing secret. **Does not** call a made-up redeem HTTP API |
-| Android IME + share | landed | Solid `viewInsets` surface. `ShareReceiverActivity` + Direct Share shortcuts. Exact instance+assistant only — no silent default |
+| Android IME + share | landed | `Scaffold.resizeToAvoidBottomInset` (no manual keyboard pad). `ShareReceiverActivity` + Direct Share shortcuts. Exact instance+assistant only — no silent default |
 | Simulator CI | documented | `flutter build ios --simulator --no-codesign` includes the new targets. Simulator often skips extension signing. Linux VM cannot run this. **This agent did not run the macos-15 job.** |
 | Capgo / plan / notes / Todo / Chat dock | **not present** | Do not rebuild |
 
@@ -123,7 +123,7 @@ Native contracts / shell
 | Connection onboarding | landed | `MobileApp.tsx`, HANDOFF, `mobileConnections.ts` | Live `GET /health`, `GET/POST /auth/session`, pairing redeem. Persist **full** lan+relay candidate set. 1.5s LAN headstart then relay race. **Relay-only payload skips the headstart** (no 1.5s stall, no LAN error). Auto-connect last token. Delete-active → connect. Badge `已连接 · 局域网` / `已连接 · 中继`. |
 | QR pairing | landed | `mobileQrScan.ts`, `connectionPayload.ts` | Persist full v2 candidates (`lan` + `relayUrl` + `hostEncPubJwk` + grant + `serverId`). Redeem on the first reachable transport (LAN race, then official E2EE tunnel). Reload must not drop relay. |
 | iOS composer | landed | `OpenChamberComposer` | UIKit platform view, always on |
-| Android composer | landed | IME viewInsets | Material + solid inset surface. ImeSync analogue still later |
+| Android composer | landed | Scaffold IME | Material composer. Keyboard via `resizeToAvoidBottomInset`, not a second `viewInsets` pad |
 | iOS liquid-glass dock | landed | `OpenChamberTabBar` | iOS 26 `UIGlassEffect`; older: system translucent bar |
 | Android dock | landed (capsule) | Web `MobileTabBar` | Flutter floating capsule, same four roots. Not liquid glass |
 | Live Activity / Dynamic Island | landed | `OpenChamberLiveActivity` | Driven from `GET /api/session/status` busy/retry; start after 5s; `pushType` nil; no rebuild after dismiss |
@@ -145,7 +145,7 @@ Native contracts / shell
 | iOS-native effect | Android product path |
 |---|---|
 | iOS 26 liquid-glass dock | Flutter floating capsule (same four roots). Not `UIGlassEffect` |
-| UIKit liquid-glass composer | Solid floating pill + IME viewInsets. Not a fake glass clone |
+| UIKit liquid-glass composer | Solid floating pill. Scaffold owns IME. Not a fake glass clone |
 | Live Activity / Dynamic Island | Not applicable |
 | WidgetKit / Control Center / NSE | FCM + Android widgets later; not a glass clone |
 | UIImpactFeedbackGenerator | `performHapticFeedback` (light / medium / heavy) |
@@ -224,9 +224,9 @@ What still keys off the **base** id / class namespace (not broken by the suffix)
 |---|---|
 | iOS Simulator four-tab shell + pushed Chat | Needs Mac/Xcode. Linux VM: analyze/tests only |
 | Four native targets in pbxproj | Landed (Runner / Widget / NSE / Share) |
-| Android emulator LAN HTTP + IME composer | Manifest allows cleartext; composer uses solid `viewInsets` |
+| Android emulator LAN HTTP + IME composer | Manifest allows cleartext; composer uses Scaffold IME inset |
 | Settings slug walkthrough | Widget test walks all slugs + About |
-| Keyboard / IME | Android solid viewInsets. iOS UIKit composer owns IME |
+| Keyboard / IME | `Scaffold.resizeToAvoidBottomInset: true`. No parent-`viewInsets` + Scaffold double-count |
 | Pairing | v2 parse + redeem on LAN or official E2EE tunnel. **Relay-only** (no LAN candidate) goes straight to the tunnel — no 1.5s stall, no “LAN failed” error. Tunnel-open failure stays on connect |
 | Chat scroll | Reverse list prepend test + re-enter latest |
 | No PIN lock | Widget test asserts no Face ID / PIN / passcode lock |
@@ -278,7 +278,7 @@ flutter build apk --release
 | Surface | Status | Notes |
 |---|---|---|
 | E2EE relay tunnel | landed (HTTP mux) | Byte-compatible port of `protocol.ts` / `crypto.ts` / `handshake.ts` / `tunnel-codec.ts` / `tunnel-client.ts` fetch path. Layer 1 `ws/wss` + `v=1&role=client&serverId` (+ optional `grant`). Layer 2 ECDH P-256 + HKDF-SHA-256 (`openchamber-relay-v1`) + AES-256-GCM. Layer 3 HTTP frames, odd client stream ids, negotiated single-frame batches. Dummy parse base `http://tunnel.invalid`. **Not invented.** |
-| Tunneled WebSockets | landed (dictation) | Slice 10 ports `openWebSocket` / `WsOpen`…`WsClose` / `oc_url_token` for `/api/dictation/ws`. Event pipeline still uses SSE, not `/api/global/event/ws`. |
+| Tunneled WebSockets | landed (events) | `openWebSocket` / `WsOpen`…`WsClose` / `oc_url_token` for `/api/global/event/ws`. Dictation socket removed. |
 | Frame-batching window | partial | Handshake advertises `batch`; single-frame `0x00` envelopes are sent. The 150ms multi-frame body batcher from `createOutboundFrameBatcher` is not ported — legal per protocol. |
 | Live event path | landed (SSE) | `GET /api/global/event` with bearer + `Last-Event-ID`. Poll remains reconnect fallback. |
 | Android FCM | landed (native SDK) | Copied `packages/mobile/android/app/google-services.json`. No new secret names. Token still null if Firebase init/token fails. |
@@ -289,10 +289,10 @@ flutter build apk --release
 
 | Surface | Status | Notes |
 |---|---|---|
-| Settings completeness | landed (list + official fields) | Every `MOBILE_SETTINGS_PAGE_SLUGS` page except already-real instances/appearance/about now reads official APIs. Slice 6 adds create/edit/delete. Slice 7 adds Provider/MCP OAuth and plugin file write. |
+| Settings completeness | landed (list + official fields) | Mobile Settings slugs except Voice (omitted) and already-real instances/appearance/about read official APIs. Slice 6 adds create/edit/delete. Slice 7 adds Provider/MCP OAuth and plugin file write. |
 | Settings blob | landed | GET/PUT `/api/config/settings` is a merge PUT, same as `createWebSettingsAPI`. Failure keeps the previous snapshot. |
 | Notifications finish | landed | Toggles PUT `nativeNotificationsEnabled` / `notifyOnCompletion` / `notifyOnError` / `notifyOnQuestion`. Background push still uses `POST /api/push/apns-token`. |
-| Tunneled WebSockets | landed (dictation) | Slice 10. SSE remains the live event path. |
+| Tunneled WebSockets | landed (events) | Event WS. Dictation socket removed. |
 | Virtual assets / HEIC / picker | landed | See sixth-slice. |
 
 ## Sixth-slice status
@@ -344,18 +344,18 @@ Read on main (do not invent): skill grouping is `isSkillGroupTool` + `SkillToolG
 | Surface | Status | Main source | Notes |
 |---|---|---|---|
 | Skill-tool grouping | landed | `skillToolGrouping.ts`, `SkillToolGroup.tsx` | Consecutive `skill` (including `runtime.skill:N`) collapse to “Load Skill” + names (3 visible, overflow). Lone skill still uses the group header. |
-| Composer voice (STT) | landed | `ComposerDictation`, `dictation-client.ts` | Slice 10: official `/api/dictation/ws` + 16 kHz PCM. `UnavailableDictation` is no longer the production path. |
+| Composer voice (STT) | **removed** | — | Yee: product does not ship working voice input. Composer is paperclip + input + send only. |
 | Bash / fetch / search cards | landed | `ToolPart.tsx`, `toolPresentation.tsx` | Expandable Shell Command / Fetch URL / Web Search (and Code Search) with command/url/query titles, not raw JSON. |
 | Question card | landed | `toolPresentation.tsx` `question` | First-class Question card. |
 | Image preview | landed | `FileAttachment.tsx` `tool: 'image-preview'` | `type: file` + `image/*` is a named Image card **outside** Activity. No invented image-gen tool. |
 | Generated commit / PR JSON | landed | `generatedJsonResult.ts` | Assistant text that is commit/PR JSON becomes a card, not a raw dump. |
-| Composer TTS | **not composer** | `useLocalTTS.ts` | Message-body `/api/tts/speak`. Settings → Voice already reads `/api/tts/status`. |
+| Composer TTS | **removed** | — | Message read-aloud / TTS action removed. No Voice settings page. |
 | todowrite / todoread | **will not port** | Todo removed in 1.19.2 | Do not rebuild. |
 | Capgo / plan / notes / Todo / Chat dock / iosNativeUi | **will not port** | — | Unchanged. |
 
 ## Remaining gaps
 
-1. Device-only checks (do not invent another slice): live hosted-provider / MCP OAuth in a real system browser; a relay-paired **phone** on a live `wss://` host (home LAN ↔ away relay hot-switch); live microphone PCM on a real device; the iOS Local Network prompt on a real iPhone. Memory/fake transport proves the 1.5s LAN/relay race, **relay-only (no LAN, no 1.5s stall)**, full-candidate persist+reload, and candidates-refresh hot-switch. **Not 真机过.**
+1. Device-only checks (do not invent another slice): live hosted-provider / MCP OAuth in a real system browser; a relay-paired **phone** on a live `wss://` host (home LAN ↔ away relay hot-switch); the iOS Local Network prompt on a real iPhone. Memory/fake transport proves the 1.5s LAN/relay race, **relay-only (no LAN, no 1.5s stall)**, full-candidate persist+reload, and candidates-refresh hot-switch. **Not 真机过.**
 2. Android launcher badge — official Push Relay (`packages/relay-server/src/push/schema.js`) rejects `platform === 'android'` and only builds APNs `aps.badge`. There is no FCM send path to hang `NotificationCompat.setNumber` on. Do not invent ShortcutBadger. iOS badge is local `attentionCount` + `aps.badge`.
 3. Capgo / plan / notes / Todo / Chat dock tab / `iosNativeUi` — will not port.
 4. Pierre `@pierre/diffs` / `beautiful-mermaid` SVG — will not add packages.
@@ -368,9 +368,9 @@ Read on main (do not invent): composer STT is `/api/dictation/ws` + `audio/pcm;r
 
 | Surface | Status | Main source | Notes |
 |---|---|---|---|
-| Composer dictation PCM + WS | landed | `dictation-client.ts`, `use-dictation-audio-source.ts` | Production `OfficialDictation` opens `/api/dictation/ws`, waits `ready`, `start`/`chunk`/`finish`. Native iOS/Android capture emits ~1s 16 kHz PCM16LE base64. No on-device STT. |
-| Tunneled WebSockets + `oc_url_token` | landed (dictation) | `tunnel-client.ts` `openWebSocket`, `runtime-auth.ts` | `WsOpen`/`WsOpened`/`WsText`/`WsClose`. Mint `POST /auth/url-token` before connect. Needed because dictation is a WebSocket. |
-| Message TTS | landed | `MessageBody.tsx`, `useServerTTS.ts` | Assistant Read aloud → `POST /api/tts/speak` `{text, voice, speed, summarize:false}` then native playback. |
+| Composer dictation PCM + WS | **removed** | — | Flutter client no longer opens `/api/dictation/ws` or captures PCM. Shared server APIs unchanged. |
+| Tunneled WebSockets + `oc_url_token` | landed (events) | `tunnel-client.ts` `openWebSocket` | Still used for `/api/global/event/ws`. Dictation socket path removed. |
+| Message TTS | **removed** | — | No Read aloud action, no `/api/tts/speak` client, no native playback plugin. |
 | Event `/api/global/event/ws` | landed | `event-pipeline.ts` | Slice 11. Prefer WS, SSE fallback. |
 | Capgo / plan / notes / Todo / Chat dock / iosNativeUi | **will not port** | — | Unchanged. |
 
@@ -393,7 +393,11 @@ Yee rejected the Material 3 WidgetTester shots (underline fields, full-width sea
 | Surface | README target | Flutter now | Remaining pixel gap |
 |---|---|---|---|
 | Projects | Shared `MobileTabPageHeader`. One `MobileFloatingSurface` per project; linked **directories** are inset labeled groups inside that surface. Same-directory git branches stay in the main session list — they are not cards. | Same hierarchy (`groupSessionsByProject` buckets by directory, matching `useMobileProjectsHomeModel`). Project-shell icon 38 / painted 32 / `code-box` 16. Session `more-2` 12 in a 36 hit. Worktree `git-branch` 14 in an 18 box. Dock 23 filled-medium (stroke 1.28) / header disc 32 + glyph 16. | WidgetTester frost is `BackdropFilter`, not `UIGlassEffect`. Fixture 20 sessions, not 50. Painted official sprite paths ≠ live Remix CSS antialiasing. |
+<<<<<<< HEAD
 | Chat | Pushed (dock hidden). Official `.oc-mobile-detail-navigation`: 56px band, `max(1rem, safe-area)` inset, 40px `mobileGlass` discs, title 0.9375rem / 1.4 centered. Transparent sticky + fade, not a frost banner. Activity header is `completedStatus` (“已处理”) plus a sibling duration — not `completed` (“已处理 {duration}”). Last-turn footer is copy / share / TTS / fork + pulse tok/s / hourglass duration / clock. File rows use `+N/-M` with a slash. FileTypeIcon mobile is `h-3 w-3`. Changed-files preview is `bg-muted/20` + `border-foreground/15`, not a float card. | Overlay `PushedNavBar` uses `viewPadding.top` + 56 and the session `project · branch` subtitle. Back / spinner / `···` are 44px glass chips (BackdropFilter). Title 15 / 1.4 / w650 / center. Composer attach is 18 / stroke 1.25. Activity status is one “已处理”; duration is a sibling plus the message-footer meta strip. Expanded activity keeps a 10px gap and official `ml-2 pl-3` rail under the header; skill/terminal rows use OcGlyph folder/`>_`/chevron with foreground ink (only row durations muted). File preview is the official muted inset; marks are 12px. | **WidgetTester ≠ live iOS glass.** Real iOS keeps `UITextView` + `UIGlassEffect`. Painted letter marks ≠ FileTypeIcon SVGs. Official mounts the meta strip on the last assistant message. |
+=======
+| Chat | Pushed (dock hidden). Official `.oc-mobile-detail-navigation`: 56px band, `max(1rem, safe-area)` inset, 40px `mobileGlass` discs, title 0.9375rem / 1.4 centered. Transparent sticky + fade, not a frost banner. Activity header is `completedStatus` (“已处理”) plus a sibling duration — not `completed` (“已处理 {duration}”). Last-turn footer is copy / share / fork + pulse tok/s / hourglass duration / clock. File rows use `+N/-M` with a slash. FileTypeIcon mobile is `h-3 w-3`. Changed-files preview is `bg-muted/20` + `border-foreground/15`, not a float card. | Overlay `PushedNavBar` uses `viewPadding.top` + 56 and the session `project · branch` subtitle. Back / spinner / `···` are 44px glass chips (BackdropFilter). Title 15 / 1.4 / w650 / center. Composer attach is 18 / stroke 1.25. Activity status is one “已处理”; duration is a sibling plus the message-footer meta strip. File preview is the official muted inset; marks are 12px. | **WidgetTester ≠ live iOS glass.** Real iOS keeps `UITextView` + `UIGlassEffect`. Painted letter marks ≠ FileTypeIcon SVGs. Official mounts the meta strip on the last assistant message. |
+>>>>>>> 771f125e2 (fix(flutter): remove unused voice UI and WebView keyboard offset)
 | Scheduled | Same `MobileTabPageHeader` as Projects. Two-segment 任务/历史记录 track (40px items, 24 radius). Equal-width 全部/已启用/已暂停. Status uses the project-shell glass disc (`oc-mobile-project-icon` 38 / glyph 18). Paused greys the status glyph only. | Shared overlay header + 10px expand-shift spacer. Two 40px segments. Filter track matches. Status disc is a 28 glass plate inside the 38 shell + 12 check/pause. Title stays foreground when paused. `+` is primary 40 on the filter row. | Create-task `+` is chrome-only. Overflow `...` still calls run-now. |
 | Assistant | Same shared header. Contact cards (avatar, name, mode, summary). Enable guide only when off | Shared collapsing header. No 「启用助理」 toggle on the catalog. | Official guide hero images are not bundled. |
 | Settings | Same shared header. Pill search, inset groups. Appearance = language + theme | Shared collapsing header. Pushed settings pages use the same 56px detail nav. | — |
@@ -418,7 +422,7 @@ Yee rejected the Material 3 WidgetTester shots (underline fields, full-width sea
 ### Android degradations (intentional)
 
 - Dock: Flutter frosted stadium (`BackdropFilter`), not `UIGlassEffect`.
-- Composer: frosted pill + `viewInsets`, not `UIGlassEffect`.
+- Composer: frosted pill + Scaffold IME, not `UIGlassEffect`.
 - No Live Activity / Dynamic Island / WidgetKit.
 - Photo picker: system Photo Picker (`ACTION_PICK_IMAGES`).
 - Haptics: `performHapticFeedback`.
@@ -494,7 +498,7 @@ Motion only. Sibling chrome owns color / type / radii / shadows. Chat stays a pu
 | Interaction | iOS | Android / WidgetTester |
 |---|---|---|
 | Card / row / circular + / search / dock-tab press | Flutter `Pressable` scale **0.975** (finger-down **immediate**, release 260ms official overshoot cubic). Highlight = `--oc-mobile-press-fill` (foreground 7%). Cancel on drag-out. | Same timing and scale. No glass clone. |
-| iOS composer Send / + / mic | **UIKit** `UIView.animate` spring 0.975 + reused `UIImpactFeedbackGenerator` | Flutter `Pressable` on the solid pill |
+| iOS composer Send / + | **UIKit** `UIView.animate` spring 0.975 + reused `UIImpactFeedbackGenerator` | Flutter `Pressable` on the solid pill |
 | Haptics | **Always-on UIKit**: one prepared generator per style (`OpenChamberHapticFeedback`). Light = tab + row. Medium = send / + attach / swipe-commit. Never `HapticFeedback.*` on iOS. | `performHapticFeedback` CLOCK_TICK / KEYBOARD_TAP / LONG_PRESS |
 | Interactive back | **`UIScreenEdgePanGestureRecognizer`** on the Flutter view, left edge only, `CADisplayLink` progress. Flutter `IosNativePageRoute.popGestureEnabled = false`. | System predictive back (`PredictiveBackPageTransitionsBuilder`). Already started. |
 | Push / pop Chat | `IosNativePageRoute` = Cupertino slide (UINavigationController), 350ms `fastEaseInToSlowEaseOut`. Not a 300ms linear fade. | `MaterialPageRoute` + predictive back |
@@ -509,7 +513,7 @@ Official nearby is **LAN / home network**, not Bonjour. Source of truth: `packag
 
 | Surface | Status | Notes |
 |---|---|---|
-| iOS Local Network usage string | landed (plist) | Copied official English `NSLocalNetworkUsageDescription`. Kept camera/mic strings and ATS `NSAllowsLocalNetworking` + `NSAllowsArbitraryLoads`. **Device-only:** the iOS prompt was not shown on a real phone. |
+| iOS Local Network usage string | landed (plist) | Copied official English `NSLocalNetworkUsageDescription`. Camera string kept. Microphone usage string removed with dictation. ATS `NSAllowsLocalNetworking` + `NSAllowsArbitraryLoads`. **Device-only:** the iOS prompt was not shown on a real phone. |
 | Persist full v2 candidates | landed | `lan` + `relayUrl` + `hostEncPubJwk` + grant + `serverId`. Reload keeps relay; does not collapse to a single LAN URL. Legacy `{url, relayUrl}` migrates. |
 | `probeConnectionCandidates` race | landed (memory) | LAN headstart 1.5s, then race relay. LAN win → `mobile.instances.status.connectedDirect`. Relay-only / LAN timeout → `connectedRelay`. Tunnel-open failure stays on connect. |
 | Candidate refresh + hot-switch | landed (memory) | `GET /api/client-auth/connection/candidates`. Fresh LAN replaces http LAN-class directs; https + relay preserved. Empty / failed fetch is skip, not wipe. Reprobe after update when on relay (home). Resume reprobe is production-only. |

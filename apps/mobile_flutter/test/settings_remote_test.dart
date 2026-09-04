@@ -22,8 +22,6 @@ void main() {
     await api.getMagicPrompts(base: base, bearer: 'tok');
     await api.getGitIdentities(base: base, bearer: 'tok');
     await api.getBehaviorAgentsMd(base: base, bearer: 'tok');
-    await api.getDictationStatus(base: base, bearer: 'tok');
-    await api.getTtsStatus(base: base, bearer: 'tok');
     await api.getSmallModel(base: base, bearer: 'tok');
     await api.getQuota(base: base, bearer: 'tok', providerId: 'openai');
 
@@ -41,8 +39,6 @@ void main() {
       'GET ${OpenChamberPaths.magicPrompts}',
       'GET ${OpenChamberPaths.gitIdentities}',
       'GET ${OpenChamberPaths.behaviorAgentsMd}',
-      'GET ${OpenChamberPaths.dictationStatus}',
-      'GET ${OpenChamberPaths.ttsStatus}',
       'GET ${OpenChamberPaths.smallModel}',
       'GET ${OpenChamberPaths.quota('openai')}',
     ]);

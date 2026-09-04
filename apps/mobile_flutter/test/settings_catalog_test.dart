@@ -3,7 +3,7 @@ import 'package:openchamber/data/settings_catalog.dart';
 import 'package:openchamber/l10n/app_strings.dart';
 
 void main() {
-  test('covers every official MOBILE_SETTINGS_PAGE_SLUGS entry', () {
+  test('covers Flutter settings slugs and omits voice', () {
     expect(mobileSettingsPageSlugs, [
       'instances',
       'appearance',
@@ -24,10 +24,11 @@ void main() {
       'snippets',
       'skills.installed',
       'usage',
-      'voice',
       'about',
     ]);
     expect(mobileSettingsPages.map((page) => page.slug).toList(), mobileSettingsPageSlugs);
+    expect(mobileSettingsPageSlugs, isNot(contains('voice')));
+    expect(mobileSettingsPages.any((page) => page.slug == 'voice'), isFalse);
   });
 
   test('does not include the deleted iosNativeUi WebView-era setting', () {
@@ -44,6 +45,18 @@ void main() {
         .toList();
     expect(hits, contains('instances'));
     expect(hits, isNot(contains('voice')));
+  });
+
+  test('voice query has no settings page to open', () {
+    final strings = AppStrings.of(AppStrings.en);
+    expect(
+      mobileSettingsPages.where((page) => settingsPageMatchesQuery(page, 'voice', strings.t)),
+      isEmpty,
+    );
+    expect(
+      mobileSettingsPages.where((page) => settingsPageMatchesQuery(page, 'tts', strings.t)),
+      isEmpty,
+    );
   });
 
   test('required settings slugs are marked real-enough', () {
@@ -64,12 +77,12 @@ void main() {
       'commands',
       'magic-prompts',
       'snippets',
-      'voice',
       'summary-ai',
     };
     for (final slug in required) {
       expect(settingsPageBySlug(slug)?.realEnough, isTrue, reason: slug);
     }
+    expect(settingsPageBySlug('voice'), isNull);
   });
 
   test('groups follow official SETTINGS_PAGE_GROUP_ORDER', () {
@@ -83,5 +96,6 @@ void main() {
       SettingsPageGroup.system,
     ]);
     expect(groups.first.pages.single.slug, 'instances');
+    expect(groups.last.pages.map((page) => page.slug), ['usage', 'about']);
   });
 }

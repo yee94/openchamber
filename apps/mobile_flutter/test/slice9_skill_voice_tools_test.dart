@@ -4,7 +4,6 @@ import 'package:openchamber/app.dart';
 import 'package:openchamber/data/app_controller.dart';
 import 'package:openchamber/data/chat_parts.dart';
 import 'package:openchamber/data/chat_timeline.dart';
-import 'package:openchamber/data/dictation.dart';
 import 'package:openchamber/data/generated_result.dart';
 import 'package:openchamber/data/openchamber_api.dart';
 import 'package:openchamber/data/secure_store.dart';
@@ -152,12 +151,10 @@ void main() {
     expect(find.text('Question'), findsOneWidget);
   });
 
-  testWidgets('composer mic inserts official dictation transcript', (tester) async {
-    final dictation = MemoryDictation(transcript: 'send this next');
+  testWidgets('composer has attach, field, and send — no mic', (tester) async {
     final controller = AppController(
       store: MemorySecureStore(),
       api: OpenChamberApi(transport: MemoryOpenChamberTransport()),
-      dictation: dictation,
     );
     await controller.bootstrap(skipDelay: true);
     await controller.connect(url: 'http://192.168.1.74:2606', label: 'lan');
@@ -166,13 +163,11 @@ void main() {
     await tester.tap(find.byKey(const Key('home-session-sess-pinned')));
     await tester.pumpAndSettle();
     expect(find.byType(ChatScreen), findsOneWidget);
-    expect(find.byKey(const Key('composer-dictate')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('composer-dictate')));
-    await tester.pumpAndSettle();
-    expect(find.text('Listening...'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('composer-dictate')));
-    await tester.pumpAndSettle();
-    expect(find.text('send this next'), findsOneWidget);
+    expect(find.byKey(const Key('composer-attach')), findsOneWidget);
+    expect(find.byKey(const Key('composer-field')), findsOneWidget);
+    expect(find.byKey(const Key('composer-send')), findsOneWidget);
+    expect(find.byKey(const Key('composer-dictate')), findsNothing);
+    expect(find.byTooltip('Start dictation'), findsNothing);
   });
 }
 

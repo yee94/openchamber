@@ -117,8 +117,6 @@ class SettingsDetailPage extends StatelessWidget {
           resource: () => controller.remoteSettings.usage,
           load: controller.remoteSettings.loadUsage,
         );
-      case 'voice':
-        return VoiceSettingsPage(controller: controller);
       default:
         return SettingsPageScaffold(
           title: t(context, page.titleKey),
@@ -695,42 +693,6 @@ class BehaviorSettingsPage extends StatelessWidget {
                     ),
                   ),
               ],
-            ),
-          ];
-        },
-      ),
-    );
-  }
-}
-
-class VoiceSettingsPage extends StatelessWidget {
-  const VoiceSettingsPage({super.key, required this.controller});
-
-  final AppController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return SettingsPageScaffold(
-      title: t(context, 'settings.voice.title'),
-      child: _BlobSettingsBody(
-        controller: controller,
-        extra: () => controller.remoteSettings.loadVoice(),
-        builder: (context, blob) {
-          return [
-            SettingsGroup(
-              label: t(context, 'settings.voice.provider'),
-              children: [
-                SettingsValueRow(
-                  label: t(context, 'settings.voice.stt'),
-                  subtitle: blob.stringField('sttProvider') ?? t(context, 'settings.value.unset'),
-                ),
-              ],
-            ),
-            _resourceGroup(
-              context,
-              label: t(context, 'settings.voice.models'),
-              resource: controller.remoteSettings.voice,
-              emptyKey: 'settings.voice.empty',
             ),
           ];
         },

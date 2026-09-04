@@ -1,6 +1,6 @@
-/// Canonical mobile Settings slugs from
-/// `packages/ui/src/lib/settings/metadata.ts` `MOBILE_SETTINGS_PAGE_SLUGS`
-/// on main (`3a164b6` / 1.19.3-beta.5). Keep this list identical.
+/// Flutter Settings slugs. Same as `MOBILE_SETTINGS_PAGE_SLUGS` on main
+/// except `voice` — the product does not ship working STT/TTS, so Flutter
+/// must not surface a Voice page or composer/message voice controls.
 const List<String> mobileSettingsPageSlugs = [
   'instances',
   'appearance',
@@ -21,7 +21,6 @@ const List<String> mobileSettingsPageSlugs = [
   'snippets',
   'skills.installed',
   'usage',
-  'voice',
   'about',
 ];
 
@@ -216,14 +215,6 @@ const List<SettingsPageMeta> mobileSettingsPages = [
     titleKey: 'settings.usage.title',
     descriptionKey: 'settings.usage.description',
     keywords: ['quota', 'billing', 'tokens', '用量'],
-    realEnough: true,
-  ),
-  SettingsPageMeta(
-    slug: 'voice',
-    group: SettingsPageGroup.system,
-    titleKey: 'settings.voice.title',
-    descriptionKey: 'settings.voice.description',
-    keywords: ['tts', 'speech', 'voice', '语音'],
     realEnough: true,
   ),
   SettingsPageMeta(
