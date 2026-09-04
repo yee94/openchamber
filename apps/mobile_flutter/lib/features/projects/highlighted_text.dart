@@ -19,9 +19,9 @@ class HighlightedText extends StatelessWidget {
   /// Session 16/12 rows keep [OcOptical.cssLineCjkHalfLead]. Project /
   /// schedule 14/18 titles use [OcOptical.cardTitleHalfLead] (not 0).
   final double? halfLead;
-  /// Same-color miter stem under Regular CJK so 12px titles reach
-  /// authored foreground without a round-join halo. ReviewCjk has no
-  /// Medium cut; Latin uses ReviewSans Medium. 0 = off.
+  /// Reserved. Review CJK has no Medium cut — a miter stem fattens
+  /// Regular into a brick vs README. Keep 0 (fill-only). Latin uses
+  /// ReviewSans Medium. Shade stays off.
   final double stem;
 
   @override
@@ -120,7 +120,7 @@ class HighlightedText extends StatelessWidget {
       for (final run in scriptRuns(value))
         TextSpan(
           text: run.text,
-          style: run.cjk ? _shaded(paint) : paint,
+          style: run.cjk ? _cjkFill(paint) : paint,
         ),
     ];
   }
@@ -142,6 +142,16 @@ class HighlightedText extends StatelessWidget {
               : const TextStyle(color: Colors.transparent),
         ),
     ];
+  }
+
+  /// Regular CJK fill. Incoming `w500`/`w600` synthesizes a blob on
+  /// ReviewCjk — official Medium/Semibold is a real cut we do not have.
+  TextStyle _cjkFill(TextStyle paint) {
+    final weight = paint.fontWeight;
+    final next = (weight != null && weight.index > FontWeight.w400.index)
+        ? paint.copyWith(fontWeight: FontWeight.w400)
+        : paint;
+    return _shaded(next);
   }
 
   TextStyle _shaded(TextStyle paint) {

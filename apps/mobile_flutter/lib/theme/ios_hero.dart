@@ -45,10 +45,11 @@ class OcOptical {
   /// Official title/subtitle column is `gap-0.5` (2). Keep that; do not
   /// invent extra title↔meta gap or 15px empty air per line.
   /// Official title is `font-medium` / unread `font-semibold`. Review CJK
-  /// has no Medium cut. Stem 0.48 still read heavy vs README light
-  /// single-line air — 0.28 miter only, no shade. Do not pile half-lead.
+  /// has no Medium cut. A same-color miter stem (0.28–1.05) still read
+  /// as a brick vs README light air — fill-only Regular, no stem/shade.
+  /// Latin keeps ReviewSans Medium. Do not pile half-lead.
   /// Half-lead 4.7 + tracking 1.42 stay (no Medium CJK).
-  static const double sessionTitleStem = 0.28;
+  static const double sessionTitleStem = 0;
   static const double sessionTitleShade = 0;
   static const double sessionTitleSubtitleGap = 2;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).

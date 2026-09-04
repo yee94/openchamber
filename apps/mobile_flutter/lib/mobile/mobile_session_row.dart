@@ -89,10 +89,9 @@ class MobileSessionRow extends StatelessWidget {
                               fontSize: OcOptical.rowTitle,
                               // Official `.oc-mobile-session-title` is
                               // `font-medium` (unread `font-semibold`).
-                              // ReviewSans Medium covers Latin. CJK uses
-                              // [OcOptical.sessionTitleStem] so Regular
-                              // 12px reaches foreground without w600 blobs
-                              // on 32px page titles.
+                              // ReviewSans Medium covers Latin. CJK is
+                              // Regular fill only — a miter stem + w500
+                              // faux-bold still read heavy vs README.
                               fontWeight: FontWeight.w500,
                               letterSpacing: OcOptical.rowTitleTracking,
                               height: OcOptical.rowTitleHeight,
