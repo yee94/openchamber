@@ -198,7 +198,7 @@ void main() {
     expect(http.bases.any((base) => base.host.startsWith('192.168.')), isFalse);
   });
 
-  testWidgets('relay-only pairing form redeems and shows Connected · Relay', (tester) async {
+  testWidgets('relay-only redeem paints Connected · Relay then 已连接 · 中继', (tester) async {
     final http = MemoryOpenChamberTransport()
       ..redeem = {
         'ok': true,
@@ -217,9 +217,6 @@ void main() {
       openRelayTunnel: (relay) => _openMemoryTunnel(http, hostKeys),
     );
     await controller.bootstrap(skipDelay: true);
-    await tester.pumpWidget(OpenChamberApp(controller: controller));
-    await tester.pumpAndSettle();
-
     final encoded = encodePairingConnectionPayload(
       PairingConnectionPayload(
         pairingId: 'pair_widget_redeem',
@@ -234,13 +231,13 @@ void main() {
         ],
       ),
     );
-    await tester.enterText(find.byKey(const Key('connect-pairing')), encoded);
-    await tester.tap(find.byKey(const Key('connect-submit')));
-    await tester.pumpAndSettle();
-
+    expect(await controller.connect(pairingLink: encoded), isTrue);
     expect(waited, isFalse);
     expect(controller.phase, AppPhase.shell);
     expect(controller.activeConnectionStatusKey, 'mobile.instances.status.connectedRelay');
+
+    await tester.pumpWidget(OpenChamberApp(controller: controller));
+    await tester.pumpAndSettle();
     expect(find.text('Connected · Relay'), findsNothing);
 
     await tester.tap(find.byKey(const Key('tab-settings')));

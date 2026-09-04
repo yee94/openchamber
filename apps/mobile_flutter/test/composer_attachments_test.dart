@@ -1,11 +1,9 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openchamber/data/app_controller.dart';
 import 'package:openchamber/data/openchamber_api.dart';
-import 'package:openchamber/data/openchamber_http.dart';
 import 'package:openchamber/data/prompt_attachment.dart';
 import 'package:openchamber/data/secure_store.dart';
 import 'package:openchamber/native/media_channel.dart';
@@ -18,7 +16,7 @@ void main() {
     expect(needsHeicTranscode('image/heic'), isTrue);
     expect(needsHeicTranscode('image/HEIF'), isTrue);
     expect(needsHeicTranscode(' image/heif '), isTrue);
-    expect(const AttachmentDraft(name: 'a.heic', mime: 'image/heic', bytes: Uint8List(0)).isHeic, isTrue);
+    expect(AttachmentDraft(name: 'a.heic', mime: 'image/heic', bytes: Uint8List(0)).isHeic, isTrue);
     expect(needsHeicTranscode('image/jpeg'), isFalse);
     expect(needsHeicTranscode('image/png'), isFalse);
     expect(needsHeicTranscode('application/octet-stream'), isFalse);

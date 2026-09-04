@@ -53,7 +53,7 @@ class AppController extends ChangeNotifier {
     OpenRelayTunnel? openRelayTunnel,
     ExternalBrowser? browser,
     Duration? relayRaceHeadstart,
-    Future<void> Function(Duration duration)? relayRaceWait,
+    this.relayRaceWait,
   })  : _store = store,
         _qrScanner = qrScanner ?? QrScanner(),
         _deepLinks = deepLinks ?? DeepLinkListener(),
@@ -62,8 +62,7 @@ class AppController extends ChangeNotifier {
         browser = browser ?? ExternalBrowser(),
         _instances = seed?.instances ?? const [],
         _activeId = seed?.activeId,
-        relayRaceHeadstart = relayRaceHeadstart ?? const Duration(milliseconds: 1500),
-        relayRaceWait = relayRaceWait {
+        relayRaceHeadstart = relayRaceHeadstart ?? const Duration(milliseconds: 1500) {
     _directTransport = _api.transport;
     _openRelayTunnel = openRelayTunnel ?? _defaultOpenRelay;
     remoteSettings = SettingsRemoteStore(
