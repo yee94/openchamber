@@ -629,7 +629,10 @@ undo 3.7 / 1.46, gap **2**, 20+10+20, title↔meta **4**, far
 clone. Small-chrome stroke **0.62 → 0.50** (search / leading
 optical weight; not a hit-box grow). Session title half-lead
 **3.7 → 3.2** toward official 16/12 (row **47.4 → 46.4**); gap-0.5
-stays. Recapture 02 (+scrolled/dark).
+stays. Recapture 02 (+scrolled/dark) after `ca35d4e28`:
+`02=744af68e` / scrolled `816c4b19` / dark `2b9a8856`. MAE vs
+`1e2a6be5a` ~4.08 / 4.53 / 3.34. 03/04/05/07 SAME (`2dbec33b` /
+`94805d37` / `6534068a` / `1db7adf7`).
 **Not 精致.**
 
 | File | Screen |
