@@ -308,6 +308,18 @@ void main() {
     expect(OcOptical.worktreeGlyph, 14);
     expect(OcOptical.worktreeGlyphVisual, 12);
     expect(OcOptical.worktreeGlyphVisual, lessThan(OcOptical.worktreeGlyph));
+    expect(OcOptical.worktreeMeta, 11);
+    expect(OcOptical.worktreeMetaHeight, closeTo(14 / 11, 0.001));
+    expect(
+      OcCssLine.boxHeight(
+        const TextStyle(
+          fontSize: OcOptical.worktreeMeta,
+          height: OcOptical.worktreeMetaHeight,
+        ),
+        halfLead: 0,
+      ),
+      OcOptical.worktreeMeta * OcOptical.worktreeMetaHeight,
+    );
     expect(OcOptical.sessionMore, 14);
     expect(OcOptical.sessionMoreStroke, OcOptical.dockGlyphStrokeVisual);
     expect(OcOptical.sessionMoreStroke, isNot(OcOptical.headerGlyphStrokeVisual));

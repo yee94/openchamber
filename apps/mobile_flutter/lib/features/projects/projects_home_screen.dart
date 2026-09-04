@@ -16,6 +16,7 @@ import '../../mobile/mobile_surface.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
 import '../chat/chat_screen.dart';
+import 'highlighted_text.dart';
 import 'project_groups.dart';
 
 class ProjectsHomeScreen extends StatefulWidget {
@@ -326,38 +327,39 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
             ),
             const SizedBox(width: OcOptical.worktreeLabelGap),
             Expanded(
-              child: OcCssLine(
-                style: const TextStyle(
-                  fontSize: OcOptical.rowTitle,
-                  height: OcOptical.rowTitleHeight,
-                ),
-                child: Text(
-                  tree.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: ocCssInk(TextStyle(
-                    fontSize: OcOptical.rowTitle,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: OcOptical.rowTitleTracking,
-                    height: OcOptical.rowTitleHeight,
-                    color: context.oc.foreground,
-                  )),
+              child: HighlightedText(
+                tree.name,
+                query: _query,
+                // Official worktree name is project-shell
+                // `oc-mobile-entity-title` (14/18 + semibold), not
+                // session 12/16 Regular. Same CJK band as project titles.
+                halfLead: OcOptical.cardTitleHalfLead,
+                stem: OcOptical.sessionTitleStem,
+                style: TextStyle(
+                  fontSize: OcOptical.projectTitle,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: OcOptical.projectTitleTracking,
+                  height: OcOptical.projectTitleHeight,
+                  color: context.oc.foreground,
                 ),
               ),
             ),
             OcCssLine(
               expand: false,
+              // Official `.typography-small` override is 11/14.
+              // Default 4.7 sat in the 42px label like the old meta bug.
+              halfLead: 0,
               style: const TextStyle(
-                fontSize: OcOptical.meta,
-                height: OcOptical.metaHeight,
+                fontSize: OcOptical.worktreeMeta,
+                height: OcOptical.worktreeMetaHeight,
               ),
               child: Text(
                 tree.sessionCount == 1
                     ? t(context, 'projects.sessionsCount.one')
                     : t(context, 'projects.sessionsCount', {'count': '${tree.sessionCount}'}),
                 style: ocCssInk(TextStyle(
-                  fontSize: OcOptical.meta,
-                  height: OcOptical.metaHeight,
+                  fontSize: OcOptical.worktreeMeta,
+                  height: OcOptical.worktreeMetaHeight,
                   color: context.oc.mutedForeground,
                 )),
               ),
@@ -366,7 +368,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
             OcGlyph(
               expanded ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
               size: OcOptical.chevron,
-              strokeWidth: OcOptical.headerGlyphStrokeVisual,
+              strokeWidth: OcOptical.sessionMoreStroke,
               color: context.oc.mutedForeground,
             ),
             SizedBox(
@@ -376,7 +378,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                 child: OcGlyph(
                   OcGlyphKind.ellipsis,
                   size: OcOptical.sessionMore,
-                  strokeWidth: OcOptical.headerGlyphStrokeVisual,
+                  strokeWidth: OcOptical.sessionMoreStroke,
                   color: context.oc.mutedForeground,
                 ),
               ),

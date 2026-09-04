@@ -588,6 +588,20 @@ slim medium as schedule `more-2`). Far stays official **-6**.
 Recapture 04 (+dark).
 **Not 精致.**
 
+**2026-09-04 wake-0157 residual (after `2bfb542e0`):**
+Watch scored live `2bfb542e0` / goldens `7c8112a0e` (`02=453ecf5a`).
+STRUCTURE PASS. THEME OK. Do **not** undo 20+10+20, session gap
+**2**, title↔meta **4**, subtitle/time `halfLead` **0**, title
+half-lead 4.7. Do **not** pile tracking / half-lead. Plates **28**;
+glyphs **14**; search **14**; header stroke **0.62**; dock **0.12**.
+Far stays official **-6**. Worktree label still used session 12/16
+Regular + default half-lead 4.7 and header 0.62 meatballs. Port
+official project-shell `oc-mobile-entity-title` (14/18 + semibold +
+cardTitleHalfLead 2.7), count `.typography-small` 11/14
+(`halfLead: 0`), more/chevron dock **0.12**. Recapture 02
+(+scrolled/dark).
+**Not 精致.**
+
 | File | Screen |
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |

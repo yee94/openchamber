@@ -291,6 +291,12 @@ class OcOptical {
   /// inside the 18 box so the sprite matches the web scale.
   static const double worktreeGlyph = 14;
   static const double worktreeGlyphVisual = 12;
+  /// Official `.oc-mobile-group-label-trigger .typography-small`
+  /// 0.6875rem / 0.875rem. `halfLead: 0` so default 4.7 does not
+  /// inflate the 42px label. Name is project-shell entity-title
+  /// (14/18 + [cardTitleHalfLead]), not session 12/16.
+  static const double worktreeMeta = 11;
+  static const double worktreeMetaHeight = 14 / 11;
   /// Official session `more-2` is `size-3.5` (14). Trailing ··· / chevron
   /// stay dock visual — not small-chrome 0.62 (that fattened meatballs
   /// vs README). Search / leading keep 0.62.
