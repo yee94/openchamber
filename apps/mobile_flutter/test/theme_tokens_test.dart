@@ -148,7 +148,7 @@ void main() {
       ),
     );
     final text = tester.widget<Text>(find.byType(Text));
-    final root = text.textSpan!;
+    final root = text.textSpan! as TextSpan;
     final spans = root.children!.cast<TextSpan>();
     expect(spans, hasLength(2));
     expect(spans[0].text, 'openchamber ');
@@ -174,7 +174,7 @@ void main() {
       ),
     );
     final live = tester.widget<Text>(find.byType(Text));
-    final liveSpans = live.textSpan!.children!.cast<TextSpan>();
+    final liveSpans = (live.textSpan! as TextSpan).children!.cast<TextSpan>();
     expect(liveSpans[1].style?.letterSpacing ?? live.textSpan!.style?.letterSpacing,
         closeTo(OcOptical.rowTitleTrackingOfficial, 0.01));
     expect(liveSpans[1].style?.fontWeight, FontWeight.w500);
