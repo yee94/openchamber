@@ -190,7 +190,9 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
   Widget _taskCard(BuildContext context, ScheduledTaskRecord task) {
     final paused = !task.enabled;
     final card = MobileFloatingSurface(
-      tight: true,
+      // Official `MobileFloatingSurface` is `--oc-mobile-float-shadow`
+      // (same near/far as project shells). `tight` invented a quieter
+      // near pair. Far stays official light 10% / dark 0.34.
       child: Pressable(
         key: Key('scheduled-task-${task.id}'),
         haptic: HapticStrength.light,

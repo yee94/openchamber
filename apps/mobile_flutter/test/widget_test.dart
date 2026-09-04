@@ -152,7 +152,7 @@ void main() {
     expect(add.ink, isTrue);
     expect(add.filled, isFalse);
     final scheduleCard = tester.widget<MobileFloatingSurface>(find.byType(MobileFloatingSurface).first);
-    expect(scheduleCard.tight, isTrue);
+    expect(scheduleCard.tight, isFalse);
     expect(
       find.descendant(
         of: find.byKey(const Key('scheduled-task-cron-1')),

@@ -20,8 +20,9 @@ class OcElevation {
     // light `rgb(0 0 0 / 0.1)` / dark `rgb(0 0 0 / 0.34)`. Geometry
     // stays 10/24/-6 — do not invent Material 8/20 or WidgetTester
     // -2 (that loudens the umbra on cream). Light alpha stays 10%.
-    // Dark was incorrectly painted at light 10% (wash-out). Near
-    // pair stays quieter on tight. Dock / chips stay near-pair only.
+    // Dark was incorrectly painted at light 10% (wash-out). Official
+    // surfaces use this full trio — do not invent a quieter near pair
+    // on schedule cards. Dock / chips stay near-pair only.
     final far = BoxShadow(
       color: Color.fromRGBO(0, 0, 0, tokens.isDark ? 0.34 : 0.10),
       offset: const Offset(0, 10),
