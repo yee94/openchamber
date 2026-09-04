@@ -91,8 +91,9 @@ class MobileProjectCard extends StatelessWidget {
                     HighlightedText(
                       name,
                       query: highlightQuery,
-                      // 14/18 official CSS box — do not add session 2.5.
-                      halfLead: compact ? null : 0,
+                      // 14/18 official CSS box + [cardTitleHalfLead].
+                      // Compact worktree labels keep the session half-lead.
+                      halfLead: compact ? null : OcOptical.cardTitleHalfLead,
                       stem: OcOptical.sessionTitleStem,
                       style: TextStyle(
                         fontSize: compact ? OcOptical.rowTitle : OcOptical.projectTitle,

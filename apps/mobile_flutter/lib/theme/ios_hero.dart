@@ -99,6 +99,10 @@ class OcOptical {
   /// Official 18/14 box unchanged.
   static const double projectTitleTracking = 0.95;
   static const double projectTitleHeight = 18 / 14;
+  /// Session rows keep [cssLineCjkHalfLead] (4.5). 14/18 project /
+  /// schedule titles get a smaller CJK band so Regular is not packed
+  /// into the official CSS box — not another session-row bump, not 7.5.
+  static const double cardTitleHalfLead = 2.0;
 
   /// `.oc-mobile-entity-meta` 0.75rem / 0.9375rem.
   static const double meta = 12;
@@ -115,8 +119,8 @@ class OcOptical {
   static const double floatCardStackGap = 16;
   /// Official scheduled task row `p-3` (12).
   static const double scheduleCardPadV = 12;
-  /// Official scheduled meta `mt-1` (4). Title air is the CSS 18px box,
-  /// not extra half-lead or a second invented gap.
+  /// Official scheduled meta `mt-1` (4). Title air is the 18px CSS box
+  /// plus [cardTitleHalfLead] — not session 4.5 and not a second gap.
   static const double scheduleTitleMetaGap = 4;
 
   /// Official `.oc-mobile-detail-title` 0.9375rem / line-height 1.4 / weight 650.
@@ -306,6 +310,8 @@ class OcOptical {
   static const double scheduleStatusGlyph = 9;
   /// Schedule overflow `more-2` — slimmer than session 12.
   static const double scheduleMore = 10;
+  /// Header 0.48 still reads heavy next to the 24/9 badge. Dock visual.
+  static const double scheduleMoreStroke = dockGlyphStrokeVisual;
   /// Quiet status polish: check/pause at dock visual stroke so the
   /// 38 disc does not outweigh the card title.
   static const double scheduleStatusGlyphStroke = dockGlyphStrokeVisual;

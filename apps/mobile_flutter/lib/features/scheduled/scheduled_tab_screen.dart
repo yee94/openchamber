@@ -224,7 +224,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                     HighlightedText(
                       task.name.isEmpty ? task.id : task.name,
                       query: '',
-                      halfLead: 0,
+                      halfLead: OcOptical.cardTitleHalfLead,
                       stem: OcOptical.sessionTitleStem,
                       style: TextStyle(
                         fontSize: OcOptical.projectTitle,
@@ -273,7 +273,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                     child: OcGlyph(
                       OcGlyphKind.ellipsis,
                       size: OcOptical.scheduleMore,
-                      strokeWidth: OcOptical.headerGlyphStrokeVisual,
+                      strokeWidth: OcOptical.scheduleMoreStroke,
                       color: context.oc.mutedForeground,
                     ),
                   ),

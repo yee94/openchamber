@@ -16,8 +16,8 @@ class HighlightedText extends StatelessWidget {
   final String text;
   final String query;
   final TextStyle? style;
-  /// Session 16/12 rows keep the pinned 4px CJK half-lead. Project /
-  /// schedule 14/18 titles pass 0 so the official CSS box is not inflated.
+  /// Session 16/12 rows keep [OcOptical.cssLineCjkHalfLead]. Project /
+  /// schedule 14/18 titles use [OcOptical.cardTitleHalfLead] (not 0).
   final double? halfLead;
   /// Same-color miter stem under Regular CJK so 12px titles reach
   /// authored foreground without a round-join halo. ReviewCjk has no

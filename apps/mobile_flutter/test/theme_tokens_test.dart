@@ -127,6 +127,19 @@ void main() {
       ),
       OcOptical.projectTitle * OcOptical.projectTitleHeight,
     );
+    expect(OcOptical.cardTitleHalfLead, closeTo(2.0, 0.01));
+    expect(OcOptical.cardTitleHalfLead, greaterThan(0));
+    expect(OcOptical.cardTitleHalfLead, lessThan(OcOptical.cssLineCjkHalfLead));
+    expect(
+      OcCssLine.boxHeight(
+        const TextStyle(
+          fontSize: OcOptical.projectTitle,
+          height: OcOptical.projectTitleHeight,
+        ),
+        halfLead: OcOptical.cardTitleHalfLead,
+      ),
+      OcOptical.projectTitle * OcOptical.projectTitleHeight + 2 * OcOptical.cardTitleHalfLead,
+    );
     expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
     expect(OcOptical.rowTitleHeight, lessThan(1.42));
     expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);
@@ -281,6 +294,7 @@ void main() {
     expect(OcOptical.scheduleStatusGlyph, 9);
     expect(OcOptical.scheduleMore, 10);
     expect(OcOptical.scheduleMore, lessThan(OcOptical.sessionMore));
+    expect(OcOptical.scheduleMoreStroke, OcOptical.dockGlyphStrokeVisual);
     expect(OcOptical.scheduleStatusGlyphStroke, OcOptical.dockGlyphStrokeVisual);
     expect(OcOptical.scheduleStatusGlyphStroke, lessThan(OcOptical.listGlyphStroke));
     expect(OcOptical.overflow, 16);
