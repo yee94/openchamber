@@ -112,7 +112,7 @@ void main() {
     expect(OcOptical.largeTitleTracking, closeTo(-1.28, 0.01));
     expect(OcOptical.largeTitleHeight, 1.2);
     expect(OcOptical.rowTitle, 12);
-    expect(OcOptical.rowTitleTracking, closeTo(1.42, 0.01));
+    expect(OcOptical.rowTitleTracking, closeTo(1.46, 0.01));
     expect(OcOptical.rowTitleTracking, greaterThan(1.2));
     expect(OcOptical.rowTitleTracking, lessThan(1.5));
     expect(OcOptical.projectTitleTracking, closeTo(1.02, 0.01));

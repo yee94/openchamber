@@ -18,9 +18,10 @@ class OcOptical {
   /// Ink is `font-size`; strut is `line-height`. Do not faux-bold CJK.
   static const double rowTitle = 12;
   /// Official CSS is −0.012em. Flutter Regular CJK still packs tighter
-  /// than the WebView — 1.42 opens the 12px band that packed at 1.35.
-  /// Stay under 1.5. Do not pile tracking. Official 16/12 boxes stay.
-  static const double rowTitleTracking = 1.42;
+  /// than the WebView — 1.46 opens the 12px band after the 3.7 box
+  /// step (1.42 packed). Stay under 1.5. Do not pile. Official 16/12
+  /// boxes stay.
+  static const double rowTitleTracking = 1.46;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   /// Official project-shell row is 40. Title keeps a CJK half-lead
@@ -56,8 +57,8 @@ class OcOptical {
   /// half-lead pile and not 7.5/70.
   /// Official title is `font-medium` / unread `font-semibold`. Fill-only
   /// at that weight. Do not revive a miter stem. Session title half-lead
-  /// is [sessionTitleHalfLead] (3.7); tracking 1.42 stays. Latin is
-  /// ReviewSans Medium.
+  /// is [sessionTitleHalfLead] (3.7); tracking is [rowTitleTracking]
+  /// (1.46). Latin is ReviewSans Medium.
   static const double sessionTitleStem = 0;
   static const double sessionTitleShade = 0;
   static const double sessionTitleSubtitleGap = 2;
