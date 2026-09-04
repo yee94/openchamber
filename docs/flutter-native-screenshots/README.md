@@ -736,7 +736,11 @@ STRUCTURE PASS. THEME OK. Type Regular stays — do **not** pile
 3.2 / 3.0 / tracking. Search/+ circle weight: through-frost
 **0.22 → 0.16**, search/plus drop near-pair halo (hits **40**,
 plate **34**, `+` **40**). Schedule status plates **28 → 24**
-(hit 38). Far **10/24/-6 @ 10%**. Recapture 02/04 after dart.
+(hit 38). Far **10/24/-6 @ 10%**. Recapture MAE vs `8732d9c79`
+~0.017 / 0.017 / 0.002 on 02; ~0.011 / 0.073 on 04 — below
+tester noise; goldens unrestored (`02=64c3192a` / scrolled
+`5502da00` / dark `14ae4b84`; 04 `30c34667` / 04-dark
+`64372546`). WidgetTester cannot prove the halo or 4px disc.
 **Not 精致.**
 
 | File | Screen |
