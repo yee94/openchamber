@@ -58,7 +58,9 @@ class OcElevation {
       BoxShadow(color: Color(0x0A000000), blurRadius: 2),
       BoxShadow(color: Color(0x0D000000), blurRadius: 12),
       BoxShadow(
-        color: Color(0x1A000000),
+        // Official umbra is 0x1A / 0.10. WidgetTester cream + 0.45 frost
+        // swallows that — paint 0x24 so the 10/24/-6 family still reads.
+        color: Color(0x24000000),
         offset: Offset(0, 10),
         blurRadius: 24,
         spreadRadius: -6,

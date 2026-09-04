@@ -141,11 +141,10 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  /// Official hit is 40 (`mobileIcon` / `.oc-mobile-floating-action`).
-  /// Search frost plate is 36 — mobileGlass 0.42/σ16, not a 32 page-bleed
-  /// glyph and not a 0.68/40 cream coin. Solid primary `+` paints the
-  /// full 40 hit. No 8/20 umbra. No UIKit clone.
-  static const double headerDiscVisual = 36;
+  /// Official hit is 40 (`mobileIcon`). Search frost plate is 32 — mobileGlass
+  /// 0.34/σ14, not a 22 page-bleed glyph and not a 0.68/36 cream coin. Solid
+  /// primary `+` paints the full 40 hit. No 8/20 umbra. No UIKit clone.
+  static const double headerDiscVisual = 32;
   /// Official `size-5` is 20. Flutter round-cap bloom; paint 15 in the
   /// 32 frost plate so search / ink glyphs are not massy coins.
   static const double headerGlyph = 15;
@@ -214,9 +213,8 @@ class OcOptical {
   static const bool dockSelectedFullSlot = true;
   /// Official selected class is `bg-interactive-selection/55`.
   /// Mix only (no nested frost) so the 58×r29 cell is a through-wash.
-  /// 0.70 keeps the pill readable on cream frost without a second plate.
   /// Do not use RGB@0.55 or a second BackdropFilter.
-  static const double dockIconWashAlpha = 0.70;
+  static const double dockIconWashAlpha = 0.55;
   /// Official selected tab is `bg-interactive-selection/55` on already-
   /// frosted dock glass — no second BackdropFilter. Nested sigma painted
   /// a cream plate that hid the list. 0 = mix only so rows show through.
@@ -224,9 +222,9 @@ class OcOptical {
   /// Official `--oc-mobile-glass-blur` on the 36 `mobileGlass` disc.
   static const double chipBlur = 20;
   /// Chip frost sigma. Official [chipBlur] is 20; WidgetTester cream +
-  /// 20 paints a coin. 16 + fill 0.42 is a mobileGlass frost plate —
+  /// 20 paints a coin. 14 + fill 0.34 is a mobileGlass frost plate —
   /// not a bare glyph and not a 0.68 cream disc.
-  static const double chipBleedBlur = 16;
+  static const double chipBleedBlur = 14;
   /// Official `.oc-mobile-floating-surface` `blur(22px) saturate(1.35)`.
   /// Distinct from control-scale [chipBlur] / [glassSaturate].
   static const double floatBlur = 22;

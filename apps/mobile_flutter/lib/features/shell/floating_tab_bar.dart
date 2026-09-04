@@ -158,7 +158,7 @@ class _TabSlot extends StatelessWidget {
               width: double.infinity,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(OcOptical.dockTabRadius),
-                // Mix-only ×0.70 on already-frosted dock glass. No hairline
+                // Mix-only /55 on already-frosted dock glass. No hairline
                 // rim (that painted a cream pill) and no nested OcFrosted.
                 child: t <= 0
                     ? column

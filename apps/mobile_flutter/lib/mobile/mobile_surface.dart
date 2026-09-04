@@ -35,10 +35,15 @@ class MobileLabeledSurfaceGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final inner = OcTokens.insetRadius - 1;
+    final tokens = context.oc;
+    // Official inset group is 1px `--oc-mobile-border` (6%). On cream
+    // frost that hairline vanishes — paint 11% so nested worktree shells
+    // stay a labeled group, not a flat stack.
+    final insetBorder = tokens.foreground.withValues(alpha: tokens.isDark ? 0.05 : 0.11);
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(OcTokens.insetRadius),
-        border: Border.all(color: context.oc.mobileBorder),
+        border: Border.all(color: insetBorder),
         color: Colors.transparent,
       ),
       child: Column(
