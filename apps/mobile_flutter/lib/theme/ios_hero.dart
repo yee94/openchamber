@@ -223,9 +223,12 @@ class OcOptical {
   /// (not the 32 vanish). Solid primary `+` paints the full 40 hit.
   /// No 8/20 umbra. Hits stay 40. Leading plates stay 28.
   static const double headerDiscVisual = 34;
-  /// Official `size-5` is 20. Wake-2341 restored 5→12. 14 is the
-  /// next step toward README search — still under the 16 field glyph
-  /// and official 20. Not a 22 bleed coin. Plates stay 28.
+  /// Official search / Projects `+` `Icon` is `size-5` (20). Catalog
+  /// [headerGlyph] stays 14 so leading / segment chrome do not jump.
+  /// Plate stays [headerDiscVisual] 34 / through 0.16 / lift false.
+  static const double headerActionGlyph = 20;
+  /// Small header chrome (segments, not search/+). Official action
+  /// glyph is [headerActionGlyph] 20.
   static const double headerGlyph = 14;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;

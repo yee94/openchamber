@@ -347,6 +347,9 @@ void main() {
     expect(OcOptical.headerGlyph, 14);
     expect(OcOptical.headerGlyph, lessThan(OcOptical.searchFieldGlyph));
     expect(OcOptical.headerGlyph, lessThan(20));
+    expect(OcOptical.headerActionGlyph, 20);
+    expect(OcOptical.headerActionGlyph, OcOptical.searchFieldGlyph + 4);
+    expect(OcOptical.headerActionGlyph, greaterThan(OcOptical.headerGlyph));
     expect(OcOptical.headerGlyphStroke, 1.5);
     expect(OcOptical.collapsingActionSize, 40);
     expect(OcOptical.collapsingTitleCompactSize, 20);
