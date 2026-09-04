@@ -52,6 +52,14 @@ void main() {
     expect(find.byKey(const Key('tab-scheduled')), findsOneWidget);
     expect(find.byKey(const Key('tab-settings')), findsOneWidget);
     expect(find.byKey(const Key('tab-chat'), skipOffstage: false), findsNothing);
+    final spacers = tester.widgetList<SizedBox>(
+      find.byKey(const Key('mobile-tab-page-header-spacer'), skipOffstage: false),
+    );
+    expect(spacers.length, 4);
+    for (final spacer in spacers) {
+      expect(spacer.height, OcOptical.collapsingExpandShift);
+    }
+    expect(OcOptical.headerRestPeek, 0);
     expect(find.byKey(const Key('dock-capsule')), findsOneWidget);
     final capsule = tester.getSize(find.byKey(const Key('dock-capsule')));
     expect(capsule.height, OcTokens.dockHeight);

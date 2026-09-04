@@ -507,7 +507,7 @@ Product chrome **not** in the semantic catalog: agent-count purple `OcProductChr
 | `MobileProjectCard` | `MobileProjectCard` (`lib/mobile/mobile_project_card.dart`) |
 | `MobileSessionRow` | `MobileSessionRow` (`lib/mobile/mobile_session_row.dart`) |
 
-Root tabs (项目 / 计划 / 助理 / 设置) all use `MobileTabPageScaffold` as a **Stack overlay** (translucent header `Positioned` on top of a `SingleChildScrollView` + `Column` that starts with `layoutSlot` + expand-shift spacer). Chat stays `PushedNavBar`. Connect keeps in-flow `LargeTitleHeader` (not a root tab). There is no status/attention/Dynamic Island banner above the title. Projects render **one** `MobileFloatingSurface` per project. Linked worktree directories are inset `MobileLabeledSurfaceGroup`s inside that surface; git branches in the same directory are not extra cards.
+Root tabs (项目 / 计划 / 助理 / 设置) all use `MobileTabPageScaffold` as a **Stack overlay** (translucent header `Positioned` on top of a `SingleChildScrollView` + `Column` that starts with `layoutSlot` + expand-shift spacer + official `--oc-mobile-page-gap` title clearance). `headerRestPeek` stays 0 — no per-tab peek or negative translate eating the spacer. `pageProjectGap` is card-stack spacing after that shared title 空档. Chat stays `PushedNavBar`. Connect keeps in-flow `LargeTitleHeader` (not a root tab). There is no status/attention/Dynamic Island banner above the title. Projects render **one** `MobileFloatingSurface` per project. Linked worktree directories are inset `MobileLabeledSurfaceGroup`s inside that surface; git branches in the same directory are not extra cards.
 
 ## Fourteenth-slice status (native press / spring / back)
 

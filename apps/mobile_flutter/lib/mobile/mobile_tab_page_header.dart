@@ -9,8 +9,9 @@ import '../theme/ios_chrome.dart';
 ///
 /// Layout height is FIXED (`safe-area + 0.75rem + 2.5rem`). Background is
 /// transparent. Scroll only drives compositor props (title scale 1→0.625,
-/// inner translateY, fade opacity, letter-spacing). The 0.625rem spacer lives
-/// in [MobileTabPageScaffold] as a real sibling — not folded into padding.
+/// inner translateY, fade opacity, letter-spacing). The 0.625rem spacer and
+/// official `--oc-mobile-page-gap` clearance live in [MobileTabPageScaffold]
+/// as real siblings — not folded into padding, not a per-tab restPeek.
 class MobileTabPageHeader extends StatelessWidget {
   const MobileTabPageHeader({
     super.key,
@@ -44,6 +45,16 @@ class MobileTabPageHeader extends StatelessWidget {
   static const expandShiftSpacer = SizedBox(
     key: Key('mobile-tab-page-header-spacer'),
     height: expandShift,
+  );
+
+  /// Official `.oc-mobile-tab-page` / Projects `gap-5` after the spacer
+  /// (`--oc-mobile-page-gap` = 1.25rem). Shared large-title 空档 for every
+  /// root tab — not [OcOptical.pageProjectGap] card-stack spacing.
+  static const double titleClearanceHeight = OcTokens.pageGap;
+
+  static const titleClearance = SizedBox(
+    key: Key('mobile-tab-page-header-clearance'),
+    height: titleClearanceHeight,
   );
 
   static double fadeHeight(double safeAreaTop) => OcHeaderFade.heightFor(safeAreaTop);

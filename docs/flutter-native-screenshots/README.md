@@ -249,6 +249,15 @@ stays **0.12**. Far stays official **10%**; soften blur/spread
 02/04 after this dart.
 **Not 精致.**
 
+**2026-09-04 wake-2210 P0 (after `bf95dea16`):**
+Large-title 空档 is universal for 项目 / 助理 / 计划 / 设置. Shared
+`MobileTabPageScaffold` now keeps the official expand-shift spacer
+(10) plus `--oc-mobile-page-gap` (20) after `layoutSlot`.
+`headerRestPeek` stays **0** — no per-tab peek / negative translate.
+`pageProjectGap` stays card-stack only (Projects leading gap removed).
+Recapture 02 (+scrolled/dark) 03 04 (+dark) 05 after this lock.
+**Not 精致.**
+
 | File | Screen |
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |

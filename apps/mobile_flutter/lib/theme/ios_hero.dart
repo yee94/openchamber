@@ -72,9 +72,10 @@ class OcOptical {
   static const double projectGroupsPadBottom = 14;
   /// `--oc-mobile-project-group-gap` inside the shell.
   static const double projectGroupGap = 10;
-  /// Official `MobileProjectsHome` `gap-5` is 20. Medium catalog still
-  /// packed title↔first-card — 24 is official `gap-6` (1.5rem), not a
-  /// restPeek pull and not a fake banner.
+  /// Card-stack gap between project shells. Official `MobileProjectsHome`
+  /// `gap-5` is 20; 24 is `gap-6` between cards only. Large-title 空档 is
+  /// the shared expand-shift spacer + [OcTokens.pageGap] on
+  /// [MobileTabPageScaffold] — do not use this as title clearance.
   static const double pageProjectGap = 24;
   /// `.oc-mobile-entity-meta` gap 0.3125rem.
   static const double entityMetaGap = 5;
@@ -194,8 +195,9 @@ class OcOptical {
   static const double titleCollapseScaleReduce = 0.375;
   static const double titleCollapseScaleEnd = 0.625;
   static const double pageScrollBottomExtra = 40;
-  /// Do not pull the in-flow list up through the expand-shift spacer.
-  /// Catalog peeks under translucent chrome via the Stack overlay only.
+  /// Shared contract: never a per-tab restPeek or negative translate that
+  /// eats the expand-shift spacer. Catalog peeks under translucent chrome
+  /// via the Stack overlay only.
   static const double headerRestPeek = 0;
 
   /// Official `--oc-settings-group-radius` 1rem. Not project 1.5rem.

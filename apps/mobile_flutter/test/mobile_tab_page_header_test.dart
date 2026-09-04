@@ -45,11 +45,18 @@ void main() {
       tester.getSize(find.byKey(const Key('mobile-tab-page-header-slot'))).height,
       expanded.height,
     );
-    expect(tester.getSize(find.byKey(const Key('mobile-tab-page-header-spacer'))).height, 10);
+    expect(tester.getSize(find.byKey(const Key('mobile-tab-page-header-spacer'))).height, OcOptical.collapsingExpandShift);
+    expect(tester.getSize(find.byKey(const Key('mobile-tab-page-header-clearance'))).height, OcTokens.pageGap);
+    expect(OcOptical.headerRestPeek, 0);
 
     final headerRect = tester.getRect(find.byType(MobileTabPageHeader));
     final rowAtRest = tester.getTopLeft(find.text('row-0')).dy;
-    expect(rowAtRest, greaterThanOrEqualTo(headerRect.bottom + OcOptical.collapsingExpandShift - 0.5));
+    expect(
+      rowAtRest,
+      greaterThanOrEqualTo(
+        headerRect.bottom + OcOptical.collapsingExpandShift + MobileTabPageHeader.titleClearanceHeight - 0.5,
+      ),
+    );
 
     final titleAtRest = tester.widget<Transform>(find.byKey(const Key('mobile-tab-page-title')));
     expect(titleAtRest.transform.storage[0], closeTo(1, 0.001));
@@ -69,6 +76,57 @@ void main() {
     final headerBottom = tester.getBottomLeft(find.byType(MobileTabPageHeader)).dy;
     final rowTop = tester.getTopLeft(find.text('row-0')).dy;
     expect(rowTop, lessThan(headerBottom));
+  });
+
+  testWidgets('all four root scaffolds keep the shared expand-shift spacer', (tester) async {
+    tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+    tester.view.devicePixelRatio = 3;
+    tester.view.padding = const FakeViewPadding(top: 47 * 3);
+    tester.view.viewPadding = const FakeViewPadding(top: 47 * 3);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+
+    const titles = ['项目', '助理', '计划', '设置'];
+    await tester.pumpWidget(
+      StringsScope(
+        strings: AppStrings.of(AppStrings.zhCN),
+        child: MaterialApp(
+          theme: materialTheme(Brightness.light),
+          home: Column(
+            children: [
+              for (final title in titles)
+                Expanded(
+                  child: MobileTabPageScaffold(
+                    title: title,
+                    children: [Text('$title-first')],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(OcOptical.headerRestPeek, 0);
+    expect(OcOptical.headerRestPeek, greaterThanOrEqualTo(0));
+    final spacers = tester.widgetList<SizedBox>(
+      find.byKey(const Key('mobile-tab-page-header-spacer')),
+    );
+    expect(spacers.length, 4);
+    for (final spacer in spacers) {
+      expect(spacer.height, OcOptical.collapsingExpandShift);
+    }
+    final clearances = tester.widgetList<SizedBox>(
+      find.byKey(const Key('mobile-tab-page-header-clearance')),
+    );
+    expect(clearances.length, 4);
+    for (final clearance in clearances) {
+      expect(clearance.height, OcTokens.pageGap);
+      expect(clearance.height, greaterThan(OcOptical.headerRestPeek));
+    }
   });
 
   testWidgets('detail nav consumes viewPadding.top and keeps a 56px band', (tester) async {

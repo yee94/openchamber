@@ -131,10 +131,9 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
             ],
           ),
           children: [
-            // Official `MobileProjectsHome` is `flex-col gap-5` after the
-            // header + expand-shift spacer. Do not start the first card
-            // flush under the large title.
-            const SizedBox(height: OcOptical.pageProjectGap),
+            // Large-title 空档 is shared on MobileTabPageScaffold
+            // (expand-shift spacer + official page-gap). pageProjectGap
+            // is card-stack spacing on each project surface, not here.
             if (_searchOpen)
               Padding(
                 padding: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 12),

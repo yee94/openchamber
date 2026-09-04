@@ -91,7 +91,10 @@ void main() {
     expect(
       restCard.top,
       greaterThanOrEqualTo(
-        restHeader.bottom + OcOptical.collapsingExpandShift + OcOptical.pageProjectGap - 0.5,
+        restHeader.bottom +
+            OcOptical.collapsingExpandShift +
+            MobileTabPageHeader.titleClearanceHeight -
+            0.5,
       ),
     );
     expect(find.byKey(const Key('home-worktree-openchamber::/workspace/Code/github/openchamber-wt/feat-opencode2up')), findsOneWidget);
@@ -107,6 +110,8 @@ void main() {
     expect(find.byType(MobileFloatingSurface), findsWidgets);
     expect(tester.getSize(find.byType(MobileTabPageHeader)).height, 47 + OcOptical.collapsingTopPad + OcOptical.collapsingActionSize);
     expect(tester.getSize(find.byKey(const Key('mobile-tab-page-header-spacer'))).height, OcOptical.collapsingExpandShift);
+    expect(tester.getSize(find.byKey(const Key('mobile-tab-page-header-clearance'))).height, OcTokens.pageGap);
+    expect(OcOptical.headerRestPeek, 0);
     expect(tester.getSize(find.byKey(const Key('dock-capsule'))).height, OcTokens.dockHeight);
     expect(
       tester.getSize(find.byKey(const Key('dock-capsule'))).width,
@@ -177,6 +182,16 @@ void main() {
     expect(find.textContaining('连续模式'), findsWidgets);
     expect(find.byKey(const Key('tab-assistant')), findsOneWidget);
     expect(find.byType(MobileTabPageHeader), findsOneWidget);
+    expect(tester.getSize(find.byKey(const Key('mobile-tab-page-header-spacer'))).height, OcOptical.collapsingExpandShift);
+    expect(
+      tester.getRect(find.byKey(const Key('assistant-item-asst-1'))).top,
+      greaterThanOrEqualTo(
+        tester.getRect(find.byType(MobileTabPageHeader)).bottom +
+            OcOptical.collapsingExpandShift +
+            MobileTabPageHeader.titleClearanceHeight -
+            0.5,
+      ),
+    );
     await _writePng(tester, screenshotKey, '03-assistant.png');
 
     await tester.tap(find.byKey(const Key('tab-scheduled')));
@@ -211,6 +226,16 @@ void main() {
       tester.getTopLeft(find.byKey(const Key('segment-0'))).dy,
       greaterThan(tester.getBottomLeft(find.byKey(const Key('mobile-tab-page-title'))).dy),
     );
+    expect(tester.getSize(find.byKey(const Key('mobile-tab-page-header-spacer'))).height, OcOptical.collapsingExpandShift);
+    expect(
+      tester.getRect(find.byKey(const Key('segment-0'))).top,
+      greaterThanOrEqualTo(
+        tester.getRect(find.byType(MobileTabPageHeader)).bottom +
+            OcOptical.collapsingExpandShift +
+            MobileTabPageHeader.titleClearanceHeight -
+            0.5,
+      ),
+    );
     await _writePng(tester, screenshotKey, '04-scheduled.png');
 
     await tester.tap(find.byKey(const Key('tab-settings')));
@@ -224,6 +249,16 @@ void main() {
     expect(
       tester.getTopLeft(find.byKey(const Key('settings-search'))).dy,
       greaterThan(tester.getBottomLeft(find.byKey(const Key('mobile-tab-page-title'))).dy),
+    );
+    expect(tester.getSize(find.byKey(const Key('mobile-tab-page-header-spacer'))).height, OcOptical.collapsingExpandShift);
+    expect(
+      tester.getRect(find.byKey(const Key('settings-search'))).top,
+      greaterThanOrEqualTo(
+        tester.getRect(find.byType(MobileTabPageHeader)).bottom +
+            OcOptical.collapsingExpandShift +
+            MobileTabPageHeader.titleClearanceHeight -
+            0.5,
+      ),
     );
     await _writePng(tester, screenshotKey, '05-settings.png');
 

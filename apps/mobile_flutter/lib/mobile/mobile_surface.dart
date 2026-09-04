@@ -74,10 +74,12 @@ class MobileLabeledSurfaceGroup extends StatelessWidget {
 ///
 /// Flutter analogue of sticky `.oc-mobile-collapsing-header`: a [Stack] overlay
 /// so scrolling content passes **under** the translucent header / status area.
-/// The scroll body keeps an in-flow [MobileTabPageHeader.layoutSlot] plus the
-/// official `0.625rem` expand-shift spacer as a real sibling. Do not pull
-/// children up through that spacer — peek is the overlay Stack, not a
-/// negative translate. Children stay a built [Column] (not a lazy sliver)
+/// The scroll body keeps an in-flow [MobileTabPageHeader.layoutSlot], the
+/// official `0.625rem` expand-shift spacer, and `--oc-mobile-page-gap`
+/// title clearance as real siblings. Do not pull children up through that
+/// air — peek is the overlay Stack, not a per-tab restPeek or negative
+/// translate. [OcOptical.pageProjectGap] is card-stack spacing after this
+/// shared clearance. Children stay a built [Column] (not a lazy sliver)
 /// so settings slugs remain hittable via `ensureVisible`.
 /// WidgetTester / Android paint header frost via [MobileTabPageHeader].
 /// Real iOS still keeps live glass on the UIKit `UITabBar` overlay.
@@ -152,6 +154,7 @@ class _MobileTabPageScaffoldState extends State<MobileTabPageScaffold> {
           children: [
             MobileTabPageHeader.layoutSlot(safeTop: safeTop),
             MobileTabPageHeader.expandShiftSpacer,
+            MobileTabPageHeader.titleClearance,
             ...widget.children,
           ],
         ),
