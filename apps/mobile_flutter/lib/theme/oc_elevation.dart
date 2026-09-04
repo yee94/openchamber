@@ -126,8 +126,9 @@ class OcElevation {
     ];
   }
 
-  /// Composer pill — same `--oc-mobile-float-shadow` as cards (not flatter).
+  /// Official `.oc-mobile-composer` / `.oc-mobile-composer-surface`:
+  /// `box-shadow: none` — elevation under the input reads as a foot bar.
   static List<BoxShadow> composer(BuildContext context) => composerFor(OcTokens.of(context));
 
-  static List<BoxShadow> composerFor(OcTokens tokens) => cardFor(tokens);
+  static List<BoxShadow> composerFor(OcTokens tokens) => const [];
 }

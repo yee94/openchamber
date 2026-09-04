@@ -15,6 +15,32 @@ export 'ios_hero.dart' show OcOptical;
 export 'oc_elevation.dart' show OcElevation;
 export 'oc_tokens.dart' show OcProductChrome, OcTokens, OcTokensContext;
 
+/// CSS `font-size` is ink. Official `line-height` is the strut — do not
+/// also multiply Flutter `TextStyle.height` or CJK packs the 40px box.
+TextStyle? ocCssInk(TextStyle? style) {
+  if (style == null) return null;
+  return style.copyWith(
+    height: 1.0,
+    leadingDistribution: TextLeadingDistribution.even,
+  );
+}
+
+/// Official CSS `line-height` boxes (session title 16, subtitle/time 12).
+/// Move [OcOptical.sessionLineLeading] of that box into strut leading so
+/// CJK ink sits with official single-line air. Total height is unchanged.
+StrutStyle? ocCssLineBox(TextStyle? style) {
+  if (style?.fontSize == null || style?.height == null) return null;
+  final box = style!.height!;
+  const lead = OcOptical.sessionLineLeading;
+  return StrutStyle(
+    fontSize: style.fontSize,
+    height: (box - lead).clamp(0.5, box),
+    leading: lead,
+    forceStrutHeight: true,
+    leadingDistribution: TextLeadingDistribution.even,
+  );
+}
+
 /// Geometry aliases of official `--oc-mobile-*` tokens.
 /// Colors come from [OcTokens.of] so Light / Dark / System switch live.
 class OcChrome {
@@ -739,13 +765,17 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                           textAlign: TextAlign.center,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          strutStyle: ocCssLineBox(const TextStyle(
+                            fontSize: OcOptical.chatTitle,
+                            height: OcOptical.chatTitleHeight,
+                          )),
+                          style: ocCssInk(TextStyle(
                             fontSize: OcOptical.chatTitle,
                             fontWeight: FontWeight.lerp(FontWeight.w600, FontWeight.w700, 0.5),
                             letterSpacing: OcOptical.chatTitleTracking,
                             height: OcOptical.chatTitleHeight,
                             color: tokens.foreground,
-                          ),
+                          )),
                         ),
                         if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
                           const SizedBox(height: OcOptical.detailSubtitleGap),
@@ -755,12 +785,16 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                             textAlign: TextAlign.center,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
+                            strutStyle: ocCssLineBox(const TextStyle(
+                              fontSize: OcOptical.detailSubtitle,
+                              height: OcOptical.detailSubtitleHeight,
+                            )),
+                            style: ocCssInk(TextStyle(
                               fontSize: OcOptical.detailSubtitle,
                               fontWeight: FontWeight.w400,
                               height: OcOptical.detailSubtitleHeight,
                               color: tokens.mutedForeground,
-                            ),
+                            )),
                           ),
                         ],
                       ],

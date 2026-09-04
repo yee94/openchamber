@@ -74,6 +74,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('reverse-chat-list')), findsOneWidget);
     expect(find.byKey(const Key('composer-field')), findsOneWidget);
+    expect(find.byKey(const Key('composer-send')), findsOneWidget);
+    final idleSend = tester.widget<OcGlyph>(
+      find.descendant(of: find.byKey(const Key('composer-send')), matching: find.byType(OcGlyph)),
+    );
+    expect(idleSend.kind, OcGlyphKind.sendPlane);
+    expect(idleSend.size, OcOptical.sendPlane);
     expect(find.byKey(const Key('chat-back')), findsOneWidget);
     expect(find.text('Release notes'), findsOneWidget);
     expect(find.text('Open a session from Projects.'), findsOneWidget);

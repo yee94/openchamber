@@ -222,26 +222,34 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   children: [
                     Text(
                       task.name.isEmpty ? task.id : task.name,
-                      style: TextStyle(
+                      strutStyle: ocCssLineBox(const TextStyle(
+                        fontSize: OcOptical.projectTitle,
+                        height: OcOptical.projectTitleHeight,
+                      )),
+                      style: ocCssInk(TextStyle(
                         fontSize: OcOptical.projectTitle,
                         fontWeight: FontWeight.w500,
                         letterSpacing: OcOptical.projectTitleTracking,
                         height: OcOptical.projectTitleHeight,
                         color: context.oc.foreground,
-                      ),
+                      )),
                     ),
                     const SizedBox(height: OcOptical.scheduleTitleMetaGap),
                     Text(
                       paused
                           ? [_humanSchedule(context, task), '—'].join(' · ')
                           : _taskSubtitle(context, task),
-                      style: TextStyle(
+                      strutStyle: ocCssLineBox(const TextStyle(
+                        fontSize: OcOptical.meta,
+                        height: OcOptical.metaHeight,
+                      )),
+                      style: ocCssInk(TextStyle(
                         fontSize: OcOptical.meta,
                         fontWeight: FontWeight.w400,
                         letterSpacing: OcOptical.metaTracking,
                         height: OcOptical.metaHeight,
                         color: context.oc.mutedForeground,
-                      ),
+                      )),
                     ),
                   ],
                 ),

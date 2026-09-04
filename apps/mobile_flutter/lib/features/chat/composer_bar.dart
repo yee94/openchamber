@@ -40,7 +40,16 @@ class ComposerBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) => _build(context),
+    );
+  }
+
+  Widget _build(BuildContext context) {
     final suggestions = autocompleteStubFor(controller.text);
+    final sendReady = !busy &&
+        (controller.text.trim().isNotEmpty || attachments.isNotEmpty);
     final field = TextField(
       key: const Key('composer-field'),
       controller: controller,
@@ -123,28 +132,23 @@ class ComposerBar extends StatelessWidget {
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
+                    color: context.oc.background.withValues(alpha: 0.95),
                     boxShadow: OcElevation.chip(context),
                   ),
-                  child: ClipOval(
-                    child: OcFrosted(
-                      fill: context.oc.glassChipFill,
-                      sigma: OcOptical.chipBlur,
-                      child: Pressable(
-                        key: const Key('chat-scroll-to-bottom'),
-                        haptic: HapticStrength.light,
-                        highlight: false,
-                        onPressed: onScrollToBottom,
-                        child: SizedBox(
-                          width: OcOptical.scrollFab,
-                          height: OcOptical.scrollFab,
-                          child: Center(
-                            child: OcGlyph(
-                              OcGlyphKind.chevronDown,
-                              size: OcOptical.scrollChevron,
-                              strokeWidth: OcOptical.scrollChevronStroke,
-                              color: context.oc.foreground,
-                            ),
-                          ),
+                  child: Pressable(
+                    key: const Key('chat-scroll-to-bottom'),
+                    haptic: HapticStrength.light,
+                    highlight: false,
+                    onPressed: onScrollToBottom,
+                    child: SizedBox(
+                      width: OcOptical.scrollFab,
+                      height: OcOptical.scrollFab,
+                      child: Center(
+                        child: OcGlyph(
+                          OcGlyphKind.chevronDown,
+                          size: OcOptical.scrollChevron,
+                          strokeWidth: OcOptical.scrollChevronStroke,
+                          color: context.oc.foreground,
                         ),
                       ),
                     ),
@@ -154,19 +158,17 @@ class ComposerBar extends StatelessWidget {
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(OcOptical.composerRadius),
-                boxShadow: OcElevation.composer(context),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(OcOptical.composerRadius),
-                child: OcFrosted(
-                  fill: context.oc.glassChipFill,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-                    child: Row(
-                      children: [
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(OcOptical.composerRadius),
+              // Official `.oc-mobile-composer-surface` is `--surface-subtle`
+              // with `box-shadow: none` / `filter: none`. Frost + float
+              // elevation read as a WidgetTester foot bar.
+              child: ColoredBox(
+                color: context.oc.surfaceSubtle,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                  child: Row(
+                    children: [
                         Tooltip(
                           message: t(context, 'chat.composer.attach'),
                           child: Pressable(
@@ -206,33 +208,52 @@ class ComposerBar extends StatelessWidget {
                             width: OcOptical.sendRing,
                             height: OcOptical.sendRing,
                             child: Center(
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: context.oc.foreground,
-                                ),
-                                child: SizedBox(
-                                  width: OcOptical.sendRingDisc,
-                                  height: OcOptical.sendRingDisc,
-                                  child: Center(
-                                    child: busy
-                                        ? Container(
+                              child: busy
+                                  ? DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: context.oc.foreground,
+                                      ),
+                                      child: SizedBox(
+                                        width: OcOptical.sendRingDisc,
+                                        height: OcOptical.sendRingDisc,
+                                        child: Center(
+                                          child: Container(
                                             width: OcOptical.sendStop,
                                             height: OcOptical.sendStop,
                                             decoration: BoxDecoration(
                                               color: context.oc.background,
                                               borderRadius: BorderRadius.circular(OcOptical.sendStop * 0.2),
                                             ),
-                                          )
-                                        : OcGlyph(
-                                            OcGlyphKind.arrowUp,
-                                            size: OcOptical.sendArrow,
-                                            strokeWidth: OcOptical.dockGlyphStroke,
-                                            color: context.oc.background,
                                           ),
-                                  ),
-                                ),
-                              ),
+                                        ),
+                                      ),
+                                    )
+                                  : sendReady
+                                      ? DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: context.oc.foreground,
+                                          ),
+                                          child: SizedBox(
+                                            width: OcOptical.sendRingDisc,
+                                            height: OcOptical.sendRingDisc,
+                                            child: Center(
+                                              child: OcGlyph(
+                                                OcGlyphKind.arrowUp,
+                                                size: OcOptical.sendArrow,
+                                                strokeWidth: OcOptical.dockGlyphStroke,
+                                                color: context.oc.background,
+                                              ),
+                                            ),
+                                          ),
+                                        )
+                                      : OcGlyph(
+                                          OcGlyphKind.sendPlane,
+                                          size: OcOptical.sendPlane,
+                                          strokeWidth: OcOptical.headerGlyphStrokeVisual,
+                                          color: context.oc.primary,
+                                        ),
                             ),
                           ),
                         ),
@@ -242,7 +263,6 @@ class ComposerBar extends StatelessWidget {
                 ),
               ),
             ),
-          ),
         ],
       ),
     );

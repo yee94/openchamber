@@ -46,9 +46,9 @@ class OcOptical {
   /// glyphs do not fill the 16/12 boxes. Total box stays official —
   /// [ocCssLineBox] must not floor `height` at 1.0 or leading grows the
   /// row instead of opening air inside it. Official gap-0.5 stays 2;
-  /// more air is this leading, not an invented gap. 0.54 is a hair
-  /// opener than 0.52 inside the same official 16/12 boxes (wake-0802).
-  static const double sessionLineLeading = 0.54;
+  /// more air is this leading, not an invented gap. 0.56 is a hair
+  /// opener than 0.54 inside the same official 16/12 boxes (wake-0809).
+  static const double sessionLineLeading = 0.56;
   /// `.oc-mobile-session-status` 0.75rem; `.oc-mobile-session-row-main` gap 0.5rem.
   static const double sessionStatus = 12;
   static const double sessionRowMainGap = 8;
@@ -144,8 +144,8 @@ class OcOptical {
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
   /// Flutter round-cap bloom at dpr 3; paint under official 1.5 so 20px
-  /// header glyphs stay thin, not a filled coin stroke.
-  static const double headerGlyphStrokeVisual = 1.25;
+  /// header glyphs stay thin vs `size-5` medium, not massy coins.
+  static const double headerGlyphStrokeVisual = 1.20;
   /// In-card / list `Icon` regular weight — same 24-viewBox 1.5 as header.
   static const double listGlyphStroke = 1.5;
   /// Search-field prefix `Icon name="search" className="size-4"`.
@@ -180,10 +180,12 @@ class OcOptical {
   /// 23px sprite, not a 21px stand-in.
   static const double dockGlyphVisual = 23;
   /// Official dock `Icon weight="medium"` (`ICON_STROKE_WIDTH_MEDIUM` = 2).
-  /// Flutter round-cap bloom at dpr 3; paint 1.55 on stroke frames so
-  /// slim filled-medium 23px stays delicate — not bricks, not hairlines.
+  /// Flutter round-cap bloom at dpr 3; paint under 2 so slim filled-medium
+  /// 23px stays delicate — not bricks, not hairlines.
   static const double dockGlyphStroke = 2;
-  static const double dockGlyphStrokeVisual = 1.55;
+  /// Slimmer than 1.55 so calendar/gear read filled-medium, not bricks
+  /// (wake-0809). Folder / sparkles stay [dockStrokeGlyphStrokeVisual].
+  static const double dockGlyphStrokeVisual = 1.42;
   /// Folder / sparkles stay official medium stroke but paint lighter
   /// than calendar/gear so the 23px outline is not a brick (wake-0741).
   static const double dockStrokeGlyphStrokeVisual = 1.32;

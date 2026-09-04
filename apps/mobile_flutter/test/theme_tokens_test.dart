@@ -116,7 +116,7 @@ void main() {
     expect(OcOptical.sessionRowPadH, 16);
     expect(OcOptical.sessionRowPadRight, 2);
     expect(OcOptical.sessionTitleSubtitleGap, 2);
-    expect(OcOptical.sessionLineLeading, closeTo(0.54, 0.001));
+    expect(OcOptical.sessionLineLeading, closeTo(0.56, 0.001));
     expect(OcOptical.sessionLineLeading, greaterThan(0.48));
     expect(OcOptical.sessionLineLeading, lessThan(0.58));
     for (final box in [OcOptical.rowTitleHeight, OcOptical.sessionSubtitleHeight]) {
@@ -158,7 +158,7 @@ void main() {
     expect(OcOptical.headerDisc, OcOptical.searchButton);
     expect(OcOptical.headerDiscVisual, 36);
     expect(OcOptical.headerDiscVisual, lessThan(OcOptical.headerDisc));
-    expect(OcOptical.headerGlyphStrokeVisual, 1.25);
+    expect(OcOptical.headerGlyphStrokeVisual, closeTo(1.20, 0.01));
     expect(OcOptical.headerGlyphStrokeVisual, lessThan(OcOptical.headerGlyphStroke));
     expect(OcOptical.detailSubtitleGap, 2);
     expect(OcOptical.headerGlyph, 20);
@@ -178,7 +178,7 @@ void main() {
     expect(OcOptical.dockGlyph, 23);
     expect(OcOptical.dockGlyphVisual, OcOptical.dockGlyph);
     expect(OcOptical.dockGlyphStrokeVisual, lessThan(OcOptical.dockGlyphStroke));
-    expect(OcOptical.dockGlyphStrokeVisual, closeTo(1.55, 0.01));
+    expect(OcOptical.dockGlyphStrokeVisual, closeTo(1.42, 0.01));
     expect(OcOptical.dockGlyphStrokeVisual, greaterThan(1.4));
     expect(OcOptical.dockStrokeGlyphStrokeVisual, closeTo(1.32, 0.01));
     expect(OcOptical.dockStrokeGlyphStrokeVisual, lessThan(OcOptical.dockGlyphStrokeVisual));
@@ -265,7 +265,8 @@ void main() {
       OcElevation.cardFor(OcTokens.light),
     );
     expect(OcElevation.groupedFor(OcTokens.light), OcElevation.cardFor(OcTokens.light));
-    expect(OcElevation.composerFor(OcTokens.light), OcElevation.cardFor(OcTokens.light));
+    expect(OcElevation.composerFor(OcTokens.light), isEmpty);
+    expect(OcElevation.composerFor(OcTokens.dark), isEmpty);
     expect(OcElevation.dockFor(OcTokens.light).length, 2);
     expect(OcElevation.dockFor(OcTokens.light).last.blurRadius, lessThanOrEqualTo(12));
     expect(OcElevation.controlFor(OcTokens.light), hasLength(3));
