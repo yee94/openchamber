@@ -362,6 +362,79 @@ void main() {
             darkTheme: _reviewTheme(Brightness.dark),
             themeMode: ThemeMode.light,
             home: Scaffold(
+              backgroundColor: OcTokens.light.pageBackground,
+              body: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+                children: const [
+                  ChatTranscriptBody(
+                    message: ChatMessage(
+                      id: 'm-expand',
+                      body: '按 skill 流程上 pod 取证，再跑 pub get。',
+                      isUser: false,
+                      processedLabel: '10m 33s',
+                      parts: [
+                        ChatPart(
+                          id: 't1',
+                          kind: ChatPartKind.text,
+                          title: 'text',
+                          body: '按 skill 流程上 pod 取证，再跑 pub get。',
+                        ),
+                        ChatPart(
+                          id: 'skill-1',
+                          kind: ChatPartKind.tool,
+                          title: 'wxa-bff-hot-debug',
+                          status: 'completed',
+                          toolName: 'skill',
+                        ),
+                        ChatPart(
+                          id: 'bash-1',
+                          kind: ChatPartKind.tool,
+                          title: "ego-browser nodejs <<'EOF'",
+                          status: 'completed',
+                          toolName: 'bash',
+                          body: 'ok pub done',
+                          metadata: {
+                            'duration': '8.2s',
+                            'command': "ego-browser nodejs <<'EOF'",
+                          },
+                        ),
+                        ChatPart(
+                          id: 'bash-2',
+                          kind: ChatPartKind.tool,
+                          title: 'kubectl logs',
+                          status: 'completed',
+                          toolName: 'bash',
+                          metadata: {'duration': '0.1s', 'command': 'kubectl logs'},
+                        ),
+                      ],
+                    ),
+                    isLastAssistant: true,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const Key('chat-activity-m-expand')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chat-skill-group-skill-1')), findsOneWidget);
+    expect(find.text('加载技能'), findsOneWidget);
+    expect(find.text('运行'), findsWidgets);
+    await _writePng(tester, screenshotKey, '07-chat-activity.png');
+
+    await tester.pumpWidget(
+      StringsScope(
+        strings: AppStrings.of(AppStrings.zhCN),
+        child: RepaintBoundary(
+          key: screenshotKey,
+          child: _screenshotMaterialApp(
+            locale: AppStrings.zhCN,
+            theme: _reviewTheme(Brightness.light),
+            darkTheme: _reviewTheme(Brightness.dark),
+            themeMode: ThemeMode.light,
+            home: Scaffold(
               body: Column(
                 children: [
                   const PushedNavBar(title: '发布说明'),

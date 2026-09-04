@@ -320,6 +320,16 @@ class OcOptical {
   /// Official `MESSAGE_ACTION_ICON_CLASS` `size-3.5` / medium stroke.
   static const double footerGlyph = 14;
   static const double footerGlyphStroke = 2;
+  /// Official ProgressiveGroup expanded rail: header must not sit flush
+  /// on the first skill/terminal row (Yee P0 2026-09-04).
+  static const double activityExpandedGap = 10;
+  /// Official expanded rail `ml-2 pl-3` (8 + 12).
+  static const double activityExpandedIndent = 20;
+  /// Official skill-group expanded children `ml-2 pl-3` inner inset.
+  static const double activityChildIndent = 12;
+  static const double activityRowGap = 4;
+  /// Official tool-row icon `size-3.5`.
+  static const double toolRowGlyph = 14;
   /// Official `MESSAGE_FOOTER_META_CLASS` `text-[11px] leading-none`.
   static const double footerMeta = 11;
   static const double footerMetaHeight = 1.0;

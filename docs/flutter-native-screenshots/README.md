@@ -29,4 +29,5 @@ Recapture after restoring Yee-open type (tracking + line-height) on top of the s
 | `06-settings-appearance-dark.png` | Appearance after tapping Dark — tokens switch live. |
 | `07-chat.png` | Isolated pushed Chat (light): 40px glass chips, centered title, official attach `size-5`, last-turn footer meta (copy / fork / tok/s / duration / clock), one “已处理”, file `+N/-M`. Not UIKit glass. |
 | `07-chat-dark.png` | Same isolated Chat with `ThemeMode.dark`. |
+| `07-chat-activity.png` | Expanded 「已处理」 activity: gap under header, skill + terminal rows, foreground ink, OcGlyph folder/`>_`/chevron. |
 | `08-permission.png` | Permission card only. |

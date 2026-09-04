@@ -55,6 +55,7 @@ enum OcGlyphKind {
   bolt,
   hourglass,
   layers,
+  terminal,
   undo,
   edit,
   link,
@@ -399,6 +400,10 @@ class _OcGlyphPainter extends CustomPainter {
           ..lineTo(w * 0.50, h * 0.50)
           ..close();
         canvas.drawPath(glass, stroke);
+      case OcGlyphKind.terminal:
+        canvas.drawLine(Offset(w * 0.22, h * 0.28), Offset(w * 0.50, h * 0.50), stroke);
+        canvas.drawLine(Offset(w * 0.50, h * 0.50), Offset(w * 0.22, h * 0.72), stroke);
+        canvas.drawLine(Offset(w * 0.54, h * 0.74), Offset(w * 0.84, h * 0.74), stroke);
       case OcGlyphKind.layers:
         canvas.drawRRect(
           RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.22, h * 0.22, w * 0.56, h * 0.22), Radius.circular(w * 0.06)),

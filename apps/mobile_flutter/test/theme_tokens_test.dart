@@ -257,6 +257,11 @@ void main() {
     expect(OcOptical.chatChip, 44);
     expect(OcOptical.chatChip, greaterThan(OcOptical.headerDisc));
     expect(OcOptical.chatChipGlyph, 16);
+    expect(OcOptical.activityExpandedGap, 10);
+    expect(OcOptical.activityExpandedIndent, 20);
+    expect(OcOptical.activityChildIndent, 12);
+    expect(OcOptical.activityRowGap, 4);
+    expect(OcOptical.toolRowGlyph, 14);
     expect(OcOptical.sessionBullet, 5);
     expect(OcOptical.sessionBulletReadAlpha, closeTo(0.55, 0.01));
     expect(OcOptical.sessionBulletReadAlpha, greaterThan(0.35));

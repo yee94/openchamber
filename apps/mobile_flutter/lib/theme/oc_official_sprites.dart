@@ -168,6 +168,10 @@ OcOfficialSprite? officialSpriteFor(String kindName) {
     'slashCommands' => const OcOfficialSprite(
         paths: ['M12 19h8', 'm4 17 6-6-6-6'],
       ),
+    // Official `terminal` / `terminal-box` — same `>_` sprite.
+    'terminal' => const OcOfficialSprite(
+        paths: ['M12 19h8', 'm4 17 6-6-6-6'],
+      ),
     'bookOpen' => const OcOfficialSprite(
         paths: [
           'M12 7v14',

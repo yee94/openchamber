@@ -679,6 +679,7 @@ class _ActivityItems extends StatelessWidget {
   Widget build(BuildContext context) {
     final children = <Widget>[];
     var index = 0;
+    var painted = 0;
     while (index < parts.length) {
       final part = parts[index];
       if (!_isActivityPart(part)) {
@@ -689,7 +690,7 @@ class _ActivityItems extends StatelessWidget {
         final grouped = collectConsecutiveContextTools(parts, index);
         children.add(
           Padding(
-            padding: const EdgeInsets.only(top: 8),
+            padding: EdgeInsets.only(top: painted == 0 ? 0 : OcOptical.activityRowGap),
             child: _ContextToolGroup(
               parts: grouped.items,
               exploring: isContextGroupExploring(
@@ -700,6 +701,7 @@ class _ActivityItems extends StatelessWidget {
             ),
           ),
         );
+        painted += 1;
         index = grouped.end;
         continue;
       }
@@ -707,19 +709,21 @@ class _ActivityItems extends StatelessWidget {
         final grouped = collectConsecutiveSkillTools(parts, index);
         children.add(
           Padding(
-            padding: const EdgeInsets.only(top: 8),
+            padding: EdgeInsets.only(top: painted == 0 ? 0 : OcOptical.activityRowGap),
             child: _SkillToolGroup(parts: grouped.items),
           ),
         );
+        painted += 1;
         index = grouped.end;
         continue;
       }
       children.add(
         Padding(
-          padding: const EdgeInsets.only(top: 8),
+          padding: EdgeInsets.only(top: painted == 0 ? 0 : OcOptical.activityRowGap),
           child: ToolPartCard(part: part, onPermission: onPermission),
         ),
       );
+      painted += 1;
       index += 1;
     }
     return Column(
@@ -800,7 +804,7 @@ class _ActivityDisclosureState extends State<_ActivityDisclosure> {
                             fontSize: OcOptical.meta,
                             fontWeight: FontWeight.w500,
                             height: OcOptical.metaHeight,
-                            color: OcTokens.of(context).foreground.withValues(alpha: 0.85),
+                            color: OcTokens.of(context).foreground,
                           ),
                         ),
                       ),
@@ -831,7 +835,34 @@ class _ActivityDisclosureState extends State<_ActivityDisclosure> {
             ),
           ),
         ),
-        if (open) widget.child,
+        if (open)
+          Padding(
+            padding: const EdgeInsets.only(
+              top: OcOptical.activityExpandedGap,
+              left: OcOptical.activityExpandedIndent - OcOptical.activityChildIndent,
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(
+                    color: context.oc.border.withValues(alpha: 0.4),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.only(left: OcOptical.activityChildIndent),
+                child: DefaultTextStyle.merge(
+                  style: TextStyle(
+                    fontSize: OcTokens.textMarkdown,
+                    height: OcOptical.chatBodyHeight,
+                    color: context.oc.foreground,
+                  ),
+                  child: widget.child,
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -886,36 +917,18 @@ class _ContextToolGroupState extends State<_ContextToolGroup> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        InkWell(
-          key: Key('chat-context-group-${widget.parts.first.id}'),
+        _ActivityToolRow(
+          rowKey: Key('chat-context-group-${widget.parts.first.id}'),
+          leading: OcGlyphKind.search,
+          title: title,
+          detail: summary.isEmpty ? null : summary,
+          detailKey: Key('chat-context-summary-${widget.parts.first.id}'),
+          expanded: _expanded,
           onTap: () => setState(() => _expanded = !_expanded),
-          child: Row(
-            children: [
-              Icon(
-                widget.exploring ? Icons.travel_explore : Icons.search,
-                size: 16,
-                color: OcTokens.of(context).mutedForeground,
-              ),
-              const SizedBox(width: 6),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              if (summary.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    summary,
-                    key: Key('chat-context-summary-${widget.parts.first.id}'),
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: 12),
-                  ),
-                ),
-              ],
-              Icon(_expanded ? Icons.expand_more : Icons.chevron_right, size: 16, color: OcTokens.of(context).mutedForeground),
-            ],
-          ),
         ),
         if (_expanded)
           Padding(
-            padding: const EdgeInsets.only(left: 12, top: 4),
+            padding: const EdgeInsets.only(left: OcOptical.activityChildIndent, top: OcOptical.activityRowGap),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -953,36 +966,21 @@ class _SkillToolGroupState extends State<_SkillToolGroup> {
             'count': '${summary.hiddenCount}',
           })
         : summary.joinedVisible;
-    final active = widget.parts.any(isToolPartActive);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        InkWell(
-          key: Key('chat-skill-group-${widget.parts.first.id}'),
+        _ActivityToolRow(
+          rowKey: Key('chat-skill-group-${widget.parts.first.id}'),
+          leading: OcGlyphKind.folder,
+          title: t(context, 'chat.tools.display.skill'),
+          detail: label.isEmpty ? null : label,
+          detailKey: Key('chat-skill-summary-${widget.parts.first.id}'),
+          expanded: _expanded,
           onTap: () => setState(() => _expanded = !_expanded),
-          child: Row(
-            children: [
-              Icon(active ? Icons.auto_stories : Icons.menu_book, size: 16, color: OcTokens.of(context).mutedForeground),
-              const SizedBox(width: 6),
-              Text(t(context, 'chat.tools.display.skill'), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              if (label.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    label,
-                    key: Key('chat-skill-summary-${widget.parts.first.id}'),
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: 12),
-                  ),
-                ),
-              ],
-              Icon(_expanded ? Icons.expand_more : Icons.chevron_right, size: 16, color: OcTokens.of(context).mutedForeground),
-            ],
-          ),
         ),
         if (_expanded)
           Padding(
-            padding: const EdgeInsets.only(left: 12, top: 4),
+            padding: const EdgeInsets.only(left: OcOptical.activityChildIndent, top: OcOptical.activityRowGap),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1004,11 +1002,13 @@ class _ExpandableToolCard extends StatefulWidget {
     required this.part,
     required this.cardKey,
     required this.displayTitle,
+    required this.leading,
   });
 
   final ChatPart part;
   final String cardKey;
   final String displayTitle;
+  final OcGlyphKind leading;
 
   @override
   State<_ExpandableToolCard> createState() => _ExpandableToolCardState();
@@ -1020,31 +1020,209 @@ class _ExpandableToolCardState extends State<_ExpandableToolCard> {
   @override
   Widget build(BuildContext context) {
     final output = widget.part.body;
-    return _CardShell(
+    final command = _toolRowCommand(widget.part);
+    return Column(
       key: Key(widget.cardKey),
-      title: widget.displayTitle,
-      subtitle: [widget.part.title, widget.part.status].whereType<String>().where((item) => item.isNotEmpty).join(' · '),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (output != null && output.isNotEmpty)
-            InkWell(
-              key: Key('${widget.cardKey}-toggle'),
-              onTap: () => setState(() => _expanded = !_expanded),
-              child: Text(
-                _expanded ? t(context, 'chat.messageBody.shellCommand.hideOutput') : t(context, 'chat.messageBody.shellCommand.showOutput'),
-                style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: 12),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ActivityToolRow(
+          rowKey: Key('${widget.cardKey}-toggle'),
+          leading: widget.leading,
+          title: widget.displayTitle,
+          duration: _toolRowDuration(widget.part),
+          detail: command,
+          expanded: _expanded,
+          onTap: () => setState(() => _expanded = !_expanded),
+        ),
+        if (_expanded && output != null && output.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(
+              left: OcOptical.activityChildIndent,
+              top: OcOptical.activityRowGap,
+            ),
+            child: _ActivityInkText(
+              output,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12,
+                height: 1.35,
+                color: context.oc.foreground,
               ),
             ),
-          if (_expanded && output != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(output, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+          ),
+      ],
+    );
+  }
+}
+
+class _ActivityToolRow extends StatelessWidget {
+  const _ActivityToolRow({
+    required this.leading,
+    required this.title,
+    required this.expanded,
+    required this.onTap,
+    this.rowKey,
+    this.duration,
+    this.detail,
+    this.detailKey,
+  });
+
+  final Key? rowKey;
+  final OcGlyphKind leading;
+  final String title;
+  final String? duration;
+  final String? detail;
+  final Key? detailKey;
+  final bool expanded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.oc;
+    return Pressable(
+      key: rowKey,
+      haptic: HapticStrength.light,
+      highlight: false,
+      onPressed: onTap,
+      child: Row(
+        children: [
+          OcGlyph(
+            leading,
+            size: OcOptical.toolRowGlyph,
+            strokeWidth: OcOptical.headerGlyphStrokeVisual,
+            color: tokens.foreground,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: OcOptical.meta,
+              fontWeight: FontWeight.w500,
+              height: OcOptical.metaHeight,
+              color: tokens.foreground,
             ),
+          ),
+          if (duration != null && duration!.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            Text(
+              duration!,
+              style: TextStyle(
+                fontSize: OcOptical.meta,
+                height: OcOptical.metaHeight,
+                color: tokens.mutedForeground,
+              ),
+            ),
+          ],
+          if (detail != null && detail!.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            Expanded(
+              child: _ActivityInkText(
+                detail!,
+                key: detailKey,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: OcOptical.meta,
+                  height: OcOptical.metaHeight,
+                  color: tokens.foreground,
+                ),
+              ),
+            ),
+          ] else
+            const Spacer(),
+          OcGlyph(
+            expanded ? OcGlyphKind.chevronDown : OcGlyphKind.chevronRight,
+            size: OcOptical.chevron,
+            strokeWidth: OcOptical.listGlyphStroke,
+            color: tokens.mutedForeground,
+          ),
         ],
       ),
     );
   }
+}
+
+/// Foreground narrative with a green `pub` badge when that token appears.
+class _ActivityInkText extends StatelessWidget {
+  const _ActivityInkText(
+    this.text, {
+    super.key,
+    this.style,
+    this.maxLines,
+    this.overflow,
+  });
+
+  final String text;
+  final TextStyle? style;
+  final int? maxLines;
+  final TextOverflow? overflow;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = style ?? TextStyle(color: context.oc.foreground);
+    final spans = <InlineSpan>[];
+    final pattern = RegExp(r'\bpub\b');
+    var start = 0;
+    for (final match in pattern.allMatches(text)) {
+      if (match.start > start) {
+        spans.add(TextSpan(text: text.substring(start, match.start), style: base));
+      }
+      spans.add(WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+          decoration: BoxDecoration(
+            color: context.oc.statusSuccess,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            'pub',
+            style: base.copyWith(
+              color: context.oc.background,
+              fontSize: (base.fontSize ?? OcOptical.meta) - 1,
+              height: 1.1,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ));
+      start = match.end;
+    }
+    if (spans.isEmpty) {
+      return Text(text, maxLines: maxLines, overflow: overflow, style: base);
+    }
+    if (start < text.length) {
+      spans.add(TextSpan(text: text.substring(start), style: base));
+    }
+    return Text.rich(
+      TextSpan(children: spans),
+      maxLines: maxLines,
+      overflow: overflow,
+    );
+  }
+}
+
+String? _toolRowCommand(ChatPart part) {
+  final fromMeta = part.metadata['command']?.toString().trim()
+      ?? part.metadata['cmd']?.toString().trim();
+  if (fromMeta != null && fromMeta.isNotEmpty) return fromMeta;
+  final title = part.title.trim();
+  if (title.isNotEmpty && title.toLowerCase() != (part.toolName ?? '').toLowerCase()) {
+    return title;
+  }
+  return null;
+}
+
+String? _toolRowDuration(ChatPart part) {
+  final labeled = part.metadata['duration']?.toString().trim()
+      ?? part.metadata['durationLabel']?.toString().trim();
+  if (labeled != null && labeled.isNotEmpty) return labeled;
+  final raw = part.metadata['durationMs'];
+  final ms = raw is num ? raw.toDouble() : double.tryParse(raw?.toString() ?? '');
+  if (ms == null || ms <= 0) return null;
+  if (ms >= 1000) return '${(ms / 1000).toStringAsFixed(1)}s';
+  return '${ms.round()}ms';
 }
 
 class _GeneratedResultCard extends StatelessWidget {
@@ -1139,6 +1317,7 @@ class ToolPartCard extends StatelessWidget {
             part: part,
             cardKey: 'chat-tool-bash-${part.id}',
             displayTitle: t(context, 'chat.tools.display.bash'),
+            leading: OcGlyphKind.terminal,
           );
         }
         if (isWebFetchTool(part.toolName)) {
@@ -1146,6 +1325,7 @@ class ToolPartCard extends StatelessWidget {
             part: part,
             cardKey: 'chat-tool-fetch-${part.id}',
             displayTitle: t(context, 'chat.tools.display.webfetch'),
+            leading: OcGlyphKind.link,
           );
         }
         if (isWebSearchTool(part.toolName)) {
@@ -1158,6 +1338,7 @@ class ToolPartCard extends StatelessWidget {
                   ? 'chat.tools.display.codesearch'
                   : 'chat.tools.display.websearch',
             ),
+            leading: OcGlyphKind.search,
           );
         }
         if (isQuestionTool(part.toolName)) {
@@ -1584,7 +1765,15 @@ class _CardShell extends StatelessWidget {
           children: [
             Row(
               children: [
-                Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600))),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: context.oc.foreground,
+                    ),
+                  ),
+                ),
                 if (trailing != null) trailing!,
               ],
             ),
@@ -1593,7 +1782,14 @@ class _CardShell extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(subtitle!, style: TextStyle(color: OcTokens.of(context).mutedForeground, fontSize: 12)),
               ),
-            if (child != null) Padding(padding: const EdgeInsets.only(top: 8), child: child),
+            if (child != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: DefaultTextStyle.merge(
+                  style: TextStyle(color: context.oc.foreground),
+                  child: child!,
+                ),
+              ),
           ],
         ),
       ),
