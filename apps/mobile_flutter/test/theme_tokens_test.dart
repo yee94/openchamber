@@ -144,7 +144,8 @@ void main() {
     expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
     expect(OcOptical.rowTitleHeight, lessThan(1.42));
     expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);
-    expect(OcOptical.sessionRowVisualHeight, closeTo(58.8, 0.01));
+    expect(OcOptical.sessionRowVisualHeight, closeTo(49.4, 0.01));
+    expect(OcOptical.sessionSubtitleHalfLead, 0);
     expect(OcOptical.sessionRowVisualHeight, greaterThanOrEqualTo(40));
     expect(OcOptical.sessionRowVisualHeight, lessThan(OcOptical.sessionRowVisualHeight + 1));
     expect(OcOptical.sessionRowPadV, 5);
@@ -184,7 +185,7 @@ void main() {
           2 * OcOptical.cssLineCjkHalfLead +
           OcOptical.sessionTitleSubtitleGap +
           OcOptical.sessionSubtitle * OcOptical.sessionSubtitleHeight +
-          2 * OcOptical.cssLineCjkHalfLead,
+          2 * OcOptical.sessionSubtitleHalfLead,
       closeTo(OcOptical.sessionRowVisualHeight, 0.01),
     );
     expect(
@@ -200,6 +201,16 @@ void main() {
         height: OcOptical.sessionSubtitleHeight,
       )),
       OcOptical.sessionSubtitle * OcOptical.sessionSubtitleHeight + 2 * OcOptical.cssLineCjkHalfLead,
+    );
+    expect(
+      OcCssLine.boxHeight(
+        const TextStyle(
+          fontSize: OcOptical.sessionSubtitle,
+          height: OcOptical.sessionSubtitleHeight,
+        ),
+        halfLead: OcOptical.sessionSubtitleHalfLead,
+      ),
+      OcOptical.sessionSubtitle * OcOptical.sessionSubtitleHeight,
     );
     expect(OcOptical.sessionStatus, 12);
     expect(OcOptical.sessionRowMainGap, 8);

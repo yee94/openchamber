@@ -23,12 +23,14 @@ class OcOptical {
   static const double rowTitleTracking = 1.42;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
-  /// Official project-shell row is 40. 4.7px CJK half-lead (per side)
-  /// plus official title↔subtitle `gap-0.5` (2). Wake-0123 resets the
-  /// inflate loop — do not invent 28/40/52 subtitle air.
-  /// 40 + 4×4.7 + 0 = 58.8.
+  /// Official project-shell row is 40. Title keeps 4.7px CJK half-lead
+  /// (per side) inside the 16/12 box. Subtitle/time stay the official
+  /// 10/12 box (`sessionSubtitleHalfLead` 0) so gap-0.5 is not eaten.
+  /// 40 + 2×4.7 + 0 = 49.4.
   static const double sessionRowVisualHeight =
-      40 + 4 * cssLineCjkHalfLead + (sessionTitleSubtitleGap - 2);
+      40 + 2 * cssLineCjkHalfLead + (sessionTitleSubtitleGap - 2);
+  /// Official `.oc-mobile-session-subtitle` / time is the 10/12 CSS box.
+  static const double sessionSubtitleHalfLead = 0;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
