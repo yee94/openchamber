@@ -512,7 +512,6 @@ class _FileTypeSpritePainter extends CustomPainter {
       ..strokeWidth = OcOptical.fileTypeStrokeVisual
       ..strokeJoin = StrokeJoin.miter
       ..strokeCap = StrokeCap.butt;
-    final fill = Paint()..color = tint;
     switch (kind) {
       case _FileKind.markdown:
         final file = Path()
@@ -531,33 +530,32 @@ class _FileTypeSpritePainter extends CustomPainter {
       case _FileKind.react:
         canvas.save();
         canvas.translate(w * 0.5, h * 0.5);
-        canvas.drawCircle(Offset.zero, w * 0.08, fill);
+        canvas.drawCircle(Offset.zero, w * 0.07, stroke);
         for (var i = 0; i < 3; i++) {
-          canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: w * 0.86, height: h * 0.32), stroke);
+          canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: w * 0.78, height: h * 0.24), stroke);
           canvas.rotate(1.047);
         }
         canvas.restore();
       case _FileKind.script:
         canvas.drawRRect(
           RRect.fromRectAndRadius(
-            Rect.fromLTWH(w * 0.16, h * 0.16, w * 0.68, h * 0.68),
-            Radius.circular(w * 0.16),
+            Rect.fromLTWH(w * 0.18, h * 0.18, w * 0.64, h * 0.64),
+            Radius.circular(w * 0.14),
           ),
           stroke,
         );
-        canvas.drawLine(Offset(w * 0.32, h * 0.38), Offset(w * 0.52, h * 0.38), stroke);
-        canvas.drawLine(Offset(w * 0.42, h * 0.38), Offset(w * 0.42, h * 0.66), stroke);
-        canvas.drawLine(Offset(w * 0.54, h * 0.46), Offset(w * 0.70, h * 0.46), stroke);
-        canvas.drawLine(Offset(w * 0.54, h * 0.58), Offset(w * 0.68, h * 0.58), stroke);
+        canvas.drawLine(Offset(w * 0.34, h * 0.40), Offset(w * 0.50, h * 0.40), stroke);
+        canvas.drawLine(Offset(w * 0.42, h * 0.40), Offset(w * 0.42, h * 0.64), stroke);
+        canvas.drawLine(Offset(w * 0.54, h * 0.46), Offset(w * 0.68, h * 0.46), stroke);
+        canvas.drawLine(Offset(w * 0.54, h * 0.56), Offset(w * 0.66, h * 0.56), stroke);
       case _FileKind.dart:
         final diamond = Path()
-          ..moveTo(w * 0.50, h * 0.10)
-          ..lineTo(w * 0.86, h * 0.50)
-          ..lineTo(w * 0.50, h * 0.90)
-          ..lineTo(w * 0.14, h * 0.50)
+          ..moveTo(w * 0.50, h * 0.14)
+          ..lineTo(w * 0.82, h * 0.50)
+          ..lineTo(w * 0.50, h * 0.86)
+          ..lineTo(w * 0.18, h * 0.50)
           ..close();
         canvas.drawPath(diamond, stroke);
-        canvas.drawCircle(Offset(w * 0.50, h * 0.50), w * 0.10, fill);
       case _FileKind.other:
         final file = Path()
           ..moveTo(w * 0.30, h * 0.14)

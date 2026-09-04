@@ -16,31 +16,41 @@ class OcElevation {
       cardFor(OcTokens.of(context), tight: tight);
 
   static List<BoxShadow> cardFor(OcTokens tokens, {bool tight = false}) {
-    // Official `--oc-mobile-float-shadow` near pair only (2 + 12).
-    // The CSS far 10/24/-6 reads as a contact umbra on WidgetTester
-    // cream. Inset highlight stays on the clipped fill. [tight] keeps
-    // the same 2+12 family, quieter alphas.
+    // Official `--oc-mobile-float-shadow` trio: near 2+12 plus far
+    // `0 10px 24px -6px`. Far uses `--oc-mobile-shadow-far` (foreground
+    // 7%), not rgb(0 0 0 / 0.1) — that black drop was a cream umbra.
+    // Dock / chips stay near-pair only. Inset highlight stays clipped.
+    final far = BoxShadow(
+      color: tokens.foreground.withValues(alpha: tight ? 0.04 : 0.07),
+      offset: const Offset(0, 10),
+      blurRadius: 24,
+      spreadRadius: -6,
+    );
     if (tokens.isDark) {
       if (tight) {
-        return const [
-          BoxShadow(color: Color(0x2E000000), blurRadius: 2),
-          BoxShadow(color: Color(0x2A000000), blurRadius: 12),
+        return [
+          const BoxShadow(color: Color(0x2E000000), blurRadius: 2),
+          const BoxShadow(color: Color(0x2A000000), blurRadius: 12),
+          far,
         ];
       }
-      return const [
-        BoxShadow(color: Color(0x42000000), blurRadius: 2),
-        BoxShadow(color: Color(0x3D000000), blurRadius: 12),
+      return [
+        const BoxShadow(color: Color(0x42000000), blurRadius: 2),
+        const BoxShadow(color: Color(0x3D000000), blurRadius: 12),
+        far,
       ];
     }
     if (tight) {
-      return const [
-        BoxShadow(color: Color(0x08000000), blurRadius: 2),
-        BoxShadow(color: Color(0x0A000000), blurRadius: 12),
+      return [
+        const BoxShadow(color: Color(0x08000000), blurRadius: 2),
+        const BoxShadow(color: Color(0x0A000000), blurRadius: 12),
+        far,
       ];
     }
-    return const [
-      BoxShadow(color: Color(0x0A000000), blurRadius: 2),
-      BoxShadow(color: Color(0x0D000000), blurRadius: 12),
+    return [
+      const BoxShadow(color: Color(0x0A000000), blurRadius: 2),
+      const BoxShadow(color: Color(0x0D000000), blurRadius: 12),
+      far,
     ];
   }
 

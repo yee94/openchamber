@@ -341,24 +341,31 @@ void main() {
   });
 
   test('OcElevation ports official float-shadow and chip near-pair lift', () {
-    expect(OcElevation.cardFor(OcTokens.light), hasLength(2));
+    expect(OcElevation.cardFor(OcTokens.light), hasLength(3));
     expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, 2);
     expect(OcElevation.cardFor(OcTokens.light)[1].blurRadius, 12);
+    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, 24);
+    expect(OcElevation.cardFor(OcTokens.light).last.offset.dy, 10);
+    expect(OcElevation.cardFor(OcTokens.light).last.spreadRadius, -6);
     expect(
-      OcElevation.cardFor(OcTokens.light).every((s) => s.offset == Offset.zero),
+      OcElevation.cardFor(OcTokens.light).take(2).every((s) => s.offset == Offset.zero),
       isTrue,
     );
     expect(
-      OcElevation.cardFor(OcTokens.light).every((s) => s.spreadRadius == 0),
-      isTrue,
-    );
-    expect(
-      (OcElevation.cardFor(OcTokens.light).last.color.a * 255).round(),
+      (OcElevation.cardFor(OcTokens.light)[1].color.a * 255).round(),
       closeTo(0x0D, 1),
     );
     expect(
-      (OcElevation.cardFor(OcTokens.light, tight: true).last.color.a * 255).round(),
-      lessThan((OcElevation.cardFor(OcTokens.light).last.color.a * 255).round()),
+      OcElevation.cardFor(OcTokens.light).last.color.a,
+      closeTo(0.07, 0.001),
+    );
+    expect(
+      OcElevation.cardFor(OcTokens.light).last.color.a,
+      lessThan(0.10),
+    );
+    expect(
+      OcElevation.cardFor(OcTokens.light, tight: true).last.color.a,
+      lessThan(OcElevation.cardFor(OcTokens.light).last.color.a),
     );
     expect(OcElevation.groupedFor(OcTokens.light), OcElevation.cardFor(OcTokens.light));
     expect(OcElevation.composerFor(OcTokens.light), isEmpty);
@@ -400,8 +407,8 @@ void main() {
       (OcElevation.controlFor(OcTokens.light).last.color.a * 255).round(),
       lessThanOrEqualTo(0x1F),
     );
-    expect(OcElevation.cardFor(OcTokens.dark), hasLength(2));
-    expect(OcElevation.cardFor(OcTokens.dark).last.offset.dy, 0);
+    expect(OcElevation.cardFor(OcTokens.dark), hasLength(3));
+    expect(OcElevation.cardFor(OcTokens.dark).last.offset.dy, 10);
     expect(OcElevation.dockFor(OcTokens.dark), isEmpty);
     expect(OcElevation.controlFor(OcTokens.dark), isEmpty);
   });
