@@ -315,7 +315,7 @@ void main() {
     expect(OcElevation.cardFor(OcTokens.light).last.spreadRadius, -6);
     expect(
       (OcElevation.cardFor(OcTokens.light).last.color.a * 255).round(),
-      closeTo(0x24, 1),
+      closeTo(0x1A, 1),
     );
     expect(
       OcElevation.cardFor(OcTokens.light, tight: true).last.blurRadius,
