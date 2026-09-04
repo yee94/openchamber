@@ -104,7 +104,7 @@ void main() {
       OcCssLine.boxHeight(title),
       OcOptical.rowTitle * OcOptical.rowTitleHeight + 2 * OcOptical.cssLineCjkHalfLead,
     );
-    expect(OcOptical.sessionTitleSubtitleGap, 46);
+    expect(OcOptical.sessionTitleSubtitleGap, 40);
     expect(OcOptical.cssLineCjkHalfLead, closeTo(4.7, 0.01));
   });
 
