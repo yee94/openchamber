@@ -24,8 +24,8 @@ class OcOptical {
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   /// Official project-shell row is 40. 4.7px CJK half-lead (per side)
-  /// plus title↔subtitle air after Medium ate 2 / 4 / 6 / 8 / 10 / 12 / 14.
-  /// 40 + 4×4.7 + 14 = 72.8 — gap residual, not 7.5 half-lead / 70.
+  /// plus title↔subtitle air after Medium ate 2 / 4 / 6 / 8 / 10 / 12 / 14 / 16.
+  /// 40 + 4×4.7 + 16 = 74.8 — gap residual, not 7.5 half-lead / 70.
   static const double sessionRowVisualHeight =
       40 + 4 * cssLineCjkHalfLead + (sessionTitleSubtitleGap - 2);
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
@@ -37,21 +37,21 @@ class OcOptical {
   /// gap 0.4375rem. Not the standalone trigger padding 0.75rem.
   static const double projectTriggerPad = 10;
   static const double projectTriggerGap = 7;
-  /// Project title column `flex-col gap-1` = 0.25rem. Medium ate 4 / 6 / 8 / 10
-  /// — 12 is the next 2px of card title↔meta air, not a half-lead pile.
-  static const double groupTitleMetaGap = 12;
+  /// Project title column `flex-col gap-1` = 0.25rem. Medium ate 4 / 6 / 8 / 10 / 12
+  /// — 14 is the next 2px of card title↔meta air, not a half-lead pile.
+  static const double groupTitleMetaGap = 14;
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
   /// Official title/subtitle column is `gap-0.5` (2). Medium ate 2, 4,
-  /// 6, 8, 10, 12, and 14. 16 is the next 2px of column air — not a
+  /// 6, 8, 10, 12, 14, and 16. 18 is the next 2px of column air — not a
   /// half-lead pile and not 7.5/70.
   /// Official title is `font-medium` / unread `font-semibold`. Fill-only
   /// at that weight. Do not revive a miter stem. Half-lead 4.7 + tracking
   /// 1.42 stay. Latin is ReviewSans Medium.
   static const double sessionTitleStem = 0;
   static const double sessionTitleShade = 0;
-  static const double sessionTitleSubtitleGap = 16;
+  static const double sessionTitleSubtitleGap = 18;
   /// Official CSS half-leading already lives in the 16/12 boxes (2px / 1px).
   /// 4.7 extra Flutter pixels open Regular CJK that still packed at 4.6.
   /// Stay under the 4.75 ceiling — do not invent 7.5/70.
@@ -119,9 +119,9 @@ class OcOptical {
   /// Official scheduled task row `p-3` (12).
   static const double scheduleCardPadV = 12;
   /// Official scheduled meta `mt-1` (4). Title air is the 18px CSS box
-  /// plus [cardTitleHalfLead] — not session 4.7. Medium ate 4 / 6 / 8 / 10 —
-  /// 12 matches the project card title↔meta residual.
-  static const double scheduleTitleMetaGap = 12;
+  /// plus [cardTitleHalfLead] — not session 4.7. Medium ate 4 / 6 / 8 / 10 / 12 —
+  /// 14 matches the project card title↔meta residual.
+  static const double scheduleTitleMetaGap = 14;
 
   /// Official `.oc-mobile-detail-title` 0.9375rem / line-height 1.4 / weight 650.
   static const double chatTitle = 15;
@@ -167,9 +167,9 @@ class OcOptical {
   /// `glassChipThrough` 0.22 / σ14, not a 0.68 coin and not a 22 bleed
   /// glyph. Solid primary `+` paints the full 40 hit. No 8/20 umbra.
   static const double headerDiscVisual = 36;
-  /// Official `size-5` is 20. Flutter round-cap bloom; paint 16 (official
-  /// `size-4`) in the 36 frost plate — toward size-5, not an SF clone.
-  static const double headerGlyph = 16;
+  /// Official `size-5` is 20. Flutter bloom still read large in the 36
+  /// plate — paint 14 so search / ink glyphs are not massy coins.
+  static const double headerGlyph = 14;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
   /// Flutter round-cap bloom at dpr 3; paint the dock visual so search
@@ -261,14 +261,14 @@ class OcOptical {
   /// `size-3.5` (14). Hit areas (36/40) stay separate from these visuals.
   static const double leadingCircle = 38;
   /// Painted plate inside the official 38 shell so project leading
-  /// discs are not oversized coins. 26 still read large vs README.
-  static const double leadingCircleVisual = 24;
-  static const double leadingCircleCompact = 22;
+  /// discs are not oversized coins. 24 still read large vs README.
+  static const double leadingCircleVisual = 22;
+  static const double leadingCircleCompact = 20;
   /// Official `.oc-mobile-project-shell .oc-mobile-project-icon-glyph` is
   /// 1.125rem (18). Flutter CustomPaint blooms past the web SVG; paint
   /// [leadingGlyphVisual] inside the official 38/32 hit/plate.
   static const double leadingGlyph = 18;
-  static const double leadingGlyphVisual = 14;
+  static const double leadingGlyphVisual = 12;
   static const double leadingGlyphCompact = 14;
   static const double worktreeIconBox = 18;
   /// Official worktree `git-branch` is `size-3.5` (14). Paint [worktreeGlyphVisual]
@@ -301,17 +301,17 @@ class OcOptical {
 
   /// Official scheduled status uses the project-shell glass disc (2.375rem).
   static const double scheduleStatus = leadingCircle;
-  /// Hit stays official 38. Paint 14 so leading check/pause is not a
+  /// Hit stays official 38. Paint 12 so leading check/pause is not a
   /// massy coin beside the title. Fill is glassChipThrough + inset
   /// highlight — same quiet disc as project leading, not OcGlassChip
   /// frost + chip shadow (that read as a Material badge).
-  static const double scheduleStatusVisual = 14;
+  static const double scheduleStatusVisual = 12;
   /// Official non-tab scheduled glyph is `size-3.5`; residual optical
-  /// paints 6 so the badge does not outweigh the segment track.
-  static const double scheduleStatusGlyph = 6;
+  /// paints 5 so the badge does not outweigh the segment track.
+  static const double scheduleStatusGlyph = 5;
   /// Schedule overflow `more-2` — slimmer than session 12.
   static const double scheduleMore = 10;
-  /// Header now shares dock visual so the 14/6 badge is not a second weight.
+  /// Header now shares dock visual so the 12/5 badge is not a second weight.
   static const double scheduleMoreStroke = dockGlyphStrokeVisual;
   /// Quiet status polish: check/pause at dock visual stroke so the
   /// 38 disc does not outweigh the card title.
