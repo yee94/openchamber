@@ -144,10 +144,10 @@ void main() {
     expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
     expect(OcOptical.rowTitleHeight, lessThan(1.42));
     expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);
-    expect(OcOptical.sessionTitleHalfLead, closeTo(3.7, 0.01));
+    expect(OcOptical.sessionTitleHalfLead, closeTo(3.2, 0.01));
     expect(OcOptical.sessionTitleHalfLead, lessThan(OcOptical.cssLineCjkHalfLead));
     expect(OcOptical.sessionTitleHalfLead, greaterThan(OcOptical.cardTitleHalfLead));
-    expect(OcOptical.sessionRowVisualHeight, closeTo(47.4, 0.01));
+    expect(OcOptical.sessionRowVisualHeight, closeTo(46.4, 0.01));
     expect(OcOptical.sessionSubtitleHalfLead, 0);
     expect(OcOptical.sessionRowVisualHeight, greaterThanOrEqualTo(40));
     expect(OcOptical.sessionRowVisualHeight, lessThan(OcOptical.sessionRowVisualHeight + 1));

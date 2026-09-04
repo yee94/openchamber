@@ -18,18 +18,18 @@ class OcOptical {
   /// Ink is `font-size`; strut is `line-height`. Do not faux-bold CJK.
   static const double rowTitle = 12;
   /// Official CSS is −0.012em. Flutter Regular CJK still packs tighter
-  /// than the WebView — 1.46 opens the 12px band after the 3.7 box
+  /// than the WebView — 1.46 opens the 12px band after the 3.2 box
   /// step (1.42 packed). Stay under 1.5. Do not pile. Official 16/12
   /// boxes stay.
   static const double rowTitleTracking = 1.46;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
   /// Official project-shell row is 40. Title keeps a CJK half-lead
-  /// inside the 16/12 box — 3.7 is a step toward that official box
-  /// (was 4.7 / 49.4). Subtitle/time stay the official 10/12 box
+  /// inside the 16/12 box — 3.2 is the next step toward that official
+  /// box (was 3.7 / 47.4). Subtitle/time stay the official 10/12 box
   /// (`sessionSubtitleHalfLead` 0) so gap-0.5 is not eaten.
-  /// 40 + 2×3.7 + 0 = 47.4. Do not jump to 0 (packs Regular CJK).
-  static const double sessionTitleHalfLead = 3.7;
+  /// 40 + 2×3.2 + 0 = 46.4. Do not jump to 0 (packs Regular CJK).
+  static const double sessionTitleHalfLead = 3.2;
   static const double sessionRowVisualHeight =
       40 + 2 * sessionTitleHalfLead + (sessionTitleSubtitleGap - 2);
   /// Official `.oc-mobile-session-subtitle` / time is the 10/12 CSS box.
@@ -57,7 +57,7 @@ class OcOptical {
   /// half-lead pile and not 7.5/70.
   /// Official title is `font-medium` / unread `font-semibold`. Fill-only
   /// at that weight. Do not revive a miter stem. Session title half-lead
-  /// is [sessionTitleHalfLead] (3.7); tracking is [rowTitleTracking]
+  /// is [sessionTitleHalfLead] (3.2); tracking is [rowTitleTracking]
   /// (1.46). Latin is ReviewSans Medium.
   static const double sessionTitleStem = 0;
   static const double sessionTitleShade = 0;
@@ -111,7 +111,7 @@ class OcOptical {
   /// Official 18/14 box unchanged. Stay under 1.1.
   static const double projectTitleTracking = 1.02;
   static const double projectTitleHeight = 18 / 14;
-  /// Session titles use [sessionTitleHalfLead] (3.7). 14/18 project /
+  /// Session titles use [sessionTitleHalfLead] (3.2). 14/18 project /
   /// schedule titles get a smaller CJK band so Regular is not packed
   /// into the official CSS box — not another session-row bump, not 7.5.
   static const double cardTitleHalfLead = 2.7;
