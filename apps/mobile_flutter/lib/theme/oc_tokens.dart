@@ -151,11 +151,10 @@ class OcTokens extends ThemeExtension<OcTokens> {
   Color get glassFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
-  /// Delicate chip fill — well under official glass 0.68 so search /
-  /// chat discs page-bleed, not cream coins (wake-0932). Still a frost
-  /// plate — not glyph-only and not a UIKit glass clone.
+  /// Near-glass chip fill — well under official glass 0.68 so search /
+  /// chat discs are frost plates, not cream coins and not bare glyphs.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
-      .withValues(alpha: isDark ? 0.12 : 0.12);
+      .withValues(alpha: isDark ? 0.20 : 0.20);
 
   /// Official `--oc-mobile-glass-highlight` is white / 0.60
   /// (dark 0.18). Inset sheen on the elevated plate.
@@ -372,7 +371,7 @@ class OcTokens extends ThemeExtension<OcTokens> {
   static const double projectActionSize = 36;
 
   /// Root `--oc-mobile-session-row-height` = 2.875rem. Project-shell CSS
-  /// is 2.5rem (40); Flutter CJK air uses [OcOptical.sessionRowVisualHeight].
+  /// is 2.5rem (40) — [OcOptical.sessionRowVisualHeight] matches that.
   static const double sessionRowHeight = 46;
 
   static const double groupRadius = surfaceRadius;

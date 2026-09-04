@@ -44,10 +44,10 @@ StrutStyle? ocCssLineBox(TextStyle? style) {
 }
 
 /// Official CSS line-height: ink occupies `font-size`; extra half-leading
-/// sits above/below inside `font-size * line-height`. Flutter CJK paints
-/// past `font-size` into that half-leading, so [OcOptical.cssLineCjkHalfLead]
-/// is added each side (metric compensation). Official 16/12 tokens and
-/// `gap-0.5` stay; do not invent gap.
+/// sits above/below inside `font-size * line-height`. Do not clip the
+/// child to `font-size` — that sliced CJK into cream. Optional
+/// [OcOptical.cssLineCjkHalfLead] is 0 unless a face actually clips.
+/// Official 16/12 tokens and `gap-0.5` stay; do not invent gap.
 class OcCssLine extends StatelessWidget {
   const OcCssLine({
     super.key,
@@ -61,9 +61,9 @@ class OcCssLine extends StatelessWidget {
   final Widget child;
   /// Full-width in a column / [Expanded]. Trailing time / counts stay tight.
   final bool expand;
-  /// Session rows use [OcOptical.cssLineCjkHalfLead]. The 56px chat
-  /// detail band keeps official CSS boxes (`halfLead: 0`) so title +
-  /// subtitle + gap-0.5 still fit.
+  /// Default is [OcOptical.cssLineCjkHalfLead] (0). The 56px chat
+  /// detail band also passes `halfLead: 0` so title + subtitle + gap-0.5
+  /// still fit.
   final double? halfLead;
 
   static double? boxHeight(TextStyle? style, {double? halfLead}) {
@@ -82,7 +82,7 @@ class OcCssLine extends StatelessWidget {
       width: expand ? double.infinity : null,
       child: Align(
         alignment: expand ? Alignment.centerLeft : Alignment.center,
-        child: SizedBox(height: font, width: expand ? double.infinity : null, child: child),
+        child: child,
       ),
     );
   }

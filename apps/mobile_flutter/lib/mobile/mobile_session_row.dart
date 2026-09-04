@@ -65,7 +65,9 @@ class MobileSessionRow extends StatelessWidget {
                           width: OcOptical.sessionBullet,
                           height: OcOptical.sessionBullet,
                           decoration: BoxDecoration(
-                            color: row.unread ? context.oc.unreadDot : context.oc.mutedForeground.withValues(alpha: 0.35),
+                            color: row.unread
+                                ? context.oc.unreadDot
+                                : context.oc.mutedForeground.withValues(alpha: OcOptical.sessionBulletReadAlpha),
                             shape: BoxShape.circle,
                           ),
                           child: row.unread && showUnreadKey ? const SizedBox(key: Key('unread-dot')) : null,
@@ -90,6 +92,7 @@ class MobileSessionRow extends StatelessWidget {
                               fontWeight: FontWeight.w400,
                               letterSpacing: OcOptical.rowTitleTracking,
                               height: OcOptical.rowTitleHeight,
+                              color: context.oc.foreground,
                             ),
                           ),
                           if (subtitle.isNotEmpty) ...[

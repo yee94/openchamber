@@ -12,7 +12,7 @@ class OcOptical {
 
   /// Official `.oc-mobile-session-title` is 0.75rem / 1rem / −0.012em.
   /// `.oc-mobile-project-shell` sets `--oc-mobile-session-row-height` to
-  /// 2.5rem (40). Flutter CJK air uses [sessionRowVisualHeight].
+  /// 2.5rem (40). Paint titles in that box — do not add empty half-lead.
   /// Ink is `font-size`; strut is `line-height`. Do not faux-bold CJK.
   static const double rowTitle = 12;
   /// Official CSS is −0.012em. Flutter letterSpacing packs CJK tighter than
@@ -20,13 +20,10 @@ class OcOptical {
   static const double rowTitleTracking = 0;
   static const double rowTitleHeight = 16 / 12;
   static const double sessionRowHeight = 46;
-  /// Project-shell CSS min-height is 2.5rem (40). Flutter CJK paints past
-  /// `font-size` into the CSS half-leading, so the visual row is official
-  /// pads + 16/12 boxes + [cssLineCjkHalfLead] + `gap-0.5`.
-  static const double sessionRowVisualHeight = 70;
+  /// Official project-shell row: pad 5 + title 16 + gap-0.5 2 + subtitle 12 + pad 5.
+  static const double sessionRowVisualHeight = 40;
   /// `.oc-mobile-session-row-main` padding-block 0.3125rem (5).
-  /// 5 + 31 + 2 + 27 + 5 = 70. Extra 15/line is [cssLineCjkHalfLead].
-  /// Do not grow icons. Do not invent gap.
+  /// 5 + 16 + 2 + 12 + 5 = 40. Do not invent gap or half-lead air.
   static const double sessionRowPadV = 5;
   static const double moreLinkPadV = 8;
   static const double groupHeaderPadV = 10;
@@ -40,18 +37,15 @@ class OcOptical {
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
   static const double sessionRowPadRight = 2;
-  /// Official title/subtitle column is `gap-0.5` (2). Wake-0831 keeps
-  /// this; CJK air is [cssLineCjkHalfLead] inside the official 16/12
-  /// boxes, not an invented gap.
+  /// Official title/subtitle column is `gap-0.5` (2). Keep that; do not
+  /// invent extra title↔meta gap or 15px empty air per line.
   /// Official title is `font-medium` / unread `font-semibold`. The review
   /// CJK face is Regular-only, so paint Regular — do not faux-bold.
   static const double sessionTitleSubtitleGap = 2;
-  /// Extra half-leading each side of [OcCssLine] so Flutter CJK, which
-  /// paints past `font-size` into the CSS 2px/1px half-leading, keeps
-  /// ink-to-box air. Official CSS tokens stay 16/12; this is metric
-  /// compensation (7.5 × 2 = 15px / line). Wake-0932: title↔meta still
-  /// residual tight vs official — tune half-leading only, keep gap-0.5.
-  static const double cssLineCjkHalfLead = 7.5;
+  /// Official CSS half-leading is already inside the 16/12 boxes (2px /
+  /// 1px). Extra Flutter compensation washed titles and bloated rows to
+  /// 70px. 0 = official density; add a tiny metric only if CJK clips.
+  static const double cssLineCjkHalfLead = 0;
   /// Fraction of the CSS line-height moved into strut `leading`. This
   /// review CJK face ignores strut `leading` (0.52–0.57 goldens stayed
   /// byte-identical). Prefer [OcCssLine] + [cssLineCjkHalfLead].
@@ -107,8 +101,8 @@ class OcOptical {
   static const double floatCardStackGap = 16;
   /// Official scheduled task row `p-3` (12).
   static const double scheduleCardPadV = 12;
-  /// Official scheduled meta `mt-1` (4). Title air is [OcCssLine] extra
-  /// half-leading, not a second invented gap.
+  /// Official scheduled meta `mt-1` (4). Title air is the CSS 18px box,
+  /// not extra half-lead or a second invented gap.
   static const double scheduleTitleMetaGap = 4;
 
   /// Official `.oc-mobile-detail-title` 0.9375rem / line-height 1.4 / weight 650.
@@ -147,11 +141,11 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  /// Official hit is 40 (`mobileIcon`). Painted plate is 22 — page-bleed
-  /// frost, not a 24/36 coin. `+` stays primary. No primary + glow.
-  /// No 8/20 umbra. No UIKit liquid-glass clone.
-  static const double headerDiscVisual = 22;
-  static const double headerGlyph = 12;
+  /// Official hit is 40 (`mobileIcon`). Painted plate is 36 — near-glass
+  /// frost, not a 22 page-bleed glyph and not a 0.68 cream coin. `+` stays
+  /// solid primary. No primary + glow. No 8/20 umbra. No UIKit clone.
+  static const double headerDiscVisual = 36;
+  static const double headerGlyph = 16;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.
   static const double headerGlyphStroke = 1.5;
   /// Flutter round-cap bloom at dpr 3; paint under official 1.5 so 12px
@@ -216,9 +210,9 @@ class OcOptical {
   static const bool dockGlyphFillBodies = true;
   static const bool dockSelectedFullSlot = true;
   /// Official selected class is `bg-interactive-selection/55`.
-  /// WidgetTester /55 through-mix still reads as a high-contrast
-  /// capsule — paint 0.22 so the slot is an official-soft pill.
-  static const double dockIconWashAlpha = 0.22;
+  /// Mix only (no nested frost) so the 58×r29 cell is a through-wash.
+  /// Do not use RGB@0.55 or a second BackdropFilter.
+  static const double dockIconWashAlpha = 0.55;
   /// Official selected tab is `bg-interactive-selection/55` on already-
   /// frosted dock glass — no second BackdropFilter. Nested sigma painted
   /// a cream plate that hid the list. 0 = mix only so rows show through.
@@ -226,9 +220,9 @@ class OcOptical {
   /// Official `--oc-mobile-glass-blur` on the 36 `mobileGlass` disc.
   static const double chipBlur = 20;
   /// Chip frost sigma. Official [chipBlur] is 20; WidgetTester cream +
-  /// 20 paints a coin. 8 keeps the BackdropFilter path as page-bleed,
-  /// not a solid plate. Search/+ stay frost, not glyph-only.
-  static const double chipBleedBlur = 8;
+  /// 20 paints a coin. 12 is a near-glass plate — not glyph-only and
+  /// not a solid 0.68 cream disc.
+  static const double chipBleedBlur = 12;
   /// Official `.oc-mobile-floating-surface` `blur(22px) saturate(1.35)`.
   /// Distinct from control-scale [chipBlur] / [glassSaturate].
   static const double floatBlur = 22;
@@ -244,7 +238,9 @@ class OcOptical {
   /// discs are not oversized coins (wake-0905).
   static const double leadingCircleVisual = 32;
   static const double leadingCircleCompact = 22;
-  static const double leadingGlyph = 16;
+  /// Official `.oc-mobile-project-shell .oc-mobile-project-icon-glyph` is
+  /// 1.125rem (18). 16 painted as a 9px-mass hairline on cream.
+  static const double leadingGlyph = 18;
   static const double leadingGlyphCompact = 14;
   static const double worktreeIconBox = 18;
   static const double worktreeGlyph = 14;
@@ -259,6 +255,9 @@ class OcOptical {
   static const double sessionTimeGap = 6;
 
   static const double sessionBullet = 5;
+  /// Official read-dot is `bg-muted-foreground/35`. On cream that washes
+  /// into the card — raise so the status bullet stays scannable.
+  static const double sessionBulletReadAlpha = 0.55;
   static const double overflow = 16;
   static const double chevron = 14;
   /// Chat detail-nav circular glass chips. Official mobileIcon is 40;

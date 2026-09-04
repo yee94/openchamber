@@ -69,7 +69,7 @@ void main() {
     expect(capsule.width, lessThan(tester.view.physicalSize.width / tester.view.devicePixelRatio));
   });
 
-  testWidgets('OcCssLine keeps official CSS line boxes plus CJK half-lead', (tester) async {
+  testWidgets('OcCssLine keeps official CSS line boxes without extra half-lead', (tester) async {
     const title = TextStyle(fontSize: OcOptical.rowTitle, height: OcOptical.rowTitleHeight);
     await tester.pumpWidget(
       const MaterialApp(
@@ -82,8 +82,9 @@ void main() {
       ),
     );
     expect(tester.getSize(find.byType(OcCssLine)).height, OcCssLine.boxHeight(title));
-    expect(OcCssLine.boxHeight(title), OcOptical.rowTitle * OcOptical.rowTitleHeight + 2 * OcOptical.cssLineCjkHalfLead);
+    expect(OcCssLine.boxHeight(title), OcOptical.rowTitle * OcOptical.rowTitleHeight);
     expect(OcOptical.sessionTitleSubtitleGap, 2);
+    expect(OcOptical.cssLineCjkHalfLead, 0);
   });
 
   testWidgets('chat is a pushed secondary page from Projects', (tester) async {
@@ -122,6 +123,18 @@ void main() {
     final add = tester.widget<CircularChromeButton>(find.byKey(const Key('scheduled-add')));
     expect(add.ink, isFalse);
     expect(add.filled, isFalse);
+  });
+
+  testWidgets('project and session titles paint full foreground ink', (tester) async {
+    await pumpConnected(tester);
+    final sessionTitle = tester.widget<Text>(find.text('Release notes'));
+    expect(sessionTitle.style?.color, OcTokens.light.foreground);
+    expect(sessionTitle.style?.color!.computeLuminance(), lessThan(0.12));
+    final projectTitle = tester.widgetList<Text>(find.text('openchamber')).first;
+    expect(projectTitle.style?.color, OcTokens.light.foreground);
+    final row = tester.getSize(find.byKey(const Key('home-session-sess-pinned')));
+    expect(row.height, greaterThanOrEqualTo(OcOptical.sessionRowVisualHeight));
+    expect(row.height, lessThan(56));
   });
 
   testWidgets('session search matches titles and hides non-matches', (tester) async {

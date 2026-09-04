@@ -13,7 +13,12 @@ class HighlightedText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final needle = query.trim();
-    final paint = ocCssInk(style);
+    // Keep the CSS line-height box so CJK is not clipped to font-size.
+    // Always paint full warm ink — never inherit a washed DefaultTextStyle.
+    final paint = (style ?? const TextStyle()).copyWith(
+      color: style?.color ?? context.oc.foreground,
+      leadingDistribution: TextLeadingDistribution.even,
+    );
     if (needle.isEmpty) {
       return OcCssLine(
         style: style,

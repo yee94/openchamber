@@ -96,6 +96,7 @@ class MobileProjectCard extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                         letterSpacing: compact ? OcOptical.rowTitleTracking : OcOptical.projectTitleTracking,
                         height: compact ? OcOptical.rowTitleHeight : OcOptical.projectTitleHeight,
+                        color: context.oc.foreground,
                       ),
                     ),
                     const SizedBox(height: OcOptical.groupTitleMetaGap),
@@ -113,7 +114,7 @@ class MobileProjectCard extends StatelessWidget {
                             const SizedBox(width: OcOptical.entityMetaGap),
                             Text(
                               '·',
-                              style: metaInk.copyWith(color: context.oc.mutedForeground.withValues(alpha: 0.5)),
+                              style: metaInk,
                             ),
                             const SizedBox(width: OcOptical.entityMetaGap),
                             Text(activity!, style: metaInk),
@@ -122,7 +123,7 @@ class MobileProjectCard extends StatelessWidget {
                             const SizedBox(width: OcOptical.entityMetaGap),
                             Text(
                               '·',
-                              style: metaInk.copyWith(color: context.oc.mutedForeground.withValues(alpha: 0.5)),
+                              style: metaInk,
                             ),
                             const SizedBox(width: OcOptical.entityMetaGap),
                             Expanded(
