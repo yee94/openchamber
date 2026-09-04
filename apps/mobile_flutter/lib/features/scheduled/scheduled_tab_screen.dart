@@ -245,6 +245,9 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                     ),
                     const SizedBox(height: OcOptical.scheduleTitleMetaGap),
                     OcCssLine(
+                      // Official scheduled meta is `mt-1` (4) on the CSS
+                      // box. Default 4.7 half-lead re-inflated that air.
+                      halfLead: 0,
                       style: const TextStyle(
                         fontSize: OcOptical.meta,
                         height: OcOptical.metaHeight,

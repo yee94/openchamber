@@ -109,6 +109,10 @@ class MobileProjectCard extends StatelessWidget {
                     ),
                     const SizedBox(height: OcOptical.groupTitleMetaGap),
                     OcCssLine(
+                      // Official entity-meta is the 12/15 CSS box. Default
+                      // 4.7 half-lead sat in the gap-1 (4) and re-inflated
+                      // title↔meta air. Chat detail uses the same 0.
+                      halfLead: 0,
                       style: metaStyle,
                       child: Row(
                         children: [

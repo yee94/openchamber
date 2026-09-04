@@ -151,6 +151,13 @@ void main() {
     expect(OcOptical.metaHeight, 1.25);
     expect(OcOptical.entityTitleHeight, 1.25);
     expect(OcOptical.groupTitleMetaGap, 4);
+    expect(
+      OcCssLine.boxHeight(
+        const TextStyle(fontSize: OcOptical.meta, height: OcOptical.metaHeight),
+        halfLead: 0,
+      ),
+      OcOptical.meta * OcOptical.metaHeight,
+    );
     expect(OcOptical.projectTriggerPad, 10);
     expect(OcOptical.projectTriggerGap, 7);
     expect(OcOptical.sessionRowPadH, 16);

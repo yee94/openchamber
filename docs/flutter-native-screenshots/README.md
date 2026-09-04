@@ -558,6 +558,16 @@ WidgetTester loudness knob. Recapture 02 (+scrolled/dark) and 04
 (+dark).
 **Not 精致.**
 
+**2026-09-04 wake-0143 residual (after `abb2a93a4`):**
+Watch scored stale `472a49fed` / `02=17c0188b`. Live tip already
+has official far **-6**. Title↔meta token is **4** but project /
+schedule meta `OcCssLine` still used default half-lead **4.7**, so
+official `gap-1` / `mt-1` never landed. Meta now `halfLead: 0`
+(official 12/15 box). Do **not** re-inflate to 54. Do **not** undo
+20+10+20 or session gap **2**. Icons 28/14/14/0.62/0.12 stay.
+Recapture 02 (+scrolled/dark) and 04 (+dark).
+**Not 精致.**
+
 | File | Screen |
 |---|---|
 | `01-connect.png` | QR primary, inset grouped fields (no floating-label overlap). |

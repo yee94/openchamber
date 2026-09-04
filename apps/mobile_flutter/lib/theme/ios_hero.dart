@@ -39,8 +39,8 @@ class OcOptical {
   static const double projectTriggerPad = 10;
   static const double projectTriggerGap = 7;
   /// Official project title column `flex-col gap-1` = 0.25rem (4).
-  /// Wake-0135 resets the card title↔meta inflate loop — do not
-  /// re-widen. Session title↔subtitle stays official 2.
+  /// Meta paints the official 12/15 box (`halfLead: 0`) so this 4 is
+  /// not eaten by session 4.7. Do not re-widen to 54.
   static const double groupTitleMetaGap = 4;
   /// `.oc-mobile-session-row-main` padding-left is 16 (inline style).
   static const double sessionRowPadH = 16;
