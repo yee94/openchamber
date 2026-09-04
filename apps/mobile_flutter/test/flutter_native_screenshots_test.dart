@@ -273,7 +273,7 @@ void main() {
     await _pumpFrames(tester);
     expect(find.byKey(const Key('chat-back')), findsOneWidget);
     expect(tester.getSize(find.byType(PushedNavBar)).height, 47 + OcOptical.detailNavigationHeight);
-    expect(tester.getSize(find.byKey(const Key('chat-back'))).height, OcOptical.headerDisc);
+    expect(tester.getSize(find.byKey(const Key('chat-back'))).height, OcOptical.chatChip);
     expect(find.byKey(const Key('chat-busy')), findsNothing);
     expect(find.byKey(const Key('reverse-chat-list')), findsOneWidget);
     expect(find.byKey(const Key('composer-field')), findsOneWidget);
