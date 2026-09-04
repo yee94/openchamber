@@ -78,6 +78,7 @@ class HighlightedText extends StatelessWidget {
   Widget _inkRich(List<InlineSpan> fillSpans, TextStyle paint) {
     final fill = Text.rich(
       TextSpan(style: paint, children: fillSpans),
+      style: paint,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
     );
