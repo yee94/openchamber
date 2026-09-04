@@ -107,6 +107,22 @@ void main() {
     expect(dark.scaffoldBackgroundColor, OcTokens.dark.pageBackground);
   });
 
+  test('live iOS materialTheme uses iOS 2021 typography, not Android', () {
+    addTearDown(() => debugOcLiveIosType = null);
+    debugOcLiveIosType = false;
+    final androidTheme = materialTheme(Brightness.light);
+    debugOcLiveIosType = true;
+    final iosTheme = materialTheme(Brightness.light);
+    expect(
+      iosTheme.textTheme.bodyMedium?.fontFamily,
+      isNot(androidTheme.textTheme.bodyMedium?.fontFamily),
+    );
+    expect(
+      iosTheme.textTheme.bodyMedium?.fontFamily,
+      Typography.material2021(platform: TargetPlatform.iOS).black.bodyMedium?.fontFamily,
+    );
+  });
+
   test('OcOptical sizes are smaller/airier than the previous crude chrome', () {
     expect(OcOptical.largeTitle, 32);
     expect(OcOptical.largeTitleTracking, closeTo(-1.28, 0.01));

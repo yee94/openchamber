@@ -161,7 +161,7 @@ class MobileTabPageHeader extends StatelessWidget {
                                   for (final run in scriptRuns(title))
                                     TextSpan(
                                       text: run.text,
-                                      style: run.cjk
+                                      style: run.cjk && !ocLiveIosType
                                           ? const TextStyle(fontWeight: FontWeight.w400)
                                           : null,
                                     ),
@@ -173,9 +173,12 @@ class MobileTabPageHeader extends StatelessWidget {
                                 fontSize: OcOptical.largeTitle,
                                 // Official `.oc-mobile-root-page-title` is
                                 // font-semibold. Latin keeps ReviewSans
-                                // Medium. 32px DemiLight@500 bricks vs
-                                // PingFang Semibold — CJK uses Regular
-                                // Micro Hei. Session/card stay DemiLight.
+                                // Medium. WidgetTester / Android CJK uses
+                                // Regular Micro Hei (32px DemiLight@500
+                                // bricks vs PingFang Semibold). Live iOS
+                                // inherits this w600 so PingFang SC
+                                // Semibold paints. Session/card stay
+                                // DemiLight on the tester path.
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: OcOptical.rootTitleTracking(t),
                                 height: OcOptical.largeTitleHeight,

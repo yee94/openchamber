@@ -13,6 +13,7 @@ import 'oc_tokens.dart';
 
 export 'ios_hero.dart' show OcOptical;
 export 'oc_elevation.dart' show OcElevation;
+export 'oc_live_ios.dart' show debugOcLiveIosType, ocLiveIosType;
 export 'oc_tokens.dart' show OcProductChrome, OcTokens, OcTokensContext;
 
 /// CSS `font-size` is ink. Official `line-height` is the strut — do not

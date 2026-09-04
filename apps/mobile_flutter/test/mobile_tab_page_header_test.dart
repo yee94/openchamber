@@ -165,6 +165,35 @@ void main() {
     expect(runs.last.style?.fontWeight, isNull);
   });
 
+  testWidgets('live iOS page-title CJK inherits semibold for PingFang', (tester) async {
+    debugOcLiveIosType = true;
+    addTearDown(() => debugOcLiveIosType = null);
+    await tester.pumpWidget(
+      StringsScope(
+        strings: AppStrings.of(AppStrings.zhCN),
+        child: MaterialApp(
+          theme: materialTheme(Brightness.light),
+          home: const MobileTabPageScaffold(
+            title: '项目 Open',
+            children: [Text('body')],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final pageTitle = tester.widget<Text>(
+      find.descendant(of: find.byKey(const Key('mobile-tab-page-title')), matching: find.byType(Text)),
+    );
+    expect(pageTitle.style?.fontWeight, FontWeight.w600);
+    final runs = (pageTitle.textSpan! as TextSpan).children!.whereType<TextSpan>().toList();
+    expect(runs, hasLength(2));
+    expect(runs.first.text, '项目');
+    expect(runs.first.style?.fontWeight, isNull);
+    expect(runs.last.text, ' Open');
+    expect(runs.last.style?.fontWeight, isNull);
+  });
+
   testWidgets('detail nav consumes viewPadding.top and keeps a 56px band', (tester) async {
     tester.view.physicalSize = const Size(390 * 3, 844 * 3);
     tester.view.devicePixelRatio = 3;

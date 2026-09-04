@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import 'oc_live_ios.dart';
 import 'oc_tokens.dart';
 
 export 'oc_tokens.dart';
@@ -55,7 +56,10 @@ ThemeData materialTheme(Brightness brightness) {
 }
 
 TextTheme _textTheme(OcTokens tokens) {
-  final base = Typography.material2021(platform: TargetPlatform.android);
+  // WidgetTester / Android keep Material Android metrics (goldens).
+  // Live iOS uses SF / PingFang through the iOS 2021 typography.
+  final platform = ocLiveIosType ? TargetPlatform.iOS : TargetPlatform.android;
+  final base = Typography.material2021(platform: platform);
   final themed = tokens.isDark ? base.white : base.black;
   return themed.copyWith(
     bodyLarge: themed.bodyLarge?.copyWith(fontSize: OcTokens.textMarkdown, color: tokens.foreground),

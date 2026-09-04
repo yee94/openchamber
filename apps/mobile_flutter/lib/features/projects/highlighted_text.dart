@@ -145,11 +145,13 @@ class HighlightedText extends StatelessWidget {
   }
 
   /// Official CSS weight stays on the incoming style (`font-medium` /
-  /// `font-semibold`). 12px / 14px DemiLight@500 still bricks vs
-  /// PingFang Medium air after the 32px page-title Regular step.
-  /// CJK paints Regular Micro Hei. Latin keeps ReviewSans Medium.
+  /// `font-semibold`). WidgetTester / Android clamp CJK to Regular
+  /// Micro Hei — DemiLight@500 still bricks vs PingFang Medium air.
+  /// Live iOS keeps the incoming weight so PingFang SC Medium /
+  /// Semibold paint. Latin keeps ReviewSans Medium on the tester path.
   /// Not a half-lead pile. Not a Medium/Bold flip.
   TextStyle _cjkFill(TextStyle paint) {
+    if (ocLiveIosType) return _shaded(paint);
     final weight = paint.fontWeight;
     if (weight == FontWeight.w500 || weight == FontWeight.w600) {
       return _shaded(paint.copyWith(fontWeight: FontWeight.w400));
@@ -176,7 +178,8 @@ class HighlightedText extends StatelessWidget {
 /// CJK / kana / hangul vs Latin-digit runs. Stem/shade stay on CJK —
 /// Latin already has ReviewSans Medium (`font-medium`). Production
 /// collapsing page titles share this splitter so 32px CJK can paint
-/// Regular Micro Hei.
+/// Regular Micro Hei on WidgetTester / Android. Live iOS keeps the
+/// incoming Semibold so PingFang SC paints.
 List<({String text, bool cjk})> scriptRuns(String value) {
   if (value.isEmpty) return const [];
   final runs = <({String text, bool cjk})>[];
