@@ -145,9 +145,9 @@ class HighlightedText extends StatelessWidget {
   }
 
   /// CJK fill at the incoming official weight. Session `w500` is
-  /// `font-medium`; project/page `w600` is `font-semibold`. A real
-  /// Medium/Bold cut (device PingFang, review Noto) must be allowed
-  /// through — clamping to Regular was the tight/heavy recipe.
+  /// `font-medium`; project/page `w600` is `font-semibold`. Review
+  /// titles use Noto DemiLight remapped to 500 (PingFang Medium
+  /// optical). Noto Medium bricks 12px. Do not clamp to Regular.
   TextStyle _cjkFill(TextStyle paint) => _shaded(paint);
 
   TextStyle _shaded(TextStyle paint) {

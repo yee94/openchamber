@@ -98,9 +98,10 @@ class MobileSessionRow extends StatelessWidget {
                               // Official `.oc-mobile-session-title` is
                               // `font-medium` / unread `font-semibold`.
                               // ReviewSans Medium covers Latin. CJK uses
-                              // the real Medium cut (PingFang / Noto).
-                              // w600 snaps to that Medium on review —
-                              // not Noto Bold. Do not stem.
+                              // the PingFang Medium optical cut (review
+                              // Noto DemiLight@500 — not Noto Medium).
+                              // w600 snaps to that cut — not Noto Bold.
+                              // Do not stem.
                               fontWeight: row.unread ? FontWeight.w600 : FontWeight.w500,
                               letterSpacing: OcOptical.rowTitleTracking,
                               height: OcOptical.rowTitleHeight,

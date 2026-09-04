@@ -21,10 +21,11 @@ Future<void> loadReviewFonts() async {
       '/home/ubuntu/development/flutter/bin/cache/artifacts/material_fonts/Roboto-Medium.ttf',
     ],
   ]);
-  // Official session titles are `font-medium` (PingFang / Noto Medium).
-  // Regular chrome stays Micro Hei. Medium titles load Noto Sans CJK SC
-  // Medium — not a miter stem. Do not load Noto Bold (700 bricks 32px).
-  // Recapture hosts: `fonts-noto-cjk` + `fonts-noto-cjk-extra`.
+  // Official session titles are `font-medium` (PingFang Medium). Regular
+  // chrome stays Micro Hei. Title w500/w600 load Noto Sans CJK SC
+  // DemiLight remapped to 500 — Noto Medium is the wrong optical peer
+  // (packs 12px / bricks 32px). Do not load Noto Bold. Recapture hosts:
+  // `fonts-noto-cjk` + `fonts-noto-cjk-extra`.
   await _loadCjkFaces();
   await _loadFamily('RobotoReal', [
     '$flutterRoot/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
@@ -60,24 +61,71 @@ const _cjkRegularCandidates = [
   '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
 ];
 
-const _cjkMediumCandidates = [
+/// PingFang Medium optical peer, then Noto Medium if DemiLight is absent.
+const _cjkTitleMediumCandidates = [
+  '/usr/share/fonts/opentype/noto/NotoSansCJK-DemiLight.ttc',
+  '/usr/share/fonts/noto-cjk/NotoSansCJKsc-DemiLight.otf',
   '/usr/share/fonts/opentype/noto/NotoSansCJK-Medium.ttc',
   '/usr/share/fonts/noto-cjk/NotoSansCJKsc-Medium.otf',
 ];
 
 Future<void> _loadCjkFaces() async {
-  final faces = <List<String>>[_cjkRegularCandidates];
-  if (_cjkMediumCandidates.any((path) => File(path).existsSync())) {
-    faces.add(_cjkMediumCandidates);
+  final regular = _firstBytes(_cjkRegularCandidates);
+  if (regular == null) return;
+  final title = _firstTitleMediumBytes();
+  final loader = FontLoader('ReviewCjk');
+  loader.addFont(Future<ByteData>.value(regular));
+  if (title != null) {
+    loader.addFont(Future<ByteData>.value(title));
   }
-  // Do not load Noto Bold. Official page/project semibold is PingFang
-  // Semibold (~600). Noto Bold (700) bricks 32px titles and connect
-  // w700. w600 snaps to Medium — the cut this pass is after.
-  if (faces.length > 1) {
-    await _loadFaces('ReviewCjk', faces);
-    return;
+  try {
+    await loader.load();
+  } catch (_) {}
+}
+
+/// DemiLight is usWeightClass 350. Flutter w500 would snap to Regular
+/// 400 (closer than 350). Remap the title face to 500 so official
+/// `font-medium` / `font-semibold` select it.
+ByteData? _firstTitleMediumBytes() {
+  final bytes = _firstBytes(_cjkTitleMediumCandidates);
+  if (bytes == null) return null;
+  final copy = Uint8List.fromList(
+    bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes),
+  );
+  return ByteData.sublistView(_withWeightClass(copy, 500));
+}
+
+/// OpenType OS/2 `usWeightClass` at table offset 4.
+Uint8List _withWeightClass(Uint8List sfnt, int weight) {
+  if (sfnt.length < 12) return sfnt;
+  final numTables = _u16(sfnt, 4);
+  for (var i = 0; i < numTables; i++) {
+    final entry = 12 + i * 16;
+    if (entry + 16 > sfnt.length) break;
+    final tag = String.fromCharCodes(sfnt.sublist(entry, entry + 4));
+    if (tag != 'OS/2') continue;
+    final tableOffset = _u32(sfnt, entry + 8);
+    final tableLength = _u32(sfnt, entry + 12);
+    if (tableOffset + 6 > sfnt.length || tableLength < 6) return sfnt;
+    final out = Uint8List.fromList(sfnt);
+    out[tableOffset + 4] = (weight >> 8) & 0xff;
+    out[tableOffset + 5] = weight & 0xff;
+    var sum = 0;
+    final end = tableOffset + tableLength;
+    for (var o = tableOffset; o < end; o += 4) {
+      final b0 = o < out.length ? out[o] : 0;
+      final b1 = o + 1 < out.length ? out[o + 1] : 0;
+      final b2 = o + 2 < out.length ? out[o + 2] : 0;
+      final b3 = o + 3 < out.length ? out[o + 3] : 0;
+      sum = (sum + ((b0 << 24) | (b1 << 16) | (b2 << 8) | b3)) & 0xffffffff;
+    }
+    out[entry + 4] = (sum >> 24) & 0xff;
+    out[entry + 5] = (sum >> 16) & 0xff;
+    out[entry + 6] = (sum >> 8) & 0xff;
+    out[entry + 7] = sum & 0xff;
+    return out;
   }
-  await _loadFamily('ReviewCjk', _cjkRegularCandidates);
+  return sfnt;
 }
 
 Future<void> _loadFamily(String family, List<String> candidates) async {
@@ -94,8 +142,8 @@ Future<void> _loadFamily(String family, List<String> candidates) async {
   }
 }
 
-/// One family with Regular + Medium so official `font-medium` is a real cut,
-/// not a synthesized bold that packs session titles.
+/// One family with Regular + title-medium (DemiLight@500) so official
+/// `font-medium` is a real cut, not a synthesized bold that packs titles.
 Future<void> _loadFaces(String family, List<List<String>> faces) async {
   final loader = FontLoader(family);
   var any = false;
