@@ -141,9 +141,9 @@ class OcOptical {
   static const double searchButton = 40;
   static const double addButton = 40;
   static const double headerDisc = 40;
-  /// Official hit is 40 (`mobileIcon`). Painted plate is 36 — near-glass
-  /// frost, not a 22 page-bleed glyph and not a 0.68 cream coin. `+` stays
-  /// solid primary. No primary + glow. No 8/20 umbra. No UIKit clone.
+  /// Official hit is 40 (`mobileIcon`). Search frost plate is 36 — mobileGlass
+  /// 0.34/σ14, not a 22 page-bleed glyph and not a 0.68 cream coin. Solid
+  /// primary `+` paints the full 40 hit. No 8/20 umbra. No UIKit clone.
   static const double headerDiscVisual = 36;
   static const double headerGlyph = 16;
   /// Official `Icon` default stroke (`ICON_STROKE_WIDTH` = 1.5) in the 24 viewBox.

@@ -187,6 +187,8 @@ void main() {
     expect(OcOptical.headerDisc, OcOptical.searchButton);
     expect(OcOptical.headerDiscVisual, 36);
     expect(OcOptical.headerDiscVisual, lessThan(OcOptical.headerDisc));
+    expect(OcOptical.addButton, OcOptical.headerDisc);
+    expect(OcOptical.addButton, greaterThan(OcOptical.headerDiscVisual));
     expect(OcOptical.headerGlyphStrokeVisual, closeTo(0.78, 0.01));
     expect(OcOptical.headerGlyphStrokeVisual, lessThan(OcOptical.headerGlyphStroke));
     expect(OcOptical.detailSubtitleGap, 2);

@@ -112,8 +112,8 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
                           boxShadow: OcElevation.chip(context),
                         ),
                         child: SizedBox(
-                          width: OcOptical.headerDiscVisual,
-                          height: OcOptical.headerDiscVisual,
+                          width: OcOptical.addButton,
+                          height: OcOptical.addButton,
                           child: Center(
                             child: OcGlyph(
                               OcGlyphKind.plus,

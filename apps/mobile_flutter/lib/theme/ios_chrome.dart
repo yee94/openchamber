@@ -339,7 +339,10 @@ class CircularChromeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.oc;
     final hit = size ?? (filled ? OcOptical.addButton : OcOptical.searchButton);
-    final disc = hit < OcOptical.headerDiscVisual ? hit : OcOptical.headerDiscVisual;
+    // Search keeps the 36 frost plate. Solid primary `+` is official 40.
+    final disc = filled
+        ? hit
+        : (hit < OcOptical.headerDiscVisual ? hit : OcOptical.headerDiscVisual);
     final glyphWidget = OcGlyph(
       glyph,
       size: ink ? OcOptical.leadingGlyphCompact : OcOptical.headerGlyph,

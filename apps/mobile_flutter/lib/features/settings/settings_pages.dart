@@ -5,6 +5,9 @@ import '../../data/app_version.dart';
 import '../../data/settings_catalog.dart';
 import '../../data/settings_remote.dart';
 import '../../l10n/app_strings.dart';
+import '../../theme/ios_hero.dart';
+import '../../theme/oc_glyphs.dart';
+import '../../theme/oc_tokens.dart';
 import 'settings_editors.dart';
 import 'settings_primitives.dart';
 
@@ -165,19 +168,33 @@ class InstancesSettingsPage extends StatelessWidget {
                           ? t(context, controller.activeConnectionStatusKey ?? 'mobile.instances.status.connectedDirect')
                           : instance.url,
                     ),
-                    trailing: active ? const Icon(Icons.check) : null,
+                    trailing: active
+                        ? OcGlyph(
+                            OcGlyphKind.check,
+                            size: OcOptical.settingsNavIcon,
+                            color: context.oc.foreground,
+                          )
+                        : null,
                     onTap: () => controller.activateExisting(instance.id),
                   );
                 }),
               ListTile(
                 key: const Key('instances-add'),
-                leading: const Icon(Icons.add),
+                leading: OcGlyph(
+                  OcGlyphKind.plus,
+                  size: OcOptical.settingsNavIcon,
+                  color: context.oc.foreground,
+                ),
                 title: Text(t(context, 'settings.instances.add')),
                 onTap: controller.switchToConnect,
               ),
               ListTile(
                 key: const Key('instances-scan-qr'),
-                leading: const Icon(Icons.qr_code_scanner),
+                leading: OcGlyph(
+                  OcGlyphKind.qr,
+                  size: OcOptical.settingsNavIcon,
+                  color: context.oc.foreground,
+                ),
                 title: Text(t(context, 'connect.scanQr')),
                 subtitle: Text(t(context, 'settings.instances.qrTodo')),
                 onTap: controller.scanAndConnect,

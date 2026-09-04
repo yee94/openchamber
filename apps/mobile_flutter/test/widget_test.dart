@@ -146,6 +146,11 @@ void main() {
     );
     expect(codeGlyph.size, OcOptical.leadingGlyphVisual);
     expect(codeGlyph.size, lessThan(OcOptical.leadingGlyph));
+    final plusPlate = tester.widgetList<SizedBox>(
+      find.descendant(of: find.byKey(const Key('projects-plus-menu')), matching: find.byType(SizedBox)),
+    ).firstWhere((box) => box.width == OcOptical.addButton && box.height == OcOptical.addButton);
+    expect(plusPlate.width, OcOptical.addButton);
+    expect(plusPlate.width, greaterThan(OcOptical.headerDiscVisual));
   });
 
   testWidgets('session search matches titles and hides non-matches', (tester) async {

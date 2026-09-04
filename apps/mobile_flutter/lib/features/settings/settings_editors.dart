@@ -6,6 +6,9 @@ import '../../data/app_controller.dart';
 import '../../data/openchamber_http.dart';
 import '../../data/settings_remote.dart';
 import '../../l10n/app_strings.dart';
+import '../../theme/ios_hero.dart';
+import '../../theme/oc_glyphs.dart';
+import '../../theme/oc_tokens.dart';
 import 'settings_primitives.dart';
 
 enum SettingsEditorKind { providers, agents, assistants, commands, mcp, plugins, skills }
@@ -367,7 +370,11 @@ class _EntityEditorSettingsPageState extends State<EntityEditorSettingsPage> {
               if (widget.kind != SettingsEditorKind.providers)
                 ListTile(
                   key: const Key('settings-editor-add'),
-                  leading: const Icon(Icons.add),
+                  leading: OcGlyph(
+                    OcGlyphKind.plus,
+                    size: OcOptical.settingsNavIcon,
+                    color: context.oc.foreground,
+                  ),
                   title: Text(t(context, 'settings.editor.create')),
                   onTap: () => _openEditor(),
                 ),
