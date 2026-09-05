@@ -216,10 +216,10 @@ What still keys off the **base** id / class namespace (not broken by the suffix)
 
 Preferred: the GitHub **prerelease** (no Actions Artifacts UI):
 
-- Tag `flutter-v2-debug-ec50d2b` (prerelease, not draft): https://github.com/yee94/openchambery/releases/tag/flutter-v2-debug-ec50d2b
-- APK: https://github.com/yee94/openchambery/releases/download/flutter-v2-debug-ec50d2b/openchamber-v2-debug-ec50d2b.apk
-- Built from `ec50d2ba9` / Flutter Mobile CI [run 33949263955](https://github.com/yee94/openchambery/actions/runs/33949263955) (analyze + Android debug APK + iOS simulator all green). Official OpenChamber launcher icon.
-- Includes voice UI removal + standard IME keyboard. Side-by-side `com.yee94.openchamber.debug` / **OpenChamber v2**. Relay-first walk — Yee has no LAN.
+- Tag `flutter-v2-debug-cb655f0` (prerelease, not draft): https://github.com/yee94/openchambery/releases/tag/flutter-v2-debug-cb655f0
+- APK: https://github.com/yee94/openchambery/releases/download/flutter-v2-debug-cb655f0/openchamber-v2-debug-cb655f0.apk
+- Built from `cb655f0d8` / Flutter Mobile CI [run 33952157439](https://github.com/yee94/openchambery/actions/runs/33952157439) (analyze + Android debug APK + iOS simulator all green). Official OpenChamber launcher icon.
+- Includes share drain, push-tap session, HTML WebView preview, solid tab headers, and the Firebase `getInitialMessage` compile fix. Side-by-side `com.yee94.openchamber.debug` / **OpenChamber v2**. Relay-first walk — Yee has no LAN.
 
 Actions artifact fallback (14-day retention):
 
@@ -611,7 +611,7 @@ Close automated gaps that do not need Yee's phone. Visual goldens / pixel chrome
 | Pairing v2 redeem | landed (memory + widget) | Parse-only-relay payload; `POST /api/client-auth/pairing/redeem`; Instances page shows `Connected · Relay` / `已连接 · 中继`. |
 | HEIC attach plumbing | landed (memory) | `prepareComposerAttachments` owns HEIC→JPEG + 25 MiB cap. Composer still publishes virtual assets. `sendPrompt` keeps official PUT headers + `file://` parts. |
 | OAuth callback URLs | landed (unit) | Query `code`/`state`/`error`; http(s)-only external browser. Live system-browser OAuth remains ❌ 真机过. |
-| Debug APK prerelease | published | `flutter-v2-debug-ec50d2b` from CI run 33949263955 / `ec50d2ba9` (official launcher icon). |
+| Debug APK prerelease | published | `flutter-v2-debug-cb655f0` from CI run 33952157439 / `cb655f0d8` (official launcher icon). |
 
 ## Seventeenth-slice status (main 1.19.5-beta.14 parity, no 真机过)
 
