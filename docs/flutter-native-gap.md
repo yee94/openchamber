@@ -690,7 +690,7 @@ Validated: focused Flutter analyze + `flutter test` on 3.32.8 (this agent). Sess
 
 ## Twentieth-slice status (2026-09-05) — session overflow + projects home + context ring
 
-Continues `d9e793ac1` on `work/flutter-native`. No merge to `main`. No 1.18 TanStack. No Flutter UI golden recapture.
+Continues `d9e793ac1` rebased onto `cb655f0d8` on `work/flutter-native` (Firebase `getInitialMessage` APK fix). No merge to `main`. No 1.18 TanStack. No Flutter UI golden recapture.
 
 | Surface | Status | Notes |
 |---|---|---|
