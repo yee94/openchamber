@@ -89,8 +89,9 @@ object NativePlugins {
                 }
             }
         }
+        // Cold-start notification taps put FCM data on the launch intent.
+        // Native FirebaseMessaging has token, not FlutterFire's getInitialMessage().
         capturePushOpen(activity.intent)
-        readInitialFcmMessage()
         MethodChannel(messenger, "openchamber/widget_snapshot").setMethodCallHandler { call, result ->
             if (call.method == "setBadge" || call.method == "write") {
                 // Official push relay has no FCM send path (APNs aps.badge only).
@@ -140,27 +141,6 @@ object NativePlugins {
         val sessionId = map["sessionId"]?.toString().orEmpty().ifEmpty { map["sessionID"]?.toString().orEmpty() }
         if (url.isEmpty() && deeplink.isEmpty() && sessionId.isEmpty()) return null
         return map
-    }
-
-    private fun readInitialFcmMessage() {
-        try {
-            com.google.firebase.messaging.FirebaseMessaging.getInstance().getInitialMessage()
-                .addOnSuccessListener { message ->
-                    val data = message?.data ?: return@addOnSuccessListener
-                    if (data.isEmpty()) return@addOnSuccessListener
-                    val payload = data.mapValues { it.value }
-                    if (payload["url"].isNullOrEmpty() &&
-                        payload["deeplink"].isNullOrEmpty() &&
-                        payload["sessionId"].isNullOrEmpty() &&
-                        payload["sessionID"].isNullOrEmpty()
-                    ) {
-                        return@addOnSuccessListener
-                    }
-                    pendingPushOpen = payload
-                    pushChannel?.invokeMethod("opened", payload)
-                }
-        } catch (_: Exception) {
-        }
     }
 
     private fun argumentId(arguments: Any?, key: String): String {
