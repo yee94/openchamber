@@ -393,8 +393,6 @@ class OcOptical {
   /// Official `ContextProgressIcon` is 18px / stroke 3.
   static const double contextProgressRing = 18;
   static const double contextProgressStroke = 3;
-  /// Visual stub until quota / context-limit APIs land in Flutter.
-  static const double contextProgressStubPercent = 35;
 
   /// Official scheduled status uses the project-shell glass disc (2.375rem).
   static const double scheduleStatus = leadingCircle;

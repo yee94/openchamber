@@ -26,7 +26,6 @@ class SessionOverflowItem {
 }
 
 /// Official session overflow order: rename / pin / refresh / archive / delete.
-/// Callbacks are stubs until session mutation APIs land; the sheet must open.
 List<SessionOverflowItem> buildSessionOverflowItems({
   required bool pinned,
   required VoidCallback onRename,
@@ -73,16 +72,84 @@ List<SessionOverflowItem> buildSessionOverflowItems({
   ];
 }
 
+List<SessionOverflowItem> buildProjectOverflowItems({
+  required bool gitRepository,
+  required VoidCallback onNewSession,
+  VoidCallback? onNewWorktree,
+  required VoidCallback onSyncSessions,
+  required VoidCallback onEditProject,
+  required VoidCallback onCloseProject,
+}) {
+  return [
+    SessionOverflowItem(
+      id: 'newSession',
+      labelKey: 'sessions.sidebar.project.actions.newSession',
+      glyph: OcGlyphKind.plus,
+      onTap: onNewSession,
+    ),
+    if (gitRepository && onNewWorktree != null)
+      SessionOverflowItem(
+        id: 'newWorktree',
+        labelKey: 'sessions.sidebar.project.actions.newWorktree',
+        glyph: OcGlyphKind.branch,
+        onTap: onNewWorktree,
+      ),
+    SessionOverflowItem(
+      id: 'syncSessions',
+      labelKey: 'sessions.sidebar.project.actions.syncSessions',
+      glyph: OcGlyphKind.undo,
+      onTap: onSyncSessions,
+    ),
+    SessionOverflowItem(
+      id: 'edit',
+      labelKey: 'sessions.sidebar.project.actions.edit',
+      glyph: OcGlyphKind.edit,
+      onTap: onEditProject,
+    ),
+    SessionOverflowItem(
+      id: 'closeProject',
+      labelKey: 'sessions.sidebar.project.actions.closeProject',
+      glyph: OcGlyphKind.xmark,
+      onTap: onCloseProject,
+      destructive: true,
+      separated: true,
+    ),
+  ];
+}
+
+List<SessionOverflowItem> buildWorktreeOverflowItems({
+  required VoidCallback onNewSession,
+  required VoidCallback onDeleteWorktree,
+}) {
+  return [
+    SessionOverflowItem(
+      id: 'newSession',
+      labelKey: 'sessions.sidebar.project.actions.newSession',
+      glyph: OcGlyphKind.plus,
+      onTap: onNewSession,
+    ),
+    SessionOverflowItem(
+      id: 'deleteWorktree',
+      labelKey: 'mobile.projectEdit.deleteWorktreeConfirmButton',
+      glyph: OcGlyphKind.xmark,
+      onTap: onDeleteWorktree,
+      destructive: true,
+      separated: true,
+    ),
+  ];
+}
+
 Future<void> showSessionOverflowSheet({
   required BuildContext context,
   required String title,
   required List<SessionOverflowItem> items,
+  Key sheetKey = const Key('session-overflow-sheet'),
 }) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
-    builder: (sheetContext) => SessionOverflowSheet(title: title, items: items),
+    builder: (sheetContext) => SessionOverflowSheet(sheetKey: sheetKey, title: title, items: items),
   );
 }
 
@@ -91,10 +158,12 @@ class SessionOverflowSheet extends StatelessWidget {
     super.key,
     required this.title,
     required this.items,
+    this.sheetKey = const Key('session-overflow-sheet'),
   });
 
   final String title;
   final List<SessionOverflowItem> items;
+  final Key sheetKey;
 
   @override
   Widget build(BuildContext context) {
@@ -110,7 +179,7 @@ class SessionOverflowSheet extends StatelessWidget {
     }
 
     return Material(
-      key: const Key('session-overflow-sheet'),
+      key: sheetKey,
       color: tokens.pageBackground,
       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       child: Padding(

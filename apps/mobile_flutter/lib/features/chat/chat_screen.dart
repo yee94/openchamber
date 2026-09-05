@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
 import '../../data/chat_timeline.dart';
+import '../../data/context_usage.dart';
 import '../../data/home_session.dart';
 import '../../data/message_id.dart';
 import '../../data/openchamber_http.dart';
+import '../projects/action_dialogs.dart';
 import '../../data/prompt_attachment.dart';
 import '../../l10n/app_strings.dart';
 import '../../data/file_preview.dart';
@@ -42,8 +44,10 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+  late HomeSessionRow _session = widget.session;
   late final ReverseChatController _timeline = widget.timeline ?? ReverseChatController();
   late final bool _ownsTimeline = widget.timeline == null;
+  final ValueNotifier<int> _contextTick = ValueNotifier(0);
   final TextEditingController _composer = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final List<AttachmentDraft> _attachments = [];
@@ -59,7 +63,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _live.selectSession(widget.session.id);
+    _live.selectSession(_session.id);
     _scroll.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -73,6 +77,10 @@ class _ChatScreenState extends State<ChatScreen> {
   void _onApp() {
     final controller = widget.appController;
     if (controller == null || !mounted) return;
+    final match = controller.sessionById(_session.id);
+    if (match != null && (match.title != _session.title || match.kind != _session.kind)) {
+      setState(() => _session = match);
+    }
     if (controller.transcriptEpoch != _seenEpoch) {
       _seenEpoch = controller.transcriptEpoch;
       unawaited(_reloadFromLive());
@@ -99,6 +107,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _busy.dispose();
     _atLiveEdge.dispose();
     _errorKey.dispose();
+    _contextTick.dispose();
     if (_ownsTimeline) _timeline.dispose();
     super.dispose();
   }
@@ -107,11 +116,12 @@ class _ChatScreenState extends State<ChatScreen> {
     final controller = widget.appController;
     if (controller == null || !mounted) return;
     try {
-      final messages = await controller.loadTranscript(widget.session);
+      final messages = await controller.loadTranscript(_session);
       if (!mounted) return;
       // Diff-apply. Do not setState the page — slots update the live row.
       // Do not jumpTo: scrolled-up readers must not be yanked to the live edge.
       _timeline.applyMessages(messages);
+      _contextTick.value += 1;
       _syncBusyFromController();
     } on OpenChamberHttpException {
       // Keep the last transcript; failure is not empty success.
@@ -125,12 +135,15 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     try {
-      final messages = await controller.loadTranscript(widget.session);
+      final messages = await controller.loadTranscript(_session);
       if (!mounted) return;
       _timeline.applyMessages(messages);
+      _contextTick.value += 1;
       _errorKey.value = null;
       WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToLatest());
-      await controller.refreshSessionStatus(directory: widget.session.directory);
+      await controller.refreshSessionStatus(directory: _session.directory);
+      await controller.ensureContextLimits();
+      _contextTick.value += 1;
       _syncBusyFromController();
     } on OpenChamberHttpException {
       if (!mounted) return;
@@ -139,7 +152,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _syncBusyFromController() {
-    final status = widget.appController?.sessionStatusById[widget.session.id];
+    final status = widget.appController?.sessionStatusById[_session.id];
     final busy = status == 'busy' || status == 'retry';
     if (busy) {
       _live.markWorkStarted();
@@ -205,7 +218,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     try {
       await controller.sendPrompt(
-        session: widget.session,
+        session: _session,
         messageId: messageId,
         text: body,
         attachments: pending,
@@ -241,10 +254,10 @@ class _ChatScreenState extends State<ChatScreen> {
         return;
       }
       try {
-        final messages = await controller.loadTranscript(widget.session);
+        final messages = await controller.loadTranscript(_session);
         if (!mounted) return;
         _timeline.applyMessages(messages);
-        await controller.refreshSessionStatus(directory: widget.session.directory);
+        await controller.refreshSessionStatus(directory: _session.directory);
         _syncBusyFromController();
         if (!_busy.value || ticks >= 30) timer.cancel();
       } on OpenChamberHttpException {
@@ -257,7 +270,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final controller = widget.appController;
     if (controller == null) return;
     try {
-      await controller.replyToPermission(session: widget.session, requestId: requestId, reply: reply);
+      await controller.replyToPermission(session: _session, requestId: requestId, reply: reply);
       await _reloadFromLive();
     } on OpenChamberHttpException {
       if (mounted) _errorKey.value = 'chat.error.permissionFailed';
@@ -270,7 +283,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final controller = widget.appController;
     if (controller != null) {
       try {
-        await controller.abortPrompt(widget.session);
+        await controller.abortPrompt(_session);
       } on OpenChamberHttpException {
         _errorKey.value = 'chat.error.stopFailed';
       }
@@ -278,33 +291,111 @@ class _ChatScreenState extends State<ChatScreen> {
     if (mounted) _busy.value = false;
   }
 
+  MobileContextDisplay? _contextDisplay() {
+    final controller = widget.appController;
+    final tokens = getLatestAssistantTotalTokens(_timeline.oldestFirst);
+    final model = getLatestUserMessageModel(_timeline.oldestFirst);
+    final limit = resolveContextLimit(
+      catalogLimits: controller?.contextLimits ?? const {},
+      providerID: model?.providerID,
+      modelID: model?.modelID,
+      defaultModel: controller?.remoteSettings.blob.value?.defaultModel,
+    );
+    return buildMobileContextDisplay(totalTokens: tokens, contextLimit: limit ?? 0);
+  }
+
   void _openSessionOverflow(BuildContext context) {
+    final controller = widget.appController;
     unawaited(showSessionOverflowSheet(
       context: context,
-      title: widget.session.title,
+      title: _session.title,
       items: buildSessionOverflowItems(
-        pinned: widget.session.kind == HomeSessionKind.pinned,
-        onRename: _stubSessionAction,
-        onTogglePin: _stubSessionAction,
-        onRefreshTranscript: _stubSessionAction,
-        onArchive: _stubSessionAction,
-        onDelete: _stubSessionAction,
+        pinned: _session.kind == HomeSessionKind.pinned,
+        onRename: controller == null ? () {} : () => unawaited(_renameSession(context)),
+        onTogglePin: controller == null ? () {} : () => unawaited(_mutateSession(() => controller.toggleSessionPin(_session))),
+        onRefreshTranscript: () => unawaited(_refreshTranscript(context)),
+        onArchive: controller == null ? () {} : () => unawaited(_archiveSession(context)),
+        onDelete: controller == null ? () {} : () => unawaited(_deleteSession(context)),
       ),
     ));
   }
 
-  void _openContextMetadata(BuildContext context) {
-    final branch = widget.session.branch?.trim();
-    unawaited(showSessionMetadataSheet(
+  Future<void> _renameSession(BuildContext context) async {
+    final next = await showTextPromptDialog(
+      context: context,
+      titleKey: 'sessions.sidebar.session.menu.rename',
+      fieldLabelKey: 'sessions.sidebar.session.menu.rename',
+      confirmKey: 'sessions.sidebar.session.rename.save',
+      cancelKey: 'sessions.sidebar.session.rename.cancel',
+      initial: _session.title,
+      fieldKey: const Key('session-rename-field'),
+      confirmWidgetKey: const Key('session-rename-save'),
+    );
+    if (next == null || !mounted) return;
+    await _mutateSession(() => widget.appController!.renameSession(_session, next));
+  }
+
+  Future<void> _refreshTranscript(BuildContext context) async {
+    if (_busy.value) return;
+    await _reloadFromLive();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(t(context, 'sessions.sidebar.session.refresh.success'))),
+    );
+  }
+
+  Future<void> _archiveSession(BuildContext context) async {
+    final ok = await _mutateSession(() => widget.appController!.archiveSession(_session));
+    if (ok && mounted) Navigator.of(context).maybePop();
+  }
+
+  Future<void> _deleteSession(BuildContext context) async {
+    final confirmed = await showConfirmDialog(
+      context: context,
+      titleKey: 'sessions.sidebar.dialogs.deleteSession.title',
+      messageKey: 'sessions.sidebar.dialogs.deleteSession.single',
+      confirmKey: 'sessions.sidebar.bulkActions.delete',
+      cancelKey: 'sessions.sidebar.session.rename.cancel',
+      messageParams: {'sessionTitle': _session.title},
+      confirmWidgetKey: const Key('session-delete-confirm'),
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    final ok = await _mutateSession(() => widget.appController!.deleteSession(_session));
+    if (ok && mounted) Navigator.of(context).maybePop();
+  }
+
+  Future<bool> _mutateSession(Future<bool> Function() run) async {
+    final controller = widget.appController;
+    if (controller == null) return false;
+    final ok = await run();
+    if (!mounted) return ok;
+    final error = controller.lastMutationErrorKey;
+    if (!ok && error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t(context, error))));
+    }
+    return ok;
+  }
+
+  Future<void> _openContextMetadata(BuildContext context) async {
+    final controller = widget.appController;
+    if (controller != null) {
+      await controller.ensureContextLimits();
+      if (controller.remoteSettings.usage.value == null) {
+        await controller.remoteSettings.loadUsage();
+      }
+    }
+    if (!mounted) return;
+    final branch = _session.branch?.trim();
+    await showSessionMetadataSheet(
       context: context,
       branchLabel: (branch == null || branch.isEmpty)
           ? t(context, 'common.unavailable')
           : branch,
-      contextPercent: OcOptical.contextProgressStubPercent,
-    ));
+      contextDisplay: _contextDisplay(),
+      quotas: controller?.remoteSettings.usage.value ?? const [],
+    );
   }
-
-  void _stubSessionAction() {}
 
   void _openFilePath(String path) {
     if (!isHtmlFile(path)) return;
@@ -375,20 +466,25 @@ class _ChatScreenState extends State<ChatScreen> {
                   valueListenable: _busy,
                   builder: (context, busy, _) {
                     return PushedNavBar(
-                      title: widget.session.title,
-                      subtitle: widget.session.subtitle,
+                      title: _session.title,
+                      subtitle: _session.subtitle,
                       leadingKey: const Key('chat-back'),
                       busy: busy,
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          OcDetailNavChip(
-                            key: const Key('chat-context'),
-                            semanticLabel: t(context, 'mobile.header.openMetadataAria'),
-                            onPressed: () => _openContextMetadata(context),
-                            child: const OcContextProgressIcon(
-                              percentage: OcOptical.contextProgressStubPercent,
-                            ),
+                          ValueListenableBuilder<int>(
+                            valueListenable: _contextTick,
+                            builder: (context, _, _) {
+                              return OcDetailNavChip(
+                                key: const Key('chat-context'),
+                                semanticLabel: t(context, 'mobile.header.openMetadataAria'),
+                                onPressed: () => unawaited(_openContextMetadata(context)),
+                                child: OcContextProgressIcon(
+                                  percentage: _contextDisplay()?.percentage ?? 0,
+                                ),
+                              );
+                            },
                           ),
                           const SizedBox(width: OcOptical.detailNavTrailingGap),
                           OcDetailNavChip(

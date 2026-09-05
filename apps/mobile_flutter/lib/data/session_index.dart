@@ -33,6 +33,7 @@ class SessionIndexSession {
     this.updated = 0,
     this.pinned = false,
     this.unread = false,
+    this.archived = false,
   });
 
   final String id;
@@ -44,6 +45,7 @@ class SessionIndexSession {
   final num updated;
   final bool pinned;
   final bool unread;
+  final bool archived;
 }
 
 SessionIndexSnapshot? parseSessionIndexSnapshot(Object? payload) {
@@ -88,10 +90,13 @@ SessionIndexSession? _parseSession(Map<Object?, Object?> raw, String fallbackDir
   final time = raw['time'];
   num updated = 0;
   var isPinned = pinned.contains(id);
+  var archived = false;
   if (time is Map) {
     final value = time['updated'] ?? time['created'];
     if (value is num) updated = value;
     if (time['pinned'] != null && time['pinned'] != false) isPinned = true;
+    final archivedAt = time['archived'];
+    archived = archivedAt is num && archivedAt > 0;
   }
   String? projectLabel;
   final project = raw['project'];
@@ -109,6 +114,7 @@ SessionIndexSession? _parseSession(Map<Object?, Object?> raw, String fallbackDir
     updated: updated,
     pinned: isPinned,
     unread: raw['unread'] == true,
+    archived: archived,
   );
 }
 
@@ -126,6 +132,7 @@ List<HomeSessionRow> rowsFromSessionIndex(
   for (final directory in snapshot.directories) {
     for (final session in directory.sessions) {
       if (session.parentId != null && session.parentId!.isNotEmpty) continue;
+      if (session.archived) continue;
       final status = statusById[session.id];
       final busy = status == 'busy' || status == 'retry';
       final kind = session.pinned

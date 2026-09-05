@@ -666,9 +666,9 @@ Read on this checkout: `apps/mobile_flutter/**` vs `packages/ui/src/mobile/*`, `
 | **Share delivery** | `MobileShareBridge.tsx` `listPending` / `deliverOne` / recipient picker | **landed** Dart `ShareDelivery` + `ShareInbox` `listPending`/`ack`/`releaseFiles`/`listDrafts`. Catalog uses snapshot `assistant.id` + capability `serverInstanceID`. Recipient picker for untargeted Android drafts. | Device share-extension → inbox → POST is 真机-only. Composer handoff for assigned drafts is not this slice. |
 | **Push tap → session** | `deepLinkNavigation.ts` `pushNotificationActionPerformed` | **landed** `sessionDeepLinkFromPushData` + iOS `remoteNotification` / `didReceive` + Android intent extras → `openchamber://session/{id}` | Real APNs/FCM tap on a phone is still residual. Native FirebaseMessaging 24.x has no `getInitialMessage` (FlutterFire Dart only). |
 | **HTML preview render** | Files iframe/WebView | **landed** preview mode `UiKitView`/`AndroidView` (`openchamber/html_preview_view`). Source stays selectable text. No new pub dep. | Scripted HTML / Impeller WebView compositing is 真机-only. |
-| **Chat context ring + quotas** | `MobileContextProgressButton.tsx` `buildMobileContextDisplay` | Stub `OcOptical.contextProgressStubPercent` (35%); metadata sheet branch-only | Live token/limit % + quota groups. |
-| **Session overflow actions** | `MobileRowActionsSheet.tsx` | `session_overflow_sheet.dart` + `_stubSessionAction` | Implement rename/pin/refresh/archive/delete against official session APIs. |
-| **Projects new-project + row/worktree actions** | `MobileProjectsHomeContainer.tsx` | Snackbar `projects.newProject.todo`; no row `···` sheet | Create-project API + home row actions + worktree new-session/delete. |
+| **Chat context ring + quotas** | `MobileContextProgressButton.tsx` `buildMobileContextDisplay` | **landed** tokens/`limit.context` (hide % when unknown; ring `?? 0`). Quotas load into the metadata sheet from `GET /api/quota/{id}`. Not a stub 35%. |
+| **Session overflow actions** | `MobileRowActionsSheet.tsx` | **landed** rename / pin / refresh / archive / delete against PATCH/DELETE `/api/session/:id` + pin POST/DELETE. Share/copy/unshare still omitted (overflow does not show those rows). |
+| **Projects new-project + row/worktree actions** | `MobileProjectsHomeContainer.tsx` | **landed** new-project sheet (`GET /api/fs/home` + `/api/fs/list` + PUT `projects[]`); home `···` project/worktree/session sheets. Full DirectoryExplorer clone / NewWorktreeDialog / MobileProjectEditSurface remain residual. |
 | Composer `/` `@` `#` | Native accessory | Pan-scroll stub | Full autocomplete if Yee still wants it. |
 | Appearance Flexoki JSON | WebView ThemeSystem | `OcTokens` Light/Dark only | Honest leftover; theme picker not on Flutter Appearance. |
 
@@ -686,7 +686,19 @@ Closes the three code-gaps called out after the eighteenth slice. No merge to `m
 | Push tap → session | landed | `sessionDeepLinkFromPushData` prefers `url`/`deeplink`, else `data.sessionId` → `openchamber://session/{id}`. iOS launch `remoteNotification` + `userNotificationCenter:didReceive`. Android notification-tap extras via `capturePushOpen` (no FlutterFire `getInitialMessage`). |
 | HTML preview render | landed (platform view) | `openchamber/html_preview_view`: WKWebView `loadHTMLString`, Android `WebView.loadDataWithBaseURL`. WidgetTester placeholder key `html-preview-platform`. Existing `html-preview-frame` ListView kept for sheet-dismiss. |
 
-Validated: focused Flutter analyze + `flutter test` on 3.32.8 (this agent). Session overflow / new-project stubs left for a later agent.
+Validated: focused Flutter analyze + `flutter test` on 3.32.8 (this agent). Session overflow / new-project stubs were closed in the twentieth slice.
+
+## Twentieth-slice status (2026-09-05) — session overflow + projects home + context ring
+
+Continues `d9e793ac1` on `work/flutter-native`. No merge to `main`. No 1.18 TanStack. No Flutter UI golden recapture.
+
+| Surface | Status | Notes |
+|---|---|---|
+| Session overflow | landed | Rename PATCH `{title}`; pin/unpin POST/DELETE `/api/openchamber/session-index/session/:id/pin` (501 rolls back); refresh reloads `GET .../messages?turns=6`; archive PATCH `{time.archived}`; delete DELETE (404 = success) with a confirm dialog. Official undo-toast archive is not ported. Share/copy/unshare stay off this sheet. |
+| Projects home | landed | Plus-menu New Project opens a path + `fs/list` browse sheet and PUTs `projects[]` (`createProjectIdFromPath`). Home `···` opens official-order project (new session / new worktree if `GET /api/git/check` / sync / edit label / close) and worktree (new session / remove) sheets. Settings projects overlay so an empty newly-added project appears. |
+| Chat context ring | landed (honest) | Ring is **tokens / `limit.context`**, not provider quota. Baseline = newest token-bearing assistant; a newer compaction part resets to unknown. No tokens or catalog limit → hide the percentage (`common.unavailable`) and paint the ring at 0 — **not** stub 35%. Quotas stay a metadata-sheet section from `GET /api/quota/{id}`. |
+
+Residuals: share/copy/unshare on the session sheet; full DirectoryExplorer (clone / git identity / hidden files); full `NewWorktreeDialog` (branch / startRef); full `MobileProjectEditSurface`; ActivityKit / true-device rows; no 真机过.
 
 #### Will not port
 
@@ -695,6 +707,6 @@ Capgo OTA; plan/notes/Todo; Chat dock tab; `iosNativeUi`; Bonjour 「附近」; 
 ### Remaining gaps (updated)
 
 1. Device-only rows above — still ❌ 真机过.
-2. Context ring; session overflow; new-project / home row actions. Share delivery / push-tap / HTML WebView preview landed in the nineteenth slice (Dart + native wiring; 真机 still residual).
+2. Share/copy/unshare on session overflow; full DirectoryExplorer / NewWorktreeDialog / project-edit surface. Context ring / session overflow mutations / new-project + home `···` landed in the twentieth slice (catalog limit required for a real %; 真机 still residual).
 3. Android launcher badge — honest host-side gap.
 4. Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` — will not port.

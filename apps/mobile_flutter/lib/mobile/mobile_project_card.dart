@@ -18,6 +18,7 @@ class MobileProjectCard extends StatelessWidget {
     required this.count,
     required this.expanded,
     required this.onToggle,
+    this.onOpenActions,
     this.glyph = OcGlyphKind.code,
     this.activity,
     this.pathHint,
@@ -34,6 +35,7 @@ class MobileProjectCard extends StatelessWidget {
   final bool compact;
   final String highlightQuery;
   final VoidCallback onToggle;
+  final VoidCallback? onOpenActions;
 
   @override
   Widget build(BuildContext context) {
@@ -45,25 +47,29 @@ class MobileProjectCard extends StatelessWidget {
       color: context.oc.mutedForeground,
     );
     final metaInk = ocCssInk(metaStyle)!;
-    return Pressable(
-      haptic: HapticStrength.light,
-      onPressed: onToggle,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          minHeight: compact ? 0 : OcOptical.projectHeaderHeight,
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minHeight: compact ? 0 : OcOptical.projectHeaderHeight,
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          OcOptical.projectTriggerPad,
+          compact ? OcOptical.groupHeaderPadVCompact : OcOptical.projectTriggerPad,
+          OcOptical.projectTriggerPad,
+          compact ? OcOptical.groupHeaderPadVCompact : OcOptical.projectTriggerPad,
         ),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            OcOptical.projectTriggerPad,
-            compact ? OcOptical.groupHeaderPadVCompact : OcOptical.projectTriggerPad,
-            OcOptical.projectTriggerPad,
-            compact ? OcOptical.groupHeaderPadVCompact : OcOptical.projectTriggerPad,
-          ),
-          child: Row(
+        child: Row(
             // Official `.oc-mobile-project-trigger` is items-center with
             // title column `gap-1` (4). Start was only for the 54 inflate.
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              Expanded(
+                child: Pressable(
+                  haptic: HapticStrength.light,
+                  onPressed: onToggle,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
               SizedBox(
                 width: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
                 height: compact ? OcOptical.leadingCircleCompact : OcOptical.leadingCircle,
@@ -159,17 +165,26 @@ class MobileProjectCard extends StatelessWidget {
                 strokeWidth: OcOptical.sessionMoreStroke,
                 color: context.oc.mutedForeground,
               ),
-              Padding(
-                padding: const EdgeInsets.only(right: OcOptical.projectActionMargin),
-                child: SizedBox(
-                  width: 36,
-                  height: 36,
-                  child: Center(
-                    child: OcGlyph(
-                      OcGlyphKind.ellipsis,
-                      size: OcOptical.overflow,
-                      strokeWidth: OcOptical.sessionMoreStroke,
-                      color: context.oc.mutedForeground,
+                    ],
+                  ),
+                ),
+              ),
+              Pressable(
+                key: Key('home-project-actions-$name'),
+                haptic: HapticStrength.light,
+                onPressed: onOpenActions,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: OcOptical.projectActionMargin),
+                  child: SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: Center(
+                      child: OcGlyph(
+                        OcGlyphKind.ellipsis,
+                        size: OcOptical.overflow,
+                        strokeWidth: OcOptical.sessionMoreStroke,
+                        color: context.oc.mutedForeground,
+                      ),
                     ),
                   ),
                 ),

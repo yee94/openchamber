@@ -16,7 +16,27 @@ import 'package:flutter/foundation.dart';
 /// Listeners of this controller fire only on **structure** (ids / order /
 /// length). Per-message content updates go through [slotFor] so a streaming
 /// token cannot rebuild the whole list.
-enum ChatPartKind { text, mermaid, diff, fileOp, permission, task, tool, reasoning }
+enum ChatPartKind { text, mermaid, diff, fileOp, permission, task, tool, reasoning, compaction }
+
+class ContextTokenRecord {
+  const ContextTokenRecord({
+    this.input = 0,
+    this.output = 0,
+    this.reasoning = 0,
+    this.cacheRead = 0,
+    this.cacheWrite = 0,
+  });
+
+  final num input;
+  final num output;
+  final num reasoning;
+  final num cacheRead;
+  final num cacheWrite;
+
+  num get total => input + output + reasoning + cacheRead + cacheWrite;
+
+  bool get hasAny => total > 0;
+}
 
 class DiffLine {
   const DiffLine({required this.kind, required this.text});
@@ -95,6 +115,10 @@ class ChatMessage {
     this.agentCount = 0,
     this.errorKind,
     this.errorText,
+    this.tokens,
+    this.providerID,
+    this.modelID,
+    this.hasCompactionPart = false,
   });
 
   final String id;
@@ -111,8 +135,20 @@ class ChatMessage {
   /// Official `resolveAssistantErrorPresentation`: `aborted` | `error`.
   final String? errorKind;
   final String? errorText;
+  final ContextTokenRecord? tokens;
+  final String? providerID;
+  final String? modelID;
+  final bool hasCompactionPart;
 
-  ChatMessage copyWith({List<ChatPart>? parts, String? errorKind, String? errorText}) {
+  ChatMessage copyWith({
+    List<ChatPart>? parts,
+    String? errorKind,
+    String? errorText,
+    ContextTokenRecord? tokens,
+    String? providerID,
+    String? modelID,
+    bool? hasCompactionPart,
+  }) {
     return ChatMessage(
       id: id,
       body: body,
@@ -126,6 +162,10 @@ class ChatMessage {
       agentCount: agentCount,
       errorKind: errorKind ?? this.errorKind,
       errorText: errorText ?? this.errorText,
+      tokens: tokens ?? this.tokens,
+      providerID: providerID ?? this.providerID,
+      modelID: modelID ?? this.modelID,
+      hasCompactionPart: hasCompactionPart ?? this.hasCompactionPart,
     );
   }
 
@@ -141,6 +181,10 @@ class ChatMessage {
         agentCount != other.agentCount ||
         errorKind != other.errorKind ||
         errorText != other.errorText ||
+        tokens?.total != other.tokens?.total ||
+        providerID != other.providerID ||
+        modelID != other.modelID ||
+        hasCompactionPart != other.hasCompactionPart ||
         parts.length != other.parts.length) {
       return false;
     }

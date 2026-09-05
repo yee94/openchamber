@@ -34,6 +34,25 @@ class HomeSessionRow {
   final num updated;
 
   String get subtitle => formatHomeSessionSubtitle(projectLabel, branch);
+
+  HomeSessionRow copyWith({
+    String? title,
+    HomeSessionKind? kind,
+    bool? unread,
+    String? directory,
+    num? updated,
+  }) {
+    return HomeSessionRow(
+      id: id,
+      title: title ?? this.title,
+      projectLabel: projectLabel,
+      kind: kind ?? this.kind,
+      branch: branch,
+      unread: unread ?? this.unread,
+      directory: directory ?? this.directory,
+      updated: updated ?? this.updated,
+    );
+  }
 }
 
 /// Fixture rows for unit tests. Production home reads `AppController.sessions`.

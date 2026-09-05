@@ -66,6 +66,13 @@ class SettingsBlob {
   }
 
   List<SettingsNamedItem> get projects => parseProjectEntries(raw['projects']);
+
+  /// Full `projects[]` maps for PUT merge (id / path / label / timestamps).
+  List<Map<String, Object?>> get projectRecords {
+    return asObjectList(raw['projects']).map((item) => Map<String, Object?>.from(item)).toList();
+  }
+
+  String? get defaultModel => stringField('defaultModel');
 }
 
 class SettingsRemoteStore {

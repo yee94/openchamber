@@ -20,6 +20,14 @@ abstract final class OpenChamberPaths {
       '/api/session/${Uri.encodeComponent(sessionId)}/abort';
   static const sessionStatus = '/api/session/status';
   static const sessionCreate = '/api/session';
+  static String session(String sessionId) =>
+      '/api/session/${Uri.encodeComponent(sessionId)}';
+  static String sessionIndexPin(String sessionId) =>
+      '/api/openchamber/session-index/session/${Uri.encodeComponent(sessionId)}/pin';
+  static const fsHome = '/api/fs/home';
+  static const fsList = '/api/fs/list';
+  static const gitCheck = '/api/git/check';
+  static const gitWorktrees = '/api/git/worktrees';
   static const globalEvent = '/api/global/event';
   static const globalEventWs = '/api/global/event/ws';
   static const pushApnsToken = '/api/push/apns-token';

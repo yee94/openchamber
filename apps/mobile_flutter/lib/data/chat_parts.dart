@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'chat_timeline.dart';
 import 'context_tool_grouping.dart';
+import 'context_usage.dart';
 
 class PermissionRequestRecord {
   const PermissionRequestRecord({
@@ -50,6 +51,10 @@ List<ChatMessage> parseTurnPageMessages(Object? payload, {List<PermissionRequest
       modelName = model?.toString() ?? info['modelID']?.toString();
     }
     if (modelName != null && modelName.isEmpty) modelName = null;
+    final providerID = info['providerID']?.toString();
+    final modelID = info['modelID']?.toString() ?? (model is Map ? model['id']?.toString() : null);
+    final tokens = parseContextTokenRecord(info['tokens']);
+    final hasCompaction = parts.any((part) => part.kind == ChatPartKind.compaction);
     final agentRole = info['agent']?.toString() ?? info['mode']?.toString();
     final created = _num(info['time'] is Map ? (info['time'] as Map)['created'] : info['createdAt']);
     final completed = _num(info['time'] is Map ? (info['time'] as Map)['completed'] : info['completedAt']);
@@ -80,6 +85,10 @@ List<ChatMessage> parseTurnPageMessages(Object? payload, {List<PermissionRequest
       agentCount: agentCount,
       errorKind: error?.kind,
       errorText: error?.text,
+      tokens: tokens,
+      providerID: providerID == null || providerID.isEmpty ? null : providerID,
+      modelID: modelID == null || modelID.isEmpty ? null : modelID,
+      hasCompactionPart: hasCompaction,
     ));
   }
   if (permissions.isEmpty || messages.isEmpty) return messages;
@@ -103,6 +112,15 @@ List<ChatPart> parseChatParts(Object? parts, {required String messageId}) {
     final type = part['type']?.toString() ?? '';
     final id = part['id']?.toString() ?? '$messageId-$index';
     index += 1;
+    if (type == 'compaction') {
+      out.add(ChatPart(
+        id: id,
+        kind: ChatPartKind.compaction,
+        title: 'compaction',
+        metadata: {'compacted': true},
+      ));
+      continue;
+    }
     if (type == 'text') {
       out.addAll(splitTextAndMermaid(part['text']?.toString() ?? '', id: id));
       continue;

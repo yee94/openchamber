@@ -17,6 +17,7 @@ class MobileSessionRow extends StatelessWidget {
     super.key,
     required this.row,
     required this.onSelect,
+    this.onOpenActions,
     this.highlightQuery = '',
     this.showUnreadKey = false,
     this.showBottomDivider = false,
@@ -27,6 +28,7 @@ class MobileSessionRow extends StatelessWidget {
   final HomeSessionRow row;
   final String highlightQuery;
   final VoidCallback onSelect;
+  final VoidCallback? onOpenActions;
   final bool showUnreadKey;
 
   /// Official `.oc-mobile-session-row:not(:last-child)` inset divider.
@@ -40,19 +42,15 @@ class MobileSessionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final inner = OcTokens.insetRadius - 1;
     final subtitle = row.subtitle.trim();
-    final rowBody = Pressable(
-      haptic: HapticStrength.light,
-      onPressed: onSelect,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: OcOptical.sessionRowVisualHeight),
-        child: Row(
-          // Official `.oc-mobile-session-row-content` is items-center.
-          // Start was a README-trace from the 114.8 invented-air era so
-          // time / ··· sat on the title band. Row is 46.4 now — port
-          // the official center. Do not screenshot-trace README.
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
+    final rowBody = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: OcOptical.sessionRowVisualHeight),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Pressable(
+              haptic: HapticStrength.light,
+              onPressed: onSelect,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
                   OcOptical.sessionRowPadH,
@@ -61,7 +59,6 @@ class MobileSessionRow extends StatelessWidget {
                   OcOptical.sessionRowPadV,
                 ),
                 child: Row(
-                  // Official `.oc-mobile-session-row-main` is items-center.
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     SizedBox(
@@ -95,12 +92,6 @@ class MobileSessionRow extends StatelessWidget {
                             stem: OcOptical.sessionTitleStem,
                             style: TextStyle(
                               fontSize: OcOptical.rowTitle,
-                              // Official `.oc-mobile-session-title` is
-                              // `font-medium` / unread `font-semibold`.
-                              // ReviewSans Medium covers Latin. CJK
-                              // Regular Micro Hei (DemiLight@500 still
-                              // bricks 12px vs PingFang Medium air).
-                              // Do not stem.
                               fontWeight: row.unread ? FontWeight.w600 : FontWeight.w500,
                               letterSpacing: OcOptical.rowTitleTrackingOfficial,
                               height: OcOptical.rowTitleHeight,
@@ -150,7 +141,12 @@ class MobileSessionRow extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(
+          ),
+          Pressable(
+            key: Key('home-session-actions-${row.id}'),
+            haptic: HapticStrength.light,
+            onPressed: onOpenActions,
+            child: SizedBox(
               width: OcOptical.sessionMoreHit,
               height: OcOptical.sessionMoreHit,
               child: Center(
@@ -162,9 +158,9 @@ class MobileSessionRow extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: OcOptical.sessionMoreEdge),
-          ],
-        ),
+          ),
+          const SizedBox(width: OcOptical.sessionMoreEdge),
+        ],
       ),
     );
 

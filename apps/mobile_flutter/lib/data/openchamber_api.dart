@@ -16,6 +16,16 @@ class CreatedSession {
   final String? directory;
 }
 
+class FilesystemEntry {
+  const FilesystemEntry({required this.name, required this.path, required this.type});
+
+  final String name;
+  final String path;
+  final String type;
+
+  bool get isDirectory => type == 'directory';
+}
+
 class OpenChamberApi {
   OpenChamberApi({OpenChamberTransport? transport})
       : transport = transport ?? LiveOpenChamberTransport();
@@ -605,6 +615,170 @@ class OpenChamberApi {
     return created;
   }
 
+  /// OpenCode `session.update` → PATCH `/api/session/:id?directory=`.
+  Future<Object?> updateSession({
+    required Uri base,
+    required String bearer,
+    required String sessionId,
+    String? directory,
+    String? title,
+    num? archivedAt,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'PATCH',
+        path: OpenChamberPaths.session(sessionId),
+        bearer: bearer,
+        query: {
+          if (directory != null && directory.isNotEmpty) 'directory': directory,
+        },
+        body: {
+          if (title != null) 'title': title,
+          if (archivedAt != null) 'time': {'archived': archivedAt},
+        },
+      ),
+      bearer,
+    );
+  }
+
+  /// OpenCode `session.delete` → DELETE `/api/session/:id?directory=`.
+  /// Official cascade treats 404 as success.
+  Future<void> deleteSession({
+    required Uri base,
+    required String bearer,
+    required String sessionId,
+    String? directory,
+  }) async {
+    final response = await transport.send(
+      base,
+      OpenChamberRequest(
+        method: 'DELETE',
+        path: OpenChamberPaths.session(sessionId),
+        bearer: bearer,
+        query: {
+          if (directory != null && directory.isNotEmpty) 'directory': directory,
+        },
+      ),
+    );
+    if (response.status == 404 || response.ok) return;
+    throw OpenChamberHttpException(response.status, OpenChamberPaths.session(sessionId));
+  }
+
+  /// POST `/api/openchamber/session-index/session/:id/pin`. 501 = unsupported.
+  Future<void> pinSession({
+    required Uri base,
+    required String bearer,
+    required String sessionId,
+  }) async {
+    await _requirePin(
+      base,
+      OpenChamberRequest(method: 'POST', path: OpenChamberPaths.sessionIndexPin(sessionId), bearer: bearer),
+    );
+  }
+
+  /// DELETE `/api/openchamber/session-index/session/:id/pin`. 501 = unsupported.
+  Future<void> unpinSession({
+    required Uri base,
+    required String bearer,
+    required String sessionId,
+  }) async {
+    await _requirePin(
+      base,
+      OpenChamberRequest(method: 'DELETE', path: OpenChamberPaths.sessionIndexPin(sessionId), bearer: bearer),
+    );
+  }
+
+  Future<String> getFilesystemHome({required Uri base, String? bearer}) async {
+    final body = await _requireMap(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.fsHome), bearer);
+    final home = body['home']?.toString().trim() ?? '';
+    if (home.isEmpty) {
+      throw const OpenChamberHttpException(200, OpenChamberPaths.fsHome, code: 'malformed');
+    }
+    return home;
+  }
+
+  Future<List<FilesystemEntry>> listFilesystem({
+    required Uri base,
+    String? bearer,
+    required String path,
+  }) async {
+    final body = await _requireMap(
+      base,
+      OpenChamberRequest(method: 'GET', path: OpenChamberPaths.fsList, query: {'path': path}),
+      bearer,
+    );
+    final entries = body['entries'];
+    if (entries is! List) return const [];
+    return entries.whereType<Map>().map((item) {
+      final map = item.map((key, value) => MapEntry(key.toString(), value));
+      return FilesystemEntry(
+        name: map['name']?.toString() ?? '',
+        path: map['path']?.toString() ?? '',
+        type: map['type']?.toString() ?? '',
+      );
+    }).where((entry) => entry.path.isNotEmpty).toList();
+  }
+
+  Future<bool> checkIsGitRepository({
+    required Uri base,
+    String? bearer,
+    required String directory,
+  }) async {
+    final body = await _requireMap(
+      base,
+      OpenChamberRequest(method: 'GET', path: OpenChamberPaths.gitCheck, query: {'directory': directory}),
+      bearer,
+    );
+    return body['isGitRepository'] == true;
+  }
+
+  Future<Map<String, Object?>> createGitWorktree({
+    required Uri base,
+    String? bearer,
+    required String directory,
+    required String worktreeName,
+  }) {
+    return _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.gitWorktrees,
+        query: {'directory': directory},
+        body: {'worktreeName': worktreeName, 'mode': 'new'},
+      ),
+      bearer,
+    );
+  }
+
+  Future<void> deleteGitWorktree({
+    required Uri base,
+    String? bearer,
+    required String directory,
+    required String worktreePath,
+  }) async {
+    await _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'DELETE',
+        path: OpenChamberPaths.gitWorktrees,
+        query: {'directory': directory},
+        body: {'directory': worktreePath},
+      ),
+      bearer,
+    );
+  }
+
+  Future<void> _requirePin(Uri base, OpenChamberRequest request) async {
+    final response = await transport.send(base, request);
+    if (response.status == 501) {
+      throw OpenChamberHttpException(501, request.path, code: 'unsupported');
+    }
+    if (!response.ok) {
+      throw OpenChamberHttpException(response.status, request.path);
+    }
+  }
+
   Stream<List<int>> openGlobalEventStream({
     required Uri base,
     required String bearer,
@@ -1008,7 +1182,7 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
     List<Map<String, Object?>>? transcript,
     this.statusBySession = const {},
     this.unlockPassword,
-  })  : sessionIndex = sessionIndex ?? defaultTestSessionIndex,
+  })  : sessionIndex = _cloneJsonMap(sessionIndex ?? defaultTestSessionIndex),
         transcript = transcript ?? defaultTestTranscript;
 
   Map<String, Object?> health;
@@ -1035,6 +1209,16 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   int statusStatus = 200;
   int pushStatus = 200;
   int createStatus = 200;
+  int sessionMutationStatus = 200;
+  int pinStatus = 200;
+  int fsStatus = 200;
+  int gitStatus = 200;
+  String fsHome = '/workspace';
+  List<Map<String, Object?>> fsEntries = [
+    {'name': 'openchamber', 'path': '/workspace/openchamber', 'type': 'directory'},
+    {'name': 'notes', 'path': '/workspace/notes', 'type': 'directory'},
+    {'name': 'README.md', 'path': '/workspace/README.md', 'type': 'file'},
+  ];
   int settingsStatus = 200;
   int catalogStatus = 200;
   int mutationStatus = 200;
@@ -1219,6 +1403,137 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
     return OpenChamberResponse(status: mutationStatus, body: {'ok': true});
   }
 
+  static String _basename(String path) {
+    final trimmed = path.replaceAll(RegExp(r'[/\\]+$'), '');
+    final parts = trimmed.split(RegExp(r'[/\\]'));
+    return parts.isEmpty ? path : parts.last;
+  }
+
+  static Map<String, Object?> _cloneJsonMap(Map<String, Object?> source) {
+    return (jsonDecode(jsonEncode(source)) as Map).map((key, value) => MapEntry(key.toString(), value));
+  }
+
+  List<Object?> _indexDirectories() {
+    final raw = sessionIndex['directories'];
+    return raw is List ? [...raw] : [];
+  }
+
+  void _writeIndexDirectories(List<Object?> directories) {
+    sessionIndex = {
+      ...sessionIndex,
+      'directories': directories,
+      'revision': (sessionIndex['revision'] is num ? (sessionIndex['revision'] as num).toInt() : 0) + 1,
+    };
+  }
+
+  void _upsertIndexedSession(Map<String, Object?> session) {
+    final id = session['id']?.toString() ?? '';
+    if (id.isEmpty) return;
+    final directory = session['directory']?.toString() ?? '';
+    final directories = _indexDirectories();
+    var foundDirectory = false;
+    final next = directories.map((item) {
+      if (item is! Map) return item;
+      final dir = item.map((key, value) => MapEntry(key.toString(), value));
+      if (dir['directory']?.toString() != directory) return item;
+      foundDirectory = true;
+      final sessions = [...(dir['sessions'] is List ? dir['sessions'] as List : const [])];
+      final index = sessions.indexWhere((row) => row is Map && row['id']?.toString() == id);
+      if (index >= 0) {
+        final current = Map<String, Object?>.from((sessions[index] as Map).map((key, value) => MapEntry(key.toString(), value)));
+        sessions[index] = {...current, ...session};
+      } else {
+        sessions.add(session);
+      }
+      return {...dir, 'sessions': sessions};
+    }).toList();
+    if (!foundDirectory && directory.isNotEmpty) {
+      next.add({
+        'directory': directory,
+        'sessions': [session],
+      });
+    }
+    _writeIndexDirectories(next);
+  }
+
+  void _patchIndexedSession(String id, Map<String, Object?> patch) {
+    final directories = _indexDirectories().map((item) {
+      if (item is! Map) return item;
+      final dir = item.map((key, value) => MapEntry(key.toString(), value));
+      final sessions = [...(dir['sessions'] is List ? dir['sessions'] as List : const [])];
+      var changed = false;
+      for (var i = 0; i < sessions.length; i += 1) {
+        if (sessions[i] is! Map) continue;
+        final current = Map<String, Object?>.from((sessions[i] as Map).map((key, value) => MapEntry(key.toString(), value)));
+        if (current['id']?.toString() != id) continue;
+        final time = current['time'] is Map
+            ? Map<String, Object?>.from((current['time'] as Map).map((key, value) => MapEntry(key.toString(), value)))
+            : <String, Object?>{};
+        if (patch['title'] != null) current['title'] = patch['title'];
+        final patchTime = patch['time'];
+        if (patchTime is Map) {
+          time.addAll(patchTime.map((key, value) => MapEntry(key.toString(), value)));
+          current['time'] = time;
+        }
+        sessions[i] = current;
+        changed = true;
+      }
+      if (!changed) return item;
+      return {...dir, 'sessions': sessions};
+    }).toList();
+    _writeIndexDirectories(directories);
+  }
+
+  void _removeIndexedSession(String id) {
+    final directories = _indexDirectories().map((item) {
+      if (item is! Map) return item;
+      final dir = item.map((key, value) => MapEntry(key.toString(), value));
+      final sessions = [...(dir['sessions'] is List ? dir['sessions'] as List : const [])]
+          .where((row) => row is! Map || row['id']?.toString() != id)
+          .toList();
+      return {...dir, 'sessions': sessions};
+    }).toList();
+    _writeIndexDirectories(directories);
+  }
+
+  void _setPinned(String id, {required bool pinned}) {
+    final ids = [...(sessionIndex['pinnedSessionIds'] is List ? sessionIndex['pinnedSessionIds'] as List : const [])]
+        .map((item) => item.toString())
+        .where((item) => item.isNotEmpty && item != id)
+        .toList();
+    if (pinned) ids.add(id);
+    sessionIndex = {...sessionIndex, 'pinnedSessionIds': ids};
+    _patchIndexedSession(id, {
+      'time': pinned ? {'pinned': '2026-09-05T00:00:00.000Z'} : {'pinned': null},
+    });
+    // Clearing pin: drop the time.pinned key rather than store null.
+    if (!pinned) {
+      final directories = _indexDirectories().map((item) {
+        if (item is! Map) return item;
+        final dir = item.map((key, value) => MapEntry(key.toString(), value));
+        final sessions = [...(dir['sessions'] is List ? dir['sessions'] as List : const [])].map((row) {
+          if (row is! Map || row['id']?.toString() != id) return row;
+          final current = Map<String, Object?>.from(row.map((key, value) => MapEntry(key.toString(), value)));
+          final time = current['time'] is Map
+              ? Map<String, Object?>.from((current['time'] as Map).map((key, value) => MapEntry(key.toString(), value)))
+              : <String, Object?>{};
+          time.remove('pinned');
+          current['time'] = time;
+          return current;
+        }).toList();
+        return {...dir, 'sessions': sessions};
+      }).toList();
+      _writeIndexDirectories(directories);
+    }
+  }
+
+  void _removeIndexDirectory(String directory) {
+    final next = _indexDirectories().where((item) {
+      return item is! Map || item['directory']?.toString() != directory;
+    }).toList();
+    _writeIndexDirectories(next);
+  }
+
   OpenChamberResponse _mutateAssistant(OpenChamberRequest request) {
     final id = Uri.decodeComponent(request.path.split('/').last);
     final root = assistants is Map ? Map<String, Object?>.from((assistants as Map).map((key, value) => MapEntry(key.toString(), value))) : <String, Object?>{'revision': 1, 'enabled': true, 'assistants': <Object?>[]};
@@ -1340,7 +1655,12 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
       {
         'id': 'anthropic',
         'name': 'Anthropic',
-        'models': {'claude-sonnet-4': {'id': 'claude-sonnet-4'}},
+        'models': {
+          'claude-sonnet-4': {
+            'id': 'claude-sonnet-4',
+            'limit': {'context': 200000},
+          },
+        },
       },
       {
         'id': 'openai',
@@ -1543,6 +1863,12 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
           'directory': directory,
         };
         createdSessions.add(created);
+        _upsertIndexedSession({
+          ...created,
+          'parentID': null,
+          'project': {'name': _basename(directory)},
+          'time': {'updated': DateTime.now().millisecondsSinceEpoch},
+        });
         return OpenChamberResponse(status: createStatus, body: created);
       case OpenChamberPaths.globalEvent:
         return const OpenChamberResponse(status: 200, body: null);
@@ -1823,6 +2149,85 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         }
         if (request.path.startsWith('/api/openchamber/assistants/')) {
           return _mutateAssistant(request);
+        }
+        if (request.path.startsWith('/api/openchamber/session-index/session/') && request.path.endsWith('/pin')) {
+          final id = Uri.decodeComponent(request.path.split('/')[request.path.split('/').length - 2]);
+          if (pinStatus == 501) {
+            return OpenChamberResponse(status: 501, body: {'error': 'unsupported'});
+          }
+          if (!pinStatus.toString().startsWith('2')) {
+            return OpenChamberResponse(status: pinStatus, body: {'error': 'pin_failed'});
+          }
+          _setPinned(id, pinned: request.method == 'POST');
+          return OpenChamberResponse(status: pinStatus, body: const {'ok': true});
+        }
+        if (request.path.startsWith('/api/session/') &&
+            !request.path.contains('/prompt_async') &&
+            !request.path.contains('/abort') &&
+            !request.path.contains('/messages')) {
+          final id = Uri.decodeComponent(request.path.split('/').last);
+          if (request.method == 'DELETE') {
+            if (sessionMutationStatus == 404) {
+              _removeIndexedSession(id);
+              return const OpenChamberResponse(status: 404, body: {'error': 'missing'});
+            }
+            if (sessionMutationStatus < 200 || sessionMutationStatus >= 300) {
+              return OpenChamberResponse(status: sessionMutationStatus, body: {'error': 'delete_failed'});
+            }
+            _removeIndexedSession(id);
+            return OpenChamberResponse(status: sessionMutationStatus, body: const {'ok': true});
+          }
+          if (request.method == 'PATCH') {
+            if (sessionMutationStatus < 200 || sessionMutationStatus >= 300) {
+              return OpenChamberResponse(status: sessionMutationStatus, body: {'error': 'update_failed'});
+            }
+            _patchIndexedSession(id, request.body ?? const {});
+            return OpenChamberResponse(status: sessionMutationStatus, body: const {'ok': true});
+          }
+        }
+        if (request.path == OpenChamberPaths.fsHome) {
+          return OpenChamberResponse(status: fsStatus, body: {'home': fsHome});
+        }
+        if (request.path == OpenChamberPaths.fsList) {
+          final path = request.query['path'] ?? fsHome;
+          final entries = fsEntries.where((entry) {
+            final entryPath = entry['path']?.toString() ?? '';
+            final parent = entryPath.contains('/') ? entryPath.substring(0, entryPath.lastIndexOf('/')) : '';
+            return parent == path || (path == '/' && entryPath.split('/').where((part) => part.isNotEmpty).length == 1);
+          }).toList();
+          return OpenChamberResponse(status: fsStatus, body: {'entries': entries});
+        }
+        if (request.path == OpenChamberPaths.gitCheck) {
+          final directory = request.query['directory'] ?? '';
+          return OpenChamberResponse(
+            status: gitStatus,
+            body: {'isGitRepository': directory.contains('openchamber') || directory == '/workspace'},
+          );
+        }
+        if (request.path == OpenChamberPaths.gitWorktrees) {
+          if (gitStatus < 200 || gitStatus >= 300) {
+            return OpenChamberResponse(status: gitStatus, body: {'error': 'git_failed'});
+          }
+          final parent = request.query['directory'] ?? '';
+          if (request.method == 'POST') {
+            final name = request.body?['worktreeName']?.toString() ?? 'worktree';
+            final path = '$parent/.worktrees/$name';
+            _upsertIndexedSession({
+              'id': 'sess-wt-$name',
+              'title': 'Worktree $name',
+              'directory': path,
+              'parentID': null,
+              'project': {'name': _basename(parent)},
+              'time': {'updated': DateTime.now().millisecondsSinceEpoch},
+              'branch': name,
+            });
+            return OpenChamberResponse(status: gitStatus, body: {'path': path, 'worktreeName': name});
+          }
+          if (request.method == 'DELETE') {
+            final worktreePath = request.body?['directory']?.toString() ?? '';
+            _removeIndexDirectory(worktreePath);
+            return OpenChamberResponse(status: gitStatus, body: const {'success': true});
+          }
         }
         return const OpenChamberResponse(status: 404, body: {'error': 'not_found'});
     }

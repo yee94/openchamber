@@ -1398,6 +1398,7 @@ class ToolPartCard extends StatelessWidget {
         return _MermaidCard(part: part);
       case ChatPartKind.text:
       case ChatPartKind.reasoning:
+      case ChatPartKind.compaction:
         return const SizedBox.shrink();
     }
   }

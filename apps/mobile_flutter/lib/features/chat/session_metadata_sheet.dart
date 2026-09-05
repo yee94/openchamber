@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../data/context_usage.dart';
+import '../../data/settings_remote.dart';
 import '../../l10n/app_strings.dart';
 import '../../motion/pressable.dart';
 import '../../native/haptics.dart';
@@ -9,7 +11,8 @@ import '../../theme/oc_glyphs.dart';
 Future<void> showSessionMetadataSheet({
   required BuildContext context,
   required String branchLabel,
-  required double contextPercent,
+  MobileContextDisplay? contextDisplay,
+  List<SettingsNamedItem> quotas = const [],
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -17,26 +20,30 @@ Future<void> showSessionMetadataSheet({
     isScrollControlled: true,
     builder: (sheetContext) => SessionMetadataSheet(
       branchLabel: branchLabel,
-      contextPercent: contextPercent,
+      contextDisplay: contextDisplay,
+      quotas: quotas,
     ),
   );
 }
 
-/// Visual stub of official session metadata (branch + context ring).
-/// Quota groups stay off until Flutter has a usage store.
+/// Official metadata: branch + token/limit context (not a stub %).
+/// Quotas are a separate section from `GET /api/quota/{id}`.
 class SessionMetadataSheet extends StatelessWidget {
   const SessionMetadataSheet({
     super.key,
     required this.branchLabel,
-    required this.contextPercent,
+    this.contextDisplay,
+    this.quotas = const [],
   });
 
   final String branchLabel;
-  final double contextPercent;
+  final MobileContextDisplay? contextDisplay;
+  final List<SettingsNamedItem> quotas;
 
   @override
   Widget build(BuildContext context) {
     final tokens = context.oc;
+    final percent = contextDisplay?.percentage ?? 0;
     return Material(
       key: const Key('session-metadata-sheet'),
       color: tokens.pageBackground,
@@ -88,10 +95,30 @@ class SessionMetadataSheet extends StatelessWidget {
               value: branchLabel,
             ),
             _MetadataRow(
-              icon: OcContextProgressIcon(percentage: contextPercent),
+              icon: OcContextProgressIcon(percentage: percent),
               label: t(context, 'mobile.header.metadata.context'),
-              value: '${contextPercent.toStringAsFixed(1)}%',
+              value: contextDisplay?.tokensLabel ?? t(context, 'common.unavailable'),
             ),
+            if (quotas.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  t(context, 'settings.usage.title'),
+                  style: ocCssInk(TextStyle(
+                    fontSize: OcTokens.textUiLabel,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.foreground,
+                  )),
+                ),
+              ),
+              for (final row in quotas)
+                _MetadataRow(
+                  glyph: OcGlyphKind.layers,
+                  label: row.title,
+                  value: row.subtitle ?? t(context, 'common.unavailable'),
+                ),
+            ],
           ],
         ),
       ),

@@ -20,7 +20,9 @@ import 'oauth.dart';
 import 'assistant_scheduled.dart';
 import 'chat_timeline.dart';
 import 'connection_candidates.dart';
+import 'context_usage.dart';
 import 'home_session.dart';
+import 'project_id.dart';
 import 'instance_store.dart';
 import 'openchamber_api.dart';
 import 'openchamber_http.dart';
@@ -132,6 +134,8 @@ class AppController extends ChangeNotifier {
   int transcriptEpoch = 0;
   SessionIndexSnapshot? lastIndex;
   String? createSessionErrorKey;
+  String? lastMutationErrorKey;
+  Map<String, num> contextLimits = const {};
   SettingsResource<AssistantSnapshotView> assistantSnapshot = const SettingsResource();
   SettingsResource<List<ScheduledTaskRecord>> scheduledTasks = const SettingsResource();
   SettingsResource<List<ScheduledRunRecord>> scheduledRuns = const SettingsResource();
@@ -881,11 +885,11 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<HomeSessionRow?> createSession({String? title}) async {
+  Future<HomeSessionRow?> createSession({String? title, String? directory}) async {
     createSessionErrorKey = null;
     final base = activeBase;
-    final directory = _preferredCreateDirectory();
-    if (base == null || directory == null || directory.isEmpty) {
+    final target = (directory != null && directory.isNotEmpty) ? directory : _preferredCreateDirectory();
+    if (base == null || target == null || target.isEmpty) {
       createSessionErrorKey = 'projects.newChat.needsServer';
       notifyListeners();
       return null;
@@ -894,7 +898,7 @@ class AppController extends ChangeNotifier {
       final created = await _api.createSession(
         base: base,
         bearer: activeBearer ?? '',
-        directory: directory,
+        directory: target,
         title: title,
       );
       await refreshSessions();
@@ -906,7 +910,7 @@ class AppController extends ChangeNotifier {
         title: created.title ?? 'New Session',
         projectLabel: '',
         kind: HomeSessionKind.catalog,
-        directory: created.directory ?? directory,
+        directory: created.directory ?? target,
       );
     } on OpenChamberHttpException {
       createSessionErrorKey = 'projects.newChat.failed';
@@ -927,6 +931,326 @@ class AppController extends ChangeNotifier {
       if (directory != null && directory.isNotEmpty) return directory;
     }
     return null;
+  }
+
+  HomeSessionRow? sessionById(String id) {
+    for (final row in sessions) {
+      if (row.id == id) return row;
+    }
+    return null;
+  }
+
+  Future<bool> renameSession(HomeSessionRow session, String title) async {
+    final trimmed = title.trim();
+    if (trimmed.isEmpty) {
+      lastMutationErrorKey = 'sessions.sidebar.session.rename.error';
+      notifyListeners();
+      return false;
+    }
+    return _mutateSession(
+      session,
+      errorKey: 'sessions.sidebar.session.rename.error',
+      optimistic: () {
+        sessions = [
+          for (final row in sessions)
+            if (row.id == session.id) row.copyWith(title: trimmed) else row,
+        ];
+      },
+      run: (base) => _api.updateSession(
+        base: base,
+        bearer: activeBearer ?? '',
+        sessionId: session.id,
+        directory: session.directory,
+        title: trimmed,
+      ),
+    );
+  }
+
+  Future<bool> toggleSessionPin(HomeSessionRow session) async {
+    final pinning = session.kind != HomeSessionKind.pinned;
+    return _mutateSession(
+      session,
+      errorKey: 'sessions.sidebar.session.pin.error',
+      optimistic: () {
+        sessions = [
+          for (final row in sessions)
+            if (row.id == session.id)
+              row.copyWith(kind: pinning ? HomeSessionKind.pinned : HomeSessionKind.catalog)
+            else
+              row,
+        ];
+      },
+      run: (base) async {
+        if (pinning) {
+          await _api.pinSession(base: base, bearer: activeBearer ?? '', sessionId: session.id);
+        } else {
+          await _api.unpinSession(base: base, bearer: activeBearer ?? '', sessionId: session.id);
+        }
+      },
+    );
+  }
+
+  Future<bool> archiveSession(HomeSessionRow session) {
+    return _mutateSession(
+      session,
+      errorKey: 'sessions.sidebar.session.archive.error',
+      optimistic: () {
+        sessions = sessions.where((row) => row.id != session.id).toList();
+      },
+      run: (base) => _api.updateSession(
+        base: base,
+        bearer: activeBearer ?? '',
+        sessionId: session.id,
+        directory: session.directory,
+        archivedAt: DateTime.now().millisecondsSinceEpoch,
+      ),
+    );
+  }
+
+  Future<bool> deleteSession(HomeSessionRow session) {
+    return _mutateSession(
+      session,
+      errorKey: 'sessions.sidebar.session.delete.error',
+      optimistic: () {
+        sessions = sessions.where((row) => row.id != session.id).toList();
+      },
+      run: (base) => _api.deleteSession(
+        base: base,
+        bearer: activeBearer ?? '',
+        sessionId: session.id,
+        directory: session.directory,
+      ),
+    );
+  }
+
+  Future<bool> _mutateSession(
+    HomeSessionRow session, {
+    required String errorKey,
+    required VoidCallback optimistic,
+    required Future<void> Function(Uri base) run,
+  }) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'projects.newChat.needsServer';
+      notifyListeners();
+      return false;
+    }
+    final previous = sessions;
+    optimistic();
+    notifyListeners();
+    try {
+      await run(base);
+    } on OpenChamberHttpException {
+      sessions = previous;
+      lastMutationErrorKey = errorKey;
+      notifyListeners();
+      return false;
+    }
+    try {
+      await refreshSessions();
+    } on OpenChamberHttpException {
+      // Keep the optimistic list; refresh failure is not empty success.
+    }
+    return lastMutationErrorKey == null;
+  }
+
+  Future<bool> addProject({required String path, String? label}) async {
+    lastMutationErrorKey = null;
+    if (!isConnected) {
+      lastMutationErrorKey = 'projects.newProject.needsServer';
+      notifyListeners();
+      return false;
+    }
+    final entry = buildProjectEntry(path: path, label: label);
+    if ((entry['path']?.toString() ?? '').isEmpty || (entry['id']?.toString() ?? '').isEmpty) {
+      lastMutationErrorKey = 'projects.newProject.invalidPath';
+      notifyListeners();
+      return false;
+    }
+    try {
+      if (remoteSettings.blob.value == null) {
+        await remoteSettings.loadBlob();
+      }
+      if (remoteSettings.blob.value == null && remoteSettings.blob.errorKey != null) {
+        lastMutationErrorKey = remoteSettings.blob.errorKey;
+        notifyListeners();
+        return false;
+      }
+      final current = remoteSettings.blob.value?.projectRecords ?? const <Map<String, Object?>>[];
+      await remoteSettings.patchBlob({'projects': mergeProjectEntry(current, entry)});
+      lastMutationErrorKey = null;
+      notifyListeners();
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'chat.mobileStatus.toast.addProjectFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> editProjectLabel({required String projectId, required String label}) async {
+    lastMutationErrorKey = null;
+    if (!isConnected) {
+      lastMutationErrorKey = 'projects.newProject.needsServer';
+      notifyListeners();
+      return false;
+    }
+    try {
+      if (remoteSettings.blob.value == null) await remoteSettings.loadBlob();
+      final current = remoteSettings.blob.value?.projectRecords ?? const <Map<String, Object?>>[];
+      final next = current.map((item) {
+        if (item['id']?.toString() != projectId) return item;
+        return {...item, 'label': label.trim()};
+      }).toList();
+      await remoteSettings.patchBlob({'projects': next});
+      notifyListeners();
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'sessions.sidebar.project.actions.editFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> closeProject(String projectId) async {
+    lastMutationErrorKey = null;
+    if (!isConnected) {
+      lastMutationErrorKey = 'projects.newProject.needsServer';
+      notifyListeners();
+      return false;
+    }
+    try {
+      if (remoteSettings.blob.value == null) await remoteSettings.loadBlob();
+      final current = remoteSettings.blob.value?.projectRecords ?? const <Map<String, Object?>>[];
+      await remoteSettings.patchBlob({'projects': removeProjectEntry(current, projectId)});
+      notifyListeners();
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'sessions.sidebar.project.actions.closeFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> syncProjectSessions() async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'projects.newChat.needsServer';
+      notifyListeners();
+      return false;
+    }
+    try {
+      final directories = lastIndex?.directories.map((item) => item.directory).where((item) => item.isNotEmpty).toList() ??
+          [_preferredCreateDirectory()].whereType<String>().toList();
+      await _api.startSessionIndexSync(base, bearer: activeBearer ?? '', directories: directories);
+      await refreshSessions();
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'sessions.sidebar.project.actions.syncFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> isGitRepository(String directory) async {
+    final base = activeBase;
+    if (base == null || directory.isEmpty) return false;
+    try {
+      return await _api.checkIsGitRepository(base: base, bearer: activeBearer, directory: directory);
+    } on OpenChamberHttpException {
+      return false;
+    }
+  }
+
+  Future<bool> createWorktree({required String directory, required String worktreeName}) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'projects.newChat.needsServer';
+      notifyListeners();
+      return false;
+    }
+    try {
+      await _api.createGitWorktree(
+        base: base,
+        bearer: activeBearer,
+        directory: directory,
+        worktreeName: worktreeName,
+      );
+      await refreshSessions();
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'sessions.sidebar.project.actions.worktreeCreateFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteWorktree({required String projectDirectory, required String worktreePath}) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'projects.newChat.needsServer';
+      notifyListeners();
+      return false;
+    }
+    final linked = sessions.where((row) => normalizeProjectDirectory(row.directory ?? '') == normalizeProjectDirectory(worktreePath)).toList();
+    for (final session in linked) {
+      final archived = await archiveSession(session);
+      if (!archived) {
+        lastMutationErrorKey ??= 'sessions.sidebar.session.archive.error';
+        notifyListeners();
+        return false;
+      }
+    }
+    try {
+      await _api.deleteGitWorktree(
+        base: base,
+        bearer: activeBearer,
+        directory: projectDirectory,
+        worktreePath: worktreePath,
+      );
+      await refreshSessions();
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'sessions.sidebar.project.actions.worktreeDeleteFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> ensureContextLimits() async {
+    final base = activeBase;
+    if (base == null) return;
+    try {
+      final catalog = await _api.getProviderCatalog(base: base, bearer: activeBearer);
+      contextLimits = parseProviderContextLimits(catalog);
+    } on OpenChamberHttpException {
+      // Keep the previous map; unknown limits hide the percentage instead of inventing 0 as authoritative empty.
+    }
+    notifyListeners();
+  }
+
+  List<Map<String, Object?>> settingsProjectRecords() {
+    return remoteSettings.blob.value?.projectRecords ?? const [];
+  }
+
+  Future<String> filesystemHome() {
+    final base = activeBase;
+    if (base == null) {
+      throw const OpenChamberHttpException(0, OpenChamberPaths.fsHome, code: 'not_connected');
+    }
+    return _api.getFilesystemHome(base: base, bearer: activeBearer);
+  }
+
+  Future<List<FilesystemEntry>> listFilesystem(String path) {
+    final base = activeBase;
+    if (base == null) {
+      throw const OpenChamberHttpException(0, OpenChamberPaths.fsList, code: 'not_connected');
+    }
+    return _api.listFilesystem(base: base, bearer: activeBearer, path: path);
   }
 
   void _startStatusPoll() {
