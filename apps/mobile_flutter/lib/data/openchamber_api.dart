@@ -26,6 +26,46 @@ class FilesystemEntry {
   bool get isDirectory => type == 'directory';
 }
 
+class GitChangeFile {
+  const GitChangeFile({required this.path, this.index = '', this.workingDir = ''});
+
+  final String path;
+  final String index;
+  final String workingDir;
+
+  bool get staged {
+    final value = index.trim();
+    return value.isNotEmpty && value != '?';
+  }
+
+  bool get unstaged {
+    final working = workingDir.trim();
+    return working.isNotEmpty || index.trim() == '?';
+  }
+}
+
+class GitStatusSnapshot {
+  const GitStatusSnapshot({
+    required this.current,
+    required this.files,
+    this.isClean = false,
+  });
+
+  final String current;
+  final List<GitChangeFile> files;
+  final bool isClean;
+}
+
+class McpRuntimeStatus {
+  const McpRuntimeStatus({required this.name, required this.status, this.error});
+
+  final String name;
+  final String status;
+  final String? error;
+
+  bool get connected => status == 'connected';
+}
+
 class OpenChamberApi {
   OpenChamberApi({OpenChamberTransport? transport})
       : transport = transport ?? LiveOpenChamberTransport();
@@ -781,6 +821,178 @@ class OpenChamberApi {
         type: map['type']?.toString() ?? '',
       );
     }).where((entry) => entry.path.isNotEmpty).toList();
+  }
+
+  Future<GitStatusSnapshot> getGitStatus({
+    required Uri base,
+    String? bearer,
+    required String directory,
+  }) async {
+    final body = await _requireMap(
+      base,
+      OpenChamberRequest(method: 'GET', path: OpenChamberPaths.gitStatus, query: {'directory': directory}),
+      bearer,
+    );
+    final rawFiles = body['files'];
+    final files = <GitChangeFile>[];
+    if (rawFiles is List) {
+      for (final item in rawFiles) {
+        if (item is! Map) continue;
+        final file = GitChangeFile(
+          path: item['path']?.toString() ?? '',
+          index: item['index']?.toString() ?? '',
+          workingDir: item['working_dir']?.toString() ?? '',
+        );
+        if (file.path.isNotEmpty) files.add(file);
+      }
+    }
+    return GitStatusSnapshot(
+      current: body['current']?.toString() ?? '',
+      files: files,
+      isClean: body['isClean'] == true || files.isEmpty,
+    );
+  }
+
+  Future<void> stageGitPaths({
+    required Uri base,
+    String? bearer,
+    required String directory,
+    required List<String> paths,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.gitStage,
+        bearer: bearer,
+        query: {'directory': directory},
+        body: {'paths': paths},
+      ),
+      bearer,
+    );
+  }
+
+  Future<void> unstageGitPaths({
+    required Uri base,
+    String? bearer,
+    required String directory,
+    required List<String> paths,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.gitUnstage,
+        bearer: bearer,
+        query: {'directory': directory},
+        body: {'paths': paths},
+      ),
+      bearer,
+    );
+  }
+
+  Future<void> createGitCommit({
+    required Uri base,
+    String? bearer,
+    required String directory,
+    required String message,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.gitCommit,
+        bearer: bearer,
+        query: {'directory': directory},
+        body: {'message': message, 'addAll': false},
+      ),
+      bearer,
+    );
+  }
+
+  Future<String> getGitDiff({
+    required Uri base,
+    String? bearer,
+    required String directory,
+    required String path,
+    bool staged = false,
+  }) async {
+    final body = await _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'GET',
+        path: OpenChamberPaths.gitDiff,
+        query: {
+          'directory': directory,
+          'path': path,
+          if (staged) 'staged': 'true',
+        },
+      ),
+      bearer,
+    );
+    return body['diff']?.toString() ?? '';
+  }
+
+  Future<Map<String, McpRuntimeStatus>> getMcpRuntimeStatus({
+    required Uri base,
+    String? bearer,
+  }) async {
+    final body = await _requireOk(
+      base,
+      const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.mcpRuntime),
+      bearer,
+    );
+    final raw = body is Map ? body : const <String, Object?>{};
+    final out = <String, McpRuntimeStatus>{};
+    raw.forEach((key, value) {
+      if (value is! Map) return;
+      out[key.toString()] = McpRuntimeStatus(
+        name: key.toString(),
+        status: value['status']?.toString() ?? 'unknown',
+        error: value['error']?.toString(),
+      );
+    });
+    return out;
+  }
+
+  Future<void> connectMcpRuntime({
+    required Uri base,
+    String? bearer,
+    required String name,
+    String? directory,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.mcpConnect(name),
+        bearer: bearer,
+        query: {
+          if (directory != null && directory.isNotEmpty) 'directory': directory,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<void> disconnectMcpRuntime({
+    required Uri base,
+    String? bearer,
+    required String name,
+    String? directory,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.mcpDisconnect(name),
+        bearer: bearer,
+        query: {
+          if (directory != null && directory.isNotEmpty) 'directory': directory,
+        },
+      ),
+      bearer,
+    );
   }
 
   Future<bool> checkIsGitRepository({
@@ -1548,6 +1760,9 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
     {'name': 'notes', 'path': '/workspace/notes', 'type': 'directory'},
     {'name': '.hidden', 'path': '/workspace/.hidden', 'type': 'directory'},
     {'name': 'README.md', 'path': '/workspace/README.md', 'type': 'file'},
+    {'name': 'README.md', 'path': '/workspace/openchamber/README.md', 'type': 'file'},
+    {'name': 'docs', 'path': '/workspace/openchamber/docs', 'type': 'directory'},
+    {'name': 'index.html', 'path': '/workspace/openchamber/docs/index.html', 'type': 'file'},
   ];
   final Map<String, String> sessionShareUrls = {};
   int cloneStatus = 200;
@@ -1573,6 +1788,8 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   Map<String, String> fileContents = {
     '/workspace/openchamber/docs/index.html':
         '<!doctype html><html><body><h1>Preview</h1></body></html>',
+    '/workspace/README.md': '# OpenChamber\n',
+    '/workspace/openchamber/README.md': '# Flutter native\n',
   };
 
   Map<String, Object?> settings = Map<String, Object?>.from(defaultTestSettings);
@@ -1586,6 +1803,13 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   Object? snippets = defaultTestSnippets;
   Object? magicPrompts = defaultTestMagicPrompts;
   Object? gitIdentities = defaultTestGitIdentities;
+  List<Map<String, Object?>> gitStatusFiles = [
+    {'path': 'README.md', 'index': '', 'working_dir': 'M'},
+  ];
+  String gitCurrentBranch = 'main';
+  Map<String, Object?> mcpRuntime = {
+    'filesystem': {'status': 'connected'},
+  };
   Object? agentsMd = const {'content': 'Use official APIs. Do not invent endpoints.'};
   Object? smallModel = defaultTestSmallModel;
   Map<String, Object?> quotas = Map<String, Object?>.from(defaultTestQuotas);
@@ -2364,6 +2588,53 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
           status: gitStatus,
           body: {'all': gitBranches, 'current': gitBranches.isEmpty ? '' : gitBranches.first},
         );
+      case OpenChamberPaths.gitStatus:
+        return OpenChamberResponse(
+          status: gitStatus,
+          body: {
+            'current': gitCurrentBranch,
+            'tracking': null,
+            'ahead': 0,
+            'behind': 0,
+            'files': gitStatusFiles,
+            'isClean': gitStatusFiles.isEmpty,
+          },
+        );
+      case OpenChamberPaths.gitStage:
+      case OpenChamberPaths.gitUnstage:
+        if (gitStatus < 200 || gitStatus >= 300) {
+          return OpenChamberResponse(status: gitStatus, body: {'error': 'git_failed'});
+        }
+        final staged = request.path == OpenChamberPaths.gitStage;
+        final paths = request.body?['paths'];
+        if (paths is List) {
+          gitStatusFiles = gitStatusFiles.map((file) {
+            final path = file['path']?.toString() ?? '';
+            if (!paths.contains(path)) return file;
+            return {
+              ...file,
+              'index': staged ? 'M' : '',
+              'working_dir': staged ? '' : 'M',
+            };
+          }).toList();
+        }
+        return OpenChamberResponse(status: gitStatus, body: const {'ok': true});
+      case OpenChamberPaths.gitCommit:
+        if (gitStatus < 200 || gitStatus >= 300) {
+          return OpenChamberResponse(status: gitStatus, body: {'error': 'git_failed'});
+        }
+        gitStatusFiles = gitStatusFiles.where((file) {
+          final index = file['index']?.toString() ?? '';
+          return index.trim().isEmpty || index == '?';
+        }).toList();
+        return OpenChamberResponse(status: gitStatus, body: {'hash': 'abc1234', 'ok': true});
+      case OpenChamberPaths.gitDiff:
+        return OpenChamberResponse(
+          status: gitStatus,
+          body: {'diff': '--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-old\n+new\n'},
+        );
+      case OpenChamberPaths.mcpRuntime:
+        return OpenChamberResponse(status: catalogStatus, body: mcpRuntime);
       case OpenChamberPaths.fsMkdir:
         if (mkdirStatus < 200 || mkdirStatus >= 300) {
           return OpenChamberResponse(status: mkdirStatus, body: {'error': 'mkdir_failed'});
@@ -2533,6 +2804,22 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
             return OpenChamberResponse(status: 200, body: pending);
           }
           mcpPending.remove(state);
+          return OpenChamberResponse(status: mutationStatus, body: const {'ok': true});
+        }
+        if (request.path.startsWith('/api/mcp/') && request.path.endsWith('/connect')) {
+          final name = request.path.split('/')[3];
+          mcpRuntime = {
+            ...mcpRuntime,
+            name: {'status': 'connected'},
+          };
+          return OpenChamberResponse(status: mutationStatus, body: const {'ok': true});
+        }
+        if (request.path.startsWith('/api/mcp/') && request.path.endsWith('/disconnect')) {
+          final name = request.path.split('/')[3];
+          mcpRuntime = {
+            ...mcpRuntime,
+            name: {'status': 'disconnected'},
+          };
           return OpenChamberResponse(status: mutationStatus, body: const {'ok': true});
         }
         if (request.path.startsWith('/api/mcp/') && request.path.endsWith('/auth')) {

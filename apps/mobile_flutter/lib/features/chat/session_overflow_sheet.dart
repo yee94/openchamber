@@ -25,6 +25,48 @@ class SessionOverflowItem {
   final bool separated;
 }
 
+/// Cap phone chat overflow: new session / files / changes / MCP / refresh.
+List<SessionOverflowItem> buildChatWorkspaceOverflowItems({
+  required VoidCallback onNewSession,
+  required VoidCallback onFiles,
+  required VoidCallback onChanges,
+  required VoidCallback onMcp,
+  required VoidCallback onRefreshTranscript,
+}) {
+  return [
+    SessionOverflowItem(
+      id: 'newSession',
+      labelKey: 'mobile.menu.newSession',
+      glyph: OcGlyphKind.plus,
+      onTap: onNewSession,
+    ),
+    SessionOverflowItem(
+      id: 'files',
+      labelKey: 'mobile.menu.files',
+      glyph: OcGlyphKind.file,
+      onTap: onFiles,
+    ),
+    SessionOverflowItem(
+      id: 'changes',
+      labelKey: 'mobile.menu.changes',
+      glyph: OcGlyphKind.branch,
+      onTap: onChanges,
+    ),
+    SessionOverflowItem(
+      id: 'mcp',
+      labelKey: 'mobile.menu.mcp',
+      glyph: OcGlyphKind.mcp,
+      onTap: onMcp,
+    ),
+    SessionOverflowItem(
+      id: 'refreshTranscript',
+      labelKey: 'sessions.sidebar.session.menu.refreshTranscript',
+      glyph: OcGlyphKind.undo,
+      onTap: onRefreshTranscript,
+    ),
+  ];
+}
+
 /// Official session overflow order: rename / pin / share|copy+unshare / refresh / archive / delete.
 List<SessionOverflowItem> buildSessionOverflowItems({
   required bool pinned,
@@ -37,6 +79,7 @@ List<SessionOverflowItem> buildSessionOverflowItems({
   required VoidCallback onRefreshTranscript,
   required VoidCallback onArchive,
   required VoidCallback onDelete,
+  bool includeRefresh = true,
 }) {
   return [
     SessionOverflowItem(
@@ -75,12 +118,13 @@ List<SessionOverflowItem> buildSessionOverflowItems({
         glyph: OcGlyphKind.share,
         onTap: onShare,
       ),
-    SessionOverflowItem(
-      id: 'refreshTranscript',
-      labelKey: 'sessions.sidebar.session.menu.refreshTranscript',
-      glyph: OcGlyphKind.undo,
-      onTap: onRefreshTranscript,
-    ),
+    if (includeRefresh)
+      SessionOverflowItem(
+        id: 'refreshTranscript',
+        labelKey: 'sessions.sidebar.session.menu.refreshTranscript',
+        glyph: OcGlyphKind.undo,
+        onTap: onRefreshTranscript,
+      ),
     SessionOverflowItem(
       id: 'archive',
       labelKey: 'sessions.sidebar.bulkActions.archive',

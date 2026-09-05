@@ -1789,6 +1789,137 @@ class AppController extends ChangeNotifier {
     return _api.listFilesystem(base: base, bearer: activeBearer, path: path);
   }
 
+  Future<GitStatusSnapshot> loadGitStatus(String directory) {
+    final base = activeBase;
+    if (base == null) {
+      throw const OpenChamberHttpException(0, OpenChamberPaths.gitStatus, code: 'not_connected');
+    }
+    return _api.getGitStatus(base: base, bearer: activeBearer, directory: directory);
+  }
+
+  Future<bool> stageGitPaths(String directory, List<String> paths) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'mobile.changes.error.stageFailed';
+      notifyListeners();
+      return false;
+    }
+    try {
+      await _api.stageGitPaths(base: base, bearer: activeBearer, directory: directory, paths: paths);
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'mobile.changes.error.stageFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> unstageGitPaths(String directory, List<String> paths) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'mobile.changes.error.unstageFailed';
+      notifyListeners();
+      return false;
+    }
+    try {
+      await _api.unstageGitPaths(base: base, bearer: activeBearer, directory: directory, paths: paths);
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'mobile.changes.error.unstageFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> commitGitChanges(String directory, String message) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null || message.trim().isEmpty) {
+      lastMutationErrorKey = 'mobile.changes.error.commitFailed';
+      notifyListeners();
+      return false;
+    }
+    try {
+      await _api.createGitCommit(
+        base: base,
+        bearer: activeBearer,
+        directory: directory,
+        message: message.trim(),
+      );
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'mobile.changes.error.commitFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<String> loadGitDiff({
+    required String directory,
+    required String path,
+    bool staged = false,
+  }) {
+    final base = activeBase;
+    if (base == null) {
+      throw const OpenChamberHttpException(0, OpenChamberPaths.gitDiff, code: 'not_connected');
+    }
+    return _api.getGitDiff(
+      base: base,
+      bearer: activeBearer,
+      directory: directory,
+      path: path,
+      staged: staged,
+    );
+  }
+
+  Future<Map<String, McpRuntimeStatus>> loadMcpRuntimeStatus() {
+    final base = activeBase;
+    if (base == null) {
+      throw const OpenChamberHttpException(0, OpenChamberPaths.mcpRuntime, code: 'not_connected');
+    }
+    return _api.getMcpRuntimeStatus(base: base, bearer: activeBearer);
+  }
+
+  Future<bool> setMcpRuntimeConnected({
+    required String name,
+    required bool connected,
+    String? directory,
+  }) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'mcpDropdown.error.connectFailed';
+      notifyListeners();
+      return false;
+    }
+    try {
+      if (connected) {
+        await _api.connectMcpRuntime(
+          base: base,
+          bearer: activeBearer,
+          name: name,
+          directory: directory,
+        );
+      } else {
+        await _api.disconnectMcpRuntime(
+          base: base,
+          bearer: activeBearer,
+          name: name,
+          directory: directory,
+        );
+      }
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = connected
+          ? 'mcpDropdown.error.connectFailed'
+          : 'mcpDropdown.error.disconnectFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
   void _startStatusPoll() {
     _statusPoll?.cancel();
     if (Platform.environment['FLUTTER_TEST'] == 'true') return;

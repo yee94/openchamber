@@ -31,8 +31,18 @@ abstract final class OpenChamberPaths {
   static const fsClone = '/api/fs/clone';
   static const fsMkdir = '/api/fs/mkdir';
   static const gitCheck = '/api/git/check';
+  static const gitStatus = '/api/git/status';
+  static const gitStage = '/api/git/stage';
+  static const gitUnstage = '/api/git/unstage';
+  static const gitCommit = '/api/git/commit';
+  static const gitDiff = '/api/git/diff';
   static const gitBranches = '/api/git/branches';
   static const gitWorktrees = '/api/git/worktrees';
+  static const mcpRuntime = '/api/mcp';
+  static String mcpConnect(String name) =>
+      '/api/mcp/${Uri.encodeComponent(name)}/connect';
+  static String mcpDisconnect(String name) =>
+      '/api/mcp/${Uri.encodeComponent(name)}/disconnect';
   static const githubAuthStatus = '/api/github/auth/status';
   static const githubIssuesList = '/api/github/issues/list';
   static const githubPullsList = '/api/github/pulls/list';

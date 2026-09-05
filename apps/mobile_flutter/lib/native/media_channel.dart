@@ -16,20 +16,21 @@ class MediaChannel {
   final MethodChannel _media;
   final MethodChannel _virtual;
 
+  Future<List<AttachmentDraft>> pickFiles({int limit = 8}) async {
+    try {
+      final raw = await _media.invokeMethod<Object>('pickFiles', {'limit': limit});
+      return _draftsFromChannel(raw);
+    } on MissingPluginException {
+      return const [];
+    } on PlatformException {
+      return const [];
+    }
+  }
+
   Future<List<AttachmentDraft>> pickImages({int limit = 8}) async {
     try {
       final raw = await _media.invokeMethod<Object>('pickMedia', {'limit': limit});
-      if (raw is! Map) return const [];
-      if (raw['cancelled'] == true) return const [];
-      final files = raw['files'];
-      if (files is! List) return const [];
-      final drafts = <AttachmentDraft>[];
-      for (final file in files) {
-        if (file is! Map) continue;
-        final draft = await _draftFromPicked(file);
-        if (draft != null) drafts.add(draft);
-      }
-      return drafts;
+      return _draftsFromChannel(raw);
     } on MissingPluginException {
       return const [];
     } on PlatformException {
@@ -83,6 +84,20 @@ class MediaChannel {
     } on PlatformException {
       // Same — preview does not depend on the scheme handler.
     }
+  }
+
+  Future<List<AttachmentDraft>> _draftsFromChannel(Object? raw) async {
+    if (raw is! Map) return const [];
+    if (raw['cancelled'] == true) return const [];
+    final files = raw['files'];
+    if (files is! List) return const [];
+    final drafts = <AttachmentDraft>[];
+    for (final file in files) {
+      if (file is! Map) continue;
+      final draft = await _draftFromPicked(file);
+      if (draft != null) drafts.add(draft);
+    }
+    return drafts;
   }
 
   Future<AttachmentDraft?> _draftFromPicked(Map<dynamic, dynamic> file) async {

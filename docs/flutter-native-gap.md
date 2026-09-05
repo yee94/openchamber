@@ -707,7 +707,7 @@ Capgo OTA; plan/notes/Todo; Chat dock tab; `iosNativeUi`; Bonjour 「附近」; 
 ### Remaining gaps (updated)
 
 1. Device-only rows above — still ❌ 真机过.
-2. Context ring / session overflow mutations / new-project + home `···` landed in the twentieth slice. Share/copy/unshare + DirectoryExplorer clone/hidden/identity + worktree branch/startRef + project-edit essentials landed in the twenty-first (真机 still residual). Create-missing-dir + GitHub Issue/PR worktree + worktree drag-reorder + scheduled daily create + chat copy/share/fork landed in the twenty-second. Existing-branch worktree + scheduled full editor + chat revert/edit + assistant long-press + Cap-parity composer autocomplete landed in the twenty-third.
+2. Context ring / session overflow mutations / new-project + home `···` landed in the twentieth slice. Share/copy/unshare + DirectoryExplorer clone/hidden/identity + worktree branch/startRef + project-edit essentials landed in the twenty-first (真机 still residual). Create-missing-dir + GitHub Issue/PR worktree + worktree drag-reorder + scheduled daily create + chat copy/share/fork landed in the twenty-second. Existing-branch worktree + scheduled full editor + chat revert/edit + assistant long-press + Cap-parity composer autocomplete landed in the twenty-third. Chat overflow Files/Changes/MCP/New session + iOS autocomplete accept + Files attach + compaction activity landed in the twenty-fourth. Server message-queue chips remain CODE.
 3. Android launcher badge — honest host-side gap.
 4. Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` — will not port.
 5. Appearance Flexoki picker and Finder stay **will-not-invent**. Composer `/` `@` `#` is no longer a frost stub.
@@ -788,3 +788,38 @@ Stacked on `852e101f2` (`work/flutter-native` after PR **#20**). Do **not** merg
 Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hosted OAuth; ActivityKit / Dynamic Island / widget tap; Impeller 16ms; FCM on `.debug` if Firebase init fails; share-extension → inbox POST. Code/plist may exist — do not fake 真机过.
 
 Validated on Flutter **3.32.8 / Dart 3.8.1**: `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **241 passed**, including `flutter_remaining_gaps_test.dart`, `composer_occupancy_test.dart`, `flutter_deep_gap_test.dart`, and `slice7_oauth_tools_scheduled_test.dart`. Screenshot PNGs were **not** recaptured. Not 真机过.
+
+## Twenty-fourth-slice status (2026-09-05) — Cap phone overflow + composer no-ops
+
+Stacked on `93d8aed4e` (`work/flutter-native` after the twenty-third slice). Draft PR **#5** track. Do **not** merge `main`. No 1.18 TanStack. No Flutter UI golden recapture. OpenChamber v2 `.debug` applicationId unchanged. Do **not** invent Flexoki / Finder / Capgo / Bonjour / `iosNativeUi` / Chat dock.
+
+Read on this checkout: Cap `MobileApp.tsx` phone overflow (`mobile.menu.newSession` / `files` / `changes` / `mcp` / refresh); `MobileFilesSurface.tsx`; `MobileChangesSurface.tsx`; `McpDropdownContent` connect/disconnect via official `mcp.connect` / `mcp.disconnect`; iOS `OpenChamberComposerView` Files picker + autocomplete rows.
+
+### Landed this slice (code)
+
+| Surface | Official Cap mobile | Flutter | Notes |
+|---|---|---|---|
+| Chat overflow workspace items | Phone `overflowItems`: New session / Files / Changes / MCP / refresh | Same keys on chat `···`, then existing session actions | New session `POST /api/session`. Refresh stays once. |
+| Files browser | `MobileFilesSurface` list/navigate/preview | `FilesBrowserSheet` | `GET /api/fs/list` + `GET /api/fs/read`. HTML still uses the existing platform WebView sheet. No Pierre/Shiki. |
+| Changes | `MobileChangesSurface` status / stage / commit / diff | `ChangesSheet` | `GET /api/git/status`, `POST /api/git/stage|unstage|commit`, `GET /api/git/diff` as selectable text. No Pierre diffs. |
+| MCP overlay | `McpDropdownContent` connect switch | `McpOverlaySheet` | `GET /api/mcp` status + `POST /api/mcp/:name/connect\|disconnect`. Add opens Settings MCP. |
+| iOS autocomplete accept | Native row accept | Tappable rows → `autocompleteSelect` → `applyComposerSuggestion` | Replaces only the trigger token (mid-line `/` skills too). |
+| Non-image Files attach | iOS document picker + Android files sheet | iOS `pickedFiles` bytes; Android `pickFiles` `ACTION_GET_CONTENT */*` | Photos path unchanged. |
+| Compaction activity | ProgressiveGroup compacting / complete | Activity row, no longer `SizedBox.shrink()` | |
+
+### Still code (Cap ships; not this slice)
+
+| Gap | Why leftover |
+|---|---|
+| Server message queue chips | Cap `ChatInput` + `/api/openchamber/message-queue` ledger (revision / rowVersion / send). Settings already stores `followUpBehavior: queue`. Full admit/edit/reorder/send is a dedicated slice — do not invent a local-only fake. |
+| Settings slug editors (sessions / summary-ai / git identities / behavior AGENTS.md / magic-prompts / snippets) | Cap `SettingsView forceMobile` is editable. Flutter entity slugs (providers/agents/MCP/…) already CRUD; these remaining slugs are display-thin, not no-ops. |
+| Archive undo toast | Cap `deleteSessionsWithUndo`. Flutter archive succeeds without undo. |
+| Appearance Flexoki picker / Finder | **Do not invent.** |
+
+### 真机-only
+
+Same device rows as earlier slices: live `wss://` relay + LAN hot-switch + iOS Local Network; HEIC/album + Files picker on a phone; hosted OAuth; ActivityKit / Dynamic Island / widget tap; Impeller 16ms; FCM on `.debug` if Firebase init fails; share-extension → inbox POST; iOS UIKit autocomplete tap / document picker on a real iPhone.
+
+### EXHAUSTED
+
+**false.** High-value Cap-mobile CODE still remains: official **server message-queue** UI. After that, leftover editors/undo are thinner than the overflow/composer no-ops closed here.

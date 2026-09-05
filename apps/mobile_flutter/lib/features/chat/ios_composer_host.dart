@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../data/prompt_attachment.dart';
 import '../../l10n/app_strings.dart';
 import '../../native/platform_channels.dart';
 import 'composer_occupancy.dart';
@@ -21,6 +24,7 @@ class IosComposerHost extends StatefulWidget {
     required this.onAttach,
     required this.onText,
     this.onOccupancy,
+    this.onPickedFiles,
     this.commands = const [],
     this.files = const [],
     this.skills = const [],
@@ -38,6 +42,7 @@ class IosComposerHost extends StatefulWidget {
   final VoidCallback onAttach;
   final ValueChanged<String> onText;
   final ValueChanged<double>? onOccupancy;
+  final ValueChanged<List<AttachmentDraft>>? onPickedFiles;
   final List<String> commands;
   final List<String> files;
   final List<String> skills;
@@ -73,6 +78,27 @@ class _IosComposerHostState extends State<IosComposerHost> {
           widget.onOccupancy?.call(height);
         case 'autocomplete':
           break;
+        case 'autocompleteSelect':
+          final label = call.arguments is String ? call.arguments as String : '';
+          if (label.isNotEmpty) {
+            widget.onText(applyComposerSuggestion(widget.text, label));
+          }
+        case 'pickedFiles':
+          final drafts = <AttachmentDraft>[];
+          final raw = call.arguments;
+          if (raw is List) {
+            for (final item in raw) {
+              if (item is! Map) continue;
+              final name = item['name']?.toString() ?? 'file';
+              final mime = item['mime']?.toString() ?? item['mimeType']?.toString() ?? 'application/octet-stream';
+              final encoded = item['dataBase64']?.toString() ?? '';
+              if (encoded.isEmpty) continue;
+              final bytes = base64Decode(encoded.contains(',') ? encoded.substring(encoded.indexOf(',') + 1) : encoded);
+              if (bytes.isEmpty || bytes.length > maxPickedMediaBytes) continue;
+              drafts.add(AttachmentDraft(name: name, mime: mime, bytes: Uint8List.fromList(bytes)));
+            }
+          }
+          if (drafts.isNotEmpty) widget.onPickedFiles?.call(drafts);
       }
       return null;
     });

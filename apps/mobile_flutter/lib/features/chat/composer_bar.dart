@@ -16,6 +16,7 @@ class ComposerBar extends StatelessWidget {
     required this.controller,
     required this.onSend,
     this.onAttach,
+    this.onAttachFiles,
     this.onStop,
     this.busy = false,
     this.attachments = const [],
@@ -31,6 +32,7 @@ class ComposerBar extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
   final VoidCallback? onAttach;
+  final VoidCallback? onAttachFiles;
   final VoidCallback? onStop;
   final bool busy;
   final List<AttachmentDraft> attachments;
@@ -118,7 +120,10 @@ class ComposerBar extends StatelessWidget {
                           ListTile(
                             dense: true,
                             title: Text(item.label),
-                            onTap: () => controller.text = item.label,
+                            onTap: () {
+                              controller.text = applyComposerSuggestion(controller.text, item.label);
+                              controller.selection = TextSelection.collapsed(offset: controller.text.length);
+                            },
                           ),
                       ],
                     ),
@@ -140,7 +145,9 @@ class ComposerBar extends StatelessWidget {
                   return InputChip(
                     key: Key('composer-attachment-${item.name}'),
                     label: Text(item.name),
-                    avatar: Image.memory(item.bytes, width: 20, height: 20, fit: BoxFit.cover),
+                    avatar: item.mime.startsWith('image/')
+                        ? Image.memory(item.bytes, width: 20, height: 20, fit: BoxFit.cover)
+                        : const OcGlyph(OcGlyphKind.file, size: 16),
                     onDeleted: onRemoveAttachment == null ? null : () => onRemoveAttachment!(index),
                   );
                 },
@@ -187,7 +194,9 @@ class ComposerBar extends StatelessWidget {
                             key: const Key('composer-attach'),
                             haptic: HapticStrength.medium,
                             highlight: false,
-                            onPressed: onAttach,
+                            onPressed: onAttachFiles == null
+                                ? onAttach
+                                : () => _showAttachChoices(context),
                             child: SizedBox(
                               width: 36,
                               height: 36,
@@ -265,6 +274,44 @@ class ComposerBar extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+
+  Future<void> _showAttachChoices(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Material(
+          key: const Key('composer-attach-sheet'),
+          color: sheetContext.oc.pageBackground,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(12, 12, 12, 12 + MediaQuery.viewPaddingOf(sheetContext).bottom),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  key: const Key('composer-attach-photos'),
+                  title: Text(t(sheetContext, 'chat.composer.attachPhotos')),
+                  onTap: () {
+                    Navigator.of(sheetContext).maybePop();
+                    onAttach?.call();
+                  },
+                ),
+                ListTile(
+                  key: const Key('composer-attach-files'),
+                  title: Text(t(sheetContext, 'chat.composer.attachFiles')),
+                  onTap: () {
+                    Navigator.of(sheetContext).maybePop();
+                    onAttachFiles?.call();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

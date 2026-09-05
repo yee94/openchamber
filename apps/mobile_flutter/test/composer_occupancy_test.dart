@@ -58,6 +58,7 @@ void main() {
       filterComposerSuggestions('hello', commands: const ['review'], files: const ['README.md'], skills: const []),
       isEmpty,
     );
+    expect(applyComposerSuggestion('please /rel', '/release-notes'), 'please /release-notes ');
   });
 
   testWidgets('composer uses Scaffold IME inset without a manual keyboard pad', (tester) async {

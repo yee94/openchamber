@@ -12,6 +12,8 @@ final class OpenChamberComposerView: UIView, UITextViewDelegate {
   var onText: ((String) -> Void)?
   var onOccupancy: ((CGFloat) -> Void)?
   var onAutocomplete: ((String) -> Void)?
+  var onAutocompleteSelect: ((String) -> Void)?
+  var onPickedFiles: (([[String: String]]) -> Void)?
 
   private let card = OpenChamberGlassBackdrop()
   private let textView = UITextView()
@@ -53,6 +55,7 @@ final class OpenChamberComposerView: UIView, UITextViewDelegate {
     canAbort = nextAbort
     attachments = nextAttachments
     refreshAttachments()
+    autocomplete.onSelect = { [weak self] label in self?.onAutocompleteSelect?(label) }
     autocomplete.apply(rows: autocompleteRows)
     sendButton.setImage(UIImage(systemName: nextAbort ? "stop.fill" : "arrow.up"), for: .normal)
     sendButton.isEnabled = nextAbort || canSend || !(textView.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -201,9 +204,12 @@ final class OpenChamberComposerView: UIView, UITextViewDelegate {
     }
     let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item], asCopy: true)
     picker.allowsMultipleSelection = true
-    let host = OpenChamberDocumentPickerCoordinator { [weak self] names in
-      self?.onAttach?()
-      _ = names
+    let host = OpenChamberDocumentPickerCoordinator { [weak self] files in
+      if files.isEmpty {
+        self?.onAttach?()
+        return
+      }
+      self?.onPickedFiles?(files)
     }
     picker.delegate = host
     OpenChamberDocumentPickerCoordinator.retain(host)
@@ -226,6 +232,7 @@ final class OpenChamberComposerView: UIView, UITextViewDelegate {
 }
 
 final class OpenChamberComposerAutocomplete: UIView {
+  var onSelect: ((String) -> Void)?
   private let scroller = UIScrollView()
   private let stack = UIStackView()
 
@@ -273,11 +280,13 @@ final class OpenChamberComposerAutocomplete: UIView {
     stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
     isHidden = rows.isEmpty
     for row in rows {
-      let label = UILabel()
-      label.text = row
-      label.font = .preferredFont(forTextStyle: .body)
-      label.numberOfLines = 1
-      stack.addArrangedSubview(label)
+      let button = UIButton(type: .system)
+      button.setTitle(row, for: .normal)
+      button.contentHorizontalAlignment = .leading
+      button.titleLabel?.font = .preferredFont(forTextStyle: .body)
+      button.accessibilityIdentifier = "composer-autocomplete-\(row)"
+      button.addAction(UIAction { [weak self] _ in self?.onSelect?(row) }, for: .touchUpInside)
+      stack.addArrangedSubview(button)
     }
   }
 }
@@ -332,9 +341,9 @@ final class OpenChamberGlassBackdrop: UIView {
 
 final class OpenChamberDocumentPickerCoordinator: NSObject, UIDocumentPickerDelegate {
   private static var retained: OpenChamberDocumentPickerCoordinator?
-  private let onPicked: ([String]) -> Void
+  private let onPicked: ([[String: String]]) -> Void
 
-  init(onPicked: @escaping ([String]) -> Void) {
+  init(onPicked: @escaping ([[String: String]]) -> Void) {
     self.onPicked = onPicked
   }
 
@@ -343,7 +352,20 @@ final class OpenChamberDocumentPickerCoordinator: NSObject, UIDocumentPickerDele
   }
 
   func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-    onPicked(urls.map(\.lastPathComponent))
+    var files: [[String: String]] = []
+    for url in urls {
+      let accessed = url.startAccessingSecurityScopedResource()
+      defer {
+        if accessed { url.stopAccessingSecurityScopedResource() }
+      }
+      guard let data = try? Data(contentsOf: url), !data.isEmpty, data.count <= 32 * 1024 * 1024 else { continue }
+      files.append([
+        "name": url.lastPathComponent,
+        "mime": "application/octet-stream",
+        "dataBase64": data.base64EncodedString(),
+      ])
+    }
+    onPicked(files)
     Self.retained = nil
   }
 

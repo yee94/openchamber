@@ -56,6 +56,7 @@ class MediaPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAwar
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "pickMedia" -> pickMedia(call, result)
+            "pickFiles" -> pickFiles(call, result)
             "transcode" -> transcode(call, result)
             else -> result.notImplemented()
         }
@@ -103,8 +104,32 @@ class MediaPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAwar
         }
     }
 
+    private fun pickFiles(call: MethodCall, result: MethodChannel.Result) {
+        val host = activity
+        if (host == null) {
+            result.error("no_activity", "File picker needs an activity", null)
+            return
+        }
+        if (pending != null) {
+            result.error("busy", "Picker already open", null)
+            return
+        }
+        pending = result
+        val intent = Intent(Intent.ACTION_GET_CONTENT)
+        intent.addCategory(Intent.CATEGORY_OPENABLE)
+        intent.type = "*/*"
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try {
+            host.startActivityForResult(intent, REQUEST_FILES)
+        } catch (error: ActivityNotFoundException) {
+            pending = null
+            result.error("unavailable", error.message ?: "File picker is unavailable", null)
+        }
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
-        if (requestCode != REQUEST) return false
+        if (requestCode != REQUEST && requestCode != REQUEST_FILES) return false
         val reply = pending ?: return true
         pending = null
         if (resultCode != Activity.RESULT_OK || data == null) {
@@ -211,6 +236,7 @@ class MediaPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAwar
 
     companion object {
         private const val REQUEST = 7102
+        private const val REQUEST_FILES = 7103
         private const val MAX_BYTES = 32 * 1024 * 1024
     }
 }

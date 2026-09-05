@@ -336,6 +336,8 @@ final class OpenChamberComposerPlatformView: NSObject, FlutterPlatformView {
     viewRef.onText = { [weak self] text in self?.channel.invokeMethod("text", arguments: text) }
     viewRef.onOccupancy = { [weak self] height in self?.channel.invokeMethod("occupancy", arguments: height) }
     viewRef.onAutocomplete = { [weak self] text in self?.channel.invokeMethod("autocomplete", arguments: text) }
+    viewRef.onAutocompleteSelect = { [weak self] label in self?.channel.invokeMethod("autocompleteSelect", arguments: label) }
+    viewRef.onPickedFiles = { [weak self] files in self?.channel.invokeMethod("pickedFiles", arguments: files) }
     channel.setMethodCallHandler { [weak self] call, result in
       let args = call.arguments as? [String: Any] ?? [:]
       switch call.method {

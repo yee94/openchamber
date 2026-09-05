@@ -82,6 +82,22 @@ List<String> parseSkillNames(Object? payload) => parseNamedEntries(payload, list
 
 List<String> parseSnippetNames(Object? payload) => parseNamedEntries(payload, listKey: 'snippets');
 
+/// Cap accept replaces only the active trigger token, not the whole draft.
+String applyComposerSuggestion(String text, String label) {
+  final trigger = resolveComposerTrigger(text);
+  if (trigger == null || label.isEmpty) return label;
+  switch (trigger.kind) {
+    case ComposerTriggerKind.command:
+      return '$label ';
+    case ComposerTriggerKind.skill:
+      return '${text.substring(0, text.lastIndexOf('/'))}$label ';
+    case ComposerTriggerKind.snippet:
+      return '${text.substring(0, text.lastIndexOf('#'))}$label ';
+    case ComposerTriggerKind.mention:
+      return '${text.substring(0, text.lastIndexOf('@'))}$label ';
+  }
+}
+
 List<ComposerAutocompleteItem> filterComposerSuggestions(
   String text, {
   required Iterable<String> commands,

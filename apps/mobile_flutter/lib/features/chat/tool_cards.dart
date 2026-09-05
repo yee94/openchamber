@@ -717,7 +717,8 @@ bool _isActivityPart(ChatPart part) {
   if (part.kind == ChatPartKind.diff || part.kind == ChatPartKind.permission) return false;
   return part.kind == ChatPartKind.fileOp ||
       part.kind == ChatPartKind.task ||
-      part.kind == ChatPartKind.tool;
+      part.kind == ChatPartKind.tool ||
+      part.kind == ChatPartKind.compaction;
 }
 
 class _ActivityItems extends StatelessWidget {
@@ -776,7 +777,7 @@ class _ActivityItems extends StatelessWidget {
       children.add(
         Padding(
           padding: EdgeInsets.only(top: painted == 0 ? 0 : OcOptical.activityRowGap),
-          child: ToolPartCard(part: part, onPermission: onPermission),
+          child: ToolPartCard(part: part, onPermission: onPermission, isTurnLive: isTurnLive),
         ),
       );
       painted += 1;
@@ -1324,10 +1325,11 @@ class _GeneratedResultCard extends StatelessWidget {
 }
 
 class ToolPartCard extends StatelessWidget {
-  const ToolPartCard({super.key, required this.part, this.onPermission});
+  const ToolPartCard({super.key, required this.part, this.onPermission, this.isTurnLive = false});
 
   final ChatPart part;
   final void Function(String requestId, String reply)? onPermission;
+  final bool isTurnLive;
 
   @override
   Widget build(BuildContext context) {
@@ -1421,9 +1423,14 @@ class ToolPartCard extends StatelessWidget {
         );
       case ChatPartKind.mermaid:
         return _MermaidCard(part: part);
+      case ChatPartKind.compaction:
+        return _CardShell(
+          key: Key('chat-tool-compaction-${part.id}'),
+          title: t(context, isTurnLive ? 'chat.activity.compacting' : 'chat.activity.compactionCompleted'),
+          subtitle: part.title,
+        );
       case ChatPartKind.text:
       case ChatPartKind.reasoning:
-      case ChatPartKind.compaction:
         return const SizedBox.shrink();
     }
   }

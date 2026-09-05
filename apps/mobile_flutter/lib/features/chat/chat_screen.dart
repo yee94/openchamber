@@ -19,8 +19,11 @@ import '../../native/live_activity_controller.dart';
 import '../../native/media_channel.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
+import '../files/changes_sheet.dart';
 import '../files/file_preview_scope.dart';
+import '../files/files_browser_sheet.dart';
 import '../files/html_preview_sheet.dart';
+import '../files/mcp_overlay_sheet.dart';
 import '../shell/secondary_chrome.dart';
 import 'chat_transcript_row.dart';
 import 'composer_bar.dart';
@@ -201,6 +204,23 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _attach() async {
     try {
       final picked = await _media.pickImages();
+      await _acceptAttachments(picked);
+    } on PromptAttachmentUploadError {
+      if (mounted) _errorKey.value = 'chat.error.attachFailed';
+    }
+  }
+
+  Future<void> _attachFiles() async {
+    try {
+      final picked = await _media.pickFiles();
+      await _acceptAttachments(picked);
+    } on PromptAttachmentUploadError {
+      if (mounted) _errorKey.value = 'chat.error.attachFailed';
+    }
+  }
+
+  Future<void> _acceptAttachments(List<AttachmentDraft> picked) async {
+    try {
       final prepared = await prepareComposerAttachments(
         picked: picked,
         transcodeHeic: _media.transcodeHeic,
@@ -350,18 +370,28 @@ class _ChatScreenState extends State<ChatScreen> {
     await showSessionOverflowSheet(
       context: context,
       title: session.title,
-      items: buildSessionOverflowItems(
-        pinned: session.kind == HomeSessionKind.pinned,
-        shared: session.isShared,
-        onRename: controller == null ? () {} : () => unawaited(_renameSession(context)),
-        onTogglePin: controller == null ? () {} : () => unawaited(_mutateSession(() => controller.toggleSessionPin(session))),
-        onShare: controller == null ? null : () => unawaited(_shareSession(context, session)),
-        onCopyLink: session.isShared ? () => unawaited(_copyShareUrl(context, session.shareUrl!)) : null,
-        onUnshare: controller == null ? null : () => unawaited(_mutateSession(() => controller.unshareSession(session))),
-        onRefreshTranscript: () => unawaited(_refreshTranscript(context)),
-        onArchive: controller == null ? () {} : () => unawaited(_archiveSession(context)),
-        onDelete: controller == null ? () {} : () => unawaited(_deleteSession(context)),
-      ),
+      items: [
+        ...buildChatWorkspaceOverflowItems(
+          onNewSession: () => unawaited(_newSession(context)),
+          onFiles: () => unawaited(_openFiles(context)),
+          onChanges: () => unawaited(_openChanges(context)),
+          onMcp: () => unawaited(_openMcp(context)),
+          onRefreshTranscript: () => unawaited(_refreshTranscript(context)),
+        ),
+        ...buildSessionOverflowItems(
+          pinned: session.kind == HomeSessionKind.pinned,
+          shared: session.isShared,
+          onRename: controller == null ? () {} : () => unawaited(_renameSession(context)),
+          onTogglePin: controller == null ? () {} : () => unawaited(_mutateSession(() => controller.toggleSessionPin(session))),
+          onShare: controller == null ? null : () => unawaited(_shareSession(context, session)),
+          onCopyLink: session.isShared ? () => unawaited(_copyShareUrl(context, session.shareUrl!)) : null,
+          onUnshare: controller == null ? null : () => unawaited(_mutateSession(() => controller.unshareSession(session))),
+          onRefreshTranscript: () => unawaited(_refreshTranscript(context)),
+          includeRefresh: false,
+          onArchive: controller == null ? () {} : () => unawaited(_archiveSession(context)),
+          onDelete: controller == null ? () {} : () => unawaited(_deleteSession(context)),
+        ),
+      ],
     );
   }
 
@@ -457,6 +487,50 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     if (next == null || !context.mounted) return;
     await _mutateSession(() => widget.appController!.renameSession(_session, next));
+  }
+
+  Future<void> _newSession(BuildContext context) async {
+    final controller = widget.appController;
+    if (controller == null) return;
+    final created = await controller.createSession(directory: _session.directory);
+    if (!context.mounted) return;
+    if (created == null) {
+      final error = controller.createSessionErrorKey;
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t(context, error))));
+      }
+      return;
+    }
+    await Navigator.of(context).pushReplacement(
+      platformPageRoute<void>(
+        builder: (_) => ChatScreen(session: created, appController: controller),
+      ),
+    );
+  }
+
+  Future<void> _openFiles(BuildContext context) async {
+    final controller = widget.appController;
+    if (controller == null) return;
+    final directory = _session.directory ?? await controller.filesystemHome();
+    if (!context.mounted) return;
+    await showFilesBrowserSheet(context: context, controller: controller, directory: directory);
+  }
+
+  Future<void> _openChanges(BuildContext context) async {
+    final controller = widget.appController;
+    if (controller == null) return;
+    final directory = _session.directory;
+    if (directory == null || directory.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t(context, 'mobile.files.empty.noDirectory'))));
+      return;
+    }
+    await showChangesSheet(context: context, controller: controller, directory: directory);
+  }
+
+  Future<void> _openMcp(BuildContext context) async {
+    final controller = widget.appController;
+    if (controller == null) return;
+    await showMcpOverlaySheet(context: context, controller: controller, directory: _session.directory);
   }
 
   Future<void> _refreshTranscript(BuildContext context) async {
@@ -648,6 +722,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               onSend: _send,
                               onStop: _stop,
                               onAttach: _attach,
+                              onPickedFiles: (drafts) => unawaited(_acceptAttachments(drafts)),
                               onText: (value) => _composer.text = value,
                               commands: _commands,
                               files: _files,
@@ -669,6 +744,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             onSend: _send,
                             onStop: _stop,
                             onAttach: _attach,
+                            onAttachFiles: _attachFiles,
                             onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
                             commands: _commands,
                             files: _files,

@@ -37,7 +37,7 @@ const List<NativeContract> flutterNativeContracts = [
   NativeContract(
     id: 'ios-composer',
     status: 'landed',
-    summary: 'Always-on UIKit liquid-glass composer (pill/card, IME, / @ # frosted autocomplete stub, attach, Send/Stop, warm-on-home). No mic.',
+    summary: 'Always-on UIKit liquid-glass composer (pill/card, IME, / @ # Cap-parity autocomplete accept, photos + Files attach, Send/Stop, warm-on-home). No mic.',
   ),
   NativeContract(
     id: 'android-composer',
@@ -62,7 +62,7 @@ const List<NativeContract> flutterNativeContracts = [
   NativeContract(
     id: 'push',
     status: 'missing',
-    summary: 'TODO: APNs + FCM → openchamber-push-relay. NSE target exists and refreshes the widget snapshot.',
+    summary: 'APNs + FCM → host POST /api/push/apns-token. NSE target exists and refreshes the widget snapshot. Token may be null if Firebase init fails.',
   ),
   NativeContract(
     id: 'widgetkit-nse-control',
