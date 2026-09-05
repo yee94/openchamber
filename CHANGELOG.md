@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.19.7-beta.4] - 2026-09-05
+
+### 会话
+
+- 实验默认打开 Markstream **文档内**节点虚拟化（`max-live-nodes=320` / live-node buffer），不是会话列表虚拟化。列表仍是 TanStack（Legend 仍需 `oc:legend-timeline=1`）。关闭 Markstream：`localStorage.setItem('oc:markstream-react','0')` 后刷新。
+
 ## [1.19.7-beta.3] - 2026-09-05
 
 ### 会话
