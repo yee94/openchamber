@@ -805,8 +805,13 @@ Stacked on `1c2514999` (`work/flutter-native` after the twenty-sixth queue/setti
 
 | Gap | Why leftover |
 |---|---|
-| Files search / copy / image preview extras | Cap `MobileFilesSurface` still richer; this slice stayed on composer/question/slash. |
-| Changes generate-message / revert / sync | Cap `MobileChangesSurface` extras; not this slice. |
+| Files search / copy / image preview extras | Cap `MobileFilesSurface`: `GET /api/find/file`, copy path/content, image preview via `/api/fs/raw`. |
+| Changes extras | Cap `MobileChangesSurface`: `POST /api/git/commit-message`, `POST /api/git/revert`, fetch/pull/push, commit-and-push. |
+| Assistant empty-catalog create | Cap empty assistants → Settings assistants create. |
+| Composer swipe to switch sessions | Cap horizontal swipe between sessions. |
+| New Session as draft | Cap `sessionId == ''` until first send. |
+| Assigned-share → composer handoff | Cap assigned share fills composer, not inbox POST. |
+| About diagnostics export | Cap save-file via existing media path (skip Capgo rows). |
 | Appearance Flexoki picker | **Do not invent.** Official **mobile** Appearance is language + Light/Dark/System. |
 | Finder | **Do not invent.** Cap `handleOpenInFinder` is desktop-only. |
 | Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` / Bonjour / Pierre / mermaid SVG / Android launcher badge | Will not port. |
@@ -814,6 +819,12 @@ Stacked on `1c2514999` (`work/flutter-native` after the twenty-sixth queue/setti
 ### 真机-only
 
 Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hosted OAuth; ActivityKit / Dynamic Island / widget tap; Impeller 16ms; FCM on `.debug` if Firebase init fails; share-extension → inbox POST. Code/plist may exist — do not fake 真机过.
+
+### EXHAUSTED
+
+**false.** Composer pick / question footer / slash intercepts are landed. Remaining Cap-mobile CODE is Files/Changes extras, draft New Session, composer swipe, assigned-share composer handoff, assistant empty-create, and About diagnostics export.
+
+Validated on Flutter **3.32.8 / Dart 3.8.1**: focused `flutter_composer_question_slash_test.dart` (10 cases) + `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **273 passed**. Screenshot PNGs were **not** recaptured. Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native`.
 
 
 ## Twenty-fourth-slice status (2026-09-05) — Cap phone overflow + composer no-ops
