@@ -967,7 +967,7 @@ Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hoste
 
 **false.** Load/SSE/error feats and the About enable switch are landed. Residual CODE is richer Cap feats (transcript-diff / task / perf) plus 真机-only surfaces.
 
-Validated on Flutter **3.32.8 / Dart 3.8.1**: focused recorder tests + `flutter analyze --no-fatal-infos` + `flutter test`. Screenshot PNGs were **not** recaptured. Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native`.
+Validated on Flutter **3.32.8 / Dart 3.8.1**: `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **301 passed**, including `flutter_diagnostics_recorder_test.dart` and `flutter_share_about_test.dart`. Screenshot PNGs were **not** recaptured (`07-chat*.png` rewritten by the screenshot test and reverted). Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native`.
 
 
 
