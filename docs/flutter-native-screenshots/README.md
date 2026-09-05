@@ -971,3 +971,17 @@ cream-stadium loops. Honest leftover is live PingFang +
 UIKit `UIGlassEffect` (blocked here: no Mac pool). Press
 DONE. Do not invent gap / tracking / umbra / size-5 on
 catalog. **精致: 还没有.**
+
+**2026-09-05 wake-0855 STOP (Mac / iPhone pool):**
+STRUCTURE PASS. THEME OK. Secondary `PushedNavBar` stays official
+`MobileDetailNavigation` (`glassFill` 0.68 / size-5 / 40 / wired
+overflow + 18px context ring). Catalog md5s stay wake-0622.
+Residual 精致 (type air / icon scale / shadows / liquid dock)
+is **live PingFang SC + UIKit `UIGlassEffect`** — already wired
+(`ocLiveIosType`, `IosTabBarHost` / `OpenChamberTabBarView`,
+`IosComposerHost`). This Linux VM has no Xcode, no iOS
+Simulator run, no connected self-hosted Mac worker. `serve-sim`
+needs macOS. macos-15 CI only *compiles* `Runner.app`.
+**Do not fake glass in Flutter. Do not invent tester knobs.**
+No dart. No recapture. Goldens unchanged. Next proof needs a
+real iPhone or Mac Simulator pool. **精致: 还没有.**
