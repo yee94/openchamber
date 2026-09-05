@@ -331,14 +331,14 @@ class _ChatScreenState extends State<ChatScreen> {
       fieldKey: const Key('session-rename-field'),
       confirmWidgetKey: const Key('session-rename-save'),
     );
-    if (next == null || !mounted) return;
+    if (next == null || !context.mounted) return;
     await _mutateSession(() => widget.appController!.renameSession(_session, next));
   }
 
   Future<void> _refreshTranscript(BuildContext context) async {
     if (_busy.value) return;
     await _reloadFromLive();
-    if (!mounted) return;
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(t(context, 'sessions.sidebar.session.refresh.success'))),
     );
@@ -346,7 +346,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _archiveSession(BuildContext context) async {
     final ok = await _mutateSession(() => widget.appController!.archiveSession(_session));
-    if (ok && mounted) Navigator.of(context).maybePop();
+    if (ok && context.mounted) Navigator.of(context).maybePop();
   }
 
   Future<void> _deleteSession(BuildContext context) async {
@@ -360,9 +360,9 @@ class _ChatScreenState extends State<ChatScreen> {
       confirmWidgetKey: const Key('session-delete-confirm'),
       destructive: true,
     );
-    if (!confirmed || !mounted) return;
+    if (!confirmed || !context.mounted) return;
     final ok = await _mutateSession(() => widget.appController!.deleteSession(_session));
-    if (ok && mounted) Navigator.of(context).maybePop();
+    if (ok && context.mounted) Navigator.of(context).maybePop();
   }
 
   Future<bool> _mutateSession(Future<bool> Function() run) async {
@@ -385,7 +385,7 @@ class _ChatScreenState extends State<ChatScreen> {
         await controller.remoteSettings.loadUsage();
       }
     }
-    if (!mounted) return;
+    if (!context.mounted) return;
     final branch = _session.branch?.trim();
     await showSessionMetadataSheet(
       context: context,

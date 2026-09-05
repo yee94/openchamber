@@ -403,7 +403,6 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
             ),
           ],
         ),
-      ),
     );
   }
 

@@ -192,7 +192,6 @@ class MobileProjectCard extends StatelessWidget {
             ],
           ),
         ),
-      ),
     );
   }
 }
