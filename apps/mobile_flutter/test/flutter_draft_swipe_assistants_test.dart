@@ -50,15 +50,15 @@ void main() {
 
   test('swipe geometry matches Cap 64px / 0.6 off-axis / composer and iOS back-edge gates', () {
     expect(
-      evaluateSwipeDirection(startX: 100, startY: 40, endX: 36, endY: 40),
+      evaluateSwipeDirection(startX: 264, startY: 300, endX: 200, endY: 302),
       SessionSwipeDirection.next,
     );
     expect(
-      evaluateSwipeDirection(startX: 100, startY: 40, endX: 164, endY: 40),
+      evaluateSwipeDirection(startX: 200, startY: 300, endX: 264, endY: 302),
       SessionSwipeDirection.prev,
     );
-    expect(evaluateSwipeDirection(startX: 100, startY: 40, endX: 37, endY: 40), isNull);
-    expect(evaluateSwipeDirection(startX: 100, startY: 40, endX: 20, endY: 80), isNull);
+    expect(evaluateSwipeDirection(startX: 200, startY: 300, endX: 137, endY: 302), isNull);
+    expect(evaluateSwipeDirection(startX: 200, startY: 300, endX: 100, endY: 365), isNull);
     expect(
       shouldStartSessionSwipe(onExplicitSurface: true),
       isTrue,

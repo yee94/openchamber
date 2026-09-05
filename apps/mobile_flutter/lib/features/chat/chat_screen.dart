@@ -722,7 +722,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (controller == null || _session.isDraft) return;
     final next = swipeNeighbor(sessions: controller.sessions, currentId: _session.id, direction: direction);
     if (next == null) return;
-    await NativeHaptics().medium();
+    await NativeHaptics().impact(HapticStrength.medium);
     if (!mounted) return;
     await Navigator.of(context).pushReplacement(
       platformPageRoute<void>(
@@ -1079,7 +1079,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         onReorder: (from, to) => unawaited(_reorderQueued(from, to)),
                       ),
                     _withComposerSwipe(
-                      child: ios
+                      ios
                           ? SizedBox(
                               height: collapsedComposerOccupancy + padding.bottom,
                               child: ListenableBuilder(
