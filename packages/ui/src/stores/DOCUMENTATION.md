@@ -95,10 +95,16 @@ Examples:
 
 These stores coordinate visible app state, navigation, selected tabs, dialogs, and lightweight feature flags.
 
-`useFeatureFlagsStore` owns the chat list engine flag. TanStack Virtual is the
-runtime default (`legendTimelineEnabled` is true only when
+`useFeatureFlagsStore` owns lightweight localStorage A/B flags. TanStack Virtual
+is the chat list runtime default (`legendTimelineEnabled` is true only when
 `localStorage.oc:legend-timeline === '1'`). LegendList / TimelineList stay
-opt-in.
+opt-in. On this experiment branch, assistant Markdown defaults to
+`markstream-react` (`markstreamReactEnabled` is false only when
+`localStorage.oc:markstream-react === '0'`). Set that key to `0` to fall back
+to marked + Shiki + morphdom. User, tool, and other `SimpleMarkdownRenderer`
+surfaces stay on the current path. Markstream node virtualization
+(`maxLiveNodes`) is inside the Markdown bubble only; the chat list engine
+is unchanged.
 
 `useSidebarBrandStore` persists the sidebar wordmark. Packaged Electron multi-window
 shares one UI origin while each window may bind a different API host, so the store
