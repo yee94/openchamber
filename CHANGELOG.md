@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.19.7-beta.3] - 2026-09-05
+
+### 会话
+
+- 实验分支默认用 Markstream React 渲染助手正文（含流式）。要回到现有 marked + Shiki 路径：`localStorage.setItem('oc:markstream-react','0')` 后刷新。用户/工具 Markdown、Used 折叠和列表引擎不受影响。
+- 重发默认开启实验（1.19.7-beta.2 因 macOS 签名失败停留在 Draft）。
+
 ## [1.19.7-beta.2] - 2026-09-05
 
 ### 会话
