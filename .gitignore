@@ -67,6 +67,8 @@ Thumbs.db
 
 # Local runtime state (docker/dev)
 data/
+!apps/mobile_flutter/lib/data/
+!apps/mobile_flutter/lib/data/**
 workspaces/
 *.pid
 .worktrees/

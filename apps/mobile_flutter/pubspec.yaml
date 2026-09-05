@@ -1,0 +1,33 @@
+name: openchamber
+description: Pure Flutter mobile rewrite of OpenChamber (independent work/flutter-native track).
+publish_to: "none"
+# Flutter/pub semver build id. Marketing / About version is AppVersion.display.
+version: 1.19.3+5
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  # Official relay Layer 2: ECDH P-256 + HKDF-SHA-256 + AES-256-GCM
+  # (packages/ui/src/lib/relay/crypto.ts). Required to speak the existing
+  # tunnel; not a new protocol.
+  pointycastle: ^3.9.1
+  # Official successor to discontinued flutter_markdown. 1.0.7 is the newest
+  # release that resolves on Flutter 3.32.8 / Dart 3.8.1 (1.0.12 needs a newer
+  # SDK). MarkdownBody shrink-wraps inside the reverse list — unlike
+  # markdown_widget's scrollable MarkdownWidget or gpt_markdown's heavier
+  # LaTeX/chat chrome we do not need.
+  flutter_markdown_plus: ^1.0.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true

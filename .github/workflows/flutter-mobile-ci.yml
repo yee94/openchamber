@@ -1,0 +1,134 @@
+name: Flutter Mobile CI
+
+# Automatic smoke on the independent Flutter track. Does not replace
+# Capacitor `.github/workflows/mobile-ci.yml` on main.
+#
+# One push to work/flutter-native = one run. Do not also fire pull_request
+# (PR #5 would start a second workflow that races macos-15 and looks like
+# concurrency cancelled the first ~40s in). cursor/flutter-native-8ab3 is
+# kept in git sync but is not a second CI trigger.
+on:
+  push:
+    branches:
+      - work/flutter-native
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: Optional note for this on-demand Flutter Android debug APK
+        required: false
+        type: string
+
+concurrency:
+  group: flutter-mobile-ci-work-flutter-native
+  cancel-in-progress: true
+
+jobs:
+  analyze-test:
+    name: Flutter analyze and widget tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile_flutter
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.8"
+          channel: stable
+          cache: true
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Widget tests
+        run: flutter test
+
+  android-debug:
+    name: Android debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.8"
+          channel: stable
+          cache: true
+
+      - name: Build Android debug APK
+        working-directory: apps/mobile_flutter
+        run: |
+          # Maven Central 429/403 on GitHub Actions IPs has cancelled a
+          # green analyze+iOS run. settings.gradle.kts also lists the GCS
+          # Central mirror. Flutter retries assembleDebug once; wrap the
+          # whole build so a rate-limit does not drop the sideload APK.
+          for attempt in 1 2 3; do
+            if flutter build apk --debug; then
+              exit 0
+            fi
+            echo "flutter build apk --debug failed (attempt ${attempt}/3)"
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 30))
+          done
+
+      - name: Name side-by-side debug APK
+        id: apk
+        working-directory: apps/mobile_flutter
+        run: |
+          SHA="${GITHUB_SHA:0:7}"
+          METADATA="$(find build/app/outputs -name output-metadata.json | head -n 1)"
+          test -n "$METADATA"
+          python3 - <<PY
+          import json
+          from pathlib import Path
+          meta = json.loads(Path(r"""$METADATA""").read_text())
+          application_id = meta.get("applicationId")
+          if application_id != "com.yee94.openchamber.debug":
+              raise SystemExit(f"expected com.yee94.openchamber.debug, got {application_id}")
+          PY
+          NAME="openchamber-v2-debug-${SHA}.apk"
+          cp build/app/outputs/flutter-apk/app-debug.apk "$GITHUB_WORKSPACE/$NAME"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "file=$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: openchamber-flutter-android-debug-apk-${{ steps.apk.outputs.sha }}
+          path: ${{ github.workspace }}/${{ steps.apk.outputs.file }}
+          if-no-files-found: error
+          retention-days: 14
+
+  ios-simulator:
+    name: iOS simulator build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.8"
+          channel: stable
+          cache: true
+
+      - name: Build iOS simulator app
+        working-directory: apps/mobile_flutter
+        run: |
+          # Real simulator compile — not a no-op skip. Builds Runner plus
+          # OpenChamberWidget / NSE / Share. --no-codesign skips signing;
+          # simulator often also skips extension signing. Signed four-profile
+          # export is release YAML only.
+          flutter build ios --simulator --no-codesign
+          test -d build/ios/iphonesimulator/Runner.app
+          ls -la build/ios/iphonesimulator/Runner.app

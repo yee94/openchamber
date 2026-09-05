@@ -1,0 +1,1059 @@
+import 'dart:ui' show ColorFilter, ImageFilter;
+
+import 'package:flutter/material.dart';
+
+import '../l10n/app_strings.dart';
+import '../motion/pressable.dart';
+import '../motion/selected_spring.dart';
+import '../native/haptics.dart';
+import 'ios_hero.dart';
+import 'oc_elevation.dart';
+import 'oc_glyphs.dart';
+import 'oc_tokens.dart';
+
+export 'ios_hero.dart' show OcOptical;
+export 'oc_elevation.dart' show OcElevation;
+export 'oc_live_ios.dart' show debugOcLiveIosType, ocLiveIosType;
+export 'oc_tokens.dart' show OcProductChrome, OcTokens, OcTokensContext;
+
+/// CSS `font-size` is ink. Official `line-height` is the strut — do not
+/// also multiply Flutter `TextStyle.height` or CJK packs the line box.
+TextStyle? ocCssInk(TextStyle? style) {
+  if (style == null) return null;
+  return style.copyWith(
+    height: 1.0,
+    leadingDistribution: TextLeadingDistribution.even,
+  );
+}
+
+/// Official CSS `line-height` boxes (session title 16, subtitle/time 12).
+/// Move [OcOptical.sessionLineLeading] of that box into strut leading so
+/// CJK ink sits with official single-line air. Total height is unchanged.
+/// This review CJK face ignores strut `leading` for glyph placement
+/// (0.52–0.57 goldens stayed byte-identical). Prefer [OcCssLine].
+StrutStyle? ocCssLineBox(TextStyle? style) {
+  if (style?.fontSize == null || style?.height == null) return null;
+  final box = style!.height!;
+  const lead = OcOptical.sessionLineLeading;
+  return StrutStyle(
+    fontSize: style.fontSize,
+    height: (box - lead).clamp(0.5, box),
+    leading: lead,
+    forceStrutHeight: true,
+    leadingDistribution: TextLeadingDistribution.even,
+  );
+}
+
+/// Official CSS line-height: ink occupies `font-size`; extra half-leading
+/// sits above/below inside `font-size * line-height`. Do not clip the
+/// child to `font-size` — that sliced CJK into cream. Optional
+/// [OcOptical.cssLineCjkHalfLead] is 4.7 Flutter pixels unless a face needs more.
+/// Official 16/12 tokens and `gap-0.5` stay; do not invent gap.
+class OcCssLine extends StatelessWidget {
+  const OcCssLine({
+    super.key,
+    required this.style,
+    required this.child,
+    this.expand = true,
+    this.halfLead,
+  });
+
+  final TextStyle? style;
+  final Widget child;
+  /// Full-width in a column / [Expanded]. Trailing time / counts stay tight.
+  final bool expand;
+  /// Default is [OcOptical.cssLineCjkHalfLead] (4.7). The 56px chat
+  /// detail band also passes `halfLead: 0` so title + subtitle + gap-0.5
+  /// still fit.
+  final double? halfLead;
+
+  static double? boxHeight(TextStyle? style, {double? halfLead}) {
+    if (style?.fontSize == null || style?.height == null) return null;
+    final extra = halfLead ?? OcOptical.cssLineCjkHalfLead;
+    return style!.fontSize! * style.height! + 2 * extra;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final font = style?.fontSize;
+    final box = boxHeight(style, halfLead: halfLead);
+    if (font == null || box == null) return child;
+    return SizedBox(
+      height: box,
+      width: expand ? double.infinity : null,
+      child: Align(
+        alignment: expand ? Alignment.centerLeft : Alignment.center,
+        child: child,
+      ),
+    );
+  }
+}
+
+/// Geometry aliases of official `--oc-mobile-*` tokens.
+/// Colors come from [OcTokens.of] so Light / Dark / System switch live.
+class OcChrome {
+  static const Color agentAccent = OcProductChrome.agentAccent;
+  static const double cardRadius = OcTokens.surfaceRadius;
+  static const double pillRadius = OcTokens.controlRadius;
+  static const double dockRadius = OcTokens.dockRadius;
+  static const double largeTitleSize = OcTokens.rootTitleSize;
+  static const double pageGutter = OcTokens.pageInlineInset;
+  static const double tabBarHeight = OcOptical.dockCapsuleHeight;
+  static const double headerButtonSize = OcTokens.headerButtonSize;
+}
+
+/// Official `--oc-mobile-glass-fill` + blur 20 + saturate 1.25/1.2.
+/// iOS 26 chrome is UIKit `UIGlassEffect` (`OpenChamberTabBarView` /
+/// composer). This widget is the Android / WidgetTester degrade:
+/// clipped [BackdropFilter] through-plates. Not a Flutter glass clone.
+class OcFrosted extends StatelessWidget {
+  const OcFrosted({
+    super.key,
+    required this.child,
+    this.fill,
+    this.sigma = OcOptical.glassBlur,
+    this.saturate,
+  });
+
+  final Widget child;
+  final Color? fill;
+  final double sigma;
+  /// Null uses official `--oc-mobile-glass-saturate` for brightness
+  /// (light 1.25 / dark 1.2). Cards pass [OcOptical.floatSaturate].
+  final double? saturate;
+
+  @override
+  Widget build(BuildContext context) {
+    final plate = ColoredBox(
+      color: fill ?? context.oc.glassFill,
+      child: child,
+    );
+    if (sigma <= 0) return plate;
+    final applied = saturate ?? OcOptical.glassSaturateFor(context.oc.isDark);
+    ImageFilter filter = ImageFilter.blur(sigmaX: sigma, sigmaY: sigma);
+    if (applied != 1.0) {
+      // Official `backdrop-filter: blur() saturate()`. Blur first.
+      filter = ImageFilter.compose(
+        inner: filter,
+        outer: ColorFilter.matrix(_saturateMatrix(applied)),
+      );
+    }
+    // Clip to this plate. An unclipped BackdropFilter in a Stack
+    // (collapsing header, clipBehavior: none) filters the whole
+    // scene — 12px session cores then floor at ~L 129. CSS
+    // backdrop-filter is element-bounded.
+    return ClipRect(
+      child: BackdropFilter(
+        filter: filter,
+        child: plate,
+      ),
+    );
+  }
+}
+
+List<double> _saturateMatrix(double s) {
+  const r = 0.2126;
+  const g = 0.7152;
+  const b = 0.0722;
+  final inv = 1 - s;
+  return <double>[
+    r * inv + s, g * inv, b * inv, 0, 0,
+    r * inv, g * inv + s, b * inv, 0, 0,
+    r * inv, g * inv, b * inv + s, 0, 0,
+    0, 0, 0, 1, 0,
+  ];
+}
+
+/// Official header / detail-nav `::after` fade. Not backdrop-filter glass.
+class OcHeaderFade extends StatelessWidget {
+  const OcHeaderFade({
+    super.key,
+    required this.safeTop,
+    this.opacity = 1,
+  });
+
+  final double safeTop;
+  final double opacity;
+
+  static double heightFor(double safeTop) =>
+      safeTop + OcOptical.detailNavigationHeight + OcOptical.headerFadeExtra;
+
+  @override
+  Widget build(BuildContext context) {
+    if (opacity <= 0) return const SizedBox.shrink();
+    final fade = context.oc.headerFade;
+    final fadeH = heightFor(safeTop);
+    final mid = ((safeTop + fadeH * OcOptical.headerFadeMidStop) / fadeH).clamp(0.0, 1.0);
+    return IgnorePointer(
+      child: Opacity(
+        opacity: opacity.clamp(0.0, 1.0),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [fade, fade, fade.withValues(alpha: 0)],
+              stops: [0, mid, 1],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Official `Button` `mobileGlass` + `mobileIcon` circular chip (40).
+class OcGlassChip extends StatelessWidget {
+  const OcGlassChip({
+    super.key,
+    required this.child,
+    this.size = OcOptical.headerDiscVisual,
+    this.fill,
+    this.lift = true,
+    this.sigma = OcOptical.chipBleedBlur,
+  });
+
+  final Widget child;
+  final double size;
+  /// Default is [OcTokens.glassChipFill] 0.34. Search passes
+  /// [OcTokens.glassChipThrough] so the 34 plate is frost, not a coin.
+  /// Detail-nav passes [OcTokens.glassFill] 0.68.
+  final Color? fill;
+  /// Header search through-frost skips the near-pair halo (that
+  /// ringed the 34 plate into a coin). Detail-nav keeps lift.
+  final bool lift;
+  /// Catalog chips stay [OcOptical.chipBleedBlur] 14. Detail-nav
+  /// passes official [OcOptical.glassBlur] 20.
+  final double sigma;
+
+  @override
+  Widget build(BuildContext context) {
+    // mobileGlass frost plate. BackdropFilter + official saturate.
+    // Catalog default is glassChipFill 0.34. Detail-nav overrides to
+    // official glassFill 0.68. Chip near-pair shadow — no hairline
+    // rim, no 8/20 umbra.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: lift ? OcElevation.chip(context) : const [],
+      ),
+      child: ClipOval(
+        child: OcFrosted(
+          fill: fill ?? context.oc.glassChipFill,
+          sigma: sigma,
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Center(child: child),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Official `mobileGlass` + `mobileIcon` chip for secondary-page chrome.
+/// Foreground ink on `--oc-mobile-glass-fill` (0.68) + blur 20.
+class OcDetailNavChip extends StatelessWidget {
+  const OcDetailNavChip({
+    super.key,
+    required this.semanticLabel,
+    required this.onPressed,
+    this.glyph,
+    this.child,
+  });
+
+  final String semanticLabel;
+  final VoidCallback onPressed;
+  final OcGlyphKind? glyph;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.oc;
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: Tooltip(
+        message: semanticLabel,
+        child: Pressable(
+          haptic: HapticStrength.light,
+          highlight: false,
+          onPressed: onPressed,
+          child: SizedBox(
+            width: OcOptical.chatChip,
+            height: OcOptical.chatChip,
+            child: Center(
+              child: OcGlassChip(
+                size: OcOptical.chatChip,
+                fill: tokens.glassFill,
+                lift: true,
+                sigma: OcOptical.glassBlur,
+                child: child ??
+                    OcGlyph(
+                      glyph!,
+                      size: OcOptical.detailNavGlyph,
+                      strokeWidth: OcOptical.detailNavGlyphStroke,
+                      color: tokens.foreground,
+                    ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Official `ContextProgressIcon` — 18px ring, stroke 3, start at 12 o'clock.
+class OcContextProgressIcon extends StatelessWidget {
+  const OcContextProgressIcon({super.key, required this.percentage});
+
+  final double percentage;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.oc;
+    final pct = percentage.clamp(0.0, 100.0);
+    final tone = pct >= 80
+        ? tokens.statusError
+        : pct >= 50
+            ? tokens.statusWarning
+            : tokens.statusSuccess;
+    return Semantics(
+      value: '${pct.round()}%',
+      child: CustomPaint(
+        size: const Size.square(OcOptical.contextProgressRing),
+        painter: _OcContextProgressPainter(
+          progress: pct / 100,
+          track: tokens.border,
+          progressColor: tone,
+          strokeWidth: OcOptical.contextProgressStroke,
+        ),
+      ),
+    );
+  }
+}
+
+class _OcContextProgressPainter extends CustomPainter {
+  const _OcContextProgressPainter({
+    required this.progress,
+    required this.track,
+    required this.progressColor,
+    required this.strokeWidth,
+  });
+
+  final double progress;
+  final Color track;
+  final Color progressColor;
+  final double strokeWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.shortestSide - strokeWidth) / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    final trackPaint = Paint()
+      ..color = track
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    final progressPaint = Paint()
+      ..color = progressColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(center, radius, trackPaint);
+    canvas.drawArc(rect, -1.57079632679, 6.28318530718 * progress, false, progressPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _OcContextProgressPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.track != track ||
+        oldDelegate.progressColor != progressColor ||
+        oldDelegate.strokeWidth != strokeWidth;
+  }
+}
+
+/// Compact glass stadium for agent / model chips — not a solid muted slab.
+class OcGlassPill extends StatelessWidget {
+  const OcGlassPill({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    this.radius = 20,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: context.oc.mobileBorder, width: 0.5),
+        boxShadow: OcElevation.highlight(context),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: OcFrosted(
+          fill: context.oc.glassChipFill,
+          child: Padding(padding: padding, child: child),
+        ),
+      ),
+    );
+  }
+}
+
+class LargeTitleHeader extends StatelessWidget {
+  const LargeTitleHeader({
+    super.key,
+    required this.title,
+    this.trailing,
+    this.eyebrow,
+  });
+
+  final String title;
+  final Widget? trailing;
+  final String? eyebrow;
+
+  @override
+  Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 8, OcChrome.pageGutter, 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (eyebrow != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      eyebrow!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: OcTokens.textMicro, fontWeight: FontWeight.w500, color: context.oc.mutedForeground),
+                    ),
+                  ),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: OcOptical.largeTitle,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: OcOptical.largeTitleTracking,
+                    height: OcOptical.largeTitleHeight,
+                    color: onSurface,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (trailing != null) trailing!,
+        ],
+      ),
+    );
+  }
+}
+
+class CircularChromeButton extends StatelessWidget {
+  const CircularChromeButton({
+    super.key,
+    required this.glyph,
+    required this.onPressed,
+    this.filled = false,
+    this.ink = false,
+    this.tooltip,
+    this.size,
+    this.haptic = HapticStrength.light,
+  });
+
+  final OcGlyphKind glyph;
+  final VoidCallback onPressed;
+  final bool filled;
+  final bool ink;
+  final String? tooltip;
+  final double? size;
+  final HapticStrength? haptic;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.oc;
+    final hit = size ?? (filled ? OcOptical.addButton : OcOptical.searchButton);
+    // Search keeps the 36 frost plate. Solid primary `+` is official 40.
+    final disc = filled
+        ? hit
+        : (hit < OcOptical.headerDiscVisual ? hit : OcOptical.headerDiscVisual);
+    final glyphWidget = OcGlyph(
+      glyph,
+      size: ink ? OcOptical.leadingGlyphCompact : OcOptical.headerGlyph,
+      strokeWidth: OcOptical.headerGlyphStrokeVisual,
+      color: !filled && !ink ? tokens.foreground : tokens.primaryForeground,
+    );
+    final plate = filled || ink
+        ? DecoratedBox(
+            decoration: BoxDecoration(
+              color: ink ? tokens.foreground : tokens.primary,
+              shape: BoxShape.circle,
+              // Official Projects `+` is primary 10/22 @ 22%.
+              // Ink / scheduled stay contact-only. Not black near-pair.
+              boxShadow: filled && !ink ? OcElevation.primaryAdd(context) : const [],
+            ),
+            child: SizedBox(
+              width: disc,
+              height: disc,
+              child: Center(child: glyphWidget),
+            ),
+          )
+        : OcGlassChip(
+            size: disc,
+            fill: tokens.glassChipThrough,
+            lift: false,
+            child: glyphWidget,
+          );
+    final child = SizedBox(
+      width: hit,
+      height: hit,
+      child: Pressable(
+        onPressed: onPressed,
+        haptic: haptic,
+        highlight: false,
+        borderRadius: BorderRadius.circular(hit),
+        child: Center(child: plate),
+      ),
+    );
+    return tooltip == null ? child : Tooltip(message: tooltip, child: child);
+  }
+}
+
+class GroupedInsetCard extends StatelessWidget {
+  const GroupedInsetCard({
+    super.key,
+    required this.child,
+    this.margin,
+    this.padding,
+    this.tight = false,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry? margin;
+  final EdgeInsetsGeometry? padding;
+  /// Soft schedule lift when [tight] is set; far stays official 10%.
+  /// Schedule cards use the quieter near pair.
+  final bool tight;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(OcChrome.cardRadius);
+    return Container(
+      margin: margin ?? const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, OcOptical.floatCardStackGap),
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: OcElevation.card(context, tight: tight),
+      ),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            boxShadow: OcElevation.highlight(context),
+          ),
+          // Frost + 0.45 float fill stay *behind* the child. Wrapping
+          // titles in OcFrosted's ColoredBox composites 12px CJK through
+          // the plate (cores floor at ~L 129). Official backdrop-filter
+          // frosts the surface, not the ink. Search / dock OcFrosted
+          // chips are unchanged.
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: OcFrosted(
+                  fill: context.oc.floatSurface,
+                  sigma: OcOptical.floatBlur,
+                  saturate: OcOptical.floatSaturate,
+                  child: const SizedBox.expand(),
+                ),
+              ),
+              padding == null ? child : Padding(padding: padding!, child: child),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class InsetTextField extends StatelessWidget {
+  const InsetTextField({
+    super.key,
+    this.fieldKey,
+    required this.controller,
+    required this.label,
+    this.hint,
+    this.helper,
+    this.obscureText = false,
+    this.keyboardType,
+    this.autofocus = false,
+    this.onChanged,
+  });
+
+  final Key? fieldKey;
+  final TextEditingController controller;
+  final String label;
+  final String? hint;
+  final String? helper;
+  final bool obscureText;
+  final TextInputType? keyboardType;
+  final bool autofocus;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(label, style: TextStyle(fontSize: OcTokens.textUiLabel, color: context.oc.mutedForeground, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 6),
+          TextField(
+            key: fieldKey ?? key,
+            controller: controller,
+            obscureText: obscureText,
+            keyboardType: keyboardType,
+            autofocus: autofocus,
+            autocorrect: false,
+            onChanged: onChanged,
+            decoration: InputDecoration(
+              hintText: hint,
+              helperText: helper,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              filled: false,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+              floatingLabelBehavior: FloatingLabelBehavior.never,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class SearchPillField extends StatelessWidget {
+  const SearchPillField({
+    super.key,
+    required this.onChanged,
+    this.hint,
+    this.initialValue,
+  });
+
+  final ValueChanged<String> onChanged;
+  final String? hint;
+  final String? initialValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 12),
+      child: TextField(
+        key: key,
+        controller: initialValue == null ? null : TextEditingController(text: initialValue),
+        onChanged: onChanged,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: hint,
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(left: 10, right: 4),
+            child: OcGlyph(OcGlyphKind.search, size: 16, color: context.oc.mutedForeground),
+          ),
+          prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 18),
+          filled: true,
+          fillColor: Theme.of(context).colorScheme.surface,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(OcChrome.pillRadius),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(OcChrome.pillRadius),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(OcChrome.pillRadius),
+            borderSide: BorderSide.none,
+          ),
+          floatingLabelBehavior: FloatingLabelBehavior.never,
+        ),
+      ),
+    );
+  }
+}
+
+class SegmentedPill extends StatelessWidget {
+  const SegmentedPill({
+    super.key,
+    required this.labels,
+    required this.selectedIndex,
+    required this.onSelected,
+    this.icons,
+  });
+
+  final List<String> labels;
+  final List<OcGlyphKind>? icons;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    const trackRadius = OcTokens.surfaceRadius;
+    const pad = 4.0;
+    const gap = 4.0;
+    const itemHeight = 40.0;
+    const itemRadius = 20.0;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, OcTokens.pageGap),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(trackRadius),
+        boxShadow: OcElevation.highlight(context),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(trackRadius),
+        child: OcFrosted(
+          fill: context.oc.glassChipFill,
+          child: Padding(
+            padding: const EdgeInsets.all(pad),
+            child: Row(
+              children: [
+                for (var i = 0; i < labels.length; i += 1) ...[
+                  if (i > 0) const SizedBox(width: gap),
+                  Expanded(
+                    child: Pressable(
+                      key: Key('segment-$i'),
+                      haptic: HapticStrength.light,
+                      onPressed: () => onSelected(i),
+                      borderRadius: BorderRadius.circular(itemRadius),
+                      child: OcSelectedSpring(
+                        selected: selectedIndex == i,
+                        builder: (context, t) {
+                          final tokens = context.oc;
+                          return SizedBox(
+                            height: itemHeight,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Color.lerp(
+                                  Colors.transparent,
+                                  tokens.card.withValues(alpha: 0.55),
+                                  t,
+                                ),
+                                borderRadius: BorderRadius.circular(itemRadius),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  if (icons != null) ...[
+                                    OcGlyph(
+                                      icons![i],
+                                      size: OcOptical.headerGlyph,
+                                      strokeWidth: OcOptical.headerGlyphStrokeVisual,
+                                      color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
+                                    ),
+                                    const SizedBox(width: 6),
+                                  ],
+                                  Flexible(
+                                    child: Text(
+                                      labels[i],
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: OcTokens.textUiHeader,
+                                        height: 1.0,
+                                        fontWeight: FontWeight.w400,
+                                        color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class FilterChipBar extends StatelessWidget {
+  const FilterChipBar({
+    super.key,
+    required this.labels,
+    required this.selectedIndex,
+    required this.onSelected,
+    this.trailing,
+  });
+
+  final List<String> labels;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(OcTokens.surfaceRadius),
+                boxShadow: OcElevation.highlight(context),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(OcTokens.surfaceRadius),
+                child: OcFrosted(
+                  fill: context.oc.glassChipFill,
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Row(
+                      children: [
+                        for (var i = 0; i < labels.length; i += 1) ...[
+                          if (i > 0) const SizedBox(width: 4),
+                          Expanded(
+                            child: Pressable(
+                              key: Key('filter-$i'),
+                              haptic: HapticStrength.light,
+                              onPressed: () => onSelected(i),
+                              borderRadius: BorderRadius.circular(20),
+                              child: OcSelectedSpring(
+                                selected: selectedIndex == i,
+                                builder: (context, t) {
+                                  final tokens = context.oc;
+                                  return SizedBox(
+                                    height: 40,
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        color: Color.lerp(
+                                  Colors.transparent,
+                                  tokens.card.withValues(alpha: 0.55),
+                                  t,
+                                ),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          labels[i],
+                                          textAlign: TextAlign.center,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: OcTokens.textUiLabel,
+                                            height: 1.0,
+                                            fontWeight: FontWeight.w400,
+                                            color: Color.lerp(tokens.mutedForeground, tokens.foreground, t),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            trailing!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Official `.oc-mobile-detail-navigation`: sticky, transparent, 56px band
+/// under the status bar. Content scrolls underneath. Not a frosted banner.
+class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
+  const PushedNavBar({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.leadingKey,
+    this.trailing,
+    this.busy = false,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Key? leadingKey;
+  final Widget? trailing;
+  final bool busy;
+
+  static double overlayHeight(BuildContext context) =>
+      MediaQuery.viewPaddingOf(context).top + OcOptical.detailNavigationHeight;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(OcOptical.detailNavigationHeight);
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.oc;
+    final view = MediaQuery.viewPaddingOf(context);
+    final inlineLeft = view.left > OcOptical.detailActionEdgeInset
+        ? view.left
+        : OcOptical.detailActionEdgeInset;
+    final inlineRight = view.right > OcOptical.detailActionEdgeInset
+        ? view.right
+        : OcOptical.detailActionEdgeInset;
+    final fadeH = OcHeaderFade.heightFor(view.top);
+    final bandH = view.top + OcOptical.detailNavigationHeight;
+    final disc = OcOptical.chatChip;
+
+    return SizedBox(
+      height: bandH,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: fadeH,
+            child: OcHeaderFade(safeTop: view.top, opacity: 0.42),
+          ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(inlineLeft, view.top, inlineRight, 0),
+            child: SizedBox(
+              height: OcOptical.detailNavigationHeight,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: OcOptical.detailActionColumn,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: OcDetailNavChip(
+                        key: leadingKey,
+                        semanticLabel: t(context, 'chat.back'),
+                        glyph: OcGlyphKind.chevronBack,
+                        onPressed: () => Navigator.of(context).maybePop(),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        OcCssLine(
+                          halfLead: 0,
+                          style: const TextStyle(
+                            fontSize: OcOptical.chatTitle,
+                            height: OcOptical.chatTitleHeight,
+                          ),
+                          child: Text(
+                            title,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: ocCssInk(TextStyle(
+                              fontSize: OcOptical.chatTitle,
+                              fontWeight: FontWeight.w400,
+                              letterSpacing: OcOptical.chatTitleTracking,
+                              height: OcOptical.chatTitleHeight,
+                              color: tokens.foreground,
+                            )),
+                          ),
+                        ),
+                        if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                          const SizedBox(height: OcOptical.detailSubtitleGap),
+                          OcCssLine(
+                            halfLead: 0,
+                            style: const TextStyle(
+                              fontSize: OcOptical.detailSubtitle,
+                              height: OcOptical.detailSubtitleHeight,
+                            ),
+                            child: Text(
+                              key: const Key('chat-header-subtitle'),
+                              subtitle!,
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: ocCssInk(TextStyle(
+                                fontSize: OcOptical.detailSubtitle,
+                                fontWeight: FontWeight.w400,
+                                height: OcOptical.detailSubtitleHeight,
+                                color: tokens.mutedForeground,
+                              )),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    width: trailing == null && !busy
+                        ? OcOptical.detailActionColumn
+                        : null,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (busy)
+                          SizedBox(
+                            width: disc,
+                            height: disc,
+                            child: Center(
+                              child: OcGlassChip(
+                                size: OcOptical.chatChip,
+                                fill: tokens.glassFill,
+                                lift: true,
+                                sigma: OcOptical.glassBlur,
+                                child: SizedBox(
+                                  key: const Key('chat-busy'),
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: tokens.mutedForeground,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (busy && trailing != null)
+                          const SizedBox(width: OcOptical.detailNavTrailingGap),
+                        if (trailing != null) trailing!,
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

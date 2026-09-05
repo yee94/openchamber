@@ -24,6 +24,7 @@ If these sources materially conflict, stop and resolve the conflict instead of s
 - `packages/electron`: native desktop shell and privileged Electron boundary.
 - `packages/vscode`: extension host, webview, and runtime bridge.
 - `packages/mobile`: Capacitor iOS/Android shell; bundles the mobile web surface and connects to an existing OpenChamber server.
+- `apps/mobile_flutter`: independent native Flutter mobile rewrite on `work/flutter-native` (do not merge to main). Capacitor remains the shipped mobile shell on main.
 - `packages/docs`: product documentation; not a Bun workspace.
 
 Shared UI calls official OpenCode APIs through `@opencode-ai/sdk/v2`. OpenChamber-owned capabilities use `RuntimeAPIs`, `runtimeFetch`, and shared browser/realtime transport helpers. Server-side upstream integrations may use their owning runtime modules.

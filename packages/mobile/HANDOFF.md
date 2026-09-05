@@ -32,6 +32,11 @@ bun run --cwd packages/web build          # web/dist
       → xcodebuild / gradle assembleDebug  # native binary
 ```
 
+Workspace `bun run build` must not run the mobile prepare step in parallel with
+`packages/web`'s Vite build: both share `packages/web/dist` (`emptyOutDir`), and a
+concurrent copy drops `mobile.html`. `scripts/build-workspace.mjs` builds ui/web/
+vscode/electron first, then prepares Capacitor assets from the finished web dist.
+
 `sync` (in `packages/mobile/package.json`) runs `bun run build && cap sync` inside the mobile env
 wrapper. Everything native-facing goes through `scripts/with-mobile-env.mjs`.
 

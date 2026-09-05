@@ -1,0 +1,651 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openchamber/mobile/mobile_tab_page_header.dart';
+import 'package:openchamber/features/projects/highlighted_text.dart';
+import 'package:openchamber/theme/app_theme.dart';
+import 'package:openchamber/theme/ios_chrome.dart';
+import 'package:openchamber/theme/ios_hero.dart';
+import 'package:openchamber/theme/oc_elevation.dart';
+import 'package:openchamber/theme/oklch.dart';
+
+void main() {
+  test('oklch conversion matches Ottosson sRGB for documented dark samples', () {
+    expectNear(oklchColor(0.16, 0.01, 30), const Color(0xFF110C0B));
+    expectNear(oklchColor(0.77, 0.17, 85), const Color(0xFFE5A900));
+    expectNear(oklchColor(0.85, 0.02, 90), const Color(0xFFD3CDBF));
+    expectNear(oklchColor(0.19, 0.01, 40), const Color(0xFF181210));
+  });
+
+  test('OcTokens light and dark follow design-system.css OKLCH, not iOS greys', () {
+    expect(OcTokens.light.primary, isNot(const Color(0xFF2F6FED)));
+    expect(OcTokens.dark.primary, isNot(const Color(0xFF2F6FED)));
+    expectNear(OcTokens.light.background, oklchColor(0.97, 0.02, 85));
+    expectNear(OcTokens.light.foreground, oklchColor(0.25, 0.02, 40));
+    expect(OcTokens.light.foreground.computeLuminance(), lessThan(0.12));
+    expectNear(OcTokens.light.primary, oklchColor(0.65, 0.2, 55));
+    expectNear(OcTokens.dark.background, oklchColor(0.16, 0.01, 30));
+    expectNear(OcTokens.dark.primary, oklchColor(0.77, 0.17, 85));
+    expectNear(OcTokens.dark.destructive, oklchColor(0.65, 0.15, 30));
+    expect(OcTokens.light.surfaceElevated, OcTokens.light.card);
+    expect(OcTokens.light.surfaceBackground, OcTokens.light.background);
+    expect(OcTokens.light.surfaceMuted, OcTokens.light.muted);
+    expect(OcTokens.dark.pageBackground, isNot(OcTokens.light.pageBackground));
+    expect(OcTokens.light.pageBackground, isNot(const Color(0xFFF2F2F7)));
+    expect(OcTokens.light.pageBackground, isNot(const Color(0xFF000000)));
+    expect(OcTokens.light.colorScheme.surfaceTint, const Color(0x00000000));
+    expect(OcTokens.light.settingsGroupBackground, isNot(OcTokens.light.pageBackground));
+    expect(OcTokens.light.floatSurface.a, closeTo(0.45, 0.01));
+    expect(OcTokens.dark.floatSurface.a, closeTo(0.45, 0.01));
+    expect(OcTokens.light.dockPlate.a, closeTo(0.0, 0.01));
+    expect(OcTokens.dark.dockPlate.a, closeTo(0.0, 0.01));
+    expect(OcTokens.light.dockPlate.a, lessThan(OcTokens.light.floatSurface.a));
+    expect(OcTokens.light.dockPlate.r, closeTo(OcTokens.light.card.r, 0.01));
+    expect(OcTokens.light.glassFill.a, closeTo(0.68, 0.01));
+    expect(OcTokens.dark.glassFill.a, closeTo(0.66, 0.01));
+    expect(OcTokens.light.glassFill.r, closeTo(1.0, 0.01));
+    expect(OcTokens.light.glassFill.g, closeTo(1.0, 0.01));
+    expect(OcTokens.light.glassFill.b, closeTo(1.0, 0.01));
+    expect(OcTokens.light.glassFill, isNot(OcTokens.light.surfaceElevated));
+    expect(OcTokens.light.glassChipFill.a, closeTo(0.34, 0.01));
+    expect(OcTokens.light.glassChipThrough.a, closeTo(0.16, 0.01));
+    expect(OcTokens.light.glassChipThrough.a, lessThan(OcTokens.light.glassChipFill.a));
+    expect(OcTokens.light.glassChipFill.a, lessThan(OcTokens.light.glassFill.a));
+    expect(OcTokens.dark.glassChipFill.a, closeTo(0.34, 0.01));
+    expect(OcTokens.light.glassChipFill.r, closeTo(1.0, 0.01));
+    expect(OcTokens.light.glassHighlight.a, closeTo(0.60, 0.01));
+    expect(OcTokens.dark.glassHighlight.a, closeTo(0.18, 0.01));
+    expect(OcTokens.light.glassHighlight.a, lessThan(OcTokens.light.floatHighlight.a));
+    expect(OcTokens.light.dockPlate.a, lessThan(OcTokens.light.glassFill.a));
+    expect(
+      OcTokens.light.selectedTabWash.a,
+      closeTo(OcTokens.light.interactiveSelection.a * OcOptical.dockIconWashAlpha, 0.005),
+    );
+    expect(OcTokens.light.selectedTabWash.a, lessThan(OcTokens.light.interactiveSelection.a));
+    expect(OcTokens.light.selectedTabWash.a, greaterThan(0.015));
+    expect(OcOptical.dockIconWashAlpha, closeTo(0.55, 0.01));
+    expect(
+      (OcTokens.light.selectedTabWash.r - OcTokens.light.primary.r).abs(),
+      greaterThan(0.15),
+    );
+  });
+
+  test('mobile geometry rides official rem tokens', () {
+    expect(OcTokens.radius, 10);
+    expect(OcTokens.surfaceRadius, 24);
+    expect(OcTokens.insetRadius, 16);
+    expect(OcTokens.controlRadius, 20);
+    expect(OcTokens.formControlHeight, 36);
+    expect(OcTokens.dockHeight, 68);
+    expect(OcTokens.dockRadius, 34);
+    expect(OcTokens.rootTitleSize, 32);
+    expect(OcTokens.textMarkdown, 15);
+    expect(OcTokens.textUiHeader, 14);
+    expect(OcTokens.textUiLabel, 13);
+    expect(OcTokens.textMeta, 13);
+    expect(OcTokens.pageInlineInset, 18);
+    expect(OcTokens.detailNavigationHeight, 56);
+    expect(OcTokens.detailActionEdgeInset, 16);
+    expect(OcTokens.detailActionColumn, 44);
+    expect(OcTokens.headerFadeExtra, 28);
+    expect(OcTokens.pageScrollBottomExtra, 40);
+    expect(OcTokens.dockInnerInset, 5);
+    expect(OcTokens.dockGap, 3);
+    expect(OcTokens.dockMaxWidth, 416);
+    expect(OcTokens.tabHeight, 58);
+    expect(OcTokens.tabRadius, 29);
+    expect(OcTokens.detailTitleSize, 15);
+    expect(OcTokens.detailSubtitleSize, 10);
+  });
+
+  test('materialTheme attaches OcTokens for both brightnesses', () {
+    final light = materialTheme(Brightness.light);
+    final dark = materialTheme(Brightness.dark);
+    expect(light.extension<OcTokens>(), OcTokens.light);
+    expect(dark.extension<OcTokens>(), OcTokens.dark);
+    expect(light.colorScheme.primary, OcTokens.light.primary);
+    expect(dark.colorScheme.primary, OcTokens.dark.primary);
+    expect(light.scaffoldBackgroundColor, OcTokens.light.pageBackground);
+    expect(dark.scaffoldBackgroundColor, OcTokens.dark.pageBackground);
+  });
+
+  test('live iOS materialTheme uses iOS 2021 typography, not Android', () {
+    addTearDown(() => debugOcLiveIosType = null);
+    debugOcLiveIosType = false;
+    final androidTheme = materialTheme(Brightness.light);
+    debugOcLiveIosType = true;
+    final iosTheme = materialTheme(Brightness.light);
+    expect(
+      iosTheme.textTheme.bodyMedium?.fontFamily,
+      isNot(androidTheme.textTheme.bodyMedium?.fontFamily),
+    );
+    expect(
+      iosTheme.textTheme.bodyMedium?.fontFamily,
+      Typography.material2021(platform: TargetPlatform.iOS).black.bodyMedium?.fontFamily,
+    );
+    expect(OcOptical.sessionTitleHalfLeadPaint, 0);
+    expect(OcOptical.cardTitleHalfLeadPaint, 0);
+    debugOcLiveIosType = false;
+    expect(OcOptical.sessionTitleHalfLeadPaint, OcOptical.sessionTitleHalfLead);
+    expect(OcOptical.cardTitleHalfLeadPaint, OcOptical.cardTitleHalfLead);
+  });
+
+  testWidgets('Latin uses official session tracking; Regular CJK keeps 1.46', (tester) async {
+    addTearDown(() => debugOcLiveIosType = null);
+    debugOcLiveIosType = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: materialTheme(Brightness.light),
+        home: const HighlightedText(
+          'openchamber 发布',
+          query: '',
+          style: TextStyle(
+            fontSize: OcOptical.rowTitle,
+            fontWeight: FontWeight.w500,
+            letterSpacing: OcOptical.rowTitleTrackingOfficial,
+            height: OcOptical.rowTitleHeight,
+          ),
+        ),
+      ),
+    );
+    final text = tester.widget<Text>(find.byType(Text));
+    final root = text.textSpan! as TextSpan;
+    final spans = root.children!.cast<TextSpan>();
+    expect(spans, hasLength(2));
+    expect(spans[0].text, 'openchamber ');
+    expect(spans[0].style?.letterSpacing, closeTo(OcOptical.rowTitleTrackingOfficial, 0.01));
+    expect(spans[1].text, '发布');
+    expect(spans[1].style?.letterSpacing, closeTo(OcOptical.rowTitleTracking, 0.01));
+    expect(spans[1].style?.fontWeight, FontWeight.w400);
+
+    debugOcLiveIosType = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: materialTheme(Brightness.light),
+        home: const HighlightedText(
+          'openchamber 发布',
+          query: '',
+          style: TextStyle(
+            fontSize: OcOptical.rowTitle,
+            fontWeight: FontWeight.w500,
+            letterSpacing: OcOptical.rowTitleTrackingOfficial,
+            height: OcOptical.rowTitleHeight,
+          ),
+        ),
+      ),
+    );
+    final live = tester.widget<Text>(find.byType(Text));
+    final liveSpans = (live.textSpan! as TextSpan).children!.cast<TextSpan>();
+    expect(liveSpans[1].style?.letterSpacing ?? live.textSpan!.style?.letterSpacing,
+        closeTo(OcOptical.rowTitleTrackingOfficial, 0.01));
+    expect(liveSpans[1].style?.fontWeight, FontWeight.w500);
+  });
+
+  test('OcOptical sizes are smaller/airier than the previous crude chrome', () {
+    expect(OcOptical.largeTitle, 32);
+    expect(OcOptical.largeTitleTracking, closeTo(-1.28, 0.01));
+    expect(OcOptical.largeTitleHeight, 1.2);
+    expect(OcOptical.rowTitle, 12);
+    expect(OcOptical.rowTitleTrackingOfficial, closeTo(12 * -0.012, 0.01));
+    expect(OcOptical.rowTitleTrackingOfficial, lessThan(0));
+    expect(OcOptical.rowTitleTracking, closeTo(1.46, 0.01));
+    expect(OcOptical.rowTitleTracking, greaterThan(1.2));
+    expect(OcOptical.rowTitleTracking, lessThan(1.5));
+    expect(OcOptical.projectTitleTrackingOfficial, closeTo(14 * -0.024, 0.01));
+    expect(OcOptical.projectTitleTrackingOfficial, lessThan(0));
+    expect(OcOptical.projectTitleTracking, closeTo(1.02, 0.01));
+    expect(OcOptical.projectTitleTracking, greaterThan(0.8));
+    expect(OcOptical.projectTitleTracking, lessThan(1.1));
+    expect(OcOptical.entityTitleTrackingOfficial, closeTo(16 * -0.024, 0.01));
+    expect(OcOptical.entityTitleTrackingOfficial, lessThan(OcOptical.entityTitleTracking));
+    expect(OcOptical.assistantName, 15);
+    expect(OcOptical.assistantName, lessThan(OcOptical.entityTitle));
+    expect(OcOptical.assistantNameTrackingOfficial, closeTo(15 * -0.02, 0.01));
+    expect(OcOptical.assistantNameHeight, closeTo(20 / 15, 0.01));
+    expect(OcOptical.entityMeta, 13);
+    expect(OcOptical.entityMeta, OcTokens.entityMetaSize);
+    expect(OcOptical.entityMetaHeight, closeTo(16 / 13, 0.01));
+    expect(OcOptical.meta, 12);
+    expect(
+      OcCssLine.boxHeight(
+        const TextStyle(
+          fontSize: OcOptical.projectTitle,
+          height: OcOptical.projectTitleHeight,
+        ),
+        halfLead: 0,
+      ),
+      OcOptical.projectTitle * OcOptical.projectTitleHeight,
+    );
+    expect(OcOptical.cardTitleHalfLead, closeTo(3.0, 0.01));
+    expect(OcOptical.cardTitleHalfLead, greaterThan(0));
+    expect(OcOptical.cardTitleHalfLead, lessThan(OcOptical.cssLineCjkHalfLead));
+    expect(
+      OcCssLine.boxHeight(
+        const TextStyle(
+          fontSize: OcOptical.projectTitle,
+          height: OcOptical.projectTitleHeight,
+        ),
+        halfLead: OcOptical.cardTitleHalfLead,
+      ),
+      OcOptical.projectTitle * OcOptical.projectTitleHeight + 2 * OcOptical.cardTitleHalfLead,
+    );
+    expect(OcOptical.rowTitleHeight, greaterThanOrEqualTo(1.33));
+    expect(OcOptical.rowTitleHeight, lessThan(1.42));
+    expect(OcOptical.sessionRowHeight, OcTokens.sessionRowHeight);
+    expect(OcOptical.sessionTitleHalfLead, closeTo(3.2, 0.01));
+    expect(OcOptical.sessionTitleHalfLead, lessThan(OcOptical.cssLineCjkHalfLead));
+    expect(OcOptical.sessionTitleHalfLead, greaterThan(OcOptical.cardTitleHalfLead));
+    expect(OcOptical.sessionRowVisualHeight, closeTo(46.4, 0.01));
+    expect(OcOptical.sessionSubtitleHalfLead, 0);
+    expect(OcOptical.sessionRowVisualHeight, greaterThanOrEqualTo(40));
+    expect(OcOptical.sessionRowVisualHeight, lessThan(OcOptical.sessionRowVisualHeight + 1));
+    expect(OcOptical.sessionRowPadV, 5);
+    expect(OcOptical.metaHeight, 1.25);
+    expect(OcOptical.entityTitleHeight, 1.25);
+    expect(OcOptical.assistantAvatar, 40);
+    expect(OcOptical.assistantAvatarVisual, 38);
+    expect(OcOptical.assistantAvatar, lessThan(44));
+    expect(OcOptical.assistantCardPad, 16);
+    expect(OcOptical.assistantCardGap, 12);
+    expect(OcOptical.assistantCardMinHeight, 112);
+    expect(OcOptical.assistantHeaderGap, 8);
+    expect(OcOptical.assistantSummaryGap, 10);
+    expect(OcOptical.assistantSummaryHeight, closeTo(1.45, 0.01));
+    expect(OcOptical.assistantModePadV, 2);
+    expect(OcOptical.assistantModePadH, 7);
+    expect(OcOptical.assistantCatalogGap, 14);
+    expect(OcOptical.assistantCatalogGap, lessThan(OcOptical.floatCardStackGap));
+    expect(OcOptical.groupTitleMetaGap, 4);
+    expect(
+      OcCssLine.boxHeight(
+        const TextStyle(fontSize: OcOptical.meta, height: OcOptical.metaHeight),
+        halfLead: 0,
+      ),
+      OcOptical.meta * OcOptical.metaHeight,
+    );
+    expect(OcOptical.projectTriggerPad, 10);
+    expect(OcOptical.projectTriggerGap, 7);
+    expect(OcOptical.sessionRowPadH, 16);
+    expect(OcOptical.sessionRowPadRight, 2);
+    expect(OcOptical.sessionTitleSubtitleGap, 2);
+    expect(OcOptical.sessionTitleStem, 0);
+    expect(OcOptical.sessionTitleStem, lessThan(0.15));
+    expect(OcOptical.sessionTitleShade, 0);
+    expect(OcOptical.sessionTitleShade, lessThan(0.10));
+    expect(OcOptical.cssLineCjkHalfLead, closeTo(4.7, 0.01));
+    expect(OcOptical.cssLineCjkHalfLead, greaterThan(4.4));
+    expect(OcOptical.cssLineCjkHalfLead, lessThan(4.75));
+    expect(OcOptical.sessionLineLeading, closeTo(0.57, 0.001));
+    expect(OcOptical.sessionLineLeading, greaterThan(0.48));
+    expect(OcOptical.sessionLineLeading, lessThan(0.58));
+    for (final box in [OcOptical.rowTitleHeight, OcOptical.sessionSubtitleHeight]) {
+      final height = (box - OcOptical.sessionLineLeading).clamp(0.5, box);
+      expect(height + OcOptical.sessionLineLeading, closeTo(box, 0.001));
+      expect(height, lessThan(1.0));
+    }
+    expect(
+      OcOptical.sessionRowPadV * 2 +
+          OcOptical.rowTitle * OcOptical.rowTitleHeight +
+          2 * OcOptical.sessionTitleHalfLead +
+          OcOptical.sessionTitleSubtitleGap +
+          OcOptical.sessionSubtitle * OcOptical.sessionSubtitleHeight +
+          2 * OcOptical.sessionSubtitleHalfLead,
+      closeTo(OcOptical.sessionRowVisualHeight, 0.01),
+    );
+    expect(
+      OcCssLine.boxHeight(const TextStyle(
+        fontSize: OcOptical.rowTitle,
+        height: OcOptical.rowTitleHeight,
+      )),
+      OcOptical.rowTitle * OcOptical.rowTitleHeight + 2 * OcOptical.cssLineCjkHalfLead,
+    );
+    expect(
+      OcCssLine.boxHeight(const TextStyle(
+        fontSize: OcOptical.sessionSubtitle,
+        height: OcOptical.sessionSubtitleHeight,
+      )),
+      OcOptical.sessionSubtitle * OcOptical.sessionSubtitleHeight + 2 * OcOptical.cssLineCjkHalfLead,
+    );
+    expect(
+      OcCssLine.boxHeight(
+        const TextStyle(
+          fontSize: OcOptical.sessionSubtitle,
+          height: OcOptical.sessionSubtitleHeight,
+        ),
+        halfLead: OcOptical.sessionSubtitleHalfLead,
+      ),
+      OcOptical.sessionSubtitle * OcOptical.sessionSubtitleHeight,
+    );
+    expect(OcOptical.sessionStatus, 12);
+    expect(OcOptical.sessionRowMainGap, 8);
+    expect(OcOptical.projectHeaderHeight, 74);
+    expect(OcOptical.projectGroupsPadTop, 2);
+    expect(OcOptical.projectGroupsPadInline, 12);
+    expect(OcOptical.projectGroupsPadBottom, 14);
+    expect(OcOptical.projectGroupGap, 10);
+    expect(OcOptical.pageProjectGap, 24);
+    expect(OcOptical.entityMetaGap, 5);
+    expect(OcOptical.worktreeLabelMinHeight, 42);
+    expect(OcOptical.worktreeLabelPadV, 6);
+    expect(OcOptical.worktreeLabelPadLeft, 10);
+    expect(OcOptical.worktreeLabelPadRight, 2);
+    expect(OcOptical.floatCardStackGap, 16);
+    expect(OcOptical.scheduleCardPadV, 12);
+    expect(OcOptical.scheduleTitleMetaGap, 4);
+    expect(OcOptical.chatBodyHeight, closeTo(1.625, 0.001));
+    expect(OcOptical.chatBodyHeight, greaterThan(1.50));
+    expect(OcOptical.chatTitle, 15);
+    expect(OcOptical.chatBodyTracking, 0);
+    expect(OcOptical.chatTitleHeight, 1.4);
+    expect(OcOptical.detailSubtitle, 10);
+    expect(OcOptical.detailSubtitleHeight, 1.4);
+    expect(OcOptical.detailNavigationHeight, 56);
+    expect(OcOptical.detailActionEdgeInset, 16);
+    expect(OcOptical.searchButton, 40);
+    expect(OcOptical.addButton, 40);
+    expect(OcOptical.headerDisc, OcOptical.searchButton);
+    expect(OcOptical.headerDiscVisual, 34);
+    expect(OcOptical.headerDiscVisual, lessThan(OcOptical.headerDisc));
+    expect(OcOptical.addButton, OcOptical.headerDisc);
+    expect(OcOptical.addButton, greaterThan(OcOptical.headerDiscVisual));
+    expect(OcOptical.headerGlyphStrokeVisual, isNot(OcOptical.dockGlyphStrokeVisual));
+    expect(OcOptical.headerGlyphStrokeVisual, closeTo(0.28, 0.01));
+    expect(OcOptical.headerGlyphStrokeVisual, greaterThan(OcOptical.dockGlyphStrokeVisual));
+    expect(OcOptical.headerGlyphStrokeVisual, lessThan(OcOptical.headerGlyphStroke));
+    expect(OcOptical.detailSubtitleGap, 2);
+    expect(OcOptical.headerGlyph, 14);
+    expect(OcOptical.headerGlyph, lessThan(OcOptical.searchFieldGlyph));
+    expect(OcOptical.headerGlyph, lessThan(20));
+    expect(OcOptical.headerGlyphStroke, 1.5);
+    expect(OcOptical.collapsingActionSize, 40);
+    expect(OcOptical.collapsingTitleCompactSize, 20);
+    expect(OcOptical.collapsingTopPad, 12);
+    expect(OcOptical.collapsingExpandShift, 10);
+    expect(OcOptical.collapsingInnerGap, 16);
+    expect(OcOptical.collapsingTrailingGap, 14);
+    expect(OcOptical.collapsingInlineExtra, 4);
+    expect(OcOptical.titleCollapseDistance, 48);
+    expect(OcOptical.titleCollapseScaleReduce, 0.375);
+    expect(OcOptical.titleCollapseScaleEnd, 0.625);
+    expect(OcOptical.rootTitleTracking(0), closeTo(-1.28, 0.01));
+    expect(OcOptical.rootTitleTracking(1), closeTo(-0.64, 0.01));
+    expect(OcOptical.dockGlyph, 23);
+    expect(OcOptical.dockGlyphVisual, OcOptical.dockGlyph);
+    expect(OcOptical.dockGlyphStrokeVisual, lessThan(OcOptical.dockGlyphStroke));
+    expect(OcOptical.dockGlyphStrokeVisual, closeTo(0.12, 0.01));
+    expect(OcOptical.dockGlyphStrokeVisual, lessThan(0.44));
+    expect(OcOptical.dockStrokeGlyphStrokeVisual, closeTo(0.12, 0.01));
+    expect(OcOptical.dockStrokeGlyphStrokeVisual, lessThanOrEqualTo(OcOptical.dockGlyphStrokeVisual));
+    expect(OcOptical.dockStrokeGlyphStrokeVisual, greaterThan(0.08));
+    expect(OcOptical.dockGlyphFillBodies, isFalse);
+    expect(OcOptical.dockWashBlur, 0);
+    expect(OcOptical.dockWashBlur, lessThan(OcOptical.glassBlur));
+    expect(OcOptical.chipBlur, OcOptical.glassBlur);
+    expect(OcOptical.chipBleedBlur, 14);
+    expect(OcOptical.chipBleedBlur, lessThan(OcOptical.chipBlur));
+    expect(OcOptical.chipBleedBlur, greaterThan(0));
+    expect(OcOptical.glassSaturate, closeTo(1.25, 0.01));
+    expect(OcOptical.glassSaturateDark, closeTo(1.2, 0.01));
+    expect(OcOptical.glassSaturateFor(false), OcOptical.glassSaturate);
+    expect(OcOptical.glassSaturateFor(true), OcOptical.glassSaturateDark);
+    expect(OcOptical.sessionTitleHalfLeadPaint, OcOptical.sessionTitleHalfLead);
+    expect(OcOptical.cardTitleHalfLeadPaint, OcOptical.cardTitleHalfLead);
+    expect(OcOptical.floatBlur, 22);
+    expect(OcOptical.floatSaturate, closeTo(1.35, 0.01));
+    expect(OcOptical.floatBlur, greaterThan(OcOptical.chipBlur));
+    expect(OcOptical.dockTabHeight, 58);
+    expect(OcOptical.dockTabRadius, 29);
+    expect(OcOptical.dockLabel, 12);
+    expect(OcOptical.dockLabelTracking, 0);
+    expect(OcOptical.dockLabelHeight, 1.0);
+    expect(OcOptical.dockGap, 3);
+    expect(OcOptical.dockSelectedFullSlot, isTrue);
+    expect(OcOptical.dockIconWashAlpha, closeTo(0.55, 0.01));
+    expect(OcOptical.dockGlyphStroke, 2);
+    expect(OcOptical.listGlyphStroke, OcOptical.headerGlyphStroke);
+    expect(OcOptical.searchFieldGlyph, 16);
+    expect(OcOptical.leadingCircle, 38);
+    expect(OcOptical.leadingCircleVisual, 28);
+    expect(OcOptical.leadingCircleCompact, 18);
+    expect(OcOptical.leadingCircleCompact, OcOptical.worktreeIconBox);
+    expect(OcOptical.leadingCircleVisual, lessThan(OcOptical.leadingCircle));
+    expect(OcOptical.leadingGlyph, 18);
+    expect(OcOptical.leadingGlyphVisual, 12);
+    expect(OcOptical.leadingGlyphVisual, lessThan(OcOptical.leadingGlyph));
+    expect(OcOptical.leadingGlyphVisual, OcOptical.worktreeGlyphVisual);
+    expect(OcOptical.leadingGlyphCompact, 12);
+    expect(OcOptical.worktreeIconBox, 18);
+    expect(OcOptical.worktreeGlyph, 14);
+    expect(OcOptical.worktreeGlyphVisual, 12);
+    expect(OcOptical.worktreeGlyphVisual, lessThan(OcOptical.worktreeGlyph));
+    expect(OcOptical.worktreeMeta, 11);
+    expect(OcOptical.worktreeMetaHeight, closeTo(14 / 11, 0.001));
+    expect(
+      OcCssLine.boxHeight(
+        const TextStyle(
+          fontSize: OcOptical.worktreeMeta,
+          height: OcOptical.worktreeMetaHeight,
+        ),
+        halfLead: 0,
+      ),
+      OcOptical.worktreeMeta * OcOptical.worktreeMetaHeight,
+    );
+    expect(OcOptical.sessionMore, 14);
+    expect(OcOptical.sessionMoreStroke, OcOptical.dockGlyphStrokeVisual);
+    expect(OcOptical.sessionMoreStroke, isNot(OcOptical.headerGlyphStrokeVisual));
+    expect(OcOptical.chevron, 14);
+    expect(OcOptical.footerGlyph, 14);
+    expect(OcOptical.scheduleStatus, OcOptical.leadingCircle);
+    expect(OcOptical.scheduleStatusVisual, lessThan(OcOptical.scheduleStatus));
+    expect(OcOptical.scheduleStatusVisual, 24);
+    expect(OcOptical.scheduleStatusGlyph, 12);
+    expect(OcOptical.scheduleStatusGlyph, OcOptical.leadingGlyphVisual);
+    expect(OcOptical.scheduleMore, 10);
+    expect(OcOptical.scheduleMore, lessThan(OcOptical.sessionMore));
+    expect(OcOptical.scheduleMoreStroke, OcOptical.dockGlyphStrokeVisual);
+    expect(OcOptical.scheduleStatusGlyphStroke, OcOptical.dockGlyphStrokeVisual);
+    expect(OcOptical.scheduleStatusGlyphStroke, lessThan(OcOptical.headerGlyphStrokeVisual));
+    expect(OcOptical.scheduleStatusGlyphStroke, lessThan(OcOptical.listGlyphStroke));
+    expect(OcOptical.overflow, 16);
+    expect(OcOptical.chatChip, 40);
+    expect(OcOptical.chatChip, OcOptical.headerDisc);
+    expect(OcOptical.chatChipGlyph, 14);
+    expect(OcOptical.chatChipGlyph, lessThan(16));
+    expect(OcOptical.detailNavGlyph, 20);
+    expect(OcOptical.detailNavGlyphStroke, 1.5);
+    expect(OcOptical.detailNavGlyph, isNot(OcOptical.chatChipGlyph));
+    expect(OcOptical.detailNavGlyphStroke, isNot(OcOptical.headerGlyphStrokeVisual));
+    expect(OcOptical.detailNavTrailingGap, 8);
+    expect(OcOptical.contextProgressRing, 18);
+    expect(OcOptical.contextProgressStroke, 3);
+    expect(OcOptical.headerGlyph, 14);
+    expect(OcOptical.sessionTitleSubtitleGap, 2);
+    expect(OcOptical.activityExpandedGap, 10);
+    expect(OcOptical.activityExpandedIndent, 20);
+    expect(OcOptical.activityChildIndent, 12);
+    expect(OcOptical.activityRowGap, 4);
+    expect(OcOptical.toolRowGlyph, 14);
+    expect(OcOptical.sessionBullet, 5);
+    expect(OcOptical.sessionBulletReadAlpha, closeTo(0.55, 0.01));
+    expect(OcOptical.sessionBulletReadAlpha, greaterThan(0.35));
+    expect(OcOptical.fileTypeSize, 12);
+    expect(OcOptical.fileTypeStrokeVisual, closeTo(0.12, 0.01));
+    expect(OcOptical.fileTypeStrokeVisual, OcOptical.dockGlyphStrokeVisual);
+    expect(OcOptical.fileTypeStrokeVisual, isNot(OcOptical.headerGlyphStrokeVisual));
+    expect(OcOptical.fileTypeMark, 7);
+    expect(OcOptical.fileRowPadV, 5);
+    expect(OcOptical.fileRowHeight, 28);
+    expect(OcOptical.fileRowHeight, greaterThan(24));
+    expect(OcOptical.fileChrome, 11);
+    expect(OcOptical.composerFieldPadV, 10);
+    expect(OcOptical.composerPillPadV, 8);
+    expect(OcOptical.composerRadius, 24);
+    expect(OcOptical.composerPlus, 18);
+    expect(OcOptical.composerPlusStroke, 1.25);
+    expect(OcOptical.footerGlyphStroke, 2);
+    expect(OcOptical.footerGlyphStrokeVisual, closeTo(0.12, 0.01));
+    expect(OcOptical.footerGlyphStrokeVisual, lessThan(OcOptical.footerGlyphStroke));
+    expect(OcOptical.footerMeta, 11);
+    expect(OcOptical.sendRing, 32);
+    expect(OcOptical.sendRingStroke, closeTo(1.0, 0.01));
+    expect(OcOptical.sendRingIdleAlpha, closeTo(1.0, 0.01));
+    expect(OcOptical.sendRingDisc, 24);
+    expect(OcOptical.sendRingDisc, lessThan(OcOptical.sendRing));
+    expect(OcOptical.sendPlane, 16);
+    expect(OcOptical.sendStop, 9);
+    expect(OcOptical.sendArrow, 13);
+    expect(OcOptical.headerRestPeek, 0);
+    expect(OcOptical.headerRestPeek, lessThan(OcOptical.collapsingExpandShift));
+    expect(OcTokens.pageGap, 20);
+    expect(MobileTabPageHeader.titleBandAir, 50);
+    expect(
+      OcTokens.pageGap + OcOptical.collapsingExpandShift + OcTokens.pageGap,
+      MobileTabPageHeader.titleBandAir,
+    );
+    expect(OcOptical.settingsGroupRadius, 16);
+    expect(OcOptical.settingsRowMinHeight, 52);
+    expect(OcOptical.settingsSearchMinHeight, 44);
+    expect(OcOptical.settingsNavIcon, 16);
+    expect(OcOptical.settingsGlyphStrokeVisual, OcOptical.dockGlyphStrokeVisual);
+    expect(OcOptical.settingsGlyphStrokeVisual, lessThan(OcOptical.listGlyphStroke));
+    expect(OcOptical.sessionMoreHit, 36);
+    expect(OcOptical.sessionMoreEdge, 4);
+    expect(OcOptical.sessionTimeGap, 6);
+    expect(OcOptical.dockSelectedFullSlot, isTrue);
+    expect(OcOptical.scrollFab, 36);
+    expect(OcOptical.glassBlur, 20);
+    expect(OcOptical.dockCapsuleHeight, OcTokens.dockHeight);
+    expect(OcOptical.dockCapsuleRadius, OcTokens.dockRadius);
+    expect(OcOptical.dockBottomPad, OcTokens.pageGap);
+    expect(OcOptical.searchButton, greaterThan(OcTokens.headerButtonSize));
+    expect(OcTokens.light.primary, isNot(const Color(0xFF007AFF)));
+  });
+
+  test('OcElevation ports official float-shadow and chip near-pair lift', () {
+    expect(OcElevation.cardFor(OcTokens.light), hasLength(3));
+    expect(OcElevation.cardFor(OcTokens.light).first.blurRadius, 2);
+    expect(OcElevation.cardFor(OcTokens.light)[1].blurRadius, 12);
+    expect(OcElevation.cardFor(OcTokens.light).last.blurRadius, 24);
+    expect(OcElevation.cardFor(OcTokens.light).last.offset.dy, 10);
+    expect(OcElevation.cardFor(OcTokens.light).last.spreadRadius, -6);
+    expect(OcElevation.cardFor(OcTokens.light, tight: true).last.spreadRadius, -6);
+    expect(
+      OcElevation.cardFor(OcTokens.light).take(2).every((s) => s.offset == Offset.zero),
+      isTrue,
+    );
+    expect(
+      (OcElevation.cardFor(OcTokens.light)[1].color.a * 255).round(),
+      closeTo(0x0D, 1),
+    );
+    expect(
+      OcElevation.cardFor(OcTokens.light).last.color.a,
+      closeTo(0.10, 0.001),
+    );
+    expect(OcElevation.cardFor(OcTokens.light).last.color.red, 0);
+    expect(
+      OcElevation.cardFor(OcTokens.light).last.color.a,
+      lessThanOrEqualTo(0.10),
+    );
+    expect(
+      OcElevation.cardFor(OcTokens.light, tight: true).last.color.a,
+      closeTo(0.10, 0.001),
+    );
+    expect(OcElevation.cardFor(OcTokens.light, tight: true).last.color.red, 0);
+    expect(
+      OcElevation.cardFor(OcTokens.light, tight: true).last.color.a,
+      lessThanOrEqualTo(OcElevation.cardFor(OcTokens.light).last.color.a),
+    );
+    expect(OcElevation.groupedFor(OcTokens.light), OcElevation.cardFor(OcTokens.light));
+    expect(OcElevation.composerFor(OcTokens.light), isEmpty);
+    expect(OcElevation.composerFor(OcTokens.dark), isEmpty);
+    expect(OcElevation.dockFor(OcTokens.light).length, 2);
+    expect(OcElevation.dockFor(OcTokens.light).first.blurRadius, 2);
+    expect(OcElevation.dockFor(OcTokens.light).last.blurRadius, 12);
+    expect(
+      (OcElevation.dockFor(OcTokens.light).first.color.a * 255).round(),
+      0x0D,
+    );
+    expect(
+      (OcElevation.dockFor(OcTokens.light).last.color.a * 255).round(),
+      0x0F,
+    );
+    expect(OcElevation.dockFor(OcTokens.light).last.blurRadius, lessThanOrEqualTo(12));
+    expect(
+      OcElevation.dockFor(OcTokens.light).every((s) => s.offset == Offset.zero),
+      isTrue,
+    );
+    expect(OcElevation.controlFor(OcTokens.light), hasLength(3));
+    expect(OcElevation.controlFor(OcTokens.light).last.blurRadius, 20);
+    expect(OcElevation.controlFor(OcTokens.light).last.offset.dy, 8);
+    expect(OcElevation.controlFor(OcTokens.light).last.spreadRadius, -6);
+    expect(OcElevation.chipFor(OcTokens.light), hasLength(2));
+    expect(OcElevation.chipFor(OcTokens.light).first.blurRadius, 2);
+    expect(OcElevation.chipFor(OcTokens.light).last.blurRadius, 12);
+    expect(OcElevation.chipFor(OcTokens.light).every((s) => s.offset == Offset.zero), isTrue);
+    expect(OcElevation.chipFor(OcTokens.dark), isEmpty);
+    expect(
+      OcElevation.chipFor(OcTokens.light).every((s) => s.blurStyle != BlurStyle.inner),
+      isTrue,
+    );
+    // Search / `+` near-pair lift — no 8/20 umbra.
+    expect(OcElevation.chipFor(OcTokens.light).every((s) => s.blurRadius <= 12), isTrue);
+    expect(OcElevation.glassHighlightFor(OcTokens.light), hasLength(1));
+    expect(OcElevation.glassHighlightFor(OcTokens.light).single.blurStyle, BlurStyle.inner);
+    expect(
+      (OcElevation.controlFor(OcTokens.light).last.color.a * 255).round(),
+      lessThanOrEqualTo(0x1F),
+    );
+    expect(OcElevation.cardFor(OcTokens.dark), hasLength(3));
+    expect(OcElevation.cardFor(OcTokens.dark).last.offset.dy, 10);
+    expect(OcElevation.cardFor(OcTokens.dark).last.blurRadius, 24);
+    expect(OcElevation.cardFor(OcTokens.dark).last.spreadRadius, -6);
+    expect(
+      OcElevation.cardFor(OcTokens.dark).last.color.a,
+      closeTo(0.34, 0.001),
+    );
+    expect(
+      OcElevation.cardFor(OcTokens.dark, tight: true).last.color.a,
+      closeTo(0.34, 0.001),
+    );
+    expect(OcElevation.cardFor(OcTokens.dark).last.color.red, 0);
+    expect(OcElevation.dockFor(OcTokens.dark).length, 2);
+    expect(OcElevation.dockFor(OcTokens.dark).first.blurRadius, 2);
+    expect(OcElevation.dockFor(OcTokens.dark).last.blurRadius, 12);
+    expect(
+      OcElevation.dockFor(OcTokens.dark).first.color.a,
+      closeTo(0.30, 0.001),
+    );
+    expect(
+      OcElevation.dockFor(OcTokens.dark).last.color.a,
+      closeTo(0.28, 0.001),
+    );
+    expect(
+      OcElevation.dockFor(OcTokens.dark).every((s) => s.offset == Offset.zero),
+      isTrue,
+    );
+    expect(OcElevation.controlFor(OcTokens.dark), isEmpty);
+    expect(OcElevation.primaryAddFor(OcTokens.light), hasLength(1));
+    expect(OcElevation.primaryAddFor(OcTokens.light).single.blurRadius, 22);
+    expect(OcElevation.primaryAddFor(OcTokens.light).single.offset.dy, 10);
+    expect(OcElevation.primaryAddFor(OcTokens.light).single.color.a, closeTo(0.22, 0.01));
+    expect(
+      OcElevation.primaryAddFor(OcTokens.light).single.color.r,
+      closeTo(OcTokens.light.primary.r, 0.02),
+    );
+    expect(OcElevation.primaryAddFor(OcTokens.dark).single.blurRadius, 22);
+    expect(OcElevation.primaryAddFor(OcTokens.dark).single.color.a, closeTo(0.22, 0.01));
+  });
+
+  test('resolveOcBrightness honors Light / Dark / System', () {
+    expect(resolveOcBrightness(ThemeMode.light, Brightness.dark), Brightness.light);
+    expect(resolveOcBrightness(ThemeMode.dark, Brightness.light), Brightness.dark);
+    expect(resolveOcBrightness(ThemeMode.system, Brightness.dark), Brightness.dark);
+    expect(resolveOcBrightness(ThemeMode.system, Brightness.light), Brightness.light);
+  });
+}
+
+void expectNear(Color actual, Color expected, {int slop = 1}) {
+  int channel(Color color, double Function(Color c) read) => (read(color) * 255).round();
+  expect((channel(actual, (c) => c.r) - channel(expected, (c) => c.r)).abs(), lessThanOrEqualTo(slop), reason: 'red $actual vs $expected');
+  expect((channel(actual, (c) => c.g) - channel(expected, (c) => c.g)).abs(), lessThanOrEqualTo(slop), reason: 'green $actual vs $expected');
+  expect((channel(actual, (c) => c.b) - channel(expected, (c) => c.b)).abs(), lessThanOrEqualTo(slop), reason: 'blue $actual vs $expected');
+}
