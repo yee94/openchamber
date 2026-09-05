@@ -99,7 +99,12 @@ void main() {
     expect(find.textContaining('Flutter native'), findsOneWidget);
     await tester.tap(find.byKey(const Key('files-browser-close')));
     await tester.pumpAndSettle();
+  });
 
+  testWidgets('chat overflow Changes stages and commits via official git paths', (tester) async {
+    final env = await pumpApp(tester);
+    await tester.tap(find.byKey(const Key('home-session-sess-catalog')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('chat-more')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('session-overflow-changes')));
@@ -121,9 +126,12 @@ void main() {
       ),
       isTrue,
     );
-    await tester.tap(find.byKey(const Key('changes-close')));
-    await tester.pumpAndSettle();
+  });
 
+  testWidgets('chat overflow MCP disconnects via official /api/mcp path', (tester) async {
+    final env = await pumpApp(tester);
+    await tester.tap(find.byKey(const Key('home-session-sess-catalog')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('chat-more')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('session-overflow-mcp')));

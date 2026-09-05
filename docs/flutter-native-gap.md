@@ -853,3 +853,5 @@ Same device rows as earlier slices: live `wss://` relay + LAN hot-switch + iOS L
 ### EXHAUSTED
 
 **false.** High-value missing/stubbed/no-op surfaces that Cap ships on mobile are closed (queue chips + archive undo). Leftover CODE is thinner Cap-editable settings slugs and richer queue attachment/reorder — not empty stubs. 真机 residuals remain.
+
+Validated on Flutter **3.32.8 / Dart 3.8.1**: `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **254 passed**, including `flutter_message_queue_test.dart`, `flutter_cap_overflow_test.dart`, and `composer_occupancy_test.dart`. Screenshot PNGs were **not** recaptured. Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native` — this stacked branch does not start that Actions run. No APK publish (tip of `work/flutter-native` was not advanced).

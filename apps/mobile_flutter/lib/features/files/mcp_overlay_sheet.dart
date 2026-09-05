@@ -48,7 +48,9 @@ class _McpOverlaySheetState extends State<McpOverlaySheet> {
   @override
   void initState() {
     super.initState();
-    unawaited(_reload());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_reload());
+    });
   }
 
   Future<void> _reload() async {

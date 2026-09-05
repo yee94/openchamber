@@ -86,11 +86,14 @@ void main() {
     await tester.pumpWidget(OpenChamberApp(controller: env.controller));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('home-session-sess-catalog')));
-    await tester.pumpAndSettle();
+    // Busy nav chrome repeats; do not pumpAndSettle.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.enterText(find.byKey(const Key('composer-field')), 'queue this follow-up');
     await tester.pump();
     await tester.tap(find.byKey(const Key('composer-send')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     expect(
       env.transport.calls.any((call) => call.method == 'POST' && call.path == OpenChamberPaths.messageQueueItems),
       isTrue,
@@ -100,7 +103,8 @@ void main() {
     expect(find.text('queue this follow-up'), findsOneWidget);
     final queuedId = env.transport.messageQueueItems.single['queueItemID']!.toString();
     await tester.tap(find.byKey(Key('queued-chip-remove-$queuedId')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     expect(
       env.transport.calls.any((call) => call.method == 'DELETE' && call.path == OpenChamberPaths.messageQueueItem(queuedId)),
       isTrue,
