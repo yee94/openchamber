@@ -9,7 +9,7 @@ Independent **native-first** Flutter rewrite of OpenChamber mobile.
 - Native is the product: no Appearance `openchamber.iosNativeUi` toggle, no WebView fallback
 - Capgo OTA is **not** ported. Ship full IPA/APK via `.github/workflows/flutter-mobile-release.yml`
 
-App id: `com.yee94.openchamber` (release). Debug Android uses Capacitor’s `applicationIdSuffix` `.debug` → `com.yee94.openchamber.debug`, launcher **OpenChamber v2**, so it installs beside the official Capacitor app. FCM `google-services.json` already lists that debug package (same Firebase project; no new secrets). Token is still null if Firebase init fails — not invented.
+App id: `com.yee94.openchamber` (release). Debug Android uses Capacitor’s `applicationIdSuffix` `.debug` → `com.yee94.openchamber.debug`, launcher **OpenChamber v2**, so it installs beside the official Capacitor app. Launcher art is the same official OpenChamber mark as `packages/mobile` (Android mipmaps + adaptive icon, iOS `AppIcon`); only the debug label/package distinguish v2. FCM `google-services.json` already lists that debug package (same Firebase project; no new secrets). Token is still null if Firebase init fails — not invented.
 
 Gap / acceptance matrix: [`docs/flutter-native-gap.md`](../../docs/flutter-native-gap.md)
 

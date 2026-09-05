@@ -33,6 +33,8 @@ void main() {
     expect(gradle, contains('resValue("string", "app_name", "OpenChamber v2")'));
     final manifest = File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
     expect(manifest, contains('android:label="@string/app_name"'));
+    expect(manifest, contains('android:icon="@mipmap/ic_launcher"'));
+    expect(manifest, contains('android:roundIcon="@mipmap/ic_launcher_round"'));
     expect(manifest, contains('android:scheme="openchamber"'));
     final strings = File('android/app/src/main/res/values/strings.xml').readAsStringSync();
     expect(strings, contains('<string name="app_name">OpenChamber</string>'));

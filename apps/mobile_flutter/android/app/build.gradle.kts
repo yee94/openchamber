@@ -52,8 +52,9 @@ android {
     buildTypes {
         // Side-by-side with the official Capacitor release (`com.yee94.openchamber`):
         // same applicationIdSuffix convention as packages/mobile (`bun run
-        // build:android:debug` → com.yee94.openchamber.debug). Launcher label is
-        // "OpenChamber v2" so the Flutter debug icon is distinct from "OpenChamber".
+        // build:android:debug` → com.yee94.openchamber.debug). Launcher art is the
+        // official OpenChamber mark; only the label "OpenChamber v2" and package
+        // distinguish this debug install from "OpenChamber".
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"

@@ -199,6 +199,8 @@ The official Capacitor daily app is `com.yee94.openchamber` / **OpenChamber**. A
 | Capacitor / Flutter **release** | `com.yee94.openchamber` | OpenChamber |
 | Flutter **debug** (this CI APK) | `com.yee94.openchamber.debug` | **OpenChamber v2** |
 
+Launcher **art** is the official OpenChamber mark (same Capacitor mipmaps / iOS `AppIcon`). Debug is distinguished only by package + **OpenChamber v2** label — not a different glyph.
+
 What still keys off the **base** id / class namespace (not broken by the suffix):
 
 - Deep link scheme remains `openchamber://` (not package-specific). Both apps may offer to open a pairing link — pick **OpenChamber v2** for this walk.
