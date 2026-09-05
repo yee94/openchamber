@@ -210,22 +210,28 @@ class OcGlassChip extends StatelessWidget {
     this.size = OcOptical.headerDiscVisual,
     this.fill,
     this.lift = true,
+    this.sigma = OcOptical.chipBleedBlur,
   });
 
   final Widget child;
   final double size;
   /// Default is [OcTokens.glassChipFill] 0.34. Search passes
   /// [OcTokens.glassChipThrough] so the 34 plate is frost, not a coin.
+  /// Detail-nav passes [OcTokens.glassFill] 0.68.
   final Color? fill;
   /// Header search through-frost skips the near-pair halo (that
-  /// ringed the 34 plate into a coin). Chat discs keep lift.
+  /// ringed the 34 plate into a coin). Detail-nav keeps lift.
   final bool lift;
+  /// Catalog chips stay [OcOptical.chipBleedBlur] 14. Detail-nav
+  /// passes official [OcOptical.glassBlur] 20.
+  final double sigma;
 
   @override
   Widget build(BuildContext context) {
     // mobileGlass frost plate. BackdropFilter + official saturate.
-    // Fill is glassChipFill 0.34, not official 0.68 coin. Chip
-    // near-pair shadow — no hairline rim, no 8/20 umbra.
+    // Catalog default is glassChipFill 0.34. Detail-nav overrides to
+    // official glassFill 0.68. Chip near-pair shadow — no hairline
+    // rim, no 8/20 umbra.
     return DecoratedBox(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -234,7 +240,7 @@ class OcGlassChip extends StatelessWidget {
       child: ClipOval(
         child: OcFrosted(
           fill: fill ?? context.oc.glassChipFill,
-          sigma: OcOptical.chipBleedBlur,
+          sigma: sigma,
           child: SizedBox(
             width: size,
             height: size,
@@ -243,6 +249,130 @@ class OcGlassChip extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Official `mobileGlass` + `mobileIcon` chip for secondary-page chrome.
+/// Foreground ink on `--oc-mobile-glass-fill` (0.68) + blur 20.
+class OcDetailNavChip extends StatelessWidget {
+  const OcDetailNavChip({
+    super.key,
+    required this.semanticLabel,
+    required this.onPressed,
+    this.glyph,
+    this.child,
+  });
+
+  final String semanticLabel;
+  final VoidCallback onPressed;
+  final OcGlyphKind? glyph;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.oc;
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: Tooltip(
+        message: semanticLabel,
+        child: Pressable(
+          haptic: HapticStrength.light,
+          highlight: false,
+          onPressed: onPressed,
+          child: SizedBox(
+            width: OcOptical.chatChip,
+            height: OcOptical.chatChip,
+            child: Center(
+              child: OcGlassChip(
+                size: OcOptical.chatChip,
+                fill: tokens.glassFill,
+                lift: true,
+                sigma: OcOptical.glassBlur,
+                child: child ??
+                    OcGlyph(
+                      glyph!,
+                      size: OcOptical.detailNavGlyph,
+                      strokeWidth: OcOptical.detailNavGlyphStroke,
+                      color: tokens.foreground,
+                    ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Official `ContextProgressIcon` — 18px ring, stroke 3, start at 12 o'clock.
+class OcContextProgressIcon extends StatelessWidget {
+  const OcContextProgressIcon({super.key, required this.percentage});
+
+  final double percentage;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.oc;
+    final pct = percentage.clamp(0.0, 100.0);
+    final tone = pct >= 80
+        ? tokens.statusError
+        : pct >= 50
+            ? tokens.statusWarning
+            : tokens.statusSuccess;
+    return Semantics(
+      value: '${pct.round()}%',
+      child: CustomPaint(
+        size: const Size.square(OcOptical.contextProgressRing),
+        painter: _OcContextProgressPainter(
+          progress: pct / 100,
+          track: tokens.border,
+          progressColor: tone,
+          strokeWidth: OcOptical.contextProgressStroke,
+        ),
+      ),
+    );
+  }
+}
+
+class _OcContextProgressPainter extends CustomPainter {
+  const _OcContextProgressPainter({
+    required this.progress,
+    required this.track,
+    required this.progressColor,
+    required this.strokeWidth,
+  });
+
+  final double progress;
+  final Color track;
+  final Color progressColor;
+  final double strokeWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.shortestSide - strokeWidth) / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    final trackPaint = Paint()
+      ..color = track
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    final progressPaint = Paint()
+      ..color = progressColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(center, radius, trackPaint);
+    canvas.drawArc(rect, -1.57079632679, 6.28318530718 * progress, false, progressPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _OcContextProgressPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.track != track ||
+        oldDelegate.progressColor != progressColor ||
+        oldDelegate.strokeWidth != strokeWidth;
   }
 }
 
@@ -802,23 +932,6 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
     final bandH = view.top + OcOptical.detailNavigationHeight;
     final disc = OcOptical.chatChip;
 
-    Widget actionDisc({required Widget child, Key? key, VoidCallback? onPressed}) {
-      final chip = OcGlassChip(size: OcOptical.chatChip, child: child);
-      final hit = SizedBox(
-        width: disc,
-        height: disc,
-        child: Center(child: chip),
-      );
-      if (onPressed == null) return hit;
-      return Pressable(
-        key: key,
-        haptic: HapticStrength.light,
-        highlight: false,
-        onPressed: onPressed,
-        child: hit,
-      );
-    }
-
     return SizedBox(
       height: bandH,
       child: Stack(
@@ -841,18 +954,11 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                     width: OcOptical.detailActionColumn,
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: Tooltip(
-                        message: t(context, 'chat.back'),
-                        child: actionDisc(
-                          key: leadingKey,
-                          onPressed: () => Navigator.of(context).maybePop(),
-                          child: OcGlyph(
-                            OcGlyphKind.chevronBack,
-                            size: OcOptical.chatChipGlyph,
-                            strokeWidth: OcOptical.headerGlyphStrokeVisual,
-                            color: tokens.foreground,
-                          ),
-                        ),
+                      child: OcDetailNavChip(
+                        key: leadingKey,
+                        semanticLabel: t(context, 'chat.back'),
+                        glyph: OcGlyphKind.chevronBack,
+                        onPressed: () => Navigator.of(context).maybePop(),
                       ),
                     ),
                   ),
@@ -921,6 +1027,9 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                             child: Center(
                               child: OcGlassChip(
                                 size: OcOptical.chatChip,
+                                fill: tokens.glassFill,
+                                lift: true,
+                                sigma: OcOptical.glassBlur,
                                 child: SizedBox(
                                   key: const Key('chat-busy'),
                                   width: 16,
@@ -933,7 +1042,8 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
                               ),
                             ),
                           ),
-                        if (busy && trailing != null) const SizedBox(width: 8),
+                        if (busy && trailing != null)
+                          const SizedBox(width: OcOptical.detailNavTrailingGap),
                         if (trailing != null) trailing!,
                       ],
                     ),

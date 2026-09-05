@@ -5,6 +5,7 @@ import 'package:openchamber/mobile/mobile_surface.dart';
 import 'package:openchamber/mobile/mobile_tab_page_header.dart';
 import 'package:openchamber/theme/app_theme.dart';
 import 'package:openchamber/theme/ios_chrome.dart';
+import 'package:openchamber/theme/oc_glyphs.dart';
 
 void main() {
   testWidgets('root-tab header keeps a fixed layout height while the title scales', (tester) async {
@@ -228,5 +229,20 @@ void main() {
     expect(tester.getSize(find.byType(PushedNavBar)).height, 47 + 56);
     expect(tester.getSize(find.byKey(const Key('chat-back'))).height, OcOptical.chatChip);
     expect(tester.getTopLeft(find.byKey(const Key('chat-back'))).dx, 16);
+    final backChip = tester.widget<OcGlassChip>(find.descendant(
+      of: find.byKey(const Key('chat-back')),
+      matching: find.byType(OcGlassChip),
+    ));
+    expect(backChip.size, OcOptical.chatChip);
+    expect(backChip.fill, OcTokens.light.glassFill);
+    expect(backChip.sigma, OcOptical.glassBlur);
+    expect(backChip.lift, isTrue);
+    final backGlyph = tester.widget<OcGlyph>(find.descendant(
+      of: find.byKey(const Key('chat-back')),
+      matching: find.byType(OcGlyph),
+    ));
+    expect(backGlyph.kind, OcGlyphKind.chevronBack);
+    expect(backGlyph.size, OcOptical.detailNavGlyph);
+    expect(backGlyph.strokeWidth, OcOptical.detailNavGlyphStroke);
   });
 }

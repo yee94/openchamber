@@ -450,6 +450,15 @@ void main() {
     expect(OcOptical.chatChip, OcOptical.headerDisc);
     expect(OcOptical.chatChipGlyph, 14);
     expect(OcOptical.chatChipGlyph, lessThan(16));
+    expect(OcOptical.detailNavGlyph, 20);
+    expect(OcOptical.detailNavGlyphStroke, 1.5);
+    expect(OcOptical.detailNavGlyph, isNot(OcOptical.chatChipGlyph));
+    expect(OcOptical.detailNavGlyphStroke, isNot(OcOptical.headerGlyphStrokeVisual));
+    expect(OcOptical.detailNavTrailingGap, 8);
+    expect(OcOptical.contextProgressRing, 18);
+    expect(OcOptical.contextProgressStroke, 3);
+    expect(OcOptical.headerGlyph, 14);
+    expect(OcOptical.sessionTitleSubtitleGap, 2);
     expect(OcOptical.activityExpandedGap, 10);
     expect(OcOptical.activityExpandedIndent, 20);
     expect(OcOptical.activityChildIndent, 12);

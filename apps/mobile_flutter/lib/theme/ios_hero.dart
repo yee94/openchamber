@@ -377,9 +377,22 @@ class OcOptical {
   /// the 56px detail band — paint the official hit so back / busy / more
   /// are chips, not oversized coins.
   static const double chatChip = 40;
-  /// Official chip glyph is `size-4` (16). Flutter bloom; paint 14 so
-  /// back / ··· stay thin in the 40 frost disc.
+  /// Catalog / composer small-chrome leftover. Detail-nav back / more
+  /// use [detailNavGlyph] 20 (`size-5`). Do not unlock search 14.
   static const double chatChipGlyph = 14;
+  /// Official `MobileDetailNavigation` `Icon` `size-5` (20) on
+  /// `mobileGlass` / `mobileIcon`. Header search stays [headerGlyph] 14.
+  static const double detailNavGlyph = 20;
+  /// Official `ICON_STROKE_WIDTH` 1.5. Header 0.28 made the chevron
+  /// vanish on warm sand — that stroke is catalog-only.
+  static const double detailNavGlyphStroke = 1.5;
+  /// Official trailing `gap-2` between context ring and more.
+  static const double detailNavTrailingGap = 8;
+  /// Official `ContextProgressIcon` is 18px / stroke 3.
+  static const double contextProgressRing = 18;
+  static const double contextProgressStroke = 3;
+  /// Visual stub until quota / context-limit APIs land in Flutter.
+  static const double contextProgressStubPercent = 35;
 
   /// Official scheduled status uses the project-shell glass disc (2.375rem).
   static const double scheduleStatus = leadingCircle;

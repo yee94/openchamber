@@ -136,6 +136,40 @@ void main() {
     expect(idleDisc.color, OcTokens.light.foreground);
     expect(idleDisc.border, isNull);
     expect(find.byKey(const Key('chat-back')), findsOneWidget);
+    expect(find.byKey(const Key('chat-more')), findsOneWidget);
+    expect(find.byKey(const Key('chat-context')), findsOneWidget);
+    final backGlyph = tester.widget<OcGlyph>(find.descendant(
+      of: find.byKey(const Key('chat-back')),
+      matching: find.byType(OcGlyph),
+    ));
+    expect(backGlyph.size, OcOptical.detailNavGlyph);
+    expect(backGlyph.strokeWidth, OcOptical.detailNavGlyphStroke);
+    final backChip = tester.widget<OcGlassChip>(find.descendant(
+      of: find.byKey(const Key('chat-back')),
+      matching: find.byType(OcGlassChip),
+    ));
+    expect(backChip.fill, OcTokens.light.glassFill);
+    await tester.tap(find.byKey(const Key('chat-more')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('session-overflow-sheet')), findsOneWidget);
+    expect(find.byKey(const Key('session-overflow-rename')), findsOneWidget);
+    expect(find.byKey(const Key('session-overflow-pin')), findsOneWidget);
+    expect(find.byKey(const Key('session-overflow-archive')), findsOneWidget);
+    expect(find.byKey(const Key('session-overflow-delete')), findsOneWidget);
+    expect(find.text('Rename'), findsOneWidget);
+    expect(find.text('Unpin'), findsOneWidget);
+    expect(find.text('Archive'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('session-overflow-close')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('session-overflow-sheet')), findsNothing);
+    await tester.tap(find.byKey(const Key('chat-context')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('session-metadata-sheet')), findsOneWidget);
+    expect(find.text('Branch'), findsOneWidget);
+    expect(find.text('Context'), findsWidgets);
+    await tester.tap(find.byKey(const Key('session-metadata-close')));
+    await tester.pumpAndSettle();
     expect(find.text('Release notes'), findsOneWidget);
     expect(find.text('Open a session from Projects.'), findsOneWidget);
     expect(find.byKey(const Key('tab-projects')), findsNothing);
@@ -301,6 +335,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Native client'), findsOneWidget);
     expect(find.text('1.19.3-beta.5'), findsOneWidget);
+    expect(find.byKey(const Key('settings-back')), findsOneWidget);
+    final settingsBack = tester.widget<OcGlassChip>(find.descendant(
+      of: find.byKey(const Key('settings-back')),
+      matching: find.byType(OcGlassChip),
+    ));
+    expect(settingsBack.fill, OcTokens.light.glassFill);
+    expect(settingsBack.size, OcOptical.chatChip);
+    expect(settingsBack.sigma, OcOptical.glassBlur);
+    final settingsGlyph = tester.widget<OcGlyph>(find.descendant(
+      of: find.byKey(const Key('settings-back')),
+      matching: find.byType(OcGlyph),
+    ));
+    expect(settingsGlyph.kind, OcGlyphKind.chevronBack);
+    expect(settingsGlyph.size, OcOptical.detailNavGlyph);
   });
 
   testWidgets('chat settings load official blob fields instead of a placeholder', (tester) async {

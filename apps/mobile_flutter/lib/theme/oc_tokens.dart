@@ -112,6 +112,8 @@ class OcTokens extends ThemeExtension<OcTokens> {
 
   Color get statusSuccess => chart2;
 
+  Color get statusWarning => chart3;
+
   Color get statusInfo => chart1;
 
   /// `--oc-mobile-page-background`: muted 18% over background.
@@ -151,9 +153,10 @@ class OcTokens extends ThemeExtension<OcTokens> {
   Color get glassFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: isDark ? 0.66 : 0.68);
 
-  /// mobileGlass frost plate — under official 0.68 coin, above bare
-  /// page-bleed. Chat discs stay this 0.34 plate. Schedule status
-  /// uses [glassChipThrough] without chip frost.
+  /// Catalog / schedule frost plate — under official 0.68 coin, above
+  /// bare page-bleed. Detail-nav back / more / context use [glassFill]
+  /// 0.68 (`--oc-mobile-glass-fill`). Schedule status uses
+  /// [glassChipThrough] without chip frost.
   Color get glassChipFill => (isDark ? const Color(0xFF26262C) : const Color(0xFFFFFFFF))
       .withValues(alpha: isDark ? 0.34 : 0.34);
 

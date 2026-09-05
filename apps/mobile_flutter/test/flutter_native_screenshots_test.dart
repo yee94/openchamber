@@ -261,6 +261,8 @@ void main() {
     expect(find.text('外观'), findsWidgets);
     expect(find.textContaining('iosNativeUi'), findsNothing);
     expect(find.byKey(const Key('appearance-lang-zh')), findsOneWidget);
+    expect(find.byKey(const Key('settings-back')), findsOneWidget);
+    expect(tester.getSize(find.byKey(const Key('settings-back'))).height, OcOptical.chatChip);
     await _writePng(tester, screenshotKey, '06-settings-appearance.png');
 
     await tester.tap(find.byKey(const Key('appearance-theme-dark')));
@@ -308,8 +310,12 @@ void main() {
     await _pumpUntil(tester, find.byKey(const Key('chat-tool-diff-edit-1')));
     await _pumpFrames(tester);
     expect(find.byKey(const Key('chat-back')), findsOneWidget);
+    expect(find.byKey(const Key('chat-more')), findsOneWidget);
+    expect(find.byKey(const Key('chat-context')), findsOneWidget);
     expect(tester.getSize(find.byType(PushedNavBar)).height, 47 + OcOptical.detailNavigationHeight);
     expect(tester.getSize(find.byKey(const Key('chat-back'))).height, OcOptical.chatChip);
+    expect(tester.getSize(find.byKey(const Key('chat-more'))).height, OcOptical.chatChip);
+    expect(tester.getSize(find.byKey(const Key('chat-context'))).height, OcOptical.chatChip);
     expect(find.byKey(const Key('chat-busy')), findsNothing);
     expect(find.byKey(const Key('reverse-chat-list')), findsOneWidget);
     expect(find.byKey(const Key('composer-field')), findsOneWidget);

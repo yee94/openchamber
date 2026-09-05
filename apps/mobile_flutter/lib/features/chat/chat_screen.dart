@@ -10,7 +10,6 @@ import '../../data/message_id.dart';
 import '../../data/openchamber_http.dart';
 import '../../data/prompt_attachment.dart';
 import '../../l10n/app_strings.dart';
-import '../../motion/pressable.dart';
 import '../../native/haptics.dart';
 import '../../native/live_activity_controller.dart';
 import '../../native/media_channel.dart';
@@ -22,6 +21,8 @@ import 'composer_bar.dart';
 import 'composer_occupancy.dart';
 import 'ios_composer_host.dart';
 import 'reverse_chat_list.dart';
+import 'session_metadata_sheet.dart';
+import 'session_overflow_sheet.dart';
 
 /// Pushed secondary page — never a dock tab.
 /// 1.19.3-beta.5: re-entry jumps to the latest message (reverse index 0).
@@ -274,6 +275,34 @@ class _ChatScreenState extends State<ChatScreen> {
     if (mounted) _busy.value = false;
   }
 
+  void _openSessionOverflow(BuildContext context) {
+    unawaited(showSessionOverflowSheet(
+      context: context,
+      title: widget.session.title,
+      items: buildSessionOverflowItems(
+        pinned: widget.session.kind == HomeSessionKind.pinned,
+        onRename: _stubSessionAction,
+        onTogglePin: _stubSessionAction,
+        onRefreshTranscript: _stubSessionAction,
+        onArchive: _stubSessionAction,
+        onDelete: _stubSessionAction,
+      ),
+    ));
+  }
+
+  void _openContextMetadata(BuildContext context) {
+    final branch = widget.session.branch?.trim();
+    unawaited(showSessionMetadataSheet(
+      context: context,
+      branchLabel: (branch == null || branch.isEmpty)
+          ? t(context, 'common.unavailable')
+          : branch,
+      contextPercent: OcOptical.contextProgressStubPercent,
+    ));
+  }
+
+  void _stubSessionAction() {}
+
   @override
   Widget build(BuildContext context) {
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
@@ -332,25 +361,25 @@ class _ChatScreenState extends State<ChatScreen> {
                       subtitle: widget.session.subtitle,
                       leadingKey: const Key('chat-back'),
                       busy: busy,
-                      trailing: Pressable(
-                        haptic: HapticStrength.light,
-                        highlight: false,
-                        onPressed: () {},
-                        child: SizedBox(
-                          width: OcOptical.chatChip,
-                          height: OcOptical.chatChip,
-                          child: Center(
-                            child: OcGlassChip(
-                              size: OcOptical.chatChip,
-                              child: OcGlyph(
-                                OcGlyphKind.ellipsis,
-                                size: OcOptical.chatChipGlyph,
-                                strokeWidth: OcOptical.headerGlyphStrokeVisual,
-                                color: context.oc.foreground,
-                              ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          OcDetailNavChip(
+                            key: const Key('chat-context'),
+                            semanticLabel: t(context, 'mobile.header.openMetadataAria'),
+                            onPressed: () => _openContextMetadata(context),
+                            child: const OcContextProgressIcon(
+                              percentage: OcOptical.contextProgressStubPercent,
                             ),
                           ),
-                        ),
+                          const SizedBox(width: OcOptical.detailNavTrailingGap),
+                          OcDetailNavChip(
+                            key: const Key('chat-more'),
+                            semanticLabel: t(context, 'mobile.menu.titleAria'),
+                            glyph: OcGlyphKind.ellipsis,
+                            onPressed: () => _openSessionOverflow(context),
+                          ),
+                        ],
                       ),
                     );
                   },
