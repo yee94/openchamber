@@ -725,4 +725,4 @@ Continues `5b8c4795e` on `work/flutter-native`. Draft stacked on that tip. No me
 | Composer `/` `@` `#` | out of this slice | Cap uses real `OpenChamberComposerAutocomplete`. Flutter frost/pan stub stays; full autocomplete is residual. |
 | Appearance Flexoki | honest residual | Official mobile Appearance is language + theme only. Flexoki is the WebView ThemeSystem default, not a mobile picker. Flutter keeps design-system Light/Dark/System. |
 
-Validated on Flutter **3.32.8 / Dart 3.8.1**: `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` including `test/session_mutations_test.dart` and `test/projects_home_actions_test.dart`. `Flutter Mobile CI` is push-only on `work/flutter-native` — this stacked branch does not start that Actions run. Not 真机过.
+Validated on Flutter **3.32.8 / Dart 3.8.1**: `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **222 passed**, including `session_mutations_test.dart` and `projects_home_actions_test.dart`. `Flutter Mobile CI` is push-only on `work/flutter-native` — this stacked branch does not start that Actions run. Not 真机过.
