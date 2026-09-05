@@ -24,6 +24,7 @@ import 'context_usage.dart';
 import 'composer_autocomplete.dart';
 import 'github_worktree.dart';
 import 'home_session.dart';
+import 'message_queue.dart';
 import 'project_id.dart';
 import 'instance_store.dart';
 import 'openchamber_api.dart';
@@ -134,6 +135,7 @@ class AppController extends ChangeNotifier {
   TunnelWebSocket? _eventTunnel;
   bool liveEventsConnected = false;
   int transcriptEpoch = 0;
+  int messageQueueEpoch = 0;
   SessionIndexSnapshot? lastIndex;
   String? createSessionErrorKey;
   String? lastMutationErrorKey;
@@ -723,6 +725,145 @@ class AppController extends ChangeNotifier {
     await refreshSessionStatus(directory: directory);
   }
 
+  String get followUpBehavior =>
+      remoteSettings.blob.value?.stringField('followUpBehavior') ?? 'steer';
+
+  /// GET snapshot + scope. 501 / unavailable returns null (not an empty fake).
+  Future<MessageQueueScope?> loadMessageQueueScope(HomeSessionRow session) async {
+    final base = activeBase;
+    final directory = session.directory ?? '';
+    if (base == null || directory.isEmpty) return null;
+    try {
+      final capability = await _api.fetchMessageQueueCapability(base: base, bearer: activeBearer);
+      if (capability != true) return null;
+      final snapshot = await _api.fetchMessageQueueSnapshot(base: base, bearer: activeBearer);
+      MessageQueueScopeDescriptor? descriptor;
+      for (final scope in snapshot.scopes) {
+        if (scope.sessionID == session.id && scope.directory == directory) {
+          descriptor = scope;
+          break;
+        }
+      }
+      if (descriptor == null) {
+        return MessageQueueScope.empty(
+          directory: directory,
+          sessionID: session.id,
+          revision: snapshot.revision,
+        );
+      }
+      return _api.fetchMessageQueueScope(
+        base: base,
+        bearer: activeBearer,
+        scopeId: descriptor.scopeID,
+        expectedRevision: descriptor.revision,
+      );
+    } on OpenChamberHttpException catch (error) {
+      if (error.status == 501 || error.code == 'unavailable') return null;
+      rethrow;
+    }
+  }
+
+  Future<MessageQueueMutation?> admitQueuedFollowUp({
+    required HomeSessionRow session,
+    required String text,
+    MessageQueueScope? current,
+  }) async {
+    final base = activeBase;
+    final directory = session.directory ?? '';
+    if (base == null || directory.isEmpty) return null;
+    if (remoteSettings.blob.value == null) {
+      await remoteSettings.loadBlob();
+    }
+    final model = splitDefaultModel(remoteSettings.blob.value?.defaultModel);
+    final agent = remoteSettings.blob.value?.stringField('defaultAgent');
+    final identity = createServerQueueAdmissionIdentity();
+    final body = <String, Object?>{
+      'requestID': identity.requestID,
+      if (current != null && current.scopeID.isNotEmpty) 'expectedRevision': current.revision,
+      'scope': {'directory': directory, 'sessionID': session.id},
+      'item': {
+        'queueItemID': identity.queueItemID,
+        'operationID': identity.operationID,
+        'messageID': identity.messageID,
+        'content': text,
+        'createdAt': identity.createdAt,
+        'sendConfig': MessageQueueSendConfig(
+          providerID: model.providerId,
+          modelID: model.modelId,
+          agent: agent,
+        ).toJson(),
+        'deliveryTarget': const {'kind': 'primary'},
+      },
+    };
+    try {
+      return await _api.admitMessageQueueItem(base: base, bearer: activeBearer, body: body);
+    } on OpenChamberHttpException catch (error) {
+      if (error.status == 409 && current != null) {
+        final refreshed = await loadMessageQueueScope(session);
+        if (refreshed == null) return null;
+        body['expectedRevision'] = refreshed.revision;
+        body['requestID'] = createServerQueueAdmissionIdentity().requestID;
+        try {
+          return await _api.admitMessageQueueItem(base: base, bearer: activeBearer, body: body);
+        } on OpenChamberHttpException {
+          return null;
+        }
+      }
+      if (error.status == 501 || error.code == 'unavailable') return null;
+      rethrow;
+    }
+  }
+
+  Future<bool> removeQueuedItem({
+    required HomeSessionRow session,
+    required MessageQueueItem item,
+    required MessageQueueScope scope,
+  }) async {
+    final base = activeBase;
+    if (base == null || scope.scopeID.isEmpty) return false;
+    try {
+      await _api.removeMessageQueueItem(
+        base: base,
+        bearer: activeBearer,
+        queueItemId: item.queueItemID,
+        requestId: createServerQueueAdmissionIdentity().requestID,
+        expectedRevision: scope.revision,
+        expectedRowVersion: item.rowVersion,
+      );
+      return true;
+    } on OpenChamberHttpException catch (error) {
+      if (error.status == 501 || error.code == 'unavailable') return false;
+      lastMutationErrorKey = 'chat.queuedMessage.removeFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> sendQueuedItemNow({
+    required HomeSessionRow session,
+    required MessageQueueItem item,
+    required MessageQueueScope scope,
+  }) async {
+    final base = activeBase;
+    if (base == null || scope.scopeID.isEmpty) return false;
+    try {
+      await _api.sendMessageQueueItemNow(
+        base: base,
+        bearer: activeBearer,
+        queueItemId: item.queueItemID,
+        requestId: createServerQueueAdmissionIdentity().requestID,
+        expectedRevision: scope.revision,
+        expectedRowVersion: item.rowVersion,
+      );
+      return true;
+    } on OpenChamberHttpException catch (error) {
+      if (error.status == 501 || error.code == 'unavailable') return false;
+      lastMutationErrorKey = 'chat.queuedMessage.sendFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<String> readWorkspaceFile(String path) async {
     final base = activeBase;
     if (base == null) {
@@ -1028,6 +1169,25 @@ class AppController extends ChangeNotifier {
         sessionId: session.id,
         directory: session.directory,
         archivedAt: DateTime.now().millisecondsSinceEpoch,
+      ),
+    );
+  }
+
+  /// Cap `unarchiveSession` — PATCH `time.archived = 0`.
+  Future<bool> unarchiveSession(HomeSessionRow session) {
+    return _mutateSession(
+      session,
+      errorKey: 'sessions.sidebar.session.archive.undoFailed',
+      optimistic: () {
+        if (sessions.any((row) => row.id == session.id)) return;
+        sessions = [...sessions, session];
+      },
+      run: (base) => _api.updateSession(
+        base: base,
+        bearer: activeBearer ?? '',
+        sessionId: session.id,
+        directory: session.directory,
+        archivedAt: 0,
       ),
     );
   }
@@ -2093,6 +2253,9 @@ class AppController extends ChangeNotifier {
       unawaited(refreshSessions());
     } else if (type.startsWith('message.')) {
       transcriptEpoch += 1;
+      notifyListeners();
+    } else if (type == 'openchamber:message-queue-changed' || type == 'message-queue-changed') {
+      messageQueueEpoch += 1;
       notifyListeners();
     }
   }

@@ -27,6 +27,7 @@ class ComposerBar extends StatelessWidget {
     this.files = const [],
     this.skills = const [],
     this.snippets = const [],
+    this.queueFollowUp = false,
   });
 
   final TextEditingController controller;
@@ -43,6 +44,7 @@ class ComposerBar extends StatelessWidget {
   final List<String> files;
   final List<String> skills;
   final List<String> snippets;
+  final bool queueFollowUp;
 
   @override
   Widget build(BuildContext context) {
@@ -60,8 +62,9 @@ class ComposerBar extends StatelessWidget {
       skills: skills,
       snippets: snippets,
     );
-    final sendReady = !busy &&
-        (controller.text.trim().isNotEmpty || attachments.isNotEmpty);
+    final hasDraft = controller.text.trim().isNotEmpty || attachments.isNotEmpty;
+    final queueSend = queueFollowUp && busy && hasDraft;
+    final sendReady = queueSend || (!busy && hasDraft);
     final field = TextField(
       key: const Key('composer-field'),
       controller: controller,
@@ -212,16 +215,51 @@ class ComposerBar extends StatelessWidget {
                           ),
                         ),
                         Expanded(child: field),
+                        if (queueFollowUp && busy)
+                          Pressable(
+                            key: const Key('composer-stop'),
+                            haptic: HapticStrength.heavy,
+                            highlight: false,
+                            onPressed: onStop,
+                            child: SizedBox(
+                              width: OcOptical.sendRing,
+                              height: OcOptical.sendRing,
+                              child: Center(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: context.oc.foreground,
+                                  ),
+                                  child: SizedBox(
+                                    width: OcOptical.sendRingDisc,
+                                    height: OcOptical.sendRingDisc,
+                                    child: Center(
+                                      child: Container(
+                                        width: OcOptical.sendStop,
+                                        height: OcOptical.sendStop,
+                                        decoration: BoxDecoration(
+                                          color: context.oc.background,
+                                          borderRadius: BorderRadius.circular(OcOptical.sendStop * 0.2),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         Pressable(
                           key: const Key('composer-send'),
                           haptic: HapticStrength.medium,
                           highlight: false,
-                          onPressed: busy ? onStop : onSend,
+                          onPressed: (queueFollowUp && busy)
+                              ? (sendReady ? onSend : null)
+                              : (busy ? onStop : onSend),
                           child: SizedBox(
                             width: OcOptical.sendRing,
                             height: OcOptical.sendRing,
                             child: Center(
-                              child: busy
+                              child: busy && !queueFollowUp
                                   ? DecoratedBox(
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,

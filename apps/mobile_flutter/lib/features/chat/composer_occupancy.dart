@@ -9,6 +9,9 @@ const double collapsedComposerOccupancy = 56;
 /// ComposerBar's trailing pad under the pill (`EdgeInsets.fromLTRB(16, 0, 16, 8)`).
 const double composerPillBottomPad = 8;
 
+/// Cap `QueuedMessageChips` row above the composer.
+const double queuedMessageChipsOccupancy = 48;
+
 /// Bottom inset the reverse transcript must keep clear so the last-turn
 /// footer meta strip sits above the composer, not under it.
 ///
@@ -18,9 +21,10 @@ double composerListReserve({
   required bool ios,
   required double paddingBottom,
   required bool showScrollToBottom,
+  double queuedChipHeight = 0,
 }) {
-  if (ios) return collapsedComposerOccupancy + paddingBottom;
+  if (ios) return collapsedComposerOccupancy + paddingBottom + queuedChipHeight;
   final fab = showScrollToBottom ? OcOptical.scrollFab + 6 : 0.0;
-  return collapsedComposerOccupancy + paddingBottom + fab + composerPillBottomPad;
+  return collapsedComposerOccupancy + paddingBottom + fab + composerPillBottomPad + queuedChipHeight;
 }
 

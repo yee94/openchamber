@@ -502,7 +502,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         onCopyLink: hydrated.isShared ? () => unawaited(_copyShareUrl(context, hydrated.shareUrl!)) : null,
         onUnshare: () => unawaited(_runMutation(() => controller.unshareSession(hydrated))),
         onRefreshTranscript: () => unawaited(_runMutation(() => controller.syncProjectSessions())),
-        onArchive: () => unawaited(_runMutation(() => controller.archiveSession(hydrated))),
+        onArchive: () => unawaited(_archiveSession(context, hydrated)),
         onDelete: () => unawaited(_deleteSession(context, hydrated)),
       ),
     );
@@ -653,6 +653,25 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
       }
     }
     return group.id;
+  }
+
+  Future<void> _archiveSession(BuildContext context, HomeSessionRow session) async {
+    final ok = await controller.archiveSession(session);
+    if (!context.mounted) return;
+    if (!ok) {
+      await _runMutation(() async => false);
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(t(context, 'sessions.sidebar.session.archive.success')),
+        action: SnackBarAction(
+          key: const Key('session-archive-undo'),
+          label: t(context, 'sessions.sidebar.undo'),
+          onPressed: () => unawaited(controller.unarchiveSession(session)),
+        ),
+      ),
+    );
   }
 
   Future<void> _runMutation(Future<bool> Function() run) async {

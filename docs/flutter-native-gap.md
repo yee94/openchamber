@@ -707,7 +707,7 @@ Capgo OTA; plan/notes/Todo; Chat dock tab; `iosNativeUi`; Bonjour 「附近」; 
 ### Remaining gaps (updated)
 
 1. Device-only rows above — still ❌ 真机过.
-2. Context ring / session overflow mutations / new-project + home `···` landed in the twentieth slice. Share/copy/unshare + DirectoryExplorer clone/hidden/identity + worktree branch/startRef + project-edit essentials landed in the twenty-first (真机 still residual). Create-missing-dir + GitHub Issue/PR worktree + worktree drag-reorder + scheduled daily create + chat copy/share/fork landed in the twenty-second. Existing-branch worktree + scheduled full editor + chat revert/edit + assistant long-press + Cap-parity composer autocomplete landed in the twenty-third. Chat overflow Files/Changes/MCP/New session + iOS autocomplete accept + Files attach + compaction activity landed in the twenty-fourth. Server message-queue chips remain CODE.
+2. Context ring / session overflow mutations / new-project + home `···` landed in the twentieth slice. Share/copy/unshare + DirectoryExplorer clone/hidden/identity + worktree branch/startRef + project-edit essentials landed in the twenty-first (真机 still residual). Create-missing-dir + GitHub Issue/PR worktree + worktree drag-reorder + scheduled daily create + chat copy/share/fork landed in the twenty-second. Existing-branch worktree + scheduled full editor + chat revert/edit + assistant long-press + Cap-parity composer autocomplete landed in the twenty-third. Chat overflow Files/Changes/MCP/New session + iOS autocomplete accept + Files attach + compaction activity landed in the twenty-fourth. Server message-queue chips + archive undo landed in the twenty-fifth.
 3. Android launcher badge — honest host-side gap.
 4. Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` — will not port.
 5. Appearance Flexoki picker and Finder stay **will-not-invent**. Composer `/` `@` `#` is no longer a frost stub.
@@ -823,3 +823,33 @@ Same device rows as earlier slices: live `wss://` relay + LAN hot-switch + iOS L
 ### EXHAUSTED
 
 **false.** High-value Cap-mobile CODE still remains: official **server message-queue** UI. After that, leftover editors/undo are thinner than the overflow/composer no-ops closed here.
+
+## Twenty-fifth-slice status (2026-09-05) — official message-queue + archive undo
+
+Stacked on `c8c7971b2` (twenty-fourth overflow slice) / `work/flutter-native` tip `93d8aed4e`. Draft PR **#5** track. Do **not** merge `main`. No 1.18 TanStack. No Flutter UI golden recapture. OpenChamber v2 `.debug` applicationId unchanged. Do **not** invent Flexoki / Finder / Capgo / Bonjour / `iosNativeUi` / Chat dock.
+
+Read on this checkout + `origin/main` (not merged): Cap `ChatInput` + `QueuedMessageChips` + `/api/openchamber/message-queue` (`status` / snapshot / `scopes/:id` / `items` admit / `items/:id` delete / `items/:id/send`). Cap archive undo is `showArchivedSessionsUndoToast` + `unarchiveSession` PATCH `time.archived = 0`.
+
+### Landed this slice (code)
+
+| Surface | Official Cap mobile | Flutter | Notes |
+|---|---|---|---|
+| Follow-up queue admit | `followUpBehavior: queue` + busy → POST `/api/openchamber/message-queue/items` | Same when session status is `busy`/`retry` and the composer has text only | `requestID` / `queued-` / `operation-` / `msg_` identity. `sendConfig` from default model/agent. 501 = unavailable, fall back to direct send. Attachments still go `prompt_async` (no invented local upload ledger). |
+| Queue chips | `QueuedMessageChips` send / remove / pop-to-input | `QueuedMessageChips` above composer | GET snapshot + scope. Send-now and remove use revision + `rowVersion`. 409 retries admit once. Live `openchamber:message-queue-changed` bumps `messageQueueEpoch`. |
+| Archive undo | `showArchivedSessionsUndoToast` | SnackBar + Undo on chat overflow and home session `···` | PATCH `time.archived = 0`. |
+
+### Still code (Cap ships; thinner than closed no-ops)
+
+| Gap | Why leftover |
+|---|---|
+| Queue attachments / reserve-edit / drag-reorder | Cap uploads via `/attachments/uploads` and reorders `PUT /scopes/:id/order`. Flutter text-only chips; do not invent a local attachment store. |
+| Settings slug editors (sessions / summary-ai / git identities / behavior AGENTS.md / magic-prompts / snippets) | Cap `SettingsView forceMobile` is editable. Flutter already shows the server values; entity slugs (providers/agents/MCP/…) already CRUD. |
+| Appearance Flexoki picker / Finder | **Do not invent.** |
+
+### 真机-only
+
+Same device rows as earlier slices: live `wss://` relay + LAN hot-switch + iOS Local Network; HEIC/album + Files picker on a phone; hosted OAuth; ActivityKit / Dynamic Island / widget tap; Impeller 16ms; FCM on `.debug` if Firebase init fails; share-extension → inbox POST; iOS UIKit autocomplete tap / document picker / queue-while-busy on a real iPhone.
+
+### EXHAUSTED
+
+**false.** High-value missing/stubbed/no-op surfaces that Cap ships on mobile are closed (queue chips + archive undo). Leftover CODE is thinner Cap-editable settings slugs and richer queue attachment/reorder — not empty stubs. 真机 residuals remain.

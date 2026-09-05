@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'chat_parts.dart';
 import 'chat_timeline.dart';
 import 'home_session.dart';
+import 'message_queue.dart';
 import 'openchamber_http.dart';
 import 'prompt_attachment.dart';
 import 'session_index.dart';
@@ -1171,6 +1172,154 @@ class OpenChamberApi {
     );
   }
 
+  /// GET `/api/openchamber/message-queue/status`. 501 = unavailable (not empty).
+  Future<bool?> fetchMessageQueueCapability({required Uri base, String? bearer}) async {
+    final response = await transport.send(
+      base,
+      OpenChamberRequest(method: 'GET', path: OpenChamberPaths.messageQueueStatus, bearer: bearer),
+    );
+    if (response.status == 501) return null;
+    if (!response.ok) {
+      throw OpenChamberHttpException(
+        response.status,
+        OpenChamberPaths.messageQueueStatus,
+        code: parseMessageQueueErrorCode(response.body, response.status),
+      );
+    }
+    final capability = response.map['capability'];
+    return capability is bool ? capability : true;
+  }
+
+  /// GET `/api/openchamber/message-queue`.
+  Future<MessageQueueSnapshot> fetchMessageQueueSnapshot({required Uri base, String? bearer}) async {
+    final body = await _requireMessageQueue(
+      base,
+      const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.messageQueue),
+      bearer,
+    );
+    return parseMessageQueueSnapshot(body) ??
+        (throw const OpenChamberHttpException(200, OpenChamberPaths.messageQueue, code: 'unavailable'));
+  }
+
+  /// GET `/api/openchamber/message-queue/scopes/:scopeID`.
+  Future<MessageQueueScope> fetchMessageQueueScope({
+    required Uri base,
+    String? bearer,
+    required String scopeId,
+    int? expectedRevision,
+  }) async {
+    final body = await _requireMessageQueue(
+      base,
+      OpenChamberRequest(
+        method: 'GET',
+        path: OpenChamberPaths.messageQueueScope(scopeId),
+        query: {
+          if (expectedRevision != null) 'expectedRevision': '$expectedRevision',
+        },
+      ),
+      bearer,
+    );
+    return parseMessageQueueScope(body) ??
+        (throw OpenChamberHttpException(200, OpenChamberPaths.messageQueueScope(scopeId), code: 'unavailable'));
+  }
+
+  /// POST `/api/openchamber/message-queue/items`.
+  Future<MessageQueueMutation> admitMessageQueueItem({
+    required Uri base,
+    String? bearer,
+    required Map<String, Object?> body,
+  }) async {
+    final response = await _requireMessageQueue(
+      base,
+      OpenChamberRequest(method: 'POST', path: OpenChamberPaths.messageQueueItems, body: body),
+      bearer,
+    );
+    return parseMessageQueueMutation(response) ??
+        (throw const OpenChamberHttpException(200, OpenChamberPaths.messageQueueItems, code: 'unavailable'));
+  }
+
+  /// DELETE `/api/openchamber/message-queue/items/:id`.
+  Future<MessageQueueMutation> removeMessageQueueItem({
+    required Uri base,
+    String? bearer,
+    required String queueItemId,
+    required String requestId,
+    required int expectedRevision,
+    required int expectedRowVersion,
+  }) async {
+    final path = OpenChamberPaths.messageQueueItem(queueItemId);
+    final response = await _requireMessageQueue(
+      base,
+      OpenChamberRequest(
+        method: 'DELETE',
+        path: path,
+        body: {
+          'requestID': requestId,
+          'expectedRevision': expectedRevision,
+          'expectedRowVersion': expectedRowVersion,
+        },
+      ),
+      bearer,
+    );
+    return parseMessageQueueMutation(response) ??
+        (throw OpenChamberHttpException(200, path, code: 'unavailable'));
+  }
+
+  /// POST `/api/openchamber/message-queue/items/:id/send`.
+  Future<MessageQueueMutation> sendMessageQueueItemNow({
+    required Uri base,
+    String? bearer,
+    required String queueItemId,
+    required String requestId,
+    required int expectedRevision,
+    required int expectedRowVersion,
+  }) async {
+    final path = OpenChamberPaths.messageQueueItemSend(queueItemId);
+    final response = await _requireMessageQueue(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: path,
+        body: {
+          'requestID': requestId,
+          'expectedRevision': expectedRevision,
+          'expectedRowVersion': expectedRowVersion,
+        },
+      ),
+      bearer,
+    );
+    return parseMessageQueueMutation(response) ??
+        (throw OpenChamberHttpException(200, path, code: 'unavailable'));
+  }
+
+  Future<Map<String, Object?>> _requireMessageQueue(
+    Uri base,
+    OpenChamberRequest request,
+    String? bearer,
+  ) async {
+    final response = await transport.send(
+      base,
+      OpenChamberRequest(
+        method: request.method,
+        path: request.path,
+        query: request.query,
+        body: request.body,
+        bearer: bearer,
+      ),
+    );
+    if (!response.ok) {
+      throw OpenChamberHttpException(
+        response.status,
+        request.path,
+        code: parseMessageQueueErrorCode(response.body, response.status) ?? 'unavailable',
+      );
+    }
+    final body = response.body;
+    if (body is Map<String, Object?>) return body;
+    if (body is Map) return body.map((key, value) => MapEntry(key.toString(), value));
+    throw OpenChamberHttpException(200, request.path, code: 'unavailable');
+  }
+
   Future<Map<String, Object?>> upsertScheduledTask({
     required Uri base,
     String? bearer,
@@ -1779,6 +1928,9 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   int worktreeOrderStatus = 200;
   final Map<String, List<String>> worktreeOrders = {};
   final Map<String, int> worktreeOrderRevisions = {};
+  int messageQueueStatus = 200;
+  int messageQueueRevision = 0;
+  final List<Map<String, Object?>> messageQueueItems = [];
   int discoverStatus = 200;
   int settingsStatus = 200;
   int catalogStatus = 200;
@@ -2465,10 +2617,221 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
     },
   };
 
+  String _memoryQueueScopeId(String directory, String sessionID) => 'scope:$directory:$sessionID';
+
+  List<Map<String, Object?>> _memoryQueueItemsFor(String directory, String sessionID) {
+    return messageQueueItems
+        .where((item) => item['directory'] == directory && item['sessionID'] == sessionID)
+        .toList();
+  }
+
+  OpenChamberResponse _handleMessageQueue(OpenChamberRequest request) {
+    if (messageQueueStatus == 501) {
+      return const OpenChamberResponse(status: 501, body: {'code': 'unavailable'});
+    }
+    if (messageQueueStatus < 200 || messageQueueStatus >= 300) {
+      return OpenChamberResponse(status: messageQueueStatus, body: {'code': 'unavailable'});
+    }
+    if (request.path == OpenChamberPaths.messageQueueStatus) {
+      return const OpenChamberResponse(
+        status: 200,
+        body: {
+          'capability': true,
+          'authority': 'active',
+          'worker': {'paused': false, 'active': 0},
+        },
+      );
+    }
+    if (request.path == OpenChamberPaths.messageQueue && request.method == 'GET') {
+      final grouped = <String, List<Map<String, Object?>>>{};
+      for (final item in messageQueueItems) {
+        final key = _memoryQueueScopeId(item['directory']?.toString() ?? '', item['sessionID']?.toString() ?? '');
+        grouped.putIfAbsent(key, () => []).add(item);
+      }
+      return OpenChamberResponse(
+        status: 200,
+        body: {
+          'revision': messageQueueRevision,
+          'scopes': grouped.entries.map((entry) {
+            final first = entry.value.first;
+            return {
+              'scopeID': entry.key,
+              'revision': messageQueueRevision,
+              'directory': first['directory'],
+              'sessionID': first['sessionID'],
+              'worktreeState': 'ready',
+              'itemCount': entry.value.length,
+            };
+          }).toList(),
+          'worktreeOrders': const <Object?>[],
+        },
+      );
+    }
+    if (request.path == OpenChamberPaths.messageQueueItems && request.method == 'POST') {
+      final body = request.body ?? const <String, Object?>{};
+      final scope = body['scope'];
+      final item = body['item'];
+      if (scope is! Map || item is! Map) {
+        return const OpenChamberResponse(status: 400, body: {'code': 'validation_error'});
+      }
+      final expected = body['expectedRevision'];
+      if (expected != null && expected != messageQueueRevision) {
+        return const OpenChamberResponse(status: 409, body: {'code': 'revision_conflict'});
+      }
+      final directory = scope['directory']?.toString() ?? '';
+      final sessionID = scope['sessionID']?.toString() ?? '';
+      final queueItemID = item['queueItemID']?.toString() ?? '';
+      final operationID = item['operationID']?.toString() ?? '';
+      final messageID = item['messageID']?.toString() ?? '';
+      final content = item['content']?.toString() ?? '';
+      final createdAt = item['createdAt'];
+      if (directory.isEmpty ||
+          sessionID.isEmpty ||
+          queueItemID.isEmpty ||
+          operationID.isEmpty ||
+          messageID.isEmpty ||
+          createdAt is! num) {
+        return const OpenChamberResponse(status: 400, body: {'code': 'validation_error'});
+      }
+      messageQueueRevision += 1;
+      final peers = _memoryQueueItemsFor(directory, sessionID);
+      messageQueueItems.add({
+        'queueItemID': queueItemID,
+        'operationID': operationID,
+        'messageID': messageID,
+        'content': content,
+        'status': 'queued',
+        'attemptCount': 0,
+        'position': peers.length,
+        'rowVersion': 1,
+        'createdAt': createdAt.toInt(),
+        'directory': directory,
+        'sessionID': sessionID,
+      });
+      return OpenChamberResponse(
+        status: 200,
+        body: {
+          'revision': messageQueueRevision,
+          'scopeID': _memoryQueueScopeId(directory, sessionID),
+          'queueItemID': queueItemID,
+          'rowVersion': 1,
+        },
+      );
+    }
+    if (request.path.startsWith('${OpenChamberPaths.messageQueue}/scopes/') && request.method == 'GET') {
+      final scopeID = Uri.decodeComponent(request.path.substring('${OpenChamberPaths.messageQueue}/scopes/'.length));
+      final match = messageQueueItems.cast<Map<String, Object?>?>().firstWhere(
+        (item) => _memoryQueueScopeId(item!['directory']?.toString() ?? '', item['sessionID']?.toString() ?? '') == scopeID,
+        orElse: () => null,
+      );
+      if (match == null) {
+        return const OpenChamberResponse(status: 404, body: {'code': 'not_found'});
+      }
+      final directory = match['directory']?.toString() ?? '';
+      final sessionID = match['sessionID']?.toString() ?? '';
+      final items = _memoryQueueItemsFor(directory, sessionID);
+      return OpenChamberResponse(
+        status: 200,
+        body: {
+          'scopeID': scopeID,
+          'revision': messageQueueRevision,
+          'directory': directory,
+          'sessionID': sessionID,
+          'worktreeState': 'ready',
+          'itemCount': items.length,
+          'items': items
+              .map(
+                (item) => {
+                  'queueItemID': item['queueItemID'],
+                  'operationID': item['operationID'],
+                  'messageID': item['messageID'],
+                  'content': item['content'],
+                  'status': item['status'],
+                  'attemptCount': item['attemptCount'],
+                  'position': item['position'],
+                  'rowVersion': item['rowVersion'],
+                  'createdAt': item['createdAt'],
+                  if (item['manualDispatchRequested'] == true) 'manualDispatchRequested': true,
+                },
+              )
+              .toList(),
+        },
+      );
+    }
+    final sendSuffix = '/send';
+    if (request.path.startsWith('${OpenChamberPaths.messageQueueItems}/') &&
+        request.path.endsWith(sendSuffix) &&
+        request.method == 'POST') {
+      final encoded = request.path.substring(
+        '${OpenChamberPaths.messageQueueItems}/'.length,
+        request.path.length - sendSuffix.length,
+      );
+      final queueItemID = Uri.decodeComponent(encoded);
+      final expected = request.body?['expectedRevision'];
+      final rowVersion = request.body?['expectedRowVersion'];
+      if (expected != null && expected != messageQueueRevision) {
+        return const OpenChamberResponse(status: 409, body: {'code': 'revision_conflict'});
+      }
+      final index = messageQueueItems.indexWhere((item) => item['queueItemID'] == queueItemID);
+      if (index < 0) return const OpenChamberResponse(status: 404, body: {'code': 'not_found'});
+      final current = messageQueueItems[index];
+      if (rowVersion != null && rowVersion != current['rowVersion']) {
+        return const OpenChamberResponse(status: 409, body: {'code': 'row_version_conflict'});
+      }
+      messageQueueRevision += 1;
+      final nextVersion = (current['rowVersion'] as int? ?? 1) + 1;
+      messageQueueItems[index] = {
+        ...current,
+        'manualDispatchRequested': true,
+        'rowVersion': nextVersion,
+      };
+      return OpenChamberResponse(
+        status: 200,
+        body: {
+          'revision': messageQueueRevision,
+          'scopeID': _memoryQueueScopeId(current['directory']?.toString() ?? '', current['sessionID']?.toString() ?? ''),
+          'queueItemID': queueItemID,
+          'rowVersion': nextVersion,
+        },
+      );
+    }
+    if (request.path.startsWith('${OpenChamberPaths.messageQueueItems}/') && request.method == 'DELETE') {
+      final queueItemID = Uri.decodeComponent(request.path.substring('${OpenChamberPaths.messageQueueItems}/'.length));
+      final expected = request.body?['expectedRevision'];
+      final rowVersion = request.body?['expectedRowVersion'];
+      if (expected != null && expected != messageQueueRevision) {
+        return const OpenChamberResponse(status: 409, body: {'code': 'revision_conflict'});
+      }
+      final index = messageQueueItems.indexWhere((item) => item['queueItemID'] == queueItemID);
+      if (index < 0) return const OpenChamberResponse(status: 404, body: {'code': 'not_found'});
+      final current = messageQueueItems[index];
+      if (rowVersion != null && rowVersion != current['rowVersion']) {
+        return const OpenChamberResponse(status: 409, body: {'code': 'row_version_conflict'});
+      }
+      messageQueueRevision += 1;
+      messageQueueItems.removeAt(index);
+      return OpenChamberResponse(
+        status: 200,
+        body: {
+          'revision': messageQueueRevision,
+          'scopeID': _memoryQueueScopeId(current['directory']?.toString() ?? '', current['sessionID']?.toString() ?? ''),
+          'removedQueueItemID': queueItemID,
+        },
+      );
+    }
+    return const OpenChamberResponse(status: 404, body: {'code': 'not_found'});
+  }
+
   @override
   Future<OpenChamberResponse> send(Uri base, OpenChamberRequest request) async {
     calls.add(request);
     bases.add(base);
+    if (request.path != OpenChamberPaths.messageQueueWorktreeOrder &&
+        (request.path == OpenChamberPaths.messageQueue ||
+            request.path == OpenChamberPaths.messageQueueStatus ||
+            request.path.startsWith('${OpenChamberPaths.messageQueue}/'))) {
+      return _handleMessageQueue(request);
+    }
     switch (request.path) {
       case OpenChamberPaths.health:
         final delay = healthDelayByHost[base.host] ?? healthDelay;

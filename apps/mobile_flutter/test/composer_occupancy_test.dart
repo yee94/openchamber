@@ -131,5 +131,9 @@ void main() {
       composerListReserve(ios: false, paddingBottom: 0, showScrollToBottom: false),
       collapsedComposerOccupancy + composerPillBottomPad,
     );
+    expect(
+      composerListReserve(ios: true, paddingBottom: 34, showScrollToBottom: false, queuedChipHeight: queuedMessageChipsOccupancy),
+      collapsedComposerOccupancy + 34 + queuedMessageChipsOccupancy,
+    );
   });
 }

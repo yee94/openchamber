@@ -8,6 +8,7 @@ import '../../data/chat_timeline.dart';
 import '../../data/context_usage.dart';
 import '../../data/home_session.dart';
 import '../../data/message_id.dart';
+import '../../data/message_queue.dart';
 import '../../data/openchamber_http.dart';
 import '../projects/action_dialogs.dart';
 import '../../data/prompt_attachment.dart';
@@ -29,6 +30,7 @@ import 'chat_transcript_row.dart';
 import 'composer_bar.dart';
 import 'composer_occupancy.dart';
 import 'ios_composer_host.dart';
+import 'queued_message_chips.dart';
 import 'reverse_chat_list.dart';
 import 'session_metadata_sheet.dart';
 import 'session_overflow_sheet.dart';
@@ -66,6 +68,8 @@ class _ChatScreenState extends State<ChatScreen> {
   List<String> _skills = const [];
   List<String> _snippets = const [];
   String? _editingMessageId;
+  MessageQueueScope? _queue;
+  int _seenQueueEpoch = 0;
 
   LiveActivityController get _live => widget.appController?.liveActivity ?? LiveActivityController();
 
@@ -96,6 +100,10 @@ class _ChatScreenState extends State<ChatScreen> {
     if (controller.transcriptEpoch != _seenEpoch) {
       _seenEpoch = controller.transcriptEpoch;
       unawaited(_reloadFromLive());
+    }
+    if (controller.messageQueueEpoch != _seenQueueEpoch) {
+      _seenQueueEpoch = controller.messageQueueEpoch;
+      unawaited(_refreshQueue());
     }
     _syncBusyFromController();
     if (controller.liveEventsConnected) {
@@ -157,6 +165,7 @@ class _ChatScreenState extends State<ChatScreen> {
       await controller.ensureContextLimits();
       _contextTick.value += 1;
       _syncBusyFromController();
+      unawaited(_refreshQueue());
       unawaited(_loadComposerCatalogs());
     } on OpenChamberHttpException {
       if (!mounted) return;
@@ -243,12 +252,45 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _refreshQueue() async {
+    final controller = widget.appController;
+    if (controller == null) return;
+    try {
+      final scope = await controller.loadMessageQueueScope(_session);
+      if (!mounted) return;
+      setState(() => _queue = scope);
+    } on OpenChamberHttpException {
+      if (!mounted) return;
+      // Preserve the last chips; failure is not empty success.
+    }
+  }
+
   Future<void> _send([String? raw]) async {
     final body = (raw ?? _composer.text).trim();
     if (body.isEmpty && _attachments.isEmpty) return;
     final controller = widget.appController;
-    final messageId = ascendingId('msg');
     final pending = List<AttachmentDraft>.from(_attachments);
+    if (controller != null &&
+        controller.followUpBehavior == 'queue' &&
+        _busy.value &&
+        pending.isEmpty &&
+        body.isNotEmpty) {
+      _composer.clear();
+      _errorKey.value = null;
+      try {
+        final admitted = await controller.admitQueuedFollowUp(session: _session, text: body, current: _queue);
+        if (admitted != null) {
+          await _refreshQueue();
+          return;
+        }
+        _composer.text = body;
+      } on OpenChamberHttpException {
+        _composer.text = body;
+        _errorKey.value = 'chat.queuedMessage.admitFailed';
+        return;
+      }
+    }
+    final messageId = ascendingId('msg');
     _timeline.appendNewer(
       ChatMessage(id: messageId, body: body.isEmpty ? pending.map((item) => item.name).join(', ') : body, isUser: true),
     );
@@ -543,8 +585,47 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _archiveSession(BuildContext context) async {
-    final ok = await _mutateSession(() => widget.appController!.archiveSession(_session));
+    final messenger = ScaffoldMessenger.of(context);
+    final success = t(context, 'sessions.sidebar.session.archive.success');
+    final undo = t(context, 'sessions.sidebar.undo');
+    final session = _session;
+    final controller = widget.appController;
+    final ok = await _mutateSession(() => controller!.archiveSession(session));
     if (ok && context.mounted) Navigator.of(context).maybePop();
+    if (ok && controller != null) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(success),
+          action: SnackBarAction(
+            key: const Key('session-archive-undo'),
+            label: undo,
+            onPressed: () => unawaited(controller.unarchiveSession(session)),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _sendQueuedNow(MessageQueueItem item) async {
+    final controller = widget.appController;
+    final scope = _queue;
+    if (controller == null || scope == null) return;
+    final ok = await controller.sendQueuedItemNow(session: _session, item: item, scope: scope);
+    if (ok) await _refreshQueue();
+  }
+
+  Future<void> _removeQueued(MessageQueueItem item) async {
+    final controller = widget.appController;
+    final scope = _queue;
+    if (controller == null || scope == null) return;
+    final ok = await controller.removeQueuedItem(session: _session, item: item, scope: scope);
+    if (ok) await _refreshQueue();
+  }
+
+  Future<void> _editQueued(MessageQueueItem item) async {
+    _composer.text = item.content;
+    _composer.selection = TextSelection.collapsed(offset: _composer.text.length);
+    await _removeQueued(item);
   }
 
   Future<void> _deleteSession(BuildContext context) async {
@@ -630,6 +711,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ios: ios,
                       paddingBottom: padding.bottom,
                       showScrollToBottom: length >= 2,
+                      queuedChipHeight: (_queue?.items.isNotEmpty ?? false) ? queuedMessageChipsOccupancy : 0,
                     );
                     return EdgeInsets.fromLTRB(12, navH, 12, composerReserve + 12);
                   },
@@ -706,53 +788,69 @@ class _ChatScreenState extends State<ChatScreen> {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: ios
-                    ? SizedBox(
-                        height: collapsedComposerOccupancy + padding.bottom,
-                        child: ValueListenableBuilder<bool>(
-                          valueListenable: _busy,
-                          builder: (context, busy, _) {
-                            return IosComposerHost(
-                              visible: true,
-                              warm: false,
-                              text: _composer.text,
-                              canSend: _composer.text.trim().isNotEmpty || _attachments.isNotEmpty,
-                              canAbort: busy,
-                              attachments: _attachments.map((item) => item.name).toList(),
-                              onSend: _send,
-                              onStop: _stop,
-                              onAttach: _attach,
-                              onPickedFiles: (drafts) => unawaited(_acceptAttachments(drafts)),
-                              onText: (value) => _composer.text = value,
-                              commands: _commands,
-                              files: _files,
-                              skills: _skills,
-                              snippets: _snippets,
-                            );
-                          },
-                        ),
-                      )
-                    : ListenableBuilder(
-                        listenable: Listenable.merge([_busy, _atLiveEdge, _timeline]),
-                        builder: (context, _) {
-                          return ComposerBar(
-                            controller: _composer,
-                            busy: _busy.value,
-                            attachments: _attachments,
-                            showScrollToBottom: !_atLiveEdge.value || _timeline.length >= 2,
-                            onScrollToBottom: _jumpToLatest,
-                            onSend: _send,
-                            onStop: _stop,
-                            onAttach: _attach,
-                            onAttachFiles: _attachFiles,
-                            onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
-                            commands: _commands,
-                            files: _files,
-                            skills: _skills,
-                            snippets: _snippets,
-                          );
-                        },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_queue != null && _queue!.items.isNotEmpty)
+                      QueuedMessageChips(
+                        items: _queue!.items,
+                        onSendNow: (item) => unawaited(_sendQueuedNow(item)),
+                        onRemove: (item) => unawaited(_removeQueued(item)),
+                        onEdit: (item) => unawaited(_editQueued(item)),
                       ),
+                    ios
+                        ? SizedBox(
+                            height: collapsedComposerOccupancy + padding.bottom,
+                            child: ListenableBuilder(
+                              listenable: Listenable.merge([_busy, _composer]),
+                              builder: (context, _) {
+                                final busy = _busy.value;
+                                final queueFollowUp = widget.appController?.followUpBehavior == 'queue';
+                                final hasDraft = _composer.text.trim().isNotEmpty || _attachments.isNotEmpty;
+                                return IosComposerHost(
+                                  visible: true,
+                                  warm: false,
+                                  text: _composer.text,
+                                  canSend: hasDraft,
+                                  canAbort: busy && !(queueFollowUp && hasDraft),
+                                  attachments: _attachments.map((item) => item.name).toList(),
+                                  onSend: _send,
+                                  onStop: _stop,
+                                  onAttach: _attach,
+                                  onPickedFiles: (drafts) => unawaited(_acceptAttachments(drafts)),
+                                  onText: (value) => _composer.text = value,
+                                  commands: _commands,
+                                  files: _files,
+                                  skills: _skills,
+                                  snippets: _snippets,
+                                );
+                              },
+                            ),
+                          )
+                        : ListenableBuilder(
+                            listenable: Listenable.merge([_busy, _atLiveEdge, _timeline]),
+                            builder: (context, _) {
+                              return ComposerBar(
+                                controller: _composer,
+                                busy: _busy.value,
+                                queueFollowUp: widget.appController?.followUpBehavior == 'queue',
+                                attachments: _attachments,
+                                showScrollToBottom: !_atLiveEdge.value || _timeline.length >= 2,
+                                onScrollToBottom: _jumpToLatest,
+                                onSend: _send,
+                                onStop: _stop,
+                                onAttach: _attach,
+                                onAttachFiles: _attachFiles,
+                                onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
+                                commands: _commands,
+                                files: _files,
+                                skills: _skills,
+                                snippets: _snippets,
+                              );
+                            },
+                          ),
+                  ],
+                ),
               ),
             ],
           );

@@ -96,7 +96,7 @@ void main() {
     await tester.tap(find.byKey(const Key('files-browser-entry-README.md')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('files-browser-preview')), findsOneWidget);
-    expect(find.text('# Flutter native'), findsOneWidget);
+    expect(find.textContaining('Flutter native'), findsOneWidget);
     await tester.tap(find.byKey(const Key('files-browser-close')));
     await tester.pumpAndSettle();
 

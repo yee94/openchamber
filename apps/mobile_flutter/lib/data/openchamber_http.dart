@@ -46,7 +46,16 @@ abstract final class OpenChamberPaths {
   static const githubAuthStatus = '/api/github/auth/status';
   static const githubIssuesList = '/api/github/issues/list';
   static const githubPullsList = '/api/github/pulls/list';
+  static const messageQueue = '/api/openchamber/message-queue';
+  static const messageQueueStatus = '/api/openchamber/message-queue/status';
+  static const messageQueueItems = '/api/openchamber/message-queue/items';
   static const messageQueueWorktreeOrder = '/api/openchamber/message-queue/worktrees/order';
+  static String messageQueueScope(String scopeId) =>
+      '$messageQueue/scopes/${Uri.encodeComponent(scopeId)}';
+  static String messageQueueItem(String queueItemId) =>
+      '$messageQueueItems/${Uri.encodeComponent(queueItemId)}';
+  static String messageQueueItemSend(String queueItemId) =>
+      '${messageQueueItem(queueItemId)}/send';
   static const globalEvent = '/api/global/event';
   static const globalEventWs = '/api/global/event/ws';
   static const pushApnsToken = '/api/push/apns-token';
