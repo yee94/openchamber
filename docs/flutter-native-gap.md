@@ -935,6 +935,40 @@ Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hoste
 
 Validated on Flutter **3.32.8 / Dart 3.8.1**: `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **295 passed**, including `flutter_share_about_test.dart` and `share_delivery_test.dart`. Screenshot PNGs were **not** recaptured (`07-chat*.png` rewritten by the screenshot test and reverted). Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native`.
 
+## Thirty-first-slice status (2026-09-05) — live client-diagnostics feat recorder
+
+Stacked on `4748141f2` (`work/flutter-native` after the thirtieth share/about slice). Do **not** merge `main`. No 1.18 TanStack. No Flutter UI golden recapture. OpenChamber v2 `.debug` applicationId unchanged. Do **not** invent Flexoki, Finder, Capgo, plan/notes/Todo, Chat dock, `iosNativeUi`, Bonjour, Pierre, mermaid SVG, or Android launcher badge.
+
+Read on this checkout: Cap `transcript-diagnostics.ts` / `transcript-diagnostics-runtime.ts` (`openchamber.client-diagnostics.v1`, 500-event ring, preference `openchamber.client-diagnostics.enabled`, prerelease default on). Flutter has no IndexedDB — memory ring is the official fallback. Skip Capgo About beta-update rows. Skip invented transcript-diff / perf-window / task-click until those Flutter surfaces exist.
+
+### Landed this slice (code)
+
+| Surface | Official Cap mobile | Flutter | Notes |
+|---|---|---|---|
+| Feat recorder | IndexedDB or memory ring, 500 events | Memory ring, same schema / limit | No message bodies or tokens. User text stays out of load/refresh events (Cap puts it only on `transcript-diff` snapshots). |
+| Preference | `openchamber.client-diagnostics.enabled` | Same key via SecureStore | Prerelease default on; user override persists. |
+| About toggle | `SettingsToggleRow` + export only while on | Same official enable / enableHint / export keys | Export still uses `saveFile`. |
+| Chat record sites | `ensure-initial` / SSE skip-unchanged / `request-error` | `_load`, structure-changing live reload, poll, load failure | `message.part.delta` analogue: same-id token updates do not record. |
+
+### Still code / will-not-port
+
+| Gap | Why leftover |
+|---|---|
+| IndexedDB persistence / transcript-diff / task / perf feats | Cap WebView IndexedDB + TanStack/query-adapter diffs. Flutter records the load/SSE/error facts it actually has. |
+| Appearance Flexoki picker | **Do not invent.** Official **mobile** Appearance is language + Light/Dark/System. |
+| Finder | **Do not invent.** Cap `handleOpenInFinder` is desktop-only. |
+| Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` / Bonjour / Pierre / mermaid SVG / Android launcher badge | Will not port. |
+
+### 真机-only
+
+Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hosted OAuth; ActivityKit / Dynamic Island / widget tap; Impeller 16ms; FCM on `.debug` if Firebase init fails; share-extension → inbox POST; system save-file picker on device. Code/plist may exist — do not fake 真机过.
+
+### EXHAUSTED
+
+**false.** Load/SSE/error feats and the About enable switch are landed. Residual CODE is richer Cap feats (transcript-diff / task / perf) plus 真机-only surfaces.
+
+Validated on Flutter **3.32.8 / Dart 3.8.1**: focused recorder tests + `flutter analyze --no-fatal-infos` + `flutter test`. Screenshot PNGs were **not** recaptured. Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native`.
+
 
 
 ## Twenty-fourth-slice status (2026-09-05) — Cap phone overflow + composer no-ops

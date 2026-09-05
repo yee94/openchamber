@@ -16,7 +16,10 @@ import 'package:openchamber/native/share_inbox.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  setUp(SecondaryChrome.debugReset);
+  setUp(() {
+    SecondaryChrome.debugReset();
+    debugResetClientDiagnosticsRecorder();
+  });
 
   test('Android share handoff geometry rejects oversized or non-image attachments', () {
     expect(usesAndroidShareComposerHandoff(platform: TargetPlatform.android), isTrue);
@@ -81,7 +84,8 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('settings-slug-about')));
     await tester.tap(find.byKey(const Key('settings-slug-about')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('about-diagnostics-export')), findsOneWidget);
+    await tester.scrollUntilVisible(find.byKey(const Key('about-diagnostics-export')), 120);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('about-diagnostics-export')));
     await tester.pumpAndSettle();
     expect(saved, isNotNull);

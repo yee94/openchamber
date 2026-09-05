@@ -406,21 +406,29 @@ class _AboutSettingsPageState extends State<AboutSettingsPage> {
           SettingsGroup(
             label: t(context, 'settings.openchamber.about.diagnostics.label'),
             children: [
-              ListTile(
-                title: Text(t(context, 'settings.openchamber.about.diagnostics.description')),
+              SettingsToggleRow(
+                key: const Key('about-diagnostics-enable'),
+                label: t(context, 'settings.openchamber.about.diagnostics.enable'),
+                subtitle: t(context, 'settings.openchamber.about.diagnostics.enableHint'),
+                value: widget.controller.diagnosticsEnabled,
+                onChanged: (enabled) async {
+                  await widget.controller.setDiagnosticsEnabled(enabled);
+                  if (mounted) setState(() {});
+                },
               ),
-              ListTile(
-                key: const Key('about-diagnostics-export'),
-                title: Text(
-                  t(
-                    context,
-                    _exporting
-                        ? 'settings.openchamber.about.diagnostics.exporting'
-                        : 'settings.openchamber.about.diagnostics.export',
+              if (widget.controller.diagnosticsEnabled)
+                ListTile(
+                  key: const Key('about-diagnostics-export'),
+                  title: Text(
+                    t(
+                      context,
+                      _exporting
+                          ? 'settings.openchamber.about.diagnostics.exporting'
+                          : 'settings.openchamber.about.diagnostics.export',
+                    ),
                   ),
+                  onTap: _exporting ? null : _exportDiagnostics,
                 ),
-                onTap: _exporting ? null : _exportDiagnostics,
-              ),
             ],
           ),
         ],

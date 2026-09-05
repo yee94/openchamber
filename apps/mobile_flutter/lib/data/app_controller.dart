@@ -20,7 +20,9 @@ import 'oauth.dart';
 import 'assistant_scheduled.dart';
 import 'chat_timeline.dart';
 import 'connection_candidates.dart';
+import 'app_version.dart';
 import 'context_usage.dart';
+import 'diagnostics_export.dart';
 import 'composer_autocomplete.dart';
 import 'composer_session_pick.dart';
 import 'git_commit_generate.dart';
@@ -101,6 +103,8 @@ class AppController extends ChangeNotifier {
   final Duration relayRaceHeadstart;
   final Future<void> Function(Duration duration)? relayRaceWait;
   bool _candidateRefreshInFlight = false;
+
+  bool diagnosticsEnabled = resolveTranscriptDiagnosticsEnabled(version: AppVersion.display);
 
   AppPhase phase = AppPhase.splash;
   ConnectForm connectForm = ConnectForm.welcome;
@@ -187,6 +191,11 @@ class AppController extends ChangeNotifier {
   Future<void> bootstrap({bool skipDelay = false}) async {
     locale = _localeFromCode(await _store.read(localeStorageKey));
     themeMode = _themeFromCode(await _store.read(themeStorageKey));
+    diagnosticsEnabled = resolveTranscriptDiagnosticsEnabled(
+      version: AppVersion.display,
+      preference: parseTranscriptDiagnosticsPreference(await _store.read(transcriptDiagnosticsPreferenceKey)),
+    );
+    clientDiagnosticsRecorder.setEnabled(diagnosticsEnabled);
     final snapshot = await _repository.load();
     _instances = await _hydrateTokens(snapshot.instances);
     _activeId = snapshot.activeId;
@@ -491,6 +500,13 @@ class AppController extends ChangeNotifier {
   Future<void> setThemeMode(ThemeMode next) async {
     themeMode = next;
     await _store.write(themeStorageKey, next.name);
+    notifyListeners();
+  }
+
+  Future<void> setDiagnosticsEnabled(bool enabled) async {
+    diagnosticsEnabled = enabled;
+    clientDiagnosticsRecorder.setEnabled(enabled);
+    await _store.write(transcriptDiagnosticsPreferenceKey, enabled ? 'true' : 'false');
     notifyListeners();
   }
 

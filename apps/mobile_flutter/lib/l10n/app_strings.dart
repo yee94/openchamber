@@ -553,6 +553,9 @@ class AppStrings {
     'settings.openchamber.about.diagnostics.description': 'Export local diagnostic feats for display and sync issues. No message bodies or tokens are included.',
     'settings.openchamber.about.diagnostics.export': 'Export log',
     'settings.openchamber.about.diagnostics.exporting': 'Exporting…',
+    'settings.openchamber.about.diagnostics.enable': 'Record diagnostic feats',
+    'settings.openchamber.about.diagnostics.enableHint':
+        'Available in beta builds. Records transcript sync and display lifecycle facts on this device.',
     'settings.openchamber.about.diagnostics.toast.exported': 'Diagnostics log exported',
     'settings.openchamber.about.diagnostics.toast.failed': 'Could not export diagnostics log',
     'settings.openchamber.about.diagnostics.toast.empty': 'Diagnostics log exported. No events were recorded yet.',
@@ -1195,6 +1198,8 @@ class AppStrings {
     'settings.openchamber.about.diagnostics.description': '导出本机诊断 feat，用于分析展示与同步问题。不包含消息正文或令牌。',
     'settings.openchamber.about.diagnostics.export': '导出日志',
     'settings.openchamber.about.diagnostics.exporting': '正在导出…',
+    'settings.openchamber.about.diagnostics.enable': '记录诊断 feat',
+    'settings.openchamber.about.diagnostics.enableHint': '仅测试版可用。在本机记录会话同步与展示生命周期，不含正文。',
     'settings.openchamber.about.diagnostics.toast.exported': '已导出诊断日志',
     'settings.openchamber.about.diagnostics.toast.failed': '无法导出诊断日志',
     'settings.openchamber.about.diagnostics.toast.empty': '已导出诊断日志。尚未记录任何事件。',

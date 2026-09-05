@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
 import '../../data/chat_timeline.dart';
+import '../../data/diagnostics_export.dart';
 import '../../data/composer_session_pick.dart';
 import '../../data/context_usage.dart';
 import '../../data/home_session.dart';
@@ -161,11 +162,30 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) return;
       // Diff-apply. Do not setState the page — slots update the live row.
       // Do not jumpTo: scrolled-up readers must not be yanked to the live edge.
-      _timeline.applyMessages(messages);
+      final structureChanged = _timeline.applyMessages(messages);
+      if (structureChanged) {
+        recordChatTranscriptDiagnostics(
+          kind: 'sse-event',
+          sessionID: _session.id,
+          directory: _session.directory,
+          transport: controller.liveEventTransport,
+          source: 'sse',
+          messages: messages,
+        );
+      }
       _contextTick.value += 1;
       _syncBusyFromController();
       unawaited(_refreshQuestions());
-    } on OpenChamberHttpException {
+    } on OpenChamberHttpException catch (error) {
+      recordChatTranscriptDiagnostics(
+        kind: 'request-error',
+        sessionID: _session.id,
+        directory: _session.directory,
+        source: 'sse',
+        requestStatus: 'error',
+        purpose: 'load-failed',
+        error: error,
+      );
       // Keep the last transcript; failure is not empty success.
     }
   }
@@ -180,6 +200,15 @@ class _ChatScreenState extends State<ChatScreen> {
       final messages = await controller.loadTranscript(_session);
       if (!mounted) return;
       _timeline.applyMessages(messages);
+      recordChatTranscriptDiagnostics(
+        kind: 'ensure-initial',
+        sessionID: _session.id,
+        directory: _session.directory,
+        transport: controller.liveEventTransport,
+        source: 'network',
+        purpose: 'ensure-initial',
+        messages: messages,
+      );
       _contextTick.value += 1;
       _errorKey.value = null;
       WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToLatest());
@@ -192,8 +221,17 @@ class _ChatScreenState extends State<ChatScreen> {
       unawaited(_loadComposerCatalogs());
       unawaited(controller.remoteSettings.loadAgents());
       if (mounted) setState(() {});
-    } on OpenChamberHttpException {
+    } on OpenChamberHttpException catch (error) {
       if (!mounted) return;
+      recordChatTranscriptDiagnostics(
+        kind: 'request-error',
+        sessionID: _session.id,
+        directory: _session.directory,
+        source: 'network',
+        requestStatus: 'error',
+        purpose: 'load-failed',
+        error: error,
+      );
       _errorKey.value = 'chat.error.loadFailed';
     }
   }
@@ -427,7 +465,17 @@ class _ChatScreenState extends State<ChatScreen> {
       try {
         final messages = await controller.loadTranscript(_session);
         if (!mounted) return;
-        _timeline.applyMessages(messages);
+        final structureChanged = _timeline.applyMessages(messages);
+        if (structureChanged) {
+          recordChatTranscriptDiagnostics(
+            kind: 'refresh',
+            sessionID: _session.id,
+            directory: _session.directory,
+            source: 'network',
+            purpose: 'poll',
+            messages: messages,
+          );
+        }
         await controller.refreshSessionStatus(directory: _session.directory);
         _syncBusyFromController();
         if (!_busy.value || ticks >= 30) timer.cancel();

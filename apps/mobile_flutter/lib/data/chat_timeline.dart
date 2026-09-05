@@ -264,12 +264,15 @@ class ReverseChatController extends ChangeNotifier {
     _notifyStructure();
   }
 
-  void replaceAll(List<ChatMessage> messages) => applyMessages(messages);
+  void replaceAll(List<ChatMessage> messages) {
+    applyMessages(messages);
+  }
 
   /// Diff-apply a fetched transcript. Unchanged rows keep their [ValueNotifier]
   /// identity; only mutated ids notify their slot. Structure notifies only when
   /// ids or order change — not on every SSE token of the live tail.
-  void applyMessages(List<ChatMessage> messages) {
+  /// Returns whether ids or order changed (Cap skips unchanged SSE batches).
+  bool applyMessages(List<ChatMessage> messages) {
     var structureChanged = messages.length != _oldestFirst.length;
     if (!structureChanged) {
       for (var i = 0; i < messages.length; i += 1) {
@@ -302,6 +305,7 @@ class ReverseChatController extends ChangeNotifier {
       ..clear()
       ..addAll(next);
     if (structureChanged) _notifyStructure();
+    return structureChanged;
   }
 
   void _writeSlot(ChatMessage message) {
