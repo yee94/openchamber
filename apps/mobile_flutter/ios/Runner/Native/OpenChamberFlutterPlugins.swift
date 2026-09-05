@@ -202,8 +202,26 @@ final class OpenChamberLiveActivityPlugin: NSObject {
       eventVersion: args["eventVersion"] as? Int ?? 0,
       updatedAt: args["updatedAt"] as? Double ?? Date().timeIntervalSince1970,
       endedAt: args["endedAt"] as? Double,
-      dismissalSeconds: args["dismissalSeconds"] as? Double
+      dismissalSeconds: args["dismissalSeconds"] as? Double,
+      title: args["title"] as? String,
+      workingCount: args["workingCount"] as? Int,
+      items: Self.sessionItems(from: args["items"])
     )
+  }
+
+  private static func sessionItems(from raw: Any?) -> [OpenChamberLiveActivitySessionItem] {
+    guard let rows = raw as? [[String: Any]] else { return [] }
+    return rows.compactMap { row in
+      let sessionId = row["sessionId"] as? String ?? ""
+      guard !sessionId.isEmpty else { return nil }
+      return OpenChamberLiveActivitySessionItem(
+        sessionId: sessionId,
+        title: row["title"] as? String ?? "",
+        status: row["status"] as? String ?? "working",
+        startedAt: row["startedAt"] as? Double ?? 0,
+        endedAt: row["endedAt"] as? Double
+      )
+    }
   }
 }
 

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../data/oauth.dart';
 import '../data/pairing_payload.dart';
+import 'live_activity_controller.dart';
 import 'platform_channels.dart';
 
 class IncomingDeepLink {
@@ -35,6 +36,29 @@ IncomingDeepLink classifyDeepLink(String raw) {
     return IncomingDeepLink(raw: trimmed, kind: DeepLinkKind.oauth);
   }
   return IncomingDeepLink(raw: trimmed);
+}
+
+/// Live Activity row / widget tap → that session. `live` is the catalog
+/// activity id, not a real session.
+String? parseSessionDeepLinkId(String raw) {
+  final link = classifyDeepLink(raw);
+  if (link.kind != DeepLinkKind.session) return null;
+  final uri = Uri.tryParse(raw.trim());
+  if (uri == null) return null;
+  String? id;
+  if (uri.host.toLowerCase() == 'session') {
+    id = uri.pathSegments.isEmpty ? uri.queryParameters['id'] : uri.pathSegments.first;
+  } else {
+    final segments = [...uri.pathSegments];
+    final sessionAt = segments.indexWhere((part) => part.toLowerCase() == 'session');
+    if (sessionAt >= 0 && sessionAt + 1 < segments.length) {
+      id = segments[sessionAt + 1];
+    }
+  }
+  if (id == null || id.isEmpty) return null;
+  final decoded = Uri.decodeComponent(id);
+  if (decoded == liveActivityCatalogId) return null;
+  return decoded;
 }
 
 class DeepLinkListener {

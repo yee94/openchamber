@@ -35,6 +35,14 @@ enum OpenChamberLiveActivityError: LocalizedError {
     }
 }
 
+struct OpenChamberLiveActivitySessionItem {
+    let sessionId: String
+    let title: String
+    let status: String
+    let startedAt: Double
+    let endedAt: Double?
+}
+
 struct OpenChamberLiveActivityRequest {
     let sessionId: String
     let startedAt: Double?
@@ -43,6 +51,9 @@ struct OpenChamberLiveActivityRequest {
     let updatedAt: Double
     let endedAt: Double?
     let dismissalSeconds: Double?
+    let title: String?
+    let workingCount: Int?
+    let items: [OpenChamberLiveActivitySessionItem]
 
     static let allowedStatuses: Set<String> = [
         "working", "tool", "retry", "input", "permission", "stale", "complete", "error",
@@ -263,11 +274,23 @@ private extension OpenChamberLiveActivityManager {
     static func makeContent(
         _ request: OpenChamberLiveActivityRequest
     ) -> ActivityContent<OpenChamberActivityAttributes.ContentState> {
+        let items = request.items.map { item in
+            OpenChamberActivityAttributes.SessionItem(
+                sessionID: item.sessionId,
+                title: item.title,
+                status: item.status,
+                startedAt: item.startedAt,
+                endedAt: item.endedAt
+            )
+        }
         let state = OpenChamberActivityAttributes.ContentState(
             status: request.status,
             eventVersion: request.eventVersion,
             updatedAt: request.updatedAt,
-            endedAt: request.endedAt
+            endedAt: request.endedAt,
+            title: request.title,
+            workingCount: request.workingCount,
+            items: items.isEmpty ? nil : items
         )
         let staleDate = Date(timeIntervalSince1970: request.updatedAt + staleInterval)
         return ActivityContent(state: state, staleDate: staleDate)

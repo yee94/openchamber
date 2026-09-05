@@ -147,5 +147,8 @@ void main() {
     await controller.refreshSessionStatus(directory: '/workspace/openchamber');
     expect(controller.sessions.any((row) => row.id == 'sess-busy' && row.kind == HomeSessionKind.inProgress), isTrue);
     expect(controller.sessionStatusById['sess-busy'], 'busy');
+    expect(controller.liveActivity.catalog.map((item) => item.sessionId), contains('sess-busy'));
+    expect(controller.liveActivity.hasWorkStarted, isTrue);
+    expect(controller.sessionRowForId('sess-busy').id, 'sess-busy');
   });
 }

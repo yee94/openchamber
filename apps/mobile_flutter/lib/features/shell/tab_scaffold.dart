@@ -4,8 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
+import '../../navigation/platform_route.dart';
+import '../../native/deep_link.dart';
 import '../../theme/ios_chrome.dart';
 import '../assistant/assistant_tab_screen.dart';
+import '../chat/chat_screen.dart';
 import '../chat/composer_occupancy.dart';
 import '../chat/ios_composer_host.dart';
 import '../projects/projects_home_screen.dart';
@@ -37,13 +40,33 @@ class _MobileTabScaffoldState extends State<MobileTabScaffold> {
   void initState() {
     super.initState();
     SecondaryChrome.listenable.addListener(_onSecondaryChrome);
+    widget.controller.addListener(_onController);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openPendingSessionLink());
   }
 
   @override
   void dispose() {
+    widget.controller.removeListener(_onController);
     SecondaryChrome.listenable.removeListener(_onSecondaryChrome);
     _warmComposer.dispose();
     super.dispose();
+  }
+
+  void _onController() {
+    _openPendingSessionLink();
+  }
+
+  void _openPendingSessionLink() {
+    final link = widget.controller.takePendingSessionDeepLink();
+    if (link == null || !mounted) return;
+    final sessionId = parseSessionDeepLinkId(link.raw);
+    if (sessionId == null) return;
+    final row = widget.controller.sessionRowForId(sessionId);
+    Navigator.of(context).push(
+      platformPageRoute<void>(
+        builder: (_) => ChatScreen(session: row, appController: widget.controller),
+      ),
+    );
   }
 
   void _onSecondaryChrome() {

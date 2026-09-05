@@ -211,6 +211,25 @@ class AppController extends ChangeNotifier {
   IncomingDeepLink? pendingDeepLink;
   final LiveActivityController liveActivity = LiveActivityController();
 
+  IncomingDeepLink? takePendingSessionDeepLink() {
+    final link = pendingDeepLink;
+    if (link == null || link.kind != DeepLinkKind.session) return null;
+    pendingDeepLink = null;
+    return link;
+  }
+
+  HomeSessionRow sessionRowForId(String sessionId) {
+    for (final row in sessions) {
+      if (row.id == sessionId) return row;
+    }
+    return HomeSessionRow(
+      id: sessionId,
+      title: '',
+      projectLabel: '',
+      kind: HomeSessionKind.catalog,
+    );
+  }
+
   OAuthCallback? takeOAuthCallback() {
     final value = pendingOAuthCallback;
     pendingOAuthCallback = null;
@@ -611,6 +630,14 @@ class AppController extends ChangeNotifier {
     liveActivity.markWorkStarted();
     _armLiveActivity();
     await refreshSessionStatus(directory: directory);
+  }
+
+  Future<String> readWorkspaceFile(String path) async {
+    final base = activeBase;
+    if (base == null) {
+      throw const OpenChamberHttpException(0, OpenChamberPaths.fsRead, code: 'not_connected');
+    }
+    return _api.readFile(base: base, bearer: activeBearer ?? '', path: path);
   }
 
   Future<void> abortPrompt(HomeSessionRow session) async {
@@ -1337,17 +1364,26 @@ class AppController extends ChangeNotifier {
   }
 
   void _driveLiveActivityFromStatus() {
-    final selected = liveActivity.selectedSessionId;
-    if (selected == null) return;
-    final status = sessionStatusById[selected];
-    if (status == 'busy' || status == 'retry') {
-      final already = liveActivity.hasWorkStarted;
-      liveActivity.markWorkStarted();
-      if (!already) _armLiveActivity();
-    } else if (status == 'idle') {
+    final catalog = buildLiveActivityCatalog(
+      statusById: sessionStatusById,
+      sessions: sessions,
+      now: DateTime.now,
+    );
+    liveActivity.applyCatalog(catalog);
+    if (catalog.isEmpty) {
       _liveActivityTimer?.cancel();
       _liveActivityTimer = null;
-      unawaited(liveActivity.complete(error: false));
+      if (liveActivity.started) {
+        unawaited(liveActivity.complete(error: false));
+      }
+      return;
+    }
+    final already = liveActivity.hasWorkStarted;
+    liveActivity.markWorkStarted();
+    if (liveActivity.started) {
+      unawaited(liveActivity.update(catalog.first.status));
+    } else if (!already) {
+      _armLiveActivity();
     }
   }
 
