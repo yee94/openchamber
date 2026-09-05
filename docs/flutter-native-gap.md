@@ -891,3 +891,5 @@ Same device rows as earlier slices: live `wss://` relay + LAN hot-switch + iOS L
 ### EXHAUSTED
 
 **true.** Allowed Cap-mobile CODE that this track can close without inventing surfaces is landed. Leftovers are will-not-port (Flexoki / Finder / Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` / Bonjour / Pierre / mermaid SVG / Android launcher badge) plus 真机 residuals. Not 真机过.
+
+Validated on Flutter **3.32.8 / Dart 3.8.1**: `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **263 passed**, including `flutter_message_queue_test.dart` and `flutter_settings_editors_test.dart`. Screenshot PNGs were **not** recaptured. Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native` — this stacked branch does not start that Actions run. No APK publish.
