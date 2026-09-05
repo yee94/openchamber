@@ -940,7 +940,7 @@ size-5 / umbra / Noto-weight knobs to fake 精致 here. No
 recapture — pixels stay `7599aff50`. Press DONE.
 **精致: 还没有.** (needs a real iPhone or Mac Simulator)
 
-**2026-09-05 secondary nav back + menu:**
+**2026-09-05 secondary nav back + menu (`914c38a82` dart + recapture):**
 Yee: 正文页面的返回键还有设置那些呢. Official
 `MobileDetailNavigation` is `mobileGlass` + `arrow-left-s` size-5
 on a 40 chip, centered title, trailing context ring + `more-2`.
@@ -949,6 +949,8 @@ Flutter `PushedNavBar` now paints the same frost (`glassFill` 0.68
 `chat-more` opens a real session overflow sheet (rename / pin /
 sync / archive / delete — stub handlers). `chat-context` is the
 official 18px ring (35% visual stub). Do **not** unlock catalog
-search 14 / discs 34/28/24 / gap-0.5 **2** / 20+10+20. Recapture
-07-chat (+ dark) and 06-settings-appearance if the back chip
-changed. **Not 精致** until device glass is proven.
+search 14 / discs 34/28/24 / gap-0.5 **2** / 20+10+20.
+KEEP: 07 `73a50267` / 07-dark `5ca4bf18` / 06 `aee7c288` /
+06-dark `fa817da0` / 08 `35ff7fcb`. RESTORE noise: 02-scrolled /
+03 / 05-dark / 07-activity (MAE ≤ 0.0003). **Not 精致** until
+device glass is proven.
