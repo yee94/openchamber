@@ -109,7 +109,7 @@ Native contracts / shell
 | Release YAML four-profile signing | landed | `flutter-mobile-release.yml` pbxproj replacements + ExportOptions map all four bundle IDs / existing profile secrets |
 | iOS composer UIKit platform view | landed | `UIGlassEffect` on iOS 26; system blur on older iOS. Attachments, `/` `@` stub that pan-scrolls, IME, Send/Stop. Warm overlay on Projects; hide immediately on leave. Occupancy = collapsed 56pt only |
 | iOS 26 glass tab bar | landed | Chrome-only `UITabBarController`. Older iOS: system translucent `UITabBar`. Chat remains pushed. Widget tests / Android use the Flutter floating capsule (`tab-projects` … `tab-settings`), not Material `NavigationBar` |
-| Live Activity local MVP | landed (iOS 17+) | One Activity, 5s demo timer, `pushType: nil`, no rebuild after dismiss. Android channel is a no-op |
+| Live Activity local MVP | landed (iOS 17+) | One Activity for every busy/retry session. Each lock-screen / Dynamic Island row is a `Link` to `openchamber://session/{id}`. 5s timer, `pushType: nil`, no rebuild after dismiss. Android channel is a no-op. ActivityKit tap on a real iPhone is still residual |
 | SecureStore | landed | Production `PlatformSecureStore`: iOS Keychain + Android Keystore AES-GCM. Tests still inject `MemorySecureStore`. Never logs values |
 | QR + deep link | landed (thin redeem) | iOS VisionKit `DataScanner` (Apple on-device ML; not a Google ML Kit CocoaPod). Android Google Code Scanner then CameraX + ML Kit. Parses v2 `p=` and persists `relayUrl` / pairing secret. **Does not** call a made-up redeem HTTP API |
 | Android IME + share | landed | `Scaffold.resizeToAvoidBottomInset` (no manual keyboard pad). `ShareReceiverActivity` + Direct Share shortcuts. Exact instance+assistant only — no silent default |
@@ -126,7 +126,7 @@ Native contracts / shell
 | Android composer | landed | Scaffold IME | Material composer. Keyboard via `resizeToAvoidBottomInset`, not a second `viewInsets` pad |
 | iOS liquid-glass dock | landed | `OpenChamberTabBar` | iOS 26 `UIGlassEffect`; older: system translucent bar |
 | Android dock | landed (capsule) | Web `MobileTabBar` | Flutter floating capsule, same four roots. Not liquid glass |
-| Live Activity / Dynamic Island | landed | `OpenChamberLiveActivity` | Driven from `GET /api/session/status` busy/retry; start after 5s; `pushType` nil; no rebuild after dismiss |
+| Live Activity / Dynamic Island | landed | `OpenChamberLiveActivity` | Catalog of every busy/retry session (limit 4). Each row opens that session. Start after 5s; `pushType` nil; no rebuild after dismiss. Device ActivityKit / Dynamic Island tap not exercised on Linux |
 | Share-in | landed | Share extension + `ShareReceiverActivity` | Exact instance+assistant. Catalog published from saved instances |
 | Push | landed (host register) | APNs + FCM → `openchamber-push-relay` | Mobile `POST /api/push/apns-token` + `POST /api/push/visibility`. Host binds relay. iOS requests APNs token. Android copies Capacitor `google-services.json` (`com.yee94.openchamber` **and** `com.yee94.openchamber.debug` / `openchamber-8bf7e`) and reads the FCM token via the native Firebase SDK — still **null** if Firebase is unavailable (not invented). The Flutter **debug** APK uses the `.debug` package already listed in that file, so FCM can initialize without a second Firebase project. Presence skip is **host-side** (`isAnyInteractiveClientVisible`) |
 | WidgetKit + Control Center + NSE | landed | `OpenChamberWidget`, NSE | Snapshot JSON `{attentionCount, recentSessions}` written to App Group `widgetSnapshot` from the live index |
@@ -276,7 +276,7 @@ flutter build apk --release
 | Session index home | landed | `GET /api/openchamber/session-index`. Failure ≠ empty. Search + highlight (1.19.3-beta.1). Pinned/in-progress subtitle `项目 · 分支`. Works through the tunnel after a successful relay redeem (unit-tested on a memory wire; no live `wss://` from this VM) |
 | Chat transcript + Send/Stop | landed | `GET /api/openchamber/sessions/:id/messages?turns=6`. Send `POST /api/session/:id/prompt_async`. Stop `POST /api/session/:id/abort`. Live `GET /api/global/event` SSE; 2s/4s poll is reconnect fallback only |
 | New session | landed | Projects plus-menu `POST /api/session?directory=` using a directory from the loaded index. Honest error if no directory — not a snackbar-only stub |
-| Live Activity from busy | landed | Status map `busy`/`retry` arms a single 5s timer (polls do not reset it). `pushType` nil. No rebuild after dismiss |
+| Live Activity from busy | landed | Status map `busy`/`retry` builds a multi-session catalog (not just the selected chat). Arms a 5s timer (polls do not reset it). Each row URI is `openchamber://session/{id}`. `pushType` nil. No rebuild after dismiss |
 | Push register | landed | iOS APNs + Android FCM → host `POST /api/push/apns-token` (`platform: ios\|android`). Re-binds when `relayUrl` / instance id changes. Visibility: Flutter `AppLifecycleState` + 20s heartbeat → `POST /api/push/visibility`. Presence skip remains **host-side** |
 | Haptics + native back | landed | See parity table |
 | Widget snapshots | landed (sparse) | Written after each successful index load |
@@ -610,3 +610,13 @@ Close automated gaps that do not need Yee's phone. Visual goldens / pixel chrome
 | HEIC attach plumbing | landed (memory) | `prepareComposerAttachments` owns HEIC→JPEG + 25 MiB cap. Composer still publishes virtual assets. `sendPrompt` keeps official PUT headers + `file://` parts. |
 | OAuth callback URLs | landed (unit) | Query `code`/`state`/`error`; http(s)-only external browser. Live system-browser OAuth remains ❌ 真机过. |
 | Debug APK prerelease | published | `flutter-v2-debug-915c22d` from CI run 33862397899 / `915c22dc5`. |
+
+## Seventeenth-slice status (main 1.19.5-beta.14 parity, no 真机过)
+
+Port of official `15cf6643e` Live Activity row→session + HTML preview fullscreen/source, plus the later sheet/frost UX. Pixel goldens / strokes were **not** retouched.
+
+| Surface | Status | Notes |
+|---|---|---|
+| Live Activity rows → session | landed (Dart + Swift wiring) | Catalog of every busy/retry session. Each row URI is `openchamber://session/{id}`. Shell opens that chat. ActivityKit / Dynamic Island tap on a real iPhone is still residual |
+| HTML preview | landed (Flutter sheet) | Fullscreen + view source. `GET /api/fs/read`. Sheet flush to the physical bottom. Pull/release at scroll-top stays stable. Scripted WKWebView/Android WebView execution is device residual — WidgetTester shows fetched HTML text |
+| Composer `/` `@` `#` frost | landed | Android / WidgetTester: translucent `OcFrosted` plate. iOS: `UIBlurEffect.systemUltraThinMaterial` (Android may degrade frost) |

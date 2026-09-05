@@ -89,18 +89,27 @@ class ComposerBar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (suggestions.isNotEmpty)
-            SizedBox(
-              height: 120,
-              child: ListView(
-                key: const Key('composer-autocomplete'),
-                children: [
-                  for (final item in suggestions)
-                    ListTile(
-                      dense: true,
-                      title: Text(item.label),
-                      onTap: () => controller.text = item.label,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: OcFrosted(
+                  fill: context.oc.glassFill.withValues(alpha: 0.55),
+                  child: SizedBox(
+                    height: 120,
+                    child: ListView(
+                      key: const Key('composer-autocomplete'),
+                      children: [
+                        for (final item in suggestions)
+                          ListTile(
+                            dense: true,
+                            title: Text(item.label),
+                            onTap: () => controller.text = item.label,
+                          ),
+                      ],
                     ),
-                ],
+                  ),
+                ),
               ),
             ),
           if (attachments.isNotEmpty)

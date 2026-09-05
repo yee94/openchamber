@@ -10,11 +10,14 @@ import '../../data/message_id.dart';
 import '../../data/openchamber_http.dart';
 import '../../data/prompt_attachment.dart';
 import '../../l10n/app_strings.dart';
+import '../../data/file_preview.dart';
 import '../../native/haptics.dart';
 import '../../native/live_activity_controller.dart';
 import '../../native/media_channel.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
+import '../files/file_preview_scope.dart';
+import '../files/html_preview_sheet.dart';
 import '../shell/secondary_chrome.dart';
 import 'chat_transcript_row.dart';
 import 'composer_bar.dart';
@@ -303,6 +306,18 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _stubSessionAction() {}
 
+  void _openFilePath(String path) {
+    if (!isHtmlFile(path)) return;
+    final controller = widget.appController;
+    unawaited(showHtmlPreviewSheet(
+      context: context,
+      path: path,
+      loadContent: controller == null
+          ? (target) async => ''
+          : controller.readWorkspaceFile,
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
@@ -316,26 +331,29 @@ class _ChatScreenState extends State<ChatScreen> {
           final padding = MediaQuery.paddingOf(context);
           return Stack(
             children: [
-              ReverseChatList(
-                controller: _timeline,
-                scrollController: _scroll,
-                paddingBuilder: (length) {
-                  final composerReserve = composerListReserve(
-                    ios: ios,
-                    paddingBottom: padding.bottom,
-                    showScrollToBottom: length >= 2,
-                  );
-                  return EdgeInsets.fromLTRB(12, navH, 12, composerReserve + 12);
-                },
-                itemBuilder: (context, message, reverseIndex) {
-                  return ChatTranscriptRow(
-                    controller: _timeline,
-                    messageId: message.id,
-                    reverseIndex: reverseIndex,
-                    busy: _busy,
-                    onPermission: widget.appController == null ? null : _replyPermission,
-                  );
-                },
+              FilePreviewScope(
+                onOpenPath: _openFilePath,
+                child: ReverseChatList(
+                  controller: _timeline,
+                  scrollController: _scroll,
+                  paddingBuilder: (length) {
+                    final composerReserve = composerListReserve(
+                      ios: ios,
+                      paddingBottom: padding.bottom,
+                      showScrollToBottom: length >= 2,
+                    );
+                    return EdgeInsets.fromLTRB(12, navH, 12, composerReserve + 12);
+                  },
+                  itemBuilder: (context, message, reverseIndex) {
+                    return ChatTranscriptRow(
+                      controller: _timeline,
+                      messageId: message.id,
+                      reverseIndex: reverseIndex,
+                      busy: _busy,
+                      onPermission: widget.appController == null ? null : _replyPermission,
+                    );
+                  },
+                ),
               ),
               ValueListenableBuilder<String?>(
                 valueListenable: _errorKey,

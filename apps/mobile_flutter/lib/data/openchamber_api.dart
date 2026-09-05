@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'chat_parts.dart';
 import 'chat_timeline.dart';
 import 'home_session.dart';
@@ -860,6 +862,32 @@ class OpenChamberApi {
     );
   }
 
+  Future<String> readFile({
+    required Uri base,
+    required String bearer,
+    required String path,
+  }) async {
+    final response = await transport.send(
+      base,
+      OpenChamberRequest(
+        method: 'GET',
+        path: OpenChamberPaths.fsRead,
+        bearer: bearer,
+        query: {'path': path},
+      ),
+    );
+    if (!response.ok) {
+      throw OpenChamberHttpException(response.status, OpenChamberPaths.fsRead);
+    }
+    final body = response.body;
+    if (body is String) return body;
+    if (body is List<int>) return utf8.decode(body);
+    if (body is Map) {
+      return body['content']?.toString() ?? body['text']?.toString() ?? '';
+    }
+    return body?.toString() ?? '';
+  }
+
   Future<Object?> installSkillFromSource({
     required Uri base,
     String? bearer,
@@ -976,6 +1004,11 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   int catalogStatus = 200;
   int mutationStatus = 200;
   int uploadStatus = 200;
+  int fileStatus = 200;
+  Map<String, String> fileContents = {
+    '/workspace/openchamber/docs/index.html':
+        '<!doctype html><html><body><h1>Preview</h1></body></html>',
+  };
 
   Map<String, Object?> settings = Map<String, Object?>.from(defaultTestSettings);
   Object? providerCatalog = defaultTestProviderCatalog;
@@ -1568,6 +1601,16 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         }
         if (request.path.endsWith('/abort')) {
           return OpenChamberResponse(status: abortStatus, body: true);
+        }
+        if (request.path == OpenChamberPaths.fsRead || request.path.startsWith('/api/fs/serve')) {
+          final path = request.path == OpenChamberPaths.fsRead
+              ? (request.query['path'] ?? '')
+              : Uri.decodeComponent(request.path.substring('/api/fs/serve'.length));
+          final content = fileContents[path];
+          if (content == null) {
+            return OpenChamberResponse(status: 404, body: 'not found');
+          }
+          return OpenChamberResponse(status: fileStatus, body: content);
         }
         if (request.path.startsWith('/api/fs/prompt-attachments/')) {
           final mime = request.extraHeaders['X-OpenChamber-Mime'] ?? 'application/octet-stream';

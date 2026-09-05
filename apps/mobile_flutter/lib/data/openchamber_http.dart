@@ -54,6 +54,12 @@ abstract final class OpenChamberPaths {
       '/api/quota/${Uri.encodeComponent(providerId)}';
   static String promptAttachment(String attachmentId) =>
       '/api/fs/prompt-attachments/${Uri.encodeComponent(attachmentId)}';
+  static const fsRead = '/api/fs/read';
+  static String fsServe(String path) {
+    final normalized = path.replaceAll('\\', '/');
+    final encoded = normalized.startsWith('/') ? normalized : '/$normalized';
+    return '/api/fs/serve$encoded';
+  }
   static String providerAuth(String providerId) =>
       '/api/auth/${Uri.encodeComponent(providerId)}';
   static String providerAuthDelete(String providerId) =>

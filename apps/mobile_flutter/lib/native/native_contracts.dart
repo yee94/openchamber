@@ -37,7 +37,7 @@ const List<NativeContract> flutterNativeContracts = [
   NativeContract(
     id: 'ios-composer',
     status: 'landed',
-    summary: 'Always-on UIKit liquid-glass composer (pill/card, IME, / @ autocomplete stub, attach, Send/Stop, warm-on-home). No mic.',
+    summary: 'Always-on UIKit liquid-glass composer (pill/card, IME, / @ # frosted autocomplete stub, attach, Send/Stop, warm-on-home). No mic.',
   ),
   NativeContract(
     id: 'android-composer',
@@ -52,7 +52,7 @@ const List<NativeContract> flutterNativeContracts = [
   NativeContract(
     id: 'live-activity',
     status: 'landed',
-    summary: 'iOS 17+ local Activity, 5s busy, no pushType, no rebuild after user dismiss. Android channel is a no-op.',
+    summary: 'iOS 17+ one Activity for every working session. Each lock-screen / Dynamic Island row is a Link to that session. 5s busy, no pushType, no rebuild after user dismiss. Android channel is a no-op. Device ActivityKit tap is residual on Linux CI.',
   ),
   NativeContract(
     id: 'share-in',

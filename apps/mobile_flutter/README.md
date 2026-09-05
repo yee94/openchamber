@@ -3,7 +3,7 @@
 Independent **native-first** Flutter rewrite of OpenChamber mobile.
 
 - Track: `work/flutter-native` (do **not** merge to `main`)
-- Product baseline: `main` @ `3a164b6` / `1.19.3-beta.5`
+- Product baseline: `main` @ `70ad324` / `1.19.5-beta.14` (Flutter still does **not** claim 真机过)
 - Capacitor shell (`packages/mobile`) stays on this branch; this app sits beside it
 - Chat list analogue: reverse `ListView` (LegendList behavior). No TanStack Virtual / StickToBottom / Virtua
 - Native is the product: no Appearance `openchamber.iosNativeUi` toggle, no WebView fallback

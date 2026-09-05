@@ -254,7 +254,16 @@ final class OpenChamberComposerAutocomplete: UIView {
     ])
     layer.cornerRadius = 16
     clipsToBounds = true
-    backgroundColor = .secondarySystemBackground
+    backgroundColor = .clear
+    let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
+    blur.translatesAutoresizingMaskIntoConstraints = false
+    insertSubview(blur, at: 0)
+    NSLayoutConstraint.activate([
+      blur.topAnchor.constraint(equalTo: topAnchor),
+      blur.bottomAnchor.constraint(equalTo: bottomAnchor),
+      blur.leadingAnchor.constraint(equalTo: leadingAnchor),
+      blur.trailingAnchor.constraint(equalTo: trailingAnchor),
+    ])
   }
 
   @available(*, unavailable)

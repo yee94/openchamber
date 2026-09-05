@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../../data/chat_markdown_cache.dart';
+import '../../data/file_preview.dart';
 import '../../native/external_browser.dart';
 import '../../theme/ios_chrome.dart';
+import '../files/file_preview_scope.dart';
 
 /// Official mobile chat Markdown (`--text-markdown` / 15 / 1.625).
 ///
@@ -90,7 +92,7 @@ class _ChatMarkdownBodyState extends State<ChatMarkdownBody> {
     _builtIdentity = identity;
     _builtBody = MarkdownBody(
       key: Key('chat-markdown-${widget.cacheKey ?? 'anon'}'),
-      data: source,
+      data: linkHtmlFileReferences(source),
       shrinkWrap: true,
       fitContent: true,
       softLineBreak: true,
@@ -98,7 +100,16 @@ class _ChatMarkdownBodyState extends State<ChatMarkdownBody> {
       styleSheet: _sheetFor(context),
       onTapLink: (text, href, title) {
         final url = href?.trim() ?? '';
+        final path = isHtmlFile(url) ? url : (isHtmlFile(text) ? text : '');
+        if (path.isNotEmpty) {
+          final open = FilePreviewScope.maybeOf(context)?.onOpenPath;
+          if (open != null) {
+            open(path);
+            return;
+          }
+        }
         if (url.isEmpty) return;
+        if (!url.startsWith('http://') && !url.startsWith('https://')) return;
         final opener = widget.browser ?? ExternalBrowser();
         unawaited(opener.open(url).catchError((Object _) {}));
       },

@@ -3,12 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openchamber/features/chat/composer_bar.dart';
 import 'package:openchamber/features/chat/composer_occupancy.dart';
 import 'package:openchamber/l10n/app_strings.dart';
-import 'package:openchamber/theme/ios_hero.dart';
+import 'package:openchamber/theme/ios_chrome.dart';
 
 void main() {
   test('autocomplete stub pan-scrolls commands and files', () {
     expect(autocompleteStubFor('/st').map((item) => item.label), contains('/status'));
     expect(autocompleteStubFor('@RE').map((item) => item.label), contains('@README.md'));
+    expect(autocompleteStubFor('#t').map((item) => item.label), contains('#todo'));
     expect(autocompleteStubFor('hello'), isEmpty);
   });
 
@@ -34,6 +35,33 @@ void main() {
     expect(find.byKey(const Key('composer-attach')), findsOneWidget);
     expect(find.byKey(const Key('composer-dictate')), findsNothing);
     expect(collapsedComposerOccupancy, 56);
+  });
+
+  testWidgets('slash @ # completion sits on a translucent frosted plate', (tester) async {
+    final controller = TextEditingController(text: '/st');
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      StringsScope(
+        strings: AppStrings.of(AppStrings.en),
+        child: MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.bottomCenter,
+              child: ComposerBar(controller: controller, onSend: () {}),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.byKey(const Key('composer-autocomplete')), findsOneWidget);
+    expect(
+      find.descendant(of: find.byKey(const Key('composer-autocomplete')), matching: find.byType(OcFrosted)),
+      findsNothing,
+    );
+    expect(find.byType(OcFrosted), findsOneWidget);
+    controller.text = '#bug';
+    await tester.pump();
+    expect(find.text('#bug'), findsWidgets);
   });
 
   test('list reserve uses consumed padding, not keyboard height', () {

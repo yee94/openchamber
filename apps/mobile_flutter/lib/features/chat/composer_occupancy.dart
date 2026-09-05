@@ -47,5 +47,11 @@ List<ComposerAutocompleteItem> autocompleteStubFor(String text) {
       ComposerAutocompleteItem(id: 'file-gap', label: '@docs/flutter-native-gap.md', kind: 'file'),
     ];
   }
+  if (trimmed.startsWith('#')) {
+    return const [
+      ComposerAutocompleteItem(id: 'mention-todo', label: '#todo', kind: 'mention'),
+      ComposerAutocompleteItem(id: 'mention-bug', label: '#bug', kind: 'mention'),
+    ];
+  }
   return const [];
 }

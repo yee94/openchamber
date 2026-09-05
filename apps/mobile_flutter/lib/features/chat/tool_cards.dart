@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/chat_timeline.dart';
 import '../../data/context_tool_grouping.dart';
+import '../../data/file_preview.dart';
 import '../../data/generated_result.dart';
 import '../../data/skill_tool_grouping.dart';
 import '../../l10n/app_strings.dart';
@@ -9,6 +10,7 @@ import '../../motion/pressable.dart';
 import '../../native/haptics.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
+import '../files/file_preview_scope.dart';
 import 'chat_markdown_body.dart';
 import 'reasoning_block.dart';
 
@@ -1322,11 +1324,19 @@ class ToolPartCard extends StatelessWidget {
             child: part.body == null ? null : Text(part.body!, maxLines: 2, overflow: TextOverflow.ellipsis),
           );
         }
-        return _CardShell(
+        final path = part.path ?? '';
+        final card = _CardShell(
           key: Key('chat-tool-file-${part.id}'),
           title: part.title,
           subtitle: part.path ?? part.status,
           child: part.body == null ? null : Text(part.body!, maxLines: 4, overflow: TextOverflow.ellipsis),
+        );
+        if (!isHtmlFile(path)) return card;
+        return Pressable(
+          key: Key('chat-tool-html-${part.id}'),
+          haptic: HapticStrength.light,
+          onPressed: () => FilePreviewScope.maybeOf(context)?.onOpenPath(path),
+          child: card,
         );
       case ChatPartKind.task:
         return _CardShell(
