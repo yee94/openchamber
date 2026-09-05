@@ -148,7 +148,9 @@ class _ProjectEditSheetState extends State<ProjectEditSheet> {
       key: const Key('project-edit-sheet'),
       color: tokens.pageBackground,
       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      child: Padding(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.92),
+        child: Padding(
         padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.viewPaddingOf(context).bottom),
         child: SingleChildScrollView(
           child: Column(
@@ -283,6 +285,7 @@ class _ProjectEditSheetState extends State<ProjectEditSheet> {
                   ),
             ],
           ),
+        ),
         ),
       ),
     );

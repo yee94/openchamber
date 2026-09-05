@@ -44,6 +44,21 @@ void main() {
     expect(deriveProjectLabel('/workspace/notes'), 'notes');
   });
 
+  test('discoverProjectIcon POSTs official /icon/discover', () async {
+    final transport = MemoryOpenChamberTransport();
+    final controller = AppController(store: MemorySecureStore(), api: OpenChamberApi(transport: transport));
+    await controller.bootstrap(skipDelay: true);
+    await controller.connect(url: 'http://192.168.1.74:2606');
+    final ok = await controller.discoverProjectIcon('proj-1');
+    expect(ok, isTrue);
+    expect(
+      transport.calls.any(
+        (call) => call.method == 'POST' && call.path == OpenChamberPaths.projectIconDiscover('proj-1'),
+      ),
+      isTrue,
+    );
+  });
+
   test('addProject PUTs settings projects and does not snackbar-only', () async {
     final transport = MemoryOpenChamberTransport();
     final controller = AppController(store: MemorySecureStore(), api: OpenChamberApi(transport: transport));
@@ -113,6 +128,21 @@ void main() {
     expect(env.controller.sessionById('sess-catalog')?.shareUrl, 'https://share.example/sess-catalog');
   });
 
+  testWidgets('shared session overflow shows copy and unshare instead of share', (tester) async {
+    await pumpHome(tester);
+    await tester.tap(find.byKey(const Key('home-session-actions-sess-catalog')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('session-overflow-share')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('home-session-actions-sess-catalog')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const Key('session-overflow-share')), findsNothing);
+    expect(find.byKey(const Key('session-overflow-copyLink')), findsOneWidget);
+    expect(find.byKey(const Key('session-overflow-unshare')), findsOneWidget);
+  });
+
   testWidgets('new-project sheet hides dotfiles until shown and clones through /api/fs/clone', (tester) async {
     final env = await pumpHome(tester);
     await tester.tap(find.byKey(const Key('projects-plus-menu')));
@@ -126,6 +156,7 @@ void main() {
     expect(find.byKey(const Key('new-project-entry-.hidden')), findsOneWidget);
     await tester.tap(find.byKey(const Key('new-project-clone-toggle')));
     await tester.pumpAndSettle();
+    expect(find.byKey(const Key('new-project-git-identity')), findsOneWidget);
     await tester.enterText(find.byKey(const Key('new-project-clone-url')), 'git@example.com:org/notes.git');
     await tester.tap(find.byKey(const Key('new-project-add')));
     await tester.pumpAndSettle();
@@ -134,7 +165,8 @@ void main() {
         (call) =>
             call.method == 'POST' &&
             call.path == OpenChamberPaths.fsClone &&
-            call.body?['remoteUrl'] == 'git@example.com:org/notes.git',
+            call.body?['remoteUrl'] == 'git@example.com:org/notes.git' &&
+            call.body?['gitIdentityId'] == 'git-1',
       ),
       isTrue,
     );
@@ -170,8 +202,8 @@ void main() {
     await tester.enterText(find.byKey(const Key('project-edit-field')), 'OpenChamber');
     await tester.tap(find.byKey(const Key('project-edit-color-primary')));
     await tester.tap(find.byKey(const Key('project-edit-icon-code')));
-    await tester.tap(find.byKey(const Key('project-edit-discover')));
-    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('project-edit-discover')), findsOneWidget);
+    expect(await env.controller.discoverProjectIcon('proj-1'), isTrue);
     await tester.tap(find.byKey(const Key('project-edit-save')));
     await tester.pumpAndSettle();
     expect(

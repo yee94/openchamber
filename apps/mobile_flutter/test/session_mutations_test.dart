@@ -97,6 +97,21 @@ void main() {
     expect(env.controller.sessionById('sess-catalog'), isNull);
   });
 
+  test('hydrateSessionShare GETs /api/session/:id when the index omitted share.url', () async {
+    final env = await connected();
+    env.transport.sessionShareUrls['sess-catalog'] = 'https://share.example/sess-catalog';
+    final session = env.controller.sessionById('sess-catalog')!;
+    expect(session.isShared, isFalse);
+    final hydrated = await env.controller.hydrateSessionShare(session);
+    expect(hydrated.shareUrl, 'https://share.example/sess-catalog');
+    expect(
+      env.transport.calls.any(
+        (call) => call.method == 'GET' && call.path == OpenChamberPaths.session('sess-catalog'),
+      ),
+      isTrue,
+    );
+  });
+
   test('share POSTs /api/session/:id/share and stores the official url', () async {
     final env = await connected();
     final session = env.controller.sessionById('sess-catalog')!;

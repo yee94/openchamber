@@ -51,8 +51,11 @@ class _NewProjectSheetState extends State<NewProjectSheet> {
   @override
   void initState() {
     super.initState();
-    _loadHome();
-    unawaited(_loadIdentities());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_loadHome());
+      unawaited(_loadIdentities());
+    });
   }
 
   @override
