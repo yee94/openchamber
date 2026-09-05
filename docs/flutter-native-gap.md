@@ -865,6 +865,8 @@ Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hoste
 
 **false.** Files/Changes extras are landed. Remaining Cap-mobile CODE is draft New Session, composer swipe, assigned-share composer handoff, assistant empty-create, and About diagnostics export.
 
+Validated on Flutter **3.32.8 / Dart 3.8.1**: focused `flutter_files_changes_extras_test.dart` (10 cases) + `flutter_cap_overflow_test.dart` + `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **283 passed**. Screenshot PNGs were **not** recaptured. Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native`.
+
 
 ## Twenty-fourth-slice status (2026-09-05) — Cap phone overflow + composer no-ops
 
