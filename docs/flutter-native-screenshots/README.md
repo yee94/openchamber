@@ -954,3 +954,20 @@ KEEP: 07 `73a50267` / 07-dark `5ca4bf18` / 06 `aee7c288` /
 06-dark `fa817da0` / 08 `35ff7fcb`. RESTORE noise: 02-scrolled /
 03 / 05-dark / 07-activity (MAE ≤ 0.0003). **Not 精致** until
 device glass is proven.
+
+**2026-09-05 wake-0851 (no dart, no recapture):**
+STRUCTURE PASS. THEME OK cream/orange. Secondary nav KEEP
+goldens stay `07=73a50267` / `06=aee7c288` / `08=35ff7fcb`.
+Catalog 01/02/scrolled/dark/03/04/05 still BYTE-IDENTICAL
+wake-0622 (`7599aff50` pixels). Yee residual bars (type air /
+icon weight / shadows / dock pill) vs README `mobile_*.png`
+(MAE ~25–27) map to **already-locked official knobs**: session
+`gap-0.5` **2**, title↔meta **4**, search glyph **14**, discs
+**34/28/24**, search through **0.16** / no 8/20, dock
+glass-shadow near-pair only, far **10/24/-6 @ 10%**,
+`PushedNavBar` official `glassFill` 0.68 / size-5 / 40.
+Unlocking any of those reopens the inflate / cream-coin /
+cream-stadium loops. Honest leftover is live PingFang +
+UIKit `UIGlassEffect` (blocked here: no Mac pool). Press
+DONE. Do not invent gap / tracking / umbra / size-5 on
+catalog. **精致: 还没有.**
