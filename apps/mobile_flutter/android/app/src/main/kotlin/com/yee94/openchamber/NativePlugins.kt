@@ -6,7 +6,9 @@ import io.flutter.plugin.common.MethodChannel
 
 object NativePlugins {
     var pendingDeepLink: String? = null
+    var pendingPushOpen: Map<String, Any?>? = null
     private var deepLinkChannel: MethodChannel? = null
+    private var pushChannel: MethodChannel? = null
 
     fun register(engine: FlutterEngine, activity: MainActivity) {
         engine.plugins.add(SecureStorePlugin())
@@ -14,6 +16,10 @@ object NativePlugins {
         engine.plugins.add(MediaPlugin())
         engine.plugins.add(VirtualAssetPlugin())
         engine.plugins.add(ExternalBrowserPlugin())
+        engine.platformViewsController.registry.registerViewFactory(
+            "openchamber/html_preview_view",
+            HtmlPreviewViewFactory(),
+        )
         val messenger = engine.dartExecutor.binaryMessenger
         deepLinkChannel = MethodChannel(messenger, "openchamber/deep_link").also { channel ->
             channel.setMethodCallHandler { call, result ->
@@ -28,22 +34,28 @@ object NativePlugins {
         }
         MethodChannel(messenger, "openchamber/share").setMethodCallHandler { call, result ->
             when (call.method) {
-                "pending" -> {
-                    result.success(
-                        ShareStore.pending(activity).map { env ->
-                            mapOf(
-                                "operationID" to env.optString("operationID"),
-                                "serverInstanceID" to env.optString("serverInstanceID"),
-                                "assistantID" to env.optString("assistantID"),
-                                "text" to env.optString("text"),
-                            )
-                        },
-                    )
+                "listPending", "pending" -> {
+                    result.success(mapOf("envelopes" to ShareStore.pending(activity).map { envelopeMap(it) }))
+                }
+                "listDrafts" -> {
+                    result.success(mapOf("drafts" to ShareStore.drafts(activity).map { draftMap(it) }))
                 }
                 "updateCatalog" -> {
                     @Suppress("UNCHECKED_CAST")
                     val entries = call.arguments as? List<Map<String, Any?>> ?: emptyList()
                     ShareStore.updateCatalog(activity, entries)
+                    result.success(null)
+                }
+                "ack", "acknowledge" -> {
+                    ShareStore.ack(activity, argumentId(call.arguments, "operationID"))
+                    result.success(null)
+                }
+                "releaseFiles" -> {
+                    ShareStore.releaseFiles(activity, argumentId(call.arguments, "operationID"))
+                    result.success(null)
+                }
+                "cancelDraft" -> {
+                    ShareStore.cancelDraft(activity, argumentId(call.arguments, "draftID"))
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -64,13 +76,21 @@ object NativePlugins {
                 result.notImplemented()
             }
         }
-        MethodChannel(messenger, "openchamber/push").setMethodCallHandler { call, result ->
-            if (call.method == "requestToken") {
-                requestFcmToken(activity, result)
-            } else {
-                result.notImplemented()
+        pushChannel = MethodChannel(messenger, "openchamber/push").also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "requestToken" -> requestFcmToken(activity, result)
+                    "takeInitialOpen" -> {
+                        val value = pendingPushOpen
+                        pendingPushOpen = null
+                        result.success(value)
+                    }
+                    else -> result.notImplemented()
+                }
             }
         }
+        capturePushOpen(activity.intent)
+        readInitialFcmMessage()
         MethodChannel(messenger, "openchamber/widget_snapshot").setMethodCallHandler { call, result ->
             if (call.method == "setBadge" || call.method == "write") {
                 // Official push relay has no FCM send path (APNs aps.badge only).
@@ -93,6 +113,83 @@ object NativePlugins {
     fun open(uri: String) {
         pendingDeepLink = uri
         deepLinkChannel?.invokeMethod("opened", uri)
+    }
+
+    fun handleIntent(intent: Intent) {
+        intent.data?.toString()?.let { open(it) }
+        if (intent.action == MainActivity.ACTION_SHARE_INBOX) {
+            open("openchamber://share-inbox")
+        }
+        capturePushOpen(intent)
+    }
+
+    private fun capturePushOpen(intent: Intent?) {
+        val payload = pushPayload(intent) ?: return
+        pendingPushOpen = payload
+        pushChannel?.invokeMethod("opened", payload)
+    }
+
+    private fun pushPayload(intent: Intent?): Map<String, Any?>? {
+        val extras = intent?.extras ?: return null
+        val map = mutableMapOf<String, Any?>()
+        for (key in extras.keySet()) {
+            map[key] = extras.get(key)?.toString()
+        }
+        val url = map["url"]?.toString().orEmpty()
+        val deeplink = map["deeplink"]?.toString().orEmpty()
+        val sessionId = map["sessionId"]?.toString().orEmpty().ifEmpty { map["sessionID"]?.toString().orEmpty() }
+        if (url.isEmpty() && deeplink.isEmpty() && sessionId.isEmpty()) return null
+        return map
+    }
+
+    private fun readInitialFcmMessage() {
+        try {
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().getInitialMessage()
+                .addOnSuccessListener { message ->
+                    val data = message?.data ?: return@addOnSuccessListener
+                    if (data.isEmpty()) return@addOnSuccessListener
+                    val payload = data.mapValues { it.value }
+                    if (payload["url"].isNullOrEmpty() &&
+                        payload["deeplink"].isNullOrEmpty() &&
+                        payload["sessionId"].isNullOrEmpty() &&
+                        payload["sessionID"].isNullOrEmpty()
+                    ) {
+                        return@addOnSuccessListener
+                    }
+                    pendingPushOpen = payload
+                    pushChannel?.invokeMethod("opened", payload)
+                }
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun argumentId(arguments: Any?, key: String): String {
+        val map = arguments as? Map<*, *> ?: return ""
+        return map[key]?.toString() ?: ""
+    }
+
+    private fun envelopeMap(env: org.json.JSONObject): Map<String, Any?> {
+        return mapOf(
+            "operationID" to env.optString("operationID"),
+            "serverInstanceID" to env.optString("serverInstanceID"),
+            "assistantID" to env.optString("assistantID"),
+            "text" to env.optString("text"),
+            "source" to env.optString("source", "android-share"),
+            "createdAt" to env.optLong("createdAt"),
+            "expiresAt" to env.optLong("expiresAt"),
+        )
+    }
+
+    private fun draftMap(draft: org.json.JSONObject): Map<String, Any?> {
+        return mapOf(
+            "draftID" to draft.optString("draftID"),
+            "serverInstanceID" to draft.optString("serverInstanceID").ifEmpty { null },
+            "assistantID" to draft.optString("assistantID").ifEmpty { null },
+            "text" to draft.optString("text"),
+            "source" to draft.optString("source", "android-share"),
+            "createdAt" to draft.optLong("createdAt"),
+            "expiresAt" to draft.optLong("expiresAt"),
+        )
     }
 
     private fun requestFcmToken(activity: MainActivity, result: MethodChannel.Result) {

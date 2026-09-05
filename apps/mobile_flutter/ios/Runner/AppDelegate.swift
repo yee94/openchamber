@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -13,6 +14,9 @@ import UIKit
     }
     if let url = launchOptions?[.url] as? URL {
       OpenChamberDeepLinkPlugin.pending = url.absoluteString
+    }
+    if let remote = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
+      OpenChamberPushPlugin.rememberOpen(remote)
     }
     let launched = super.application(application, didFinishLaunchingWithOptions: launchOptions)
     OpenChamberNavigationPlugin.attachHost(window?.rootViewController as? FlutterViewController)
@@ -35,5 +39,14 @@ import UIKit
   ) -> Bool {
     OpenChamberDeepLinkPlugin.open(url)
     return true
+  }
+
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    OpenChamberPushPlugin.rememberOpen(response.notification.request.content.userInfo)
+    super.userNotificationCenter(center, didReceive: response, withCompletionHandler: completionHandler)
   }
 }

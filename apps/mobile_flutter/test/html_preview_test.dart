@@ -125,4 +125,39 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('html-preview-sheet')), findsOneWidget);
   });
+
+  testWidgets('preview mode hosts the platform surface; source stays selectable text', (tester) async {
+    await tester.pumpWidget(
+      StringsScope(
+        strings: AppStrings.of(AppStrings.en),
+        child: MaterialApp(
+          theme: materialTheme(Brightness.light),
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: HtmlPreviewSheet(
+                path: 'docs/index.html',
+                loadContent: (_) async => '<h1>Preview</h1>',
+                usePlatformView: true,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('html-preview-frame')), findsOneWidget);
+    expect(find.byKey(const Key('html-preview-platform')), findsOneWidget);
+    expect(find.byKey(const Key('html-preview-source-body')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('html-preview-source')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('html-preview-source-body')), findsOneWidget);
+    expect(find.byKey(const Key('html-preview-platform')), findsNothing);
+    expect(find.textContaining('<h1>Preview</h1>'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('html-preview-source')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('html-preview-platform')), findsOneWidget);
+    expect(find.byKey(const Key('html-preview-source-body')), findsNothing);
+  });
 }

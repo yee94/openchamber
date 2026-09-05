@@ -7,6 +7,7 @@ import WidgetKit
 import PhotosUI
 import ImageIO
 import UniformTypeIdentifiers
+import WebKit
 
 enum OpenChamberPluginRegistry {
   static func register(with registrar: FlutterPluginRegistrar, messenger: FlutterBinaryMessenger) {
@@ -24,6 +25,7 @@ enum OpenChamberPluginRegistry {
     OpenChamberExternalBrowserPlugin.register(with: messenger)
     registrar.register(OpenChamberComposerFactory(messenger: messenger), withId: "openchamber/composer_view")
     registrar.register(OpenChamberTabBarFactory(messenger: messenger), withId: "openchamber/tab_bar_view")
+    registrar.register(OpenChamberHtmlPreviewFactory(), withId: "openchamber/html_preview_view")
   }
 }
 
@@ -230,16 +232,9 @@ final class OpenChamberSharePlugin: NSObject {
     let channel = FlutterMethodChannel(name: "openchamber/share", binaryMessenger: messenger)
     channel.setMethodCallHandler { call, result in
       switch call.method {
-      case "pending":
+      case "listPending", "pending":
         let envelopes = (try? OpenChamberShareStore.pending()) ?? []
-        result(envelopes.map { env in
-          [
-            "operationID": env.operationID,
-            "serverInstanceID": env.serverInstanceID,
-            "assistantID": env.assistantID,
-            "text": env.text as Any,
-          ]
-        })
+        result(["envelopes": envelopes.map { env in OpenChamberSharePlugin.envelopeMap(env) }])
       case "updateCatalog":
         let entries = call.arguments as? [[String: Any]] ?? []
         do {
@@ -248,14 +243,42 @@ final class OpenChamberSharePlugin: NSObject {
         } catch {
           result(FlutterError(code: "catalog", message: error.localizedDescription, details: nil))
         }
-      case "acknowledge":
+      case "ack", "acknowledge":
         let id = (call.arguments as? [String: Any])?["operationID"] as? String ?? ""
         try? OpenChamberShareStore.acknowledge(id)
+        result(nil)
+      case "releaseFiles":
+        let id = (call.arguments as? [String: Any])?["operationID"] as? String ?? ""
+        try? OpenChamberShareStore.release(id)
+        result(nil)
+      case "listDrafts":
+        result(["drafts": []])
+      case "cancelDraft":
         result(nil)
       default:
         result(FlutterMethodNotImplemented)
       }
     }
+  }
+
+  private static func envelopeMap(_ env: ShareEnvelope) -> [String: Any] {
+    [
+      "operationID": env.operationID,
+      "serverInstanceID": env.serverInstanceID,
+      "assistantID": env.assistantID,
+      "text": env.text as Any,
+      "source": env.source,
+      "createdAt": env.createdAt,
+      "expiresAt": env.expiresAt,
+      "attachments": env.attachments.map { item in
+        [
+          "stagedPath": item.stagedPath,
+          "originalName": item.originalName,
+          "mime": item.mime,
+          "byteSize": item.byteSize,
+        ]
+      },
+    ]
   }
 }
 
@@ -340,6 +363,35 @@ final class OpenChamberComposerPlatformView: NSObject, FlutterPlatformView {
   }
 
   func view() -> UIView { viewRef }
+}
+
+final class OpenChamberHtmlPreviewFactory: NSObject, FlutterPlatformViewFactory {
+  func create(withFrame frame: CGRect, viewIdentifier viewId: Int64, arguments args: Any?) -> FlutterPlatformView {
+    OpenChamberHtmlPreviewPlatformView(frame: frame, args: args)
+  }
+
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    FlutterStandardMessageCodec.sharedInstance()
+  }
+}
+
+final class OpenChamberHtmlPreviewPlatformView: NSObject, FlutterPlatformView {
+  private let webView: WKWebView
+
+  init(frame: CGRect, args: Any?) {
+    let configuration = WKWebViewConfiguration()
+    if #available(iOS 14.0, *) {
+      configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+    }
+    webView = WKWebView(frame: frame, configuration: configuration)
+    webView.isOpaque = false
+    webView.backgroundColor = .clear
+    let html = (args as? [String: Any])?["html"] as? String ?? ""
+    webView.loadHTMLString(html, baseURL: nil)
+    super.init()
+  }
+
+  func view() -> UIView { webView }
 }
 
 final class OpenChamberTabBarFactory: NSObject, FlutterPlatformViewFactory {
@@ -637,23 +689,54 @@ final class OpenChamberNavigationPlugin: NSObject, UIGestureRecognizerDelegate {
 final class OpenChamberPushPlugin: NSObject {
   static var token: String?
   static var pending: FlutterResult?
+  static var pendingOpen: [String: Any]?
+  private static var channel: FlutterMethodChannel?
 
   static func register(with messenger: FlutterBinaryMessenger) {
-    let channel = FlutterMethodChannel(name: "openchamber/push", binaryMessenger: messenger)
-    channel.setMethodCallHandler { call, result in
-      guard call.method == "requestToken" else {
+    let next = FlutterMethodChannel(name: "openchamber/push", binaryMessenger: messenger)
+    channel = next
+    next.setMethodCallHandler { call, result in
+      switch call.method {
+      case "requestToken":
+        if let token {
+          result(["token": token, "platform": "ios"])
+          return
+        }
+        pending = result
+        Task { @MainActor in
+          UIApplication.shared.registerForRemoteNotifications()
+        }
+      case "takeInitialOpen":
+        let value = pendingOpen
+        pendingOpen = nil
+        result(value)
+      default:
         result(FlutterMethodNotImplemented)
-        return
-      }
-      if let token {
-        result(["token": token, "platform": "ios"])
-        return
-      }
-      pending = result
-      Task { @MainActor in
-        UIApplication.shared.registerForRemoteNotifications()
       }
     }
+    if let pendingOpen {
+      next.invokeMethod("opened", arguments: pendingOpen)
+    }
+  }
+
+  static func rememberOpen(_ userInfo: [AnyHashable: Any]) {
+    pendingOpen = flatten(userInfo)
+    if let pendingOpen {
+      channel?.invokeMethod("opened", arguments: pendingOpen)
+    }
+  }
+
+  private static func flatten(_ userInfo: [AnyHashable: Any]) -> [String: Any] {
+    var map: [String: Any] = [:]
+    for (key, value) in userInfo {
+      map[String(describing: key)] = value
+    }
+    if let nested = userInfo["data"] as? [AnyHashable: Any] {
+      for (key, value) in nested {
+        map[String(describing: key)] = value
+      }
+    }
+    return map
   }
 
   static func didRegister(token: String) {

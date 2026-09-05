@@ -12,7 +12,9 @@ import '../native/live_activity_controller.dart';
 import '../native/platform_channels.dart';
 import '../native/push_registration.dart';
 import '../native/qr_scanner.dart';
+import '../native/share_inbox.dart';
 import '../native/share_targeting.dart';
+import 'share_delivery.dart';
 import 'event_pipeline.dart';
 import 'oauth.dart';
 import 'assistant_scheduled.dart';
@@ -50,6 +52,7 @@ class AppController extends ChangeNotifier {
     DeepLinkListener? deepLinks,
     OpenChamberApi? api,
     NativePush? push,
+    ShareInbox? shareInbox,
     OpenRelayTunnel? openRelayTunnel,
     ExternalBrowser? browser,
     Duration? relayRaceHeadstart,
@@ -59,6 +62,7 @@ class AppController extends ChangeNotifier {
         _deepLinks = deepLinks ?? DeepLinkListener(),
         _api = api ?? OpenChamberApi(transport: _defaultTransport()),
         _push = push ?? NativePush(),
+        _shareInbox = shareInbox ?? (_inFlutterTest ? MemoryShareInbox() : ShareInbox()),
         browser = browser ?? ExternalBrowser(),
         _instances = seed?.instances ?? const [],
         _activeId = seed?.activeId,
@@ -80,6 +84,7 @@ class AppController extends ChangeNotifier {
   final DeepLinkListener _deepLinks;
   final OpenChamberApi _api;
   final NativePush _push;
+  final ShareInbox _shareInbox;
   final ExternalBrowser browser;
   OAuthCallback? pendingOAuthCallback;
   late final OpenChamberTransport _directTransport;
@@ -172,14 +177,30 @@ class AppController extends ChangeNotifier {
     _activeId = snapshot.activeId;
     if (_useNativeLinks) {
       _deepLinks.listen(handleIncomingLink);
+      _push.listenOpened(handleIncomingLink);
     }
+    _shareInbox.listen(() {
+      unawaited(drainShares());
+    });
     if (!skipDelay) {
       await Future<void>.delayed(const Duration(milliseconds: 350));
     }
+    String? initial;
     if (_useNativeLinks) {
-      final initial = await _deepLinks.takeInitial();
-      if (initial != null && initial.isNotEmpty) {
-        await handleIncomingLink(initial);
+      initial = await _deepLinks.takeInitial();
+    }
+    final openedPush = await _push.takeInitialOpen();
+    if (initial != null && initial.isNotEmpty) {
+      await handleIncomingLink(initial);
+      if (phase == AppPhase.shell) {
+        notifyListeners();
+        return;
+      }
+    }
+    if (openedPush != null && openedPush.isNotEmpty && openedPush != initial) {
+      await handleIncomingLink(openedPush);
+      if (phase == AppPhase.shell) {
+        notifyListeners();
         return;
       }
     }
@@ -204,12 +225,60 @@ class AppController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (link.kind == DeepLinkKind.shareInbox) {
+      await drainShares();
+      return;
+    }
     pendingDeepLink = link;
     notifyListeners();
   }
 
   IncomingDeepLink? pendingDeepLink;
+  NativeShareDraft? pendingShareDraft;
+  List<ShareTarget> shareCatalog = const [];
+  bool shareRecipientBusy = false;
+  bool _shareDrainInFlight = false;
   final LiveActivityController liveActivity = LiveActivityController();
+  late final ShareDelivery _shareDelivery = ShareDelivery(
+    connect: _connectForShare,
+    loadCapability: _loadAssistantCapability,
+    loadSnapshot: ({bool force = false}) async {
+      if (force || assistantSnapshot.value == null) {
+        await loadAssistantSnapshot();
+      }
+      return assistantSnapshot.value;
+    },
+    sendShare: ({
+      required String assistantID,
+      required String operationID,
+      required String messageID,
+      required List<AssistantSharePart> parts,
+      required String source,
+    }) async {
+      final base = activeBase;
+      if (base == null) throw const OpenChamberHttpException(0, OpenChamberPaths.assistants, code: 'not_connected');
+      return parseShareOperation(
+        await _api.sendAssistantShare(
+          base: base,
+          bearer: activeBearer,
+          assistantId: assistantID,
+          operationID: operationID,
+          messageID: messageID,
+          parts: parts.map((part) => part.toJson()).toList(),
+          source: source,
+        ),
+      );
+    },
+    fetchShareOperation: (operationID) async {
+      final base = activeBase;
+      if (base == null) throw const OpenChamberHttpException(0, OpenChamberPaths.assistants, code: 'not_connected');
+      return parseShareOperation(
+        await _api.getAssistantShareOperation(base: base, bearer: activeBearer, operationID: operationID),
+      );
+    },
+    ack: _shareInbox.ack,
+    releaseFiles: _shareInbox.releaseFiles,
+  );
 
   IncomingDeepLink? takePendingSessionDeepLink() {
     final link = pendingDeepLink;
@@ -769,9 +838,9 @@ class AppController extends ChangeNotifier {
     await _repository.persist(InstanceSnapshot(instances: _instances, activeId: _activeId));
     connectForm = ConnectForm.welcome;
     phase = AppPhase.shell;
-    if (_useNativeLinks) {
-      await _publishShareCatalog();
-    }
+    await loadAssistantSnapshot();
+    await publishShareCatalog();
+    await drainShares();
     await refreshSessions();
     unawaited(_refreshRemoteSettings());
     unawaited(_registerPush());
@@ -1391,8 +1460,9 @@ class AppController extends ChangeNotifier {
     final becameVisible = visible && !_appVisible;
     _appVisible = visible;
     unawaited(_sendVisibility(visible));
-    if (becameVisible && isConnected && !_inFlutterTest) {
-      unawaited(reprobeActiveConnection());
+    if (becameVisible && isConnected) {
+      unawaited(drainShares());
+      if (!_inFlutterTest) unawaited(reprobeActiveConnection());
     }
   }
 
@@ -1587,35 +1657,150 @@ class AppController extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> _publishShareCatalog() async {
-    final targets = _instances
-        .where((item) => item.id.isNotEmpty)
-        .map(
-          (item) => ShareTarget(
-            serverInstanceId: item.id,
-            assistantId: item.id,
-            name: item.displayLabel,
-          ),
-        )
-        .toList();
+  Future<AssistantCapability?> _loadAssistantCapability() async {
+    final base = activeBase;
+    if (base == null) return null;
     try {
-      const channel = MethodChannel(OpenChamberChannels.share);
-      await channel
-          .invokeMethod<void>(
-            'updateCatalog',
-            targets
-                .map(
-                  (target) => {
-                    'serverInstanceID': target.serverInstanceId,
-                    'assistantID': target.assistantId,
-                    'name': target.name,
-                    'enabled': true,
-                  },
-                )
-                .toList(),
-          )
-          .timeout(const Duration(milliseconds: 80));
-    } catch (_) {}
+      return parseAssistantCapability(await _api.getAssistantsCapability(base: base, bearer: activeBearer));
+    } on OpenChamberHttpException {
+      return null;
+    }
+  }
+
+  Future<bool> _connectForShare(String serverInstanceID) async {
+    if (serverInstanceID.isEmpty) return false;
+    if (isConnected) {
+      final capability = await _loadAssistantCapability();
+      if (capability?.serverInstanceID == serverInstanceID) return true;
+    }
+    SavedInstance? match;
+    for (final item in _instances) {
+      if (item.serverId == serverInstanceID) {
+        match = item;
+        break;
+      }
+    }
+    if (match == null) return false;
+    if (activeInstance?.id == match.id && isConnected) return true;
+    return _probeAndActivate(match, existing: true);
+  }
+
+  Future<void> publishShareCatalog() async {
+    final instance = activeInstance;
+    if (instance == null || !isConnected) {
+      shareCatalog = const [];
+      return;
+    }
+    final capability = await _loadAssistantCapability();
+    final serverInstanceID = capability?.serverInstanceID?.trim() ?? '';
+    if (capability == null || !capability.supported || serverInstanceID.isEmpty) {
+      shareCatalog = const [];
+      return;
+    }
+    if (instance.serverId == null || instance.serverId!.isEmpty) {
+      _instances = [
+        for (final item in _instances)
+          if (item.id == instance.id) item.copyWith(serverId: serverInstanceID) else item,
+      ];
+      await _repository.persist(InstanceSnapshot(instances: _instances, activeId: _activeId));
+    }
+    var snapshot = assistantSnapshot.value;
+    if (snapshot == null) {
+      await loadAssistantSnapshot();
+      snapshot = assistantSnapshot.value;
+    }
+    if (snapshot == null) {
+      shareCatalog = const [];
+      return;
+    }
+    final targets = shareCatalogFromSnapshot(
+      serverInstanceID: serverInstanceID,
+      connectionKey: connectionKeyFor(url: instance.url, relayUrl: instance.relayUrl, serverId: serverInstanceID),
+      serverLabel: instance.displayLabel,
+      featureEnabled: capability.enabled && snapshot.enabled,
+      assistants: snapshot.assistants,
+    );
+    shareCatalog = targets;
+    await _shareInbox.updateCatalog(targets);
+  }
+
+  Future<void> drainShares() async {
+    if (_shareDrainInFlight) return;
+    _shareDrainInFlight = true;
+    try {
+      await publishShareCatalog();
+      final pending = await _shareInbox.listPending();
+      final drafts = await _shareInbox.listDrafts();
+      final assigned = [for (final draft in drafts) if (draft.isAssigned) draft];
+      final unassigned = [for (final draft in drafts) if (!draft.isAssigned) draft];
+      final envelopes = <String, NativeShareEnvelope>{
+        for (final envelope in pending) envelope.operationID: envelope,
+        for (final draft in assigned) draft.draftID: envelopeFromAssignedDraft(draft),
+      };
+      await drainShareItems(
+        [
+          for (final envelope in pending) ShareDrainItem(operationID: envelope.operationID),
+          for (final draft in assigned) ShareDrainItem(operationID: draft.draftID),
+        ],
+        deliver: (operationID) async {
+          final envelope = envelopes[operationID];
+          if (envelope == null) return;
+          final result = await _shareDelivery.deliverOne(envelope);
+          if (assigned.any((draft) => draft.draftID == operationID)) {
+            await _shareInbox.cancelDraft(operationID);
+          }
+          if (result.state == ShareDeliveryState.delivered && result.sessionID != null && result.sessionID!.isNotEmpty) {
+            pendingDeepLink = classifyDeepLink(liveActivityRowUri(result.sessionID!).toString());
+            notifyListeners();
+          }
+        },
+        cleanup: (operationID) async {
+          final item = _shareDelivery.outbox[operationID];
+          if (item != null) await _shareDelivery.cleanupNativeDelivery(item);
+        },
+      );
+      final nextDraft = unassigned.isEmpty ? null : unassigned.first;
+      if (pendingShareDraft?.draftID != nextDraft?.draftID) {
+        pendingShareDraft = nextDraft;
+        notifyListeners();
+      }
+    } finally {
+      _shareDrainInFlight = false;
+    }
+  }
+
+  Future<void> assignShareRecipient({required NativeShareDraft draft, required ShareTarget target}) async {
+    if (shareRecipientBusy) return;
+    shareRecipientBusy = true;
+    notifyListeners();
+    try {
+      final result = await _shareDelivery.deliverOne(
+        NativeShareEnvelope(
+          operationID: draft.draftID,
+          serverInstanceID: target.serverInstanceId,
+          assistantID: target.assistantId,
+          text: draft.text,
+          attachments: draft.attachments,
+          source: draft.source,
+          createdAt: draft.createdAt,
+          expiresAt: draft.expiresAt,
+        ),
+      );
+      await _shareInbox.cancelDraft(draft.draftID);
+      if (pendingShareDraft?.draftID == draft.draftID) pendingShareDraft = null;
+      if (result.state == ShareDeliveryState.delivered && result.sessionID != null && result.sessionID!.isNotEmpty) {
+        pendingDeepLink = classifyDeepLink(liveActivityRowUri(result.sessionID!).toString());
+      }
+    } finally {
+      shareRecipientBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> cancelShareRecipient(NativeShareDraft draft) async {
+    await _shareInbox.cancelDraft(draft.draftID);
+    if (pendingShareDraft?.draftID == draft.draftID) pendingShareDraft = null;
+    notifyListeners();
   }
 
   SavedInstance? _mostRecentInstance() {

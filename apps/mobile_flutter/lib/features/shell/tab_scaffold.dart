@@ -14,6 +14,7 @@ import '../chat/ios_composer_host.dart';
 import '../projects/projects_home_screen.dart';
 import '../scheduled/scheduled_tab_screen.dart';
 import '../settings/settings_home_screen.dart';
+import '../share/share_recipient_picker.dart';
 import 'floating_tab_bar.dart';
 import 'ios_tab_bar_host.dart';
 import 'secondary_chrome.dart';
@@ -154,6 +155,7 @@ class _MobileTabScaffoldState extends State<MobileTabScaffold> {
                     onSelect: _select,
                   ),
           ),
+        ShareRecipientPicker(controller: widget.controller),
       ],
     );
   }

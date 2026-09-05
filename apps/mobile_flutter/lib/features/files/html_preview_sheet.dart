@@ -1,7 +1,12 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../native/platform_channels.dart';
 
 import '../../data/file_preview.dart';
 import '../../l10n/app_strings.dart';
@@ -16,6 +21,7 @@ Future<void> showHtmlPreviewSheet({
   required BuildContext context,
   required String path,
   required Future<String> Function(String path) loadContent,
+  bool? usePlatformView,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -27,7 +33,7 @@ Future<void> showHtmlPreviewSheet({
     builder: (sheetContext) {
       return SizedBox(
         height: MediaQuery.sizeOf(sheetContext).height,
-        child: HtmlPreviewSheet(path: path, loadContent: loadContent),
+        child: HtmlPreviewSheet(path: path, loadContent: loadContent, usePlatformView: usePlatformView),
       );
     },
   );
@@ -38,10 +44,12 @@ class HtmlPreviewSheet extends StatefulWidget {
     super.key,
     required this.path,
     required this.loadContent,
+    this.usePlatformView,
   });
 
   final String path;
   final Future<String> Function(String path) loadContent;
+  final bool? usePlatformView;
 
   @override
   State<HtmlPreviewSheet> createState() => _HtmlPreviewSheetState();
@@ -200,7 +208,11 @@ class _HtmlPreviewSheetState extends State<HtmlPreviewSheet> {
       onNotification: _onScroll,
       child: _mode == HtmlViewMode.source
           ? _SourceView(content: content, controller: _scroll)
-          : _PreviewView(content: content, controller: _scroll),
+          : _PreviewView(
+              content: content,
+              controller: _scroll,
+              usePlatformView: widget.usePlatformView,
+            ),
     );
   }
 }
@@ -370,28 +382,80 @@ class _SourceView extends StatelessWidget {
   }
 }
 
+bool htmlPreviewInFlutterTest() {
+  return Platform.environment['FLUTTER_TEST'] == 'true' ||
+      WidgetsBinding.instance.runtimeType.toString().contains('Test');
+}
+
 class _PreviewView extends StatelessWidget {
-  const _PreviewView({required this.content, required this.controller});
+  const _PreviewView({
+    required this.content,
+    required this.controller,
+    this.usePlatformView,
+  });
 
   final String content;
   final ScrollController controller;
+  final bool? usePlatformView;
 
   @override
   Widget build(BuildContext context) {
-    // WidgetTester / Linux CI cannot host WKWebView. Device residual:
-    // scripted HTML still needs the iOS/Android platform view.
-    final inTest = Platform.environment['FLUTTER_TEST'] == 'true' ||
-        WidgetsBinding.instance.runtimeType.toString().contains('Test');
+    final renderPlatform = usePlatformView ?? !htmlPreviewInFlutterTest();
     return ListView(
       key: const Key('html-preview-frame'),
       controller: controller,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
       children: [
-        Text(
-          inTest || kDebugMode ? content : content,
-          style: TextStyle(fontSize: OcTokens.textMarkdown, height: 1.4, color: context.oc.foreground),
-        ),
+        if (renderPlatform)
+          HtmlPreviewPlatformView(content: content)
+        else
+          Text(
+            content,
+            style: TextStyle(fontSize: OcTokens.textMarkdown, height: 1.4, color: context.oc.foreground),
+          ),
       ],
+    );
+  }
+}
+
+/// WKWebView / Android WebView via the existing platform-view registry.
+/// WidgetTester uses a placeholder so Linux CI does not host a real WebView.
+class HtmlPreviewPlatformView extends StatelessWidget {
+  const HtmlPreviewPlatformView({super.key, required this.content});
+
+  final String content;
+
+  @override
+  Widget build(BuildContext context) {
+    final height = math.max(320.0, MediaQuery.sizeOf(context).height * 0.62);
+    final child = htmlPreviewInFlutterTest()
+        ? ColoredBox(
+            color: context.oc.pageBackground,
+            child: Text(content, style: TextStyle(fontSize: OcTokens.textMarkdown, color: context.oc.foreground)),
+          )
+        : defaultTargetPlatform == TargetPlatform.iOS
+            ? UiKitView(
+                viewType: OpenChamberPlatformViews.htmlPreview,
+                creationParams: {'html': content},
+                creationParamsCodec: const StandardMessageCodec(),
+                gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+                  Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
+                },
+              )
+            : defaultTargetPlatform == TargetPlatform.android
+                ? AndroidView(
+                    viewType: OpenChamberPlatformViews.htmlPreview,
+                    creationParams: {'html': content},
+                    creationParamsCodec: const StandardMessageCodec(),
+                    gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+                      Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
+                    },
+                  )
+                : Text(content);
+    return SizedBox(
+      key: const Key('html-preview-platform'),
+      height: height,
+      child: child,
     );
   }
 }

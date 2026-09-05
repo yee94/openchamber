@@ -59,6 +59,21 @@ class AssistantSnapshotView {
   final bool capabilityAvailable;
 }
 
+/// Official `AssistantCapabilityDTO`.
+class AssistantCapability {
+  const AssistantCapability({
+    required this.supported,
+    required this.enabled,
+    required this.revision,
+    this.serverInstanceID,
+  });
+
+  final bool supported;
+  final bool enabled;
+  final int revision;
+  final String? serverInstanceID;
+}
+
 class ScheduledTaskRecord {
   const ScheduledTaskRecord({
     required this.projectId,
@@ -157,6 +172,17 @@ class ScheduledRunRecord {
       directory: directory,
     );
   }
+}
+
+AssistantCapability parseAssistantCapability(Object? payload) {
+  final root = asObjectMap(payload);
+  final server = root['serverInstanceID']?.toString();
+  return AssistantCapability(
+    supported: root['supported'] == true || root['available'] == true,
+    enabled: root['enabled'] != false,
+    revision: root['revision'] is num ? (root['revision'] as num).toInt() : 0,
+    serverInstanceID: server == null || server.isEmpty ? null : server,
+  );
 }
 
 AssistantSnapshotView parseAssistantSnapshotView(Object? payload) {

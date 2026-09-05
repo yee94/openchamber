@@ -20,4 +20,5 @@ abstract final class OpenChamberChannels {
 abstract final class OpenChamberPlatformViews {
   static const composer = 'openchamber/composer_view';
   static const tabBar = 'openchamber/tab_bar_view';
+  static const htmlPreview = 'openchamber/html_preview_view';
 }

@@ -13,6 +13,7 @@ object ShareStore {
     private const val PREFS = "openchamber-share"
     private const val CATALOG = "openchamberShareCatalog"
     private const val INBOX = "openchamberShareInbox"
+    private const val DRAFTS = "openchamberShareDrafts"
 
     fun catalog(context: Context): List<JSONObject> {
         val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(CATALOG, "[]")
@@ -43,23 +44,71 @@ object ShareStore {
     }
 
     fun writeInbox(context: Context, target: JSONObject, text: String?) {
+        val now = System.currentTimeMillis()
         val envelope = JSONObject()
             .put("operationID", java.util.UUID.randomUUID().toString())
             .put("serverInstanceID", target.getString("serverInstanceID"))
             .put("assistantID", target.getString("assistantID"))
             .put("text", text)
             .put("source", "android-share")
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val inbox = JSONArray(prefs.getString(INBOX, "[]"))
-        inbox.put(envelope)
-        prefs.edit().putString(INBOX, inbox.toString()).apply()
+            .put("createdAt", now)
+            .put("expiresAt", now + 24L * 60L * 60L * 1000L)
+            .put("attachments", JSONArray())
+        putJson(context, INBOX, envelope)
     }
 
-    fun pending(context: Context): List<JSONObject> {
-        val inbox = JSONArray(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(INBOX, "[]"))
+    fun writeDraft(context: Context, text: String?) {
+        val now = System.currentTimeMillis()
+        val draft = JSONObject()
+            .put("draftID", java.util.UUID.randomUUID().toString())
+            .put("text", text)
+            .put("source", "android-share")
+            .put("createdAt", now)
+            .put("expiresAt", now + 24L * 60L * 60L * 1000L)
+            .put("attachments", JSONArray())
+        putJson(context, DRAFTS, draft)
+    }
+
+    fun pending(context: Context): List<JSONObject> = readJsonList(context, INBOX)
+
+    fun drafts(context: Context): List<JSONObject> = readJsonList(context, DRAFTS)
+
+    fun ack(context: Context, operationID: String) {
+        removeJson(context, INBOX, "operationID", operationID)
+    }
+
+    fun releaseFiles(context: Context, operationID: String) {
+        removeJson(context, INBOX, "operationID", operationID)
+    }
+
+    fun cancelDraft(context: Context, draftID: String) {
+        removeJson(context, DRAFTS, "draftID", draftID)
+    }
+
+    private fun readJsonList(context: Context, key: String): List<JSONObject> {
+        val inbox = JSONArray(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(key, "[]"))
         return buildList {
             for (i in 0 until inbox.length()) add(inbox.getJSONObject(i))
         }
+    }
+
+    private fun putJson(context: Context, key: String, item: JSONObject) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val array = JSONArray(prefs.getString(key, "[]"))
+        array.put(item)
+        prefs.edit().putString(key, array.toString()).apply()
+    }
+
+    private fun removeJson(context: Context, key: String, idField: String, id: String) {
+        if (id.isEmpty()) return
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val array = JSONArray(prefs.getString(key, "[]"))
+        val next = JSONArray()
+        for (i in 0 until array.length()) {
+            val item = array.getJSONObject(i)
+            if (item.optString(idField) != id) next.put(item)
+        }
+        prefs.edit().putString(key, next.toString()).apply()
     }
 
     private fun refreshShortcuts(context: Context) {

@@ -862,6 +862,41 @@ class OpenChamberApi {
     );
   }
 
+  Future<Object?> sendAssistantShare({
+    required Uri base,
+    String? bearer,
+    required String assistantId,
+    required String operationID,
+    required String messageID,
+    required List<Map<String, Object?>> parts,
+    required String source,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.assistantShare(assistantId),
+        body: {
+          'operationID': operationID,
+          'payload': {'messageID': messageID, 'parts': parts, 'source': source},
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> getAssistantShareOperation({
+    required Uri base,
+    String? bearer,
+    required String operationID,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(method: 'GET', path: OpenChamberPaths.assistantShareOperation(operationID)),
+      bearer,
+    );
+  }
+
   Future<String> readFile({
     required Uri base,
     required String bearer,
@@ -1054,7 +1089,9 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   List<String> eventChunks = const [];
   Object? scheduledTasks = defaultTestScheduledTasks;
   Object? scheduledRuns = defaultTestScheduledRuns;
-  Object? assistantsCapability = const {'available': true};
+  Object? assistantsCapability = defaultTestAssistantsCapability;
+  final List<Map<String, Object?>> shareCalls = [];
+  final Map<String, Map<String, Object?>> shareOperations = {};
 
   @override
   Stream<List<int>> openByteStream(Uri base, OpenChamberRequest request) async* {
@@ -1337,6 +1374,13 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         'sessionID': 'sess-catalog',
       },
     ],
+  };
+
+  static const Map<String, Object?> defaultTestAssistantsCapability = {
+    'supported': true,
+    'enabled': true,
+    'revision': 1,
+    'serverInstanceID': 'srv-memory',
   };
 
   static const Map<String, Object?> defaultTestScheduledTasks = {
@@ -1738,6 +1782,34 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         }
         if (request.path.startsWith('/api/config/plugins/entry/')) {
           return _mutateNamedCatalog(request, current: plugins, assign: (next) => plugins = next, listKey: 'entries', idKey: 'id');
+        }
+        if (request.path.startsWith('/api/openchamber/assistants/share-operations/')) {
+          final operationID = Uri.decodeComponent(request.path.split('/').last);
+          final operation = shareOperations[operationID];
+          if (operation == null) {
+            return const OpenChamberResponse(status: 404, body: {'error': 'missing'});
+          }
+          return OpenChamberResponse(status: mutationStatus, body: operation);
+        }
+        if (request.path.startsWith('/api/openchamber/assistants/') && request.path.endsWith('/share')) {
+          final assistantId = Uri.decodeComponent(request.path.split('/')[4]);
+          final operationID = request.body?['operationID']?.toString() ?? '';
+          final payload = request.body?['payload'];
+          final messageID = payload is Map ? payload['messageID']?.toString() : null;
+          shareCalls.add({'path': request.path, 'method': request.method, ...?request.body});
+          final operation = <String, Object?>{
+            'operationID': operationID,
+            'assistantID': assistantId,
+            'sessionID': 'sess-catalog',
+            'messageID': messageID,
+            'state': 'completed',
+            'phase': 'done',
+            'attempt': 1,
+            'leaseExpiresAt': null,
+            'errorCode': null,
+          };
+          shareOperations[operationID] = operation;
+          return OpenChamberResponse(status: mutationStatus, body: operation);
         }
         if (request.path.startsWith('/api/openchamber/assistants/') && request.path.endsWith('/session/new')) {
           return OpenChamberResponse(

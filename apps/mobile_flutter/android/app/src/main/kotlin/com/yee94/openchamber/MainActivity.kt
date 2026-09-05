@@ -12,15 +12,13 @@ class MainActivity : FlutterActivity() {
         if (intent.action == ACTION_SHARE_INBOX) {
             NativePlugins.pendingDeepLink = "openchamber://share-inbox"
         }
+        NativePlugins.handleIntent(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        intent.data?.toString()?.let { NativePlugins.open(it) }
-        if (intent.action == ACTION_SHARE_INBOX) {
-            NativePlugins.open("openchamber://share-inbox")
-        }
+        NativePlugins.handleIntent(intent)
     }
 
     companion object {

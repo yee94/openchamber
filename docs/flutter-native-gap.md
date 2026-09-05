@@ -127,7 +127,7 @@ Native contracts / shell
 | iOS liquid-glass dock | landed | `OpenChamberTabBar` | iOS 26 `UIGlassEffect`; older: system translucent bar |
 | Android dock | landed (capsule) | Web `MobileTabBar` | Flutter floating capsule, same four roots. Not liquid glass |
 | Live Activity / Dynamic Island | landed | `OpenChamberLiveActivity` | Catalog of every busy/retry session (limit 4). Each row opens that session. Start after 5s; `pushType` nil; no rebuild after dismiss. Device ActivityKit / Dynamic Island tap not exercised on Linux |
-| Share-in | landed | Share extension + `ShareReceiverActivity` | Exact instance+assistant. Catalog published from saved instances |
+| Share-in | landed | Share extension + `ShareReceiverActivity` + Dart drain | Catalog from assistants snapshot + capability `serverInstanceID`. `listPending`/`deliverOne`/ack/release. Untargeted Android shares write a draft and open the recipient picker |
 | Push | landed (host register) | APNs + FCM → `openchamber-push-relay` | Mobile `POST /api/push/apns-token` + `POST /api/push/visibility`. Host binds relay. iOS requests APNs token. Android copies Capacitor `google-services.json` (`com.yee94.openchamber` **and** `com.yee94.openchamber.debug` / `openchamber-8bf7e`) and reads the FCM token via the native Firebase SDK — still **null** if Firebase is unavailable (not invented). The Flutter **debug** APK uses the `.debug` package already listed in that file, so FCM can initialize without a second Firebase project. Presence skip is **host-side** (`isAnyInteractiveClientVisible`) |
 | WidgetKit + Control Center + NSE | landed | `OpenChamberWidget`, NSE | Snapshot JSON `{attentionCount, recentSessions}` written to App Group `widgetSnapshot` from the live index |
 | Haptics | landed | `OpenChamberHaptics` | light / medium / heavy via method channel |
@@ -620,7 +620,7 @@ Port of official `15cf6643e` Live Activity row→session + HTML preview fullscre
 | Surface | Status | Notes |
 |---|---|---|
 | Live Activity rows → session | landed (Dart + Swift wiring) | Catalog of every busy/retry session. Each row URI is `openchamber://session/{id}`. Shell opens that chat. ActivityKit / Dynamic Island tap on a real iPhone is still residual |
-| HTML preview | landed (Flutter sheet) | Fullscreen + view source. `GET /api/fs/read`. Sheet flush to the physical bottom. Pull/release at scroll-top stays stable. Scripted WKWebView/Android WebView execution is device residual — WidgetTester shows fetched HTML text |
+| HTML preview | landed (sheet + platform WebView) | Fullscreen + view source. `GET /api/fs/read`. Preview mode hosts `openchamber/html_preview_view` (WKWebView / Android WebView). Source stays `SelectableText`. WidgetTester uses a platform placeholder; scripted HTML on a real GPU is still residual |
 | Composer `/` `@` `#` frost | landed | Android / WidgetTester: translucent `OcFrosted` plate. iOS: `UIBlurEffect.systemUltraThinMaterial` (Android may degrade frost) |
 
 ## Eighteenth-slice status (2026-09-05) — home jank + header fill + deep audit
@@ -655,7 +655,7 @@ Read on this checkout: `apps/mobile_flutter/**` vs `packages/ui/src/mobile/*`, `
 | Password Keychain/Keystore; OAuth browser paths | SecureStore + authorize/callback | `secure_store.dart`, `external_browser.dart` | Live OAuth 真机-only |
 | APNs/FCM register + visibility | `useNativePushRegistration.ts` | `push_registration.dart` | Token null if Firebase fails |
 | Live Activity rows → `openchamber://session/{id}` | `OpenChamberLiveActivity.swift` | `live_activity_controller.dart` | ActivityKit tap 真机-only |
-| HTML sheet chrome + source + `GET /api/fs/read` | `FilesView.tsx` | `html_preview_sheet.dart` | Preview **mode is still text** (see code-gap) |
+| HTML sheet chrome + source + `GET /api/fs/read` | `FilesView.tsx` | `html_preview_sheet.dart` | Preview hosts platform WebView; source is `SelectableText` |
 | Share *capture* + widget snapshot + official launcher icon | Cap Share/Widget/AppIcon | iOS/Android targets; `launcher_icon_test.dart` | Icon landed `ec50d2ba9` |
 | NSE / WidgetKit / Control Center targets | Cap four-target project | Same four targets | |
 
@@ -663,9 +663,9 @@ Read on this checkout: `apps/mobile_flutter/**` vs `packages/ui/src/mobile/*`, `
 
 | Gap | Official | Flutter today | Next-agent prompt |
 |---|---|---|---|
-| **Share delivery** | `MobileShareBridge.tsx` `listPending` / `deliverOne` / recipient picker | Native inbox + `openchamber://share-inbox` only; **no Dart drain** | Wire Dart `pending`/`ack` + assistant POST like Cap `deliverOne`. Fix `_publishShareCatalog` — it sets `assistantID = instance.id`. |
-| **Push tap → session** | `deepLinkNavigation.ts` `pushNotificationActionPerformed` | Token register only; no `sessionId` handler in AppDelegate/Dart | Route notification `data.sessionId` → `openchamber://session/{id}` (same as Live Activity). |
-| **HTML preview render** | Files iframe/WebView | `_PreviewView` always `Text(content)` (`kDebugMode` included) | Platform WKWebView/Android WebView for preview mode; keep source `SelectableText`. No new pub dep unless Yee asks (`webview_flutter`). |
+| **Share delivery** | `MobileShareBridge.tsx` `listPending` / `deliverOne` / recipient picker | **landed** Dart `ShareDelivery` + `ShareInbox` `listPending`/`ack`/`releaseFiles`/`listDrafts`. Catalog uses snapshot `assistant.id` + capability `serverInstanceID`. Recipient picker for untargeted Android drafts. | Device share-extension → inbox → POST is 真机-only. Composer handoff for assigned drafts is not this slice. |
+| **Push tap → session** | `deepLinkNavigation.ts` `pushNotificationActionPerformed` | **landed** `sessionDeepLinkFromPushData` + iOS `remoteNotification` / `didReceive` + Android intent extras / `getInitialMessage` → `openchamber://session/{id}` | Real APNs/FCM tap on a phone is still residual. |
+| **HTML preview render** | Files iframe/WebView | **landed** preview mode `UiKitView`/`AndroidView` (`openchamber/html_preview_view`). Source stays selectable text. No new pub dep. | Scripted HTML / Impeller WebView compositing is 真机-only. |
 | **Chat context ring + quotas** | `MobileContextProgressButton.tsx` `buildMobileContextDisplay` | Stub `OcOptical.contextProgressStubPercent` (35%); metadata sheet branch-only | Live token/limit % + quota groups. |
 | **Session overflow actions** | `MobileRowActionsSheet.tsx` | `session_overflow_sheet.dart` + `_stubSessionAction` | Implement rename/pin/refresh/archive/delete against official session APIs. |
 | **Projects new-project + row/worktree actions** | `MobileProjectsHomeContainer.tsx` | Snackbar `projects.newProject.todo`; no row `···` sheet | Create-project API + home row actions + worktree new-session/delete. |
@@ -676,6 +676,18 @@ Read on this checkout: `apps/mobile_flutter/**` vs `packages/ui/src/mobile/*`, `
 
 Relay-only live `wss://`; LAN/relay hot-switch on a phone; iOS Local Network prompt; HEIC/album picker; hosted OAuth browser; ActivityKit / Dynamic Island / widget tap; Impeller 16ms budget after this jank fix; FCM token on `.debug` APK if Firebase init fails.
 
+## Nineteenth-slice status (2026-09-05) — share drain + push tap + HTML WebView
+
+Closes the three code-gaps called out after the eighteenth slice. No merge to `main`. No 1.18 TanStack. No Flutter UI golden recapture.
+
+| Surface | Status | Notes |
+|---|---|---|
+| Share delivery | landed (Dart + native aliases) | `ShareDelivery.deliverOne` matches official admit → connect → capability/snapshot → POST `/share` → wait → binding check → ack → releaseFiles. Drain concurrency 1; one failure yields. Catalog is `shareCatalogFromSnapshot` (capability `serverInstanceID` + snapshot assistant ids). Untargeted Android shares write a draft; `ShareRecipientPicker` assigns then delivers. iOS plugin exposes official `listPending`/`ack`/`releaseFiles` (aliases for `pending`/`acknowledge`). |
+| Push tap → session | landed | `sessionDeepLinkFromPushData` prefers `url`/`deeplink`, else `data.sessionId` → `openchamber://session/{id}`. iOS launch `remoteNotification` + `userNotificationCenter:didReceive`. Android intent extras + `FirebaseMessaging.getInitialMessage`. |
+| HTML preview render | landed (platform view) | `openchamber/html_preview_view`: WKWebView `loadHTMLString`, Android `WebView.loadDataWithBaseURL`. WidgetTester placeholder key `html-preview-platform`. Existing `html-preview-frame` ListView kept for sheet-dismiss. |
+
+Validated: focused Flutter analyze + `flutter test` on 3.32.8 (this agent). Session overflow / new-project stubs left for a later agent.
+
 #### Will not port
 
 Capgo OTA; plan/notes/Todo; Chat dock tab; `iosNativeUi`; Bonjour 「附近」; Pierre diffs / mermaid SVG; Android launcher badge (no official FCM send).
@@ -683,6 +695,6 @@ Capgo OTA; plan/notes/Todo; Chat dock tab; `iosNativeUi`; Bonjour 「附近」; 
 ### Remaining gaps (updated)
 
 1. Device-only rows above — still ❌ 真机过.
-2. Share delivery + catalog assistant IDs; push-tap → session; HTML WebView preview; context ring; session overflow; new-project / home row actions.
+2. Context ring; session overflow; new-project / home row actions. Share delivery / push-tap / HTML WebView preview landed in the nineteenth slice (Dart + native wiring; 真机 still residual).
 3. Android launcher badge — honest host-side gap.
 4. Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` — will not port.

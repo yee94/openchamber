@@ -70,6 +70,9 @@ abstract final class OpenChamberPaths {
       '/api/openchamber/assistants/${Uri.encodeComponent(id)}';
   static String assistantSessionNew(String id) =>
       '${assistant(id)}/session/new';
+  static String assistantShare(String id) => '${assistant(id)}/share';
+  static String assistantShareOperation(String operationId) =>
+      '/api/openchamber/assistants/share-operations/${Uri.encodeComponent(operationId)}';
   static String configMcp(String name) =>
       '/api/config/mcp/${Uri.encodeComponent(name)}';
   static String pluginEntry(String id) =>
