@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
 import '../../data/openchamber_api.dart';
-import '../../data/openchamber_http.dart';
+import '../../data/project_id.dart';
+import '../../data/settings_remote.dart';
 import '../../l10n/app_strings.dart';
 import '../../motion/pressable.dart';
 import '../../native/haptics.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
+import 'explorer_paths.dart';
 
 Future<bool> showNewProjectSheet({
   required BuildContext context,
@@ -35,21 +37,37 @@ class NewProjectSheet extends StatefulWidget {
 
 class _NewProjectSheetState extends State<NewProjectSheet> {
   final TextEditingController _path = TextEditingController();
+  final TextEditingController _cloneUrl = TextEditingController();
   List<FilesystemEntry> _entries = const [];
+  List<SettingsNamedItem> _identities = const [];
+  String? _identityId;
   String? _errorKey;
   bool _loading = true;
   bool _saving = false;
+  bool _showHidden = false;
+  bool _cloneMode = false;
 
   @override
   void initState() {
     super.initState();
     _loadHome();
+    unawaited(_loadIdentities());
   }
 
   @override
   void dispose() {
     _path.dispose();
+    _cloneUrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadIdentities() async {
+    final identities = await widget.controller.gitIdentities();
+    if (!mounted) return;
+    setState(() {
+      _identities = identities;
+      _identityId ??= identities.isEmpty ? null : identities.first.id;
+    });
   }
 
   Future<void> _loadHome() async {
@@ -95,9 +113,22 @@ class _NewProjectSheetState extends State<NewProjectSheet> {
     }
   }
 
+  Iterable<FilesystemEntry> get _visibleEntries {
+    return _entries.where((entry) => _showHidden || !isHiddenDirectoryName(entry.name));
+  }
+
   Future<void> _add() async {
     setState(() => _saving = true);
-    final ok = await widget.controller.addProject(path: _path.text);
+    final bool ok;
+    if (_cloneMode) {
+      ok = await widget.controller.cloneAndAddProject(
+        remoteUrl: _cloneUrl.text,
+        destinationPath: normalizeProjectDirectory(_path.text),
+        gitIdentityId: _identityId,
+      );
+    } else {
+      ok = await widget.controller.addProject(path: _path.text);
+    }
     if (!mounted) return;
     setState(() => _saving = false);
     if (ok) {
@@ -110,6 +141,8 @@ class _NewProjectSheetState extends State<NewProjectSheet> {
   @override
   Widget build(BuildContext context) {
     final tokens = context.oc;
+    final added = widget.controller.settingsProjectRecords();
+    final parent = browseParentPath(_path.text);
     return Material(
       key: const Key('new-project-sheet'),
       color: tokens.pageBackground,
@@ -120,13 +153,31 @@ class _NewProjectSheetState extends State<NewProjectSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              t(context, 'directoryExplorerDialog.title'),
-              style: ocCssInk(TextStyle(
-                fontSize: OcTokens.textUiLabel,
-                fontWeight: FontWeight.w600,
-                color: tokens.foreground,
-              )),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    t(context, 'directoryExplorerDialog.title'),
+                    style: ocCssInk(TextStyle(
+                      fontSize: OcTokens.textUiLabel,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.foreground,
+                    )),
+                  ),
+                ),
+                Pressable(
+                  key: const Key('new-project-hidden'),
+                  haptic: HapticStrength.light,
+                  onPressed: () => setState(() => _showHidden = !_showHidden),
+                  child: Text(
+                    t(context, 'directoryExplorerDialog.toggle.showHidden'),
+                    style: TextStyle(
+                      fontSize: OcTokens.textMeta,
+                      color: _showHidden ? tokens.primary : tokens.mutedForeground,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             TextField(
@@ -137,6 +188,32 @@ class _NewProjectSheetState extends State<NewProjectSheet> {
               ),
               onSubmitted: _list,
             ),
+            if (_cloneMode) ...[
+              const SizedBox(height: 8),
+              TextField(
+                key: const Key('new-project-clone-url'),
+                controller: _cloneUrl,
+                decoration: InputDecoration(
+                  hintText: t(context, 'directoryExplorerDialog.clone.remoteUrlPlaceholder'),
+                ),
+              ),
+              if (_identities.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                DropdownButton<String>(
+                  key: const Key('new-project-git-identity'),
+                  value: _identities.any((item) => item.id == _identityId) ? _identityId : _identities.first.id,
+                  isExpanded: true,
+                  items: [
+                    for (final identity in _identities)
+                      DropdownMenuItem(
+                        value: identity.id,
+                        child: Text(identity.subtitle == null ? identity.title : '${identity.title} · ${identity.subtitle}'),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() => _identityId = value),
+                ),
+              ],
+            ],
             const SizedBox(height: 12),
             if (_errorKey != null)
               Padding(
@@ -157,7 +234,22 @@ class _NewProjectSheetState extends State<NewProjectSheet> {
                 child: ListView(
                   shrinkWrap: true,
                   children: [
-                    for (final entry in _entries)
+                    if (parent != null)
+                      ListTile(
+                        key: const Key('new-project-entry-up'),
+                        leading: OcGlyph(
+                          OcGlyphKind.chevronBack,
+                          size: 16,
+                          strokeWidth: OcOptical.detailNavGlyphStroke,
+                          color: tokens.mutedForeground,
+                        ),
+                        title: Text(t(context, 'directoryExplorerDialog.browse.parentDirectory')),
+                        onTap: () {
+                          _path.text = parent;
+                          unawaited(_list(parent));
+                        },
+                      ),
+                    for (final entry in _visibleEntries)
                       ListTile(
                         key: Key('new-project-entry-${entry.name}'),
                         leading: OcGlyph(
@@ -167,38 +259,77 @@ class _NewProjectSheetState extends State<NewProjectSheet> {
                           color: tokens.mutedForeground,
                         ),
                         title: Text(entry.name),
+                        trailing: pathAlreadyAdded(added, entry.path)
+                            ? Text(
+                                t(context, 'directoryExplorerDialog.browse.addedBadge'),
+                                style: TextStyle(fontSize: OcTokens.textMeta, color: tokens.mutedForeground),
+                              )
+                            : null,
                         onTap: () {
                           _path.text = entry.path;
-                          _list(entry.path);
+                          unawaited(_list(entry.path));
                         },
                       ),
                   ],
                 ),
               ),
             const SizedBox(height: 12),
-            Pressable(
-              haptic: HapticStrength.light,
-              onPressed: _saving ? null : () => unawaited(_add()),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: tokens.primary,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: SizedBox(
-                  key: const Key('new-project-add'),
-                  height: 44,
-                  child: Center(
-                    child: Text(
-                      t(context, 'directoryExplorerDialog.actions.addProject'),
-                      style: ocCssInk(TextStyle(
-                        fontSize: OcTokens.textUiLabel,
-                        fontWeight: FontWeight.w600,
-                        color: tokens.primaryForeground,
-                      )),
+            Row(
+              children: [
+                Expanded(
+                  child: Pressable(
+                    haptic: HapticStrength.light,
+                    onPressed: () => setState(() => _cloneMode = !_cloneMode),
+                    child: SizedBox(
+                      key: const Key('new-project-clone-toggle'),
+                      height: 44,
+                      child: Center(
+                        child: Text(
+                          t(
+                            context,
+                            _cloneMode
+                                ? 'directoryExplorerDialog.actions.addLocalProject'
+                                : 'directoryExplorerDialog.actions.cloneRepository',
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Pressable(
+                    haptic: HapticStrength.light,
+                    onPressed: _saving ? null : () => unawaited(_add()),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: tokens.primary,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: SizedBox(
+                        key: const Key('new-project-add'),
+                        height: 44,
+                        child: Center(
+                          child: Text(
+                            t(
+                              context,
+                              _cloneMode
+                                  ? 'directoryExplorerDialog.actions.cloneAndAdd'
+                                  : 'directoryExplorerDialog.actions.addProject',
+                            ),
+                            style: ocCssInk(TextStyle(
+                              fontSize: OcTokens.textUiLabel,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.primaryForeground,
+                            )),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

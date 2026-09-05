@@ -22,6 +22,7 @@ class HomeSessionRow {
     this.unread = false,
     this.directory,
     this.updated = 0,
+    this.shareUrl,
   });
 
   final String id;
@@ -32,6 +33,10 @@ class HomeSessionRow {
   final bool unread;
   final String? directory;
   final num updated;
+  /// Official `session.share.url`. Null means not shared (or not yet hydrated).
+  final String? shareUrl;
+
+  bool get isShared => shareUrl != null && shareUrl!.trim().isNotEmpty;
 
   String get subtitle => formatHomeSessionSubtitle(projectLabel, branch);
 
@@ -41,6 +46,8 @@ class HomeSessionRow {
     bool? unread,
     String? directory,
     num? updated,
+    String? shareUrl,
+    bool clearShareUrl = false,
   }) {
     return HomeSessionRow(
       id: id,
@@ -51,6 +58,7 @@ class HomeSessionRow {
       unread: unread ?? this.unread,
       directory: directory ?? this.directory,
       updated: updated ?? this.updated,
+      shareUrl: clearShareUrl ? null : (shareUrl ?? this.shareUrl),
     );
   }
 }

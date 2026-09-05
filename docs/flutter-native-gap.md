@@ -667,10 +667,10 @@ Read on this checkout: `apps/mobile_flutter/**` vs `packages/ui/src/mobile/*`, `
 | **Push tap → session** | `deepLinkNavigation.ts` `pushNotificationActionPerformed` | **landed** `sessionDeepLinkFromPushData` + iOS `remoteNotification` / `didReceive` + Android intent extras → `openchamber://session/{id}` | Real APNs/FCM tap on a phone is still residual. Native FirebaseMessaging 24.x has no `getInitialMessage` (FlutterFire Dart only). |
 | **HTML preview render** | Files iframe/WebView | **landed** preview mode `UiKitView`/`AndroidView` (`openchamber/html_preview_view`). Source stays selectable text. No new pub dep. | Scripted HTML / Impeller WebView compositing is 真机-only. |
 | **Chat context ring + quotas** | `MobileContextProgressButton.tsx` `buildMobileContextDisplay` | **landed** tokens/`limit.context` (hide % when unknown; ring `?? 0`). Quotas load into the metadata sheet from `GET /api/quota/{id}`. Not a stub 35%. |
-| **Session overflow actions** | `MobileRowActionsSheet.tsx` | **landed** rename / pin / refresh / archive / delete against PATCH/DELETE `/api/session/:id` + pin POST/DELETE. Share/copy/unshare still omitted (overflow does not show those rows). |
-| **Projects new-project + row/worktree actions** | `MobileProjectsHomeContainer.tsx` | **landed** new-project sheet (`GET /api/fs/home` + `/api/fs/list` + PUT `projects[]`); home `···` project/worktree/session sheets. Full DirectoryExplorer clone / NewWorktreeDialog / MobileProjectEditSurface remain residual. |
-| Composer `/` `@` `#` | Native accessory | Pan-scroll stub | Full autocomplete if Yee still wants it. |
-| Appearance Flexoki JSON | WebView ThemeSystem | `OcTokens` Light/Dark only | Honest leftover; theme picker not on Flutter Appearance. |
+| **Session overflow actions** | `MobileRowActionsSheet.tsx` | **landed** rename / pin / share / copy / unshare / refresh / archive / delete. Share is POST `/api/session/:id/share`; unshare is DELETE the same path; copy uses the official `share.url`. |
+| **Projects new-project + row/worktree actions** | `MobileProjectsHomeContainer.tsx` | **landed** DirectoryExplorer essentials (list/navigate/up, hidden toggle, clone + git identity via POST `/api/fs/clone`); NewWorktreeDialog essentials (`branchName` / `startRef`); MobileProjectEditSurface essentials (name / color / icon / discover POST `/api/projects/:id/icon/discover` / worktree list+delete). GitHub Issue/PR worktree mode and worktree drag-reorder stay residual. |
+| Composer `/` `@` `#` | Official Cap ships **full** `OpenChamberComposerAutocomplete` (not a pan-only stub) | Flutter keeps the existing frost/pan chrome stub | Full command / mention / file autocomplete is residual — do not invent a second stub. |
+| Appearance Flexoki JSON | WebView ThemeSystem default (`flexoki-light` / `flexoki-dark`). Official **mobile Appearance** is language + Light/Dark/System only — no Flexoki picker. | `OcTokens` Light/Dark/System from design-system OKLCH | Honest residual. Do not add a Flexoki picker Flutter Appearance does not have. |
 
 #### 真机-only (code exists or plist-only)
 
@@ -698,7 +698,7 @@ Continues `d9e793ac1` rebased onto `cb655f0d8` on `work/flutter-native` (Firebas
 | Projects home | landed | Plus-menu New Project opens a path + `fs/list` browse sheet and PUTs `projects[]` (`createProjectIdFromPath`). Home `···` opens official-order project (new session / new worktree if `GET /api/git/check` / sync / edit label / close) and worktree (new session / remove) sheets. Settings projects overlay so an empty newly-added project appears. |
 | Chat context ring | landed (honest) | Ring is **tokens / `limit.context`**, not provider quota. Baseline = newest token-bearing assistant; a newer compaction part resets to unknown. No tokens or catalog limit → hide the percentage (`common.unavailable`) and paint the ring at 0 — **not** stub 35%. Quotas stay a metadata-sheet section from `GET /api/quota/{id}`. |
 
-Residuals: share/copy/unshare on the session sheet; full DirectoryExplorer (clone / git identity / hidden files); full `NewWorktreeDialog` (branch / startRef); full `MobileProjectEditSurface`; ActivityKit / true-device rows; no 真机过.
+Residuals after the twentieth slice (closed in the twenty-first): share/copy/unshare; DirectoryExplorer clone / git identity / hidden; NewWorktree branch/startRef; project-edit essentials.
 
 #### Will not port
 
@@ -707,6 +707,22 @@ Capgo OTA; plan/notes/Todo; Chat dock tab; `iosNativeUi`; Bonjour 「附近」; 
 ### Remaining gaps (updated)
 
 1. Device-only rows above — still ❌ 真机过.
-2. Share/copy/unshare on session overflow; full DirectoryExplorer / NewWorktreeDialog / project-edit surface. Context ring / session overflow mutations / new-project + home `···` landed in the twentieth slice (catalog limit required for a real %; 真机 still residual).
+2. Context ring / session overflow mutations / new-project + home `···` landed in the twentieth slice. Share/copy/unshare + DirectoryExplorer clone/hidden/identity + worktree branch/startRef + project-edit essentials landed in the twenty-first (真机 still residual).
 3. Android launcher badge — honest host-side gap.
 4. Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` — will not port.
+5. Composer full `/` `@` `#` autocomplete (Cap ships it; Flutter keeps the frost/pan stub). NewWorktree GitHub Issue/PR mode + worktree drag-reorder. Flexoki JSON tokens (official mobile Appearance has no picker).
+
+## Twenty-first-slice status (2026-09-05) — session share + project explorer/edit
+
+Continues `5b8c4795e` on `work/flutter-native`. Draft stacked on that tip. No merge to `main`. No 1.18 TanStack. No Flutter UI golden recapture. OpenChamber v2 `.debug` applicationId unchanged.
+
+| Surface | Status | Notes |
+|---|---|---|
+| Session share / copy / unshare | landed | Official Cap `MobileRowActionsSheet` + `session.share` / `session.unshare`. POST/DELETE `/api/session/:id/share?directory=`. `share.url` hydrates from GET `/api/session/:id` when the index omitted it and overlays across index refresh. Copy writes the clipboard. Failed unshare rolls back. |
+| DirectoryExplorer essentials | landed | Official mobile sheet exposes list/navigate, show-hidden, clone, and git identity. Flutter now lists/up-navigates, filters `.*` until shown, clones via POST `/api/fs/clone` `{remoteUrl,destinationPath,gitIdentityId?}`, then PUTs `projects[]`. Finder / create-missing-dir stay residual. |
+| NewWorktreeDialog essentials | landed | Official mobile create sends `mode:'new'` + `worktreeName` + `branchName` + optional `startRef`. Flutter sheet collects those and POSTs `/api/git/worktrees`. Existing-branch mode + GitHub Issue/PR linking stay residual. |
+| MobileProjectEditSurface essentials | landed | Name / official color keys / icon keys / discover favicon POST `/api/projects/:id/icon/discover` / worktree list+delete. Drag-reorder worktrees stays residual. |
+| Composer `/` `@` `#` | out of this slice | Cap uses real `OpenChamberComposerAutocomplete`. Flutter frost/pan stub stays; full autocomplete is residual. |
+| Appearance Flexoki | honest residual | Official mobile Appearance is language + theme only. Flexoki is the WebView ThemeSystem default, not a mobile picker. Flutter keeps design-system Light/Dark/System. |
+
+Validated: focused Flutter analyze + `flutter test` on 3.32.8 (this agent). Not 真机过.

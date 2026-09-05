@@ -747,7 +747,14 @@ class AppController extends ChangeNotifier {
       }
       lastIndex = snapshot;
       await refreshSessionStatus();
-      sessions = rowsFromSessionIndex(snapshot, statusById: sessionStatusById);
+      final previousShare = {
+        for (final row in sessions)
+          if (row.isShared) row.id: row.shareUrl!,
+      };
+      sessions = [
+        for (final row in rowsFromSessionIndex(snapshot, statusById: sessionStatusById))
+          row.copyWith(shareUrl: row.shareUrl ?? previousShare[row.id]),
+      ];
       await _writeWidgetSnapshot();
     } on OpenChamberHttpException {
       sessionsErrorKey = 'projects.error.indexFailed';
@@ -779,6 +786,7 @@ class AppController extends ChangeNotifier {
                       branch: row.branch,
                       pinned: row.kind == HomeSessionKind.pinned,
                       unread: row.unread,
+                      shareUrl: row.shareUrl,
                     ),
                   )
                   .toList(),
@@ -1007,6 +1015,75 @@ class AppController extends ChangeNotifier {
     );
   }
 
+  Future<bool> shareSession(HomeSessionRow session) async {
+    return _mutateSession(
+      session,
+      errorKey: 'sessions.sidebar.session.share.error',
+      optimistic: () {},
+      run: (base) async {
+        final body = await _api.shareSession(
+          base: base,
+          bearer: activeBearer ?? '',
+          sessionId: session.id,
+          directory: session.directory,
+        );
+        final url = parseSessionShareUrl(body);
+        if (url == null || url.isEmpty) {
+          throw OpenChamberHttpException(200, OpenChamberPaths.sessionShare(session.id), code: 'missing_share_url');
+        }
+        sessions = [
+          for (final row in sessions)
+            if (row.id == session.id) row.copyWith(shareUrl: url) else row,
+        ];
+      },
+    );
+  }
+
+  Future<bool> unshareSession(HomeSessionRow session) {
+    return _mutateSession(
+      session,
+      errorKey: 'sessions.sidebar.session.unshare.error',
+      optimistic: () {
+        sessions = [
+          for (final row in sessions)
+            if (row.id == session.id) row.copyWith(clearShareUrl: true) else row,
+        ];
+      },
+      run: (base) => _api.unshareSession(
+        base: base,
+        bearer: activeBearer ?? '',
+        sessionId: session.id,
+        directory: session.directory,
+      ),
+    );
+  }
+
+  /// Hydrate official `share.url` from GET `/api/session/:id` when the index omitted it.
+  Future<HomeSessionRow> hydrateSessionShare(HomeSessionRow session) async {
+    if (session.isShared) return session;
+    final base = activeBase;
+    if (base == null) return session;
+    try {
+      final body = await _api.getSession(
+        base: base,
+        bearer: activeBearer ?? '',
+        sessionId: session.id,
+        directory: session.directory,
+      );
+      final url = parseSessionShareUrl(body);
+      if (url == null) return session;
+      final next = session.copyWith(shareUrl: url);
+      sessions = [
+        for (final row in sessions)
+          if (row.id == session.id) next else row,
+      ];
+      notifyListeners();
+      return next;
+    } on OpenChamberHttpException {
+      return session;
+    }
+  }
+
   Future<bool> deleteSession(HomeSessionRow session) {
     return _mutateSession(
       session,
@@ -1089,7 +1166,18 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<bool> editProjectLabel({required String projectId, required String label}) async {
+  Future<bool> editProjectLabel({required String projectId, required String label}) {
+    return editProjectMeta(projectId: projectId, label: label);
+  }
+
+  Future<bool> editProjectMeta({
+    required String projectId,
+    String? label,
+    String? icon,
+    String? color,
+    bool clearIcon = false,
+    bool clearColor = false,
+  }) async {
     lastMutationErrorKey = null;
     if (!isConnected) {
       lastMutationErrorKey = 'projects.newProject.needsServer';
@@ -1101,7 +1189,19 @@ class AppController extends ChangeNotifier {
       final current = remoteSettings.blob.value?.projectRecords ?? const <Map<String, Object?>>[];
       final next = current.map((item) {
         if (item['id']?.toString() != projectId) return item;
-        return {...item, 'label': label.trim()};
+        final updated = Map<String, Object?>.from(item);
+        if (label != null) updated['label'] = label.trim();
+        if (clearIcon) {
+          updated.remove('icon');
+        } else if (icon != null) {
+          updated['icon'] = icon;
+        }
+        if (clearColor) {
+          updated.remove('color');
+        } else if (color != null) {
+          updated['color'] = color;
+        }
+        return updated;
       }).toList();
       await remoteSettings.patchBlob({'projects': next});
       notifyListeners();
@@ -1111,6 +1211,73 @@ class AppController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  Future<bool> discoverProjectIcon(String projectId) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'projects.newProject.needsServer';
+      notifyListeners();
+      return false;
+    }
+    try {
+      await _api.discoverProjectIcon(base: base, bearer: activeBearer, projectId: projectId);
+      await remoteSettings.loadBlob();
+      notifyListeners();
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'projectEditDialog.toast.failedToDiscoverIcon';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> cloneAndAddProject({
+    required String remoteUrl,
+    required String destinationPath,
+    String? gitIdentityId,
+    String? label,
+  }) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'projects.newProject.needsServer';
+      notifyListeners();
+      return false;
+    }
+    final remote = remoteUrl.trim();
+    if (remote.isEmpty) {
+      lastMutationErrorKey = 'directoryExplorerDialog.toast.cloneUrlRequired';
+      notifyListeners();
+      return false;
+    }
+    try {
+      final path = await _api.cloneRepository(
+        base: base,
+        bearer: activeBearer,
+        remoteUrl: remote,
+        destinationPath: destinationPath,
+        gitIdentityId: gitIdentityId,
+      );
+      return addProject(path: path, label: label);
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'directoryExplorerDialog.toast.failedToAddProject';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<List<SettingsNamedItem>> gitIdentities() async {
+    if (remoteSettings.gitIdentities.value != null) {
+      return remoteSettings.gitIdentities.value!;
+    }
+    try {
+      await remoteSettings.loadGitIdentities();
+    } on OpenChamberHttpException {
+      return const [];
+    }
+    return remoteSettings.gitIdentities.value ?? const [];
   }
 
   Future<bool> closeProject(String projectId) async {
@@ -1164,7 +1331,12 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<bool> createWorktree({required String directory, required String worktreeName}) async {
+  Future<bool> createWorktree({
+    required String directory,
+    required String worktreeName,
+    String? branchName,
+    String? startRef,
+  }) async {
     lastMutationErrorKey = null;
     final base = activeBase;
     if (base == null) {
@@ -1178,6 +1350,8 @@ class AppController extends ChangeNotifier {
         bearer: activeBearer,
         directory: directory,
         worktreeName: worktreeName,
+        branchName: branchName,
+        startRef: startRef,
       );
       await refreshSessions();
       return true;

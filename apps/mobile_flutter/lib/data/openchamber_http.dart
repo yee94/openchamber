@@ -22,10 +22,13 @@ abstract final class OpenChamberPaths {
   static const sessionCreate = '/api/session';
   static String session(String sessionId) =>
       '/api/session/${Uri.encodeComponent(sessionId)}';
+  /// OpenCode `session.share` / `session.unshare`.
+  static String sessionShare(String sessionId) => '${session(sessionId)}/share';
   static String sessionIndexPin(String sessionId) =>
       '/api/openchamber/session-index/session/${Uri.encodeComponent(sessionId)}/pin';
   static const fsHome = '/api/fs/home';
   static const fsList = '/api/fs/list';
+  static const fsClone = '/api/fs/clone';
   static const gitCheck = '/api/git/check';
   static const gitWorktrees = '/api/git/worktrees';
   static const globalEvent = '/api/global/event';
@@ -103,6 +106,8 @@ abstract final class OpenChamberPaths {
       '/api/config/skills/${Uri.encodeComponent(name)}';
   static String configCommand(String name) =>
       '/api/config/commands/${Uri.encodeComponent(name)}';
+  static String projectIconDiscover(String projectId) =>
+      '/api/projects/${Uri.encodeComponent(projectId)}/icon/discover';
 }
 
 class OpenChamberHttpException implements Exception {

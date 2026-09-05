@@ -34,6 +34,7 @@ class SessionIndexSession {
     this.pinned = false,
     this.unread = false,
     this.archived = false,
+    this.shareUrl,
   });
 
   final String id;
@@ -46,6 +47,7 @@ class SessionIndexSession {
   final bool pinned;
   final bool unread;
   final bool archived;
+  final String? shareUrl;
 }
 
 SessionIndexSnapshot? parseSessionIndexSnapshot(Object? payload) {
@@ -115,7 +117,21 @@ SessionIndexSession? _parseSession(Map<Object?, Object?> raw, String fallbackDir
     pinned: isPinned,
     unread: raw['unread'] == true,
     archived: archived,
+    shareUrl: parseSessionShareUrl(raw),
   );
+}
+
+/// Official session `share.url` from OpenCode `session.share` / index rows.
+String? parseSessionShareUrl(Object? payload) {
+  Object? root = payload;
+  if (root is Map && root['data'] != null) root = root['data'];
+  if (root is! Map) return null;
+  final share = root['share'];
+  if (share is Map) {
+    final url = share['url']?.toString().trim() ?? '';
+    return url.isEmpty ? null : url;
+  }
+  return null;
 }
 
 String _basename(String path) {
@@ -150,6 +166,7 @@ List<HomeSessionRow> rowsFromSessionIndex(
           unread: session.unread,
           directory: session.directory,
           updated: session.updated,
+          shareUrl: session.shareUrl,
         ),
       );
     }

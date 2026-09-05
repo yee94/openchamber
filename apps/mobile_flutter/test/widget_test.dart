@@ -154,6 +154,7 @@ void main() {
     expect(find.byKey(const Key('session-overflow-sheet')), findsOneWidget);
     expect(find.byKey(const Key('session-overflow-rename')), findsOneWidget);
     expect(find.byKey(const Key('session-overflow-pin')), findsOneWidget);
+    expect(find.byKey(const Key('session-overflow-share')), findsOneWidget);
     expect(find.byKey(const Key('session-overflow-archive')), findsOneWidget);
     expect(find.byKey(const Key('session-overflow-delete')), findsOneWidget);
     expect(find.text('Rename'), findsOneWidget);

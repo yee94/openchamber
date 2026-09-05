@@ -21,6 +21,8 @@ import '../chat/session_overflow_sheet.dart';
 import 'action_dialogs.dart';
 import 'highlighted_text.dart';
 import 'new_project_sheet.dart';
+import 'new_worktree_sheet.dart';
+import 'project_edit_sheet.dart';
 import 'project_groups.dart';
 import 'project_home_overlay.dart';
 
@@ -483,16 +485,46 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
   }
 
   Future<void> _openSessionActions(BuildContext context, HomeSessionRow session) async {
+    final hydrated = await controller.hydrateSessionShare(session);
+    if (!context.mounted) return;
     await showSessionOverflowSheet(
       context: context,
-      title: session.title,
+      title: hydrated.title,
       items: buildSessionOverflowItems(
-        pinned: session.kind == HomeSessionKind.pinned,
-        onRename: () => unawaited(_renameSession(context, session)),
-        onTogglePin: () => unawaited(_runMutation(() => controller.toggleSessionPin(session))),
+        pinned: hydrated.kind == HomeSessionKind.pinned,
+        shared: hydrated.isShared,
+        onRename: () => unawaited(_renameSession(context, hydrated)),
+        onTogglePin: () => unawaited(_runMutation(() => controller.toggleSessionPin(hydrated))),
+        onShare: () => unawaited(_shareSession(context, hydrated)),
+        onCopyLink: hydrated.isShared ? () => unawaited(_copyShareUrl(context, hydrated.shareUrl!)) : null,
+        onUnshare: () => unawaited(_runMutation(() => controller.unshareSession(hydrated))),
         onRefreshTranscript: () => unawaited(_runMutation(() => controller.syncProjectSessions())),
-        onArchive: () => unawaited(_runMutation(() => controller.archiveSession(session))),
-        onDelete: () => unawaited(_deleteSession(context, session)),
+        onArchive: () => unawaited(_runMutation(() => controller.archiveSession(hydrated))),
+        onDelete: () => unawaited(_deleteSession(context, hydrated)),
+      ),
+    );
+  }
+
+  Future<void> _shareSession(BuildContext context, HomeSessionRow session) async {
+    final ok = await controller.shareSession(session);
+    if (!context.mounted) return;
+    if (!ok) {
+      await _runMutation(() async => false);
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(t(context, 'sessions.sidebar.session.share.successTitle'))),
+    );
+  }
+
+  Future<void> _copyShareUrl(BuildContext context, String url) async {
+    final ok = await copyTextToClipboard(url);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          t(context, ok ? 'sessions.sidebar.session.menu.copied' : 'sessions.sidebar.session.share.copyUrlError'),
+        ),
       ),
     );
   }
@@ -509,7 +541,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
         onNewSession: () => unawaited(_createSession(context, directory: group.path)),
         onNewWorktree: () => unawaited(_createWorktree(context, group)),
         onSyncSessions: () => unawaited(_runMutation(controller.syncProjectSessions)),
-        onEditProject: () => unawaited(_editProject(context, group)),
+        onEditProject: () => unawaited(_editProjectSurface(context, group)),
         onCloseProject: () => unawaited(_closeProject(context, group)),
       ),
     );
@@ -557,19 +589,13 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
     await _runMutation(() => controller.deleteSession(session));
   }
 
-  Future<void> _editProject(BuildContext context, ProjectHomeGroup group) async {
-    final next = await showTextPromptDialog(
+  Future<void> _editProjectSurface(BuildContext context, ProjectHomeGroup group) async {
+    await showProjectEditSheet(
       context: context,
-      titleKey: 'sessions.sidebar.project.actions.edit',
-      fieldLabelKey: 'sessions.sidebar.project.actions.edit',
-      confirmKey: 'sessions.sidebar.session.rename.save',
-      cancelKey: 'sessions.sidebar.session.rename.cancel',
-      initial: group.name,
-      fieldKey: const Key('project-edit-field'),
-      confirmWidgetKey: const Key('project-edit-save'),
+      controller: controller,
+      group: group,
+      projectId: _settingsProjectId(group),
     );
-    if (next == null || !context.mounted) return;
-    await _runMutation(() => controller.editProjectLabel(projectId: _settingsProjectId(group), label: next));
   }
 
   Future<void> _closeProject(BuildContext context, ProjectHomeGroup group) async {
@@ -588,17 +614,12 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
   }
 
   Future<void> _createWorktree(BuildContext context, ProjectHomeGroup group) async {
-    final name = await showTextPromptDialog(
+    final created = await showNewWorktreeSheet(
       context: context,
-      titleKey: 'sessions.sidebar.project.actions.newWorktree',
-      fieldLabelKey: 'sessions.sidebar.project.actions.worktreeName',
-      confirmKey: 'sessions.sidebar.session.rename.save',
-      cancelKey: 'sessions.sidebar.session.rename.cancel',
-      fieldKey: const Key('worktree-name-field'),
-      confirmWidgetKey: const Key('worktree-name-save'),
+      controller: controller,
+      directory: group.path,
     );
-    if (name == null || name.trim().isEmpty || !context.mounted) return;
-    await _runMutation(() => controller.createWorktree(directory: group.path, worktreeName: name.trim()));
+    if (!context.mounted || !created) return;
   }
 
   Future<void> _deleteWorktree(

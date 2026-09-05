@@ -25,11 +25,15 @@ class SessionOverflowItem {
   final bool separated;
 }
 
-/// Official session overflow order: rename / pin / refresh / archive / delete.
+/// Official session overflow order: rename / pin / share|copy+unshare / refresh / archive / delete.
 List<SessionOverflowItem> buildSessionOverflowItems({
   required bool pinned,
+  required bool shared,
   required VoidCallback onRename,
   required VoidCallback onTogglePin,
+  VoidCallback? onShare,
+  VoidCallback? onCopyLink,
+  VoidCallback? onUnshare,
   required VoidCallback onRefreshTranscript,
   required VoidCallback onArchive,
   required VoidCallback onDelete,
@@ -49,6 +53,28 @@ List<SessionOverflowItem> buildSessionOverflowItems({
       glyph: OcGlyphKind.bolt,
       onTap: onTogglePin,
     ),
+    if (shared) ...[
+      if (onCopyLink != null)
+        SessionOverflowItem(
+          id: 'copyLink',
+          labelKey: 'sessions.sidebar.session.menu.copyLink',
+          glyph: OcGlyphKind.copy,
+          onTap: onCopyLink,
+        ),
+      if (onUnshare != null)
+        SessionOverflowItem(
+          id: 'unshare',
+          labelKey: 'sessions.sidebar.session.menu.unshare',
+          glyph: OcGlyphKind.link,
+          onTap: onUnshare,
+        ),
+    ] else if (onShare != null)
+      SessionOverflowItem(
+        id: 'share',
+        labelKey: 'sessions.sidebar.session.menu.share',
+        glyph: OcGlyphKind.share,
+        onTap: onShare,
+      ),
     SessionOverflowItem(
       id: 'refreshTranscript',
       labelKey: 'sessions.sidebar.session.menu.refreshTranscript',

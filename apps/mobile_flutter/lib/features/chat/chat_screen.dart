@@ -78,7 +78,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final controller = widget.appController;
     if (controller == null || !mounted) return;
     final match = controller.sessionById(_session.id);
-    if (match != null && (match.title != _session.title || match.kind != _session.kind)) {
+    if (match != null &&
+        (match.title != _session.title ||
+            match.kind != _session.kind ||
+            match.shareUrl != _session.shareUrl)) {
       setState(() => _session = match);
     }
     if (controller.transcriptEpoch != _seenEpoch) {
@@ -305,19 +308,61 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _openSessionOverflow(BuildContext context) {
+    unawaited(_openSessionOverflowAsync(context));
+  }
+
+  Future<void> _openSessionOverflowAsync(BuildContext context) async {
     final controller = widget.appController;
-    unawaited(showSessionOverflowSheet(
+    var session = _session;
+    if (controller != null) {
+      session = await controller.hydrateSessionShare(session);
+      if (mounted) setState(() => _session = session);
+    }
+    if (!context.mounted) return;
+    await showSessionOverflowSheet(
       context: context,
-      title: _session.title,
+      title: session.title,
       items: buildSessionOverflowItems(
-        pinned: _session.kind == HomeSessionKind.pinned,
+        pinned: session.kind == HomeSessionKind.pinned,
+        shared: session.isShared,
         onRename: controller == null ? () {} : () => unawaited(_renameSession(context)),
-        onTogglePin: controller == null ? () {} : () => unawaited(_mutateSession(() => controller.toggleSessionPin(_session))),
+        onTogglePin: controller == null ? () {} : () => unawaited(_mutateSession(() => controller.toggleSessionPin(session))),
+        onShare: controller == null ? null : () => unawaited(_shareSession(context, session)),
+        onCopyLink: session.isShared ? () => unawaited(_copyShareUrl(context, session.shareUrl!)) : null,
+        onUnshare: controller == null ? null : () => unawaited(_mutateSession(() => controller.unshareSession(session))),
         onRefreshTranscript: () => unawaited(_refreshTranscript(context)),
         onArchive: controller == null ? () {} : () => unawaited(_archiveSession(context)),
         onDelete: controller == null ? () {} : () => unawaited(_deleteSession(context)),
       ),
-    ));
+    );
+  }
+
+  Future<void> _shareSession(BuildContext context, HomeSessionRow session) async {
+    final controller = widget.appController;
+    if (controller == null) return;
+    final ok = await controller.shareSession(session);
+    if (!context.mounted) return;
+    if (!ok) {
+      await _mutateSession(() async => false);
+      return;
+    }
+    final match = controller.sessionById(session.id);
+    if (match != null && mounted) setState(() => _session = match);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(t(context, 'sessions.sidebar.session.share.successTitle'))),
+    );
+  }
+
+  Future<void> _copyShareUrl(BuildContext context, String url) async {
+    final ok = await copyTextToClipboard(url);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          t(context, ok ? 'sessions.sidebar.session.menu.copied' : 'sessions.sidebar.session.share.copyUrlError'),
+        ),
+      ),
+    );
   }
 
   Future<void> _renameSession(BuildContext context) async {

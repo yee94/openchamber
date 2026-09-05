@@ -97,6 +97,45 @@ void main() {
     expect(env.controller.sessionById('sess-catalog'), isNull);
   });
 
+  test('share POSTs /api/session/:id/share and stores the official url', () async {
+    final env = await connected();
+    final session = env.controller.sessionById('sess-catalog')!;
+    expect(session.isShared, isFalse);
+    final ok = await env.controller.shareSession(session);
+    expect(ok, isTrue);
+    expect(
+      env.transport.calls.any(
+        (call) => call.method == 'POST' && call.path == OpenChamberPaths.sessionShare('sess-catalog'),
+      ),
+      isTrue,
+    );
+    expect(env.controller.sessionById('sess-catalog')?.shareUrl, 'https://share.example/sess-catalog');
+  });
+
+  test('unshare DELETEs /api/session/:id/share and rolls back on 500', () async {
+    final env = await connected();
+    final session = env.controller.sessionById('sess-catalog')!;
+    expect(await env.controller.shareSession(session), isTrue);
+    final shared = env.controller.sessionById('sess-catalog')!;
+    final ok = await env.controller.unshareSession(shared);
+    expect(ok, isTrue);
+    expect(
+      env.transport.calls.any(
+        (call) => call.method == 'DELETE' && call.path == OpenChamberPaths.sessionShare('sess-catalog'),
+      ),
+      isTrue,
+    );
+    expect(env.controller.sessionById('sess-catalog')?.isShared, isFalse);
+
+    env.transport.sessionShareUrls['sess-catalog'] = 'https://share.example/sess-catalog';
+    await env.controller.hydrateSessionShare(env.controller.sessionById('sess-catalog')!);
+    env.transport.sessionMutationStatus = 500;
+    final failed = await env.controller.unshareSession(env.controller.sessionById('sess-catalog')!);
+    expect(failed, isFalse);
+    expect(env.controller.lastMutationErrorKey, 'sessions.sidebar.session.unshare.error');
+    expect(env.controller.sessionById('sess-catalog')?.isShared, isTrue);
+  });
+
   test('failed delete rolls back the optimistic removal', () async {
     final env = await connected();
     env.transport.sessionMutationStatus = 500;

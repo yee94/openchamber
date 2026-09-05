@@ -665,6 +665,69 @@ class OpenChamberApi {
     throw OpenChamberHttpException(response.status, OpenChamberPaths.session(sessionId));
   }
 
+  /// GET `/api/session/:id?directory=` — hydrates official `share.url`.
+  Future<Map<String, Object?>> getSession({
+    required Uri base,
+    required String bearer,
+    required String sessionId,
+    String? directory,
+  }) {
+    return _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'GET',
+        path: OpenChamberPaths.session(sessionId),
+        bearer: bearer,
+        query: {
+          if (directory != null && directory.isNotEmpty) 'directory': directory,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  /// OpenCode `session.share` → POST `/api/session/:id/share?directory=`.
+  Future<Map<String, Object?>> shareSession({
+    required Uri base,
+    required String bearer,
+    required String sessionId,
+    String? directory,
+  }) {
+    return _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.sessionShare(sessionId),
+        bearer: bearer,
+        query: {
+          if (directory != null && directory.isNotEmpty) 'directory': directory,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  /// OpenCode `session.unshare` → DELETE `/api/session/:id/share?directory=`.
+  Future<Map<String, Object?>> unshareSession({
+    required Uri base,
+    required String bearer,
+    required String sessionId,
+    String? directory,
+  }) {
+    return _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'DELETE',
+        path: OpenChamberPaths.sessionShare(sessionId),
+        bearer: bearer,
+        query: {
+          if (directory != null && directory.isNotEmpty) 'directory': directory,
+        },
+      ),
+      bearer,
+    );
+  }
+
   /// POST `/api/openchamber/session-index/session/:id/pin`. 501 = unsupported.
   Future<void> pinSession({
     required Uri base,
@@ -738,6 +801,8 @@ class OpenChamberApi {
     String? bearer,
     required String directory,
     required String worktreeName,
+    String? branchName,
+    String? startRef,
   }) {
     return _requireMap(
       base,
@@ -745,7 +810,56 @@ class OpenChamberApi {
         method: 'POST',
         path: OpenChamberPaths.gitWorktrees,
         query: {'directory': directory},
-        body: {'worktreeName': worktreeName, 'mode': 'new'},
+        body: {
+          'mode': 'new',
+          'worktreeName': worktreeName,
+          if (branchName != null && branchName.trim().isNotEmpty) 'branchName': branchName.trim(),
+          if (startRef != null && startRef.trim().isNotEmpty) 'startRef': startRef.trim(),
+        },
+      ),
+      bearer,
+    );
+  }
+
+  /// Official DirectoryExplorer `POST /api/fs/clone`.
+  Future<String> cloneRepository({
+    required Uri base,
+    String? bearer,
+    required String remoteUrl,
+    required String destinationPath,
+    String? gitIdentityId,
+  }) async {
+    final body = await _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.fsClone,
+        body: {
+          'remoteUrl': remoteUrl,
+          'destinationPath': destinationPath,
+          if (gitIdentityId != null && gitIdentityId.isNotEmpty) 'gitIdentityId': gitIdentityId,
+        },
+      ),
+      bearer,
+    );
+    final path = body['path']?.toString().trim();
+    if (path != null && path.isNotEmpty) return path;
+    return destinationPath;
+  }
+
+  /// Official `POST /api/projects/:id/icon/discover`.
+  Future<Map<String, Object?>> discoverProjectIcon({
+    required Uri base,
+    String? bearer,
+    required String projectId,
+    bool force = false,
+  }) {
+    return _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.projectIconDiscover(projectId),
+        body: {'force': force},
       ),
       bearer,
     );
@@ -1217,8 +1331,12 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   List<Map<String, Object?>> fsEntries = [
     {'name': 'openchamber', 'path': '/workspace/openchamber', 'type': 'directory'},
     {'name': 'notes', 'path': '/workspace/notes', 'type': 'directory'},
+    {'name': '.hidden', 'path': '/workspace/.hidden', 'type': 'directory'},
     {'name': 'README.md', 'path': '/workspace/README.md', 'type': 'file'},
   ];
+  final Map<String, String> sessionShareUrls = {};
+  int cloneStatus = 200;
+  int discoverStatus = 200;
   int settingsStatus = 200;
   int catalogStatus = 200;
   int mutationStatus = 200;
@@ -1426,6 +1544,37 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
     };
   }
 
+  String? _sessionIdFromSharePath(String path) {
+    final parts = path.split('/');
+    if (parts.length >= 5 && parts.last == 'share') {
+      return Uri.decodeComponent(parts[parts.length - 2]);
+    }
+    return null;
+  }
+
+  Map<String, Object?> _sessionPayload(String id, {String? shareUrl}) {
+    for (final directory in _indexDirectories()) {
+      if (directory is! Map) continue;
+      final sessions = directory['sessions'];
+      if (sessions is! List) continue;
+      for (final row in sessions) {
+        if (row is! Map || row['id']?.toString() != id) continue;
+        final current = Map<String, Object?>.from(row.map((key, value) => MapEntry(key.toString(), value)));
+        final url = shareUrl ?? sessionShareUrls[id];
+        if (url != null && url.isNotEmpty) {
+          current['share'] = {'url': url};
+        } else {
+          current.remove('share');
+        }
+        return current;
+      }
+    }
+    return {
+      'id': id,
+      if (shareUrl != null && shareUrl.isNotEmpty) 'share': {'url': shareUrl},
+    };
+  }
+
   void _upsertIndexedSession(Map<String, Object?> session) {
     final id = session['id']?.toString() ?? '';
     if (id.isEmpty) return;
@@ -1470,6 +1619,13 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
             ? Map<String, Object?>.from((current['time'] as Map).map((key, value) => MapEntry(key.toString(), value)))
             : <String, Object?>{};
         if (patch['title'] != null) current['title'] = patch['title'];
+        if (patch.containsKey('share')) {
+          if (patch['share'] == null) {
+            current.remove('share');
+          } else {
+            current['share'] = patch['share'];
+          }
+        }
         final patchTime = patch['time'];
         if (patchTime is Map) {
           time.addAll(patchTime.map((key, value) => MapEntry(key.toString(), value)));
@@ -2165,7 +2321,41 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
             !request.path.contains('/prompt_async') &&
             !request.path.contains('/abort') &&
             !request.path.contains('/messages')) {
+          final shareId = _sessionIdFromSharePath(request.path);
+          if (shareId != null) {
+            if (sessionMutationStatus < 200 || sessionMutationStatus >= 300) {
+              return OpenChamberResponse(status: sessionMutationStatus, body: {'error': 'share_failed'});
+            }
+            if (request.method == 'POST') {
+              final url = 'https://share.example/$shareId';
+              sessionShareUrls[shareId] = url;
+              _patchIndexedSession(shareId, {
+                'share': {'url': url},
+              });
+              return OpenChamberResponse(
+                status: sessionMutationStatus,
+                body: _sessionPayload(shareId, shareUrl: url),
+              );
+            }
+            if (request.method == 'DELETE') {
+              sessionShareUrls.remove(shareId);
+              _patchIndexedSession(shareId, {'share': null});
+              return OpenChamberResponse(
+                status: sessionMutationStatus,
+                body: _sessionPayload(shareId),
+              );
+            }
+          }
           final id = Uri.decodeComponent(request.path.split('/').last);
+          if (request.method == 'GET') {
+            if (sessionMutationStatus < 200 || sessionMutationStatus >= 300) {
+              return OpenChamberResponse(status: sessionMutationStatus, body: {'error': 'get_failed'});
+            }
+            return OpenChamberResponse(
+              status: sessionMutationStatus,
+              body: _sessionPayload(id, shareUrl: sessionShareUrls[id]),
+            );
+          }
           if (request.method == 'DELETE') {
             if (sessionMutationStatus == 404) {
               _removeIndexedSession(id);
@@ -2184,6 +2374,41 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
             _patchIndexedSession(id, request.body ?? const {});
             return OpenChamberResponse(status: sessionMutationStatus, body: const {'ok': true});
           }
+        }
+        if (request.path == OpenChamberPaths.fsClone) {
+          if (cloneStatus < 200 || cloneStatus >= 300) {
+            return OpenChamberResponse(status: cloneStatus, body: {'error': 'clone_failed'});
+          }
+          final destination = request.body?['destinationPath']?.toString() ?? '';
+          final name = destination.contains('/') ? destination.split('/').last : destination;
+          if (destination.isNotEmpty) {
+            fsEntries = [
+              ...fsEntries,
+              {'name': name, 'path': destination, 'type': 'directory'},
+            ];
+          }
+          return OpenChamberResponse(status: cloneStatus, body: {'success': true, 'path': destination});
+        }
+        if (request.path.startsWith('/api/projects/') && request.path.endsWith('/icon/discover')) {
+          if (discoverStatus < 200 || discoverStatus >= 300) {
+            return OpenChamberResponse(status: discoverStatus, body: {'error': 'discover_failed'});
+          }
+          final parts = request.path.split('/');
+          final id = parts.length >= 4 ? Uri.decodeComponent(parts[3]) : '';
+          final projects = settings['projects'];
+          if (projects is List && id.isNotEmpty) {
+            settings = {
+              ...settings,
+              'projects': projects.map((item) {
+                if (item is! Map || item['id']?.toString() != id) return item;
+                return {
+                  ...item.map((key, value) => MapEntry(key.toString(), value)),
+                  'iconImage': {'mime': 'image/png', 'updatedAt': 1, 'source': 'auto'},
+                };
+              }).toList(),
+            };
+          }
+          return OpenChamberResponse(status: discoverStatus, body: {'ok': true, 'settings': settings});
         }
         if (request.path == OpenChamberPaths.fsHome) {
           return OpenChamberResponse(status: fsStatus, body: {'home': fsHome});

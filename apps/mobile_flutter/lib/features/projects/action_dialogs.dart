@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../l10n/app_strings.dart';
 
@@ -76,4 +77,13 @@ Future<bool> showConfirmDialog({
     },
   );
   return result == true;
+}
+
+Future<bool> copyTextToClipboard(String value) async {
+  try {
+    await Clipboard.setData(ClipboardData(text: value));
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
