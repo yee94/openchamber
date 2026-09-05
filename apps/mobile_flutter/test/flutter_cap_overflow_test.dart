@@ -78,7 +78,7 @@ void main() {
   });
 
   testWidgets('chat overflow opens Cap Files / Changes / MCP / New session', (tester) async {
-    final env = await pumpApp(tester);
+    await pumpApp(tester);
     await tester.tap(find.byKey(const Key('home-session-sess-catalog')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('chat-more')));
