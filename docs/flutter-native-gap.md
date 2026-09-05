@@ -216,10 +216,10 @@ What still keys off the **base** id / class namespace (not broken by the suffix)
 
 Preferred: the GitHub **prerelease** (no Actions Artifacts UI):
 
-- Tag `flutter-v2-debug-ec50d2b` (prerelease, not draft): https://github.com/yee94/openchambery/releases/tag/flutter-v2-debug-ec50d2b
-- APK: https://github.com/yee94/openchambery/releases/download/flutter-v2-debug-ec50d2b/openchamber-v2-debug-ec50d2b.apk
-- Built from `ec50d2ba9` / Flutter Mobile CI [run 33949263955](https://github.com/yee94/openchambery/actions/runs/33949263955) (analyze + Android debug APK + iOS simulator all green). Official OpenChamber launcher icon.
-- Includes voice UI removal + standard IME keyboard. Side-by-side `com.yee94.openchamber.debug` / **OpenChamber v2**. Relay-first walk — Yee has no LAN.
+- Tag `flutter-v2-debug-852e101` (prerelease, not draft): https://github.com/yee94/openchambery/releases/tag/flutter-v2-debug-852e101
+- APK: https://github.com/yee94/openchambery/releases/download/flutter-v2-debug-852e101/openchamber-v2-debug-852e101.apk
+- Built from `852e101f2` / Flutter Mobile CI [run 33954622545](https://github.com/yee94/openchambery/actions/runs/33954622545) (analyze + Android debug APK + iOS simulator all green). Official OpenChamber launcher icon.
+- Isolated from `/releases/latest`. Side-by-side `com.yee94.openchamber.debug` / **OpenChamber v2**. Relay-first walk — Yee has no LAN.
 
 Actions artifact fallback (14-day retention):
 
@@ -707,10 +707,10 @@ Capgo OTA; plan/notes/Todo; Chat dock tab; `iosNativeUi`; Bonjour 「附近」; 
 ### Remaining gaps (updated)
 
 1. Device-only rows above — still ❌ 真机过.
-2. Context ring / session overflow mutations / new-project + home `···` landed in the twentieth slice. Share/copy/unshare + DirectoryExplorer clone/hidden/identity + worktree branch/startRef + project-edit essentials landed in the twenty-first (真机 still residual). Create-missing-dir + GitHub Issue/PR worktree + worktree drag-reorder + scheduled daily create + chat copy/share/fork landed in the twenty-second.
+2. Context ring / session overflow mutations / new-project + home `···` landed in the twentieth slice. Share/copy/unshare + DirectoryExplorer clone/hidden/identity + worktree branch/startRef + project-edit essentials landed in the twenty-first (真机 still residual). Create-missing-dir + GitHub Issue/PR worktree + worktree drag-reorder + scheduled daily create + chat copy/share/fork landed in the twenty-second. Existing-branch worktree + scheduled full editor + chat revert/edit + assistant long-press + Cap-parity composer autocomplete landed in the twenty-third.
 3. Android launcher badge — honest host-side gap.
 4. Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` — will not port.
-5. Composer full `/` `@` `#` autocomplete (Cap ships it; Flutter keeps the frost/pan stub). Flexoki JSON tokens (official mobile Appearance has no picker). NewWorktree GitHub Issue/PR + worktree drag-reorder + create-missing-dir landed in the twenty-second slice.
+5. Appearance Flexoki picker and Finder stay **will-not-invent**. Composer `/` `@` `#` is no longer a frost stub.
 
 ## Twenty-first-slice status (2026-09-05) — session share + project explorer/edit
 
@@ -759,4 +759,32 @@ Read on this checkout: Cap `DirectoryExplorerDialog.shouldCreateTarget` + `handl
 
 Same device rows as earlier slices: ActivityKit / Dynamic Island / widget tap; APNs/FCM tap; HEIC/album picker; hosted OAuth; live `wss://` relay; Impeller 16ms; share-extension → inbox POST; FCM on `.debug` if Firebase init fails. This slice did not recapture goldens and did not claim 真机过.
 
-Validated on Flutter **3.32.8 / Dart 3.8.1** (this agent): `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **232 passed**, including `projects_home_actions_test.dart`, `project_groups_test.dart`, and `flutter_deep_gap_test.dart`. Screenshot PNGs were **not** recaptured. `Flutter Mobile CI` is push-only on `work/flutter-native` — this stacked branch does not start that Actions run until the tip is merged there. Not 真机过.
+Validated on Flutter **3.32.8 / Dart 3.8.1** (this agent): `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **232 passed**, including `projects_home_actions_test.dart`, `project_groups_test.dart`, and `flutter_deep_gap_test.dart`. Screenshot PNGs were **not** recaptured. Fast-forwarded onto `work/flutter-native` at `852e101f2`. Flutter Mobile CI [run 33954622545](https://github.com/yee94/openchambery/actions/runs/33954622545) is green. Tip APK: [`flutter-v2-debug-852e101`](https://github.com/yee94/openchambery/releases/tag/flutter-v2-debug-852e101). Not 真机过.
+
+## Twenty-third-slice status (2026-09-05) — remaining Cap-mobile CODE gaps
+
+Stacked on `852e101f2` (`work/flutter-native` after PR **#20**). Do **not** merge `main`. No 1.18 TanStack. No Flutter UI golden recapture. OpenChamber v2 `.debug` applicationId (`com.yee94.openchamber.debug`) unchanged. Do **not** invent Flexoki or Finder.
+
+### Landed this slice (code)
+
+| Surface | Official Cap mobile | Flutter | Notes |
+|---|---|---|---|
+| NewWorktree existing-branch | `mode:'existing'` + `existingBranch` + `GET /api/git/branches` `{all,current}` | Segmented new/existing + branch dropdown | GitHub Issue/PR + `startRef` stay on new-branch only. |
+| Scheduled full editor | `ScheduledTaskEditorDialog` daily/weekly/cron + edit/toggle/delete | Same PUT path with `id`; weekly `weekdays`; cron expression; `DELETE /api/projects/:id/scheduled-tasks/:taskId` | Ellipsis menu: run / edit / pause / resume / delete. |
+| Chat revert / edit | `session.revert` `{messageID}` + `stageMessageEdit` | `POST /api/session/:id/revert`; edit stages composer then revert-on-send | No-op toolbar handlers removed. |
+| Assistant long-press | `MobileAssistantTab` → Settings assistants / delete confirm | Long-press menu; edit `requestSettingsSlug('assistants')`; delete uses `remoteSettings.deleteAssistant` | Settings already owned delete. |
+| Composer `/` `@` `#` | Cap trigger: leading `/` commands, mid-line `/` skills, `#` snippets, `@` files | `filterComposerSuggestions` + catalogs | Commands `POST /api/config/commands/metadata {catalog:true}`; files `GET /api/fs/list`; skills `GET /api/config/skills`; snippets `GET /api/config/snippets`. Not a second stub. |
+
+### Still code / will-not-port
+
+| Gap | Why leftover |
+|---|---|
+| Appearance Flexoki picker | **Do not invent.** Official **mobile** Appearance is language + Light/Dark/System. |
+| Finder | **Do not invent.** Cap `handleOpenInFinder` is desktop-only. |
+| Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` / Bonjour / Pierre / mermaid SVG / Android launcher badge | Will not port. |
+
+### 真机-only
+
+Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hosted OAuth; ActivityKit / Dynamic Island / widget tap; Impeller 16ms; FCM on `.debug` if Firebase init fails; share-extension → inbox POST. Code/plist may exist — do not fake 真机过.
+
+Validation and merge notes for this stacked branch are updated after `flutter analyze` / `flutter test` on 3.32.8.

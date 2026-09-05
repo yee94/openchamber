@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import '../native/haptics.dart';
@@ -13,6 +15,7 @@ class Pressable extends StatefulWidget {
     super.key,
     required this.child,
     this.onPressed,
+    this.onLongPress,
     this.haptic,
     this.enabled = true,
     this.highlight = true,
@@ -22,6 +25,7 @@ class Pressable extends StatefulWidget {
 
   final Widget child;
   final VoidCallback? onPressed;
+  final VoidCallback? onLongPress;
   final HapticStrength? haptic;
   final bool enabled;
   final bool highlight;
@@ -38,6 +42,7 @@ class _PressableState extends State<Pressable> with SingleTickerProviderStateMix
   Offset? _origin;
   bool _cancelled = false;
   bool _armed = false;
+  Timer? _longPress;
 
   @override
   void initState() {
@@ -47,6 +52,7 @@ class _PressableState extends State<Pressable> with SingleTickerProviderStateMix
 
   @override
   void dispose() {
+    _longPress?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -76,6 +82,16 @@ class _PressableState extends State<Pressable> with SingleTickerProviderStateMix
     _cancelled = false;
     _armed = true;
     _engage();
+    _longPress?.cancel();
+    if (widget.onLongPress != null) {
+      _longPress = Timer(const Duration(milliseconds: 450), () {
+        if (!mounted || _pointer == null || _cancelled) return;
+        _cancelled = true;
+        _armed = false;
+        _release();
+        widget.onLongPress?.call();
+      });
+    }
     final haptic = widget.haptic;
     if (haptic != null) {
       NativeHaptics.instance.impact(haptic);
@@ -93,6 +109,7 @@ class _PressableState extends State<Pressable> with SingleTickerProviderStateMix
     if (outside || dragged) {
       _cancelled = true;
       _armed = false;
+      _longPress?.cancel();
       _release();
     }
   }
@@ -100,6 +117,7 @@ class _PressableState extends State<Pressable> with SingleTickerProviderStateMix
   void _up(PointerUpEvent event) {
     if (_pointer != event.pointer) return;
     final commit = _armed && !_cancelled && widget.enabled;
+    _longPress?.cancel();
     _pointer = null;
     _origin = null;
     _armed = false;
@@ -112,6 +130,7 @@ class _PressableState extends State<Pressable> with SingleTickerProviderStateMix
 
   void _cancel(PointerCancelEvent event) {
     if (_pointer != event.pointer) return;
+    _longPress?.cancel();
     _pointer = null;
     _origin = null;
     _armed = false;

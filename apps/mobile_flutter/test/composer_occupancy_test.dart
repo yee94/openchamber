@@ -6,11 +6,58 @@ import 'package:openchamber/l10n/app_strings.dart';
 import 'package:openchamber/theme/ios_chrome.dart';
 
 void main() {
-  test('autocomplete stub pan-scrolls commands and files', () {
-    expect(autocompleteStubFor('/st').map((item) => item.label), contains('/status'));
-    expect(autocompleteStubFor('@RE').map((item) => item.label), contains('@README.md'));
-    expect(autocompleteStubFor('#t').map((item) => item.label), contains('#todo'));
-    expect(autocompleteStubFor('hello'), isEmpty);
+  test('Cap-parity autocomplete filters commands, files, skills, and snippets', () {
+    expect(
+      filterComposerSuggestions(
+        '/re',
+        commands: const ['review', 'status'],
+        files: const [],
+        skills: const [],
+      ).map((item) => item.label),
+      contains('/review'),
+    );
+    expect(
+      filterComposerSuggestions(
+        '@RE',
+        commands: const [],
+        files: const ['README.md'],
+        skills: const [],
+      ).map((item) => item.label),
+      contains('@README.md'),
+    );
+    expect(
+      filterComposerSuggestions(
+        'please /rel',
+        commands: const ['review'],
+        files: const [],
+        skills: const ['release-notes'],
+      ).map((item) => item.label),
+      contains('/release-notes'),
+    );
+    expect(
+      filterComposerSuggestions(
+        '#re',
+        commands: const [],
+        files: const [],
+        skills: const ['release-notes'],
+        snippets: const ['repro'],
+      ).map((item) => item.label),
+      contains('#repro'),
+    );
+    expect(
+      filterComposerSuggestions(
+        '#re',
+        commands: const [],
+        files: const [],
+        skills: const ['release-notes'],
+        snippets: const ['repro'],
+      ).map((item) => item.label),
+      isNot(contains('#release-notes')),
+    );
+    expect(
+      filterComposerSuggestions('hello', commands: const ['review'], files: const ['README.md'], skills: const []),
+      isEmpty,
+    );
   });
 
   testWidgets('composer uses Scaffold IME inset without a manual keyboard pad', (tester) async {
@@ -47,7 +94,13 @@ void main() {
           home: Scaffold(
             body: Align(
               alignment: Alignment.bottomCenter,
-              child: ComposerBar(controller: controller, onSend: () {}),
+              child: ComposerBar(
+                controller: controller,
+                onSend: () {},
+                commands: const ['status', 'review'],
+                files: const ['README.md'],
+                snippets: const ['bug'],
+              ),
             ),
           ),
         ),

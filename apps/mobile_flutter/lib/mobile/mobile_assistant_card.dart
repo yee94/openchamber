@@ -100,6 +100,7 @@ class MobileAssistantCard extends StatelessWidget {
     required this.modeLabel,
     required this.summary,
     required this.onOpen,
+    this.onLongPress,
     this.seed,
     this.pressKey,
   });
@@ -108,6 +109,7 @@ class MobileAssistantCard extends StatelessWidget {
   final String modeLabel;
   final String summary;
   final VoidCallback onOpen;
+  final VoidCallback? onLongPress;
   /// Official `AgentAvatar` seed is the assistant id, not the display name.
   final String? seed;
   final Key? pressKey;
@@ -132,6 +134,7 @@ class MobileAssistantCard extends StatelessWidget {
         key: pressKey,
         haptic: HapticStrength.light,
         onPressed: onOpen,
+        onLongPress: onLongPress,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: OcOptical.assistantCardMinHeight),
           child: Padding(

@@ -415,11 +415,15 @@ class UserTurnToolbar extends StatelessWidget {
     required this.message,
     this.onCopy,
     this.onFork,
+    this.onRevert,
+    this.onEdit,
   });
 
   final ChatMessage message;
   final VoidCallback? onCopy;
   final VoidCallback? onFork;
+  final VoidCallback? onRevert;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -442,8 +446,8 @@ class UserTurnToolbar extends StatelessWidget {
             ),
             const SizedBox(width: 6),
           ],
-          _icon(context, key: const Key('chat-action-revert'), glyph: OcGlyphKind.undo, tooltip: t(context, 'chat.messageBody.actions.revert')),
-          _icon(context, key: const Key('chat-action-edit'), glyph: OcGlyphKind.edit, tooltip: t(context, 'chat.messageBody.actions.edit')),
+          _icon(context, key: const Key('chat-action-revert'), glyph: OcGlyphKind.undo, tooltip: t(context, 'chat.messageBody.actions.revert'), onTap: onRevert),
+          _icon(context, key: const Key('chat-action-edit'), glyph: OcGlyphKind.edit, tooltip: t(context, 'chat.messageBody.actions.edit'), onTap: onEdit),
           _icon(context, key: const Key('chat-action-fork'), glyph: OcGlyphKind.branch, tooltip: t(context, 'chat.messageBody.actions.fork'), onTap: onFork),
           _icon(context, key: const Key('chat-action-link'), glyph: OcGlyphKind.link, tooltip: t(context, 'chat.messageBody.actions.copyMessage'), onTap: onCopy),
           _icon(context, key: const Key('chat-action-copy-user'), glyph: OcGlyphKind.copy, tooltip: t(context, 'chat.messageBody.actions.copyMessage'), onTap: onCopy),

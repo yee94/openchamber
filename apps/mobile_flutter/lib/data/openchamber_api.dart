@@ -803,6 +803,8 @@ class OpenChamberApi {
     required String worktreeName,
     String? branchName,
     String? startRef,
+    String mode = 'new',
+    String? existingBranch,
   }) {
     return _requireMap(
       base,
@@ -811,14 +813,34 @@ class OpenChamberApi {
         path: OpenChamberPaths.gitWorktrees,
         query: {'directory': directory},
         body: {
-          'mode': 'new',
+          'mode': mode,
           'worktreeName': worktreeName,
-          if (branchName != null && branchName.trim().isNotEmpty) 'branchName': branchName.trim(),
+          if (mode != 'existing' && branchName != null && branchName.trim().isNotEmpty) 'branchName': branchName.trim(),
           if (startRef != null && startRef.trim().isNotEmpty) 'startRef': startRef.trim(),
+          if (existingBranch != null && existingBranch.trim().isNotEmpty) 'existingBranch': existingBranch.trim(),
         },
       ),
       bearer,
     );
+  }
+
+  Future<List<String>> listGitBranches({
+    required Uri base,
+    String? bearer,
+    required String directory,
+  }) async {
+    final body = await _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'GET',
+        path: OpenChamberPaths.gitBranches,
+        query: {'directory': directory},
+      ),
+      bearer,
+    );
+    final raw = body['all'];
+    if (raw is! List) return const [];
+    return raw.map((item) => item.toString()).where((item) => item.isNotEmpty).toList();
   }
 
   /// Official DirectoryExplorer `POST /api/fs/mkdir`.
@@ -954,6 +976,22 @@ class OpenChamberApi {
     );
   }
 
+  Future<Map<String, Object?>> deleteScheduledTask({
+    required Uri base,
+    String? bearer,
+    required String projectId,
+    required String taskId,
+  }) {
+    return _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'DELETE',
+        path: OpenChamberPaths.scheduledTask(projectId, taskId),
+      ),
+      bearer,
+    );
+  }
+
   Future<Map<String, Object?>> forkSession({
     required Uri base,
     String? bearer,
@@ -972,6 +1010,27 @@ class OpenChamberApi {
         body: {
           if (messageId != null && messageId.isNotEmpty) 'messageID': messageId,
         },
+      ),
+      bearer,
+    );
+  }
+
+  Future<Map<String, Object?>> revertSession({
+    required Uri base,
+    String? bearer,
+    required String sessionId,
+    required String messageId,
+    String? directory,
+  }) {
+    return _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.sessionRevert(sessionId),
+        query: {
+          if (directory != null && directory.isNotEmpty) 'directory': directory,
+        },
+        body: {'messageID': messageId},
       ),
       bearer,
     );
@@ -1495,6 +1554,7 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   int mkdirStatus = 200;
   int githubStatus = 200;
   bool githubConnected = true;
+  List<String> gitBranches = const ['main', 'feat/share'];
   List<Map<String, Object?>> githubIssues = [
     {'number': 42, 'title': 'Native gap audit'},
   ];
@@ -1611,9 +1671,39 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
     final root = scheduledTasks is Map
         ? Map<String, Object?>.from((scheduledTasks as Map).map((key, value) => MapEntry(key.toString(), value)))
         : <String, Object?>{};
+    final id = task['id']?.toString() ?? '';
     final tasks = [...(root['tasks'] is List ? (root['tasks'] as List) : const [])];
-    tasks.add({'projectId': projectId, 'task': task});
-    root['tasks'] = tasks;
+    final next = <Object?>[];
+    var replaced = false;
+    for (final item in tasks) {
+      if (item is Map &&
+          item['projectId']?.toString() == projectId &&
+          item['task'] is Map &&
+          (item['task'] as Map)['id']?.toString() == id &&
+          id.isNotEmpty) {
+        next.add({'projectId': projectId, 'task': task});
+        replaced = true;
+      } else {
+        next.add(item);
+      }
+    }
+    if (!replaced) next.add({'projectId': projectId, 'task': task});
+    root['tasks'] = next;
+    scheduledTasks = root;
+  }
+
+  void _removeMemoryScheduledTask(String projectId, String taskId) {
+    final root = scheduledTasks is Map
+        ? Map<String, Object?>.from((scheduledTasks as Map).map((key, value) => MapEntry(key.toString(), value)))
+        : <String, Object?>{};
+    final tasks = [...(root['tasks'] is List ? (root['tasks'] as List) : const [])];
+    root['tasks'] = tasks.where((item) {
+      if (item is! Map) return true;
+      final task = item['task'];
+      return !(item['projectId']?.toString() == projectId &&
+          task is Map &&
+          task['id']?.toString() == taskId);
+    }).toList();
     scheduledTasks = root;
   }
 
@@ -2269,6 +2359,11 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         return OpenChamberResponse(status: catalogStatus, body: magicPrompts);
       case OpenChamberPaths.gitIdentities:
         return OpenChamberResponse(status: catalogStatus, body: gitIdentities);
+      case OpenChamberPaths.gitBranches:
+        return OpenChamberResponse(
+          status: gitStatus,
+          body: {'all': gitBranches, 'current': gitBranches.isEmpty ? '' : gitBranches.first},
+        );
       case OpenChamberPaths.fsMkdir:
         if (mkdirStatus < 200 || mkdirStatus >= 300) {
           return OpenChamberResponse(status: mkdirStatus, body: {'error': 'mkdir_failed'});
@@ -2565,7 +2660,9 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
             !request.path.contains('/prompt_async') &&
             !request.path.contains('/abort') &&
             !request.path.contains('/messages') &&
-            !request.path.endsWith('/fork')) {
+            !request.path.endsWith('/fork') &&
+            !request.path.endsWith('/revert') &&
+            !request.path.endsWith('/unrevert')) {
           final shareId = _sessionIdFromSharePath(request.path);
           if (shareId != null) {
             if (sessionMutationStatus < 200 || sessionMutationStatus >= 300) {
@@ -2656,6 +2753,29 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
               'created': true,
               'task': created,
               'tasks': [created],
+            },
+          );
+        }
+        if (request.path.startsWith('/api/projects/') &&
+            request.path.contains('/scheduled-tasks/') &&
+            request.method == 'DELETE' &&
+            !request.path.endsWith('/run')) {
+          final parts = request.path.split('/');
+          final projectId = parts.length >= 4 ? Uri.decodeComponent(parts[3]) : '';
+          final taskId = parts.isNotEmpty ? Uri.decodeComponent(parts.last) : '';
+          _removeMemoryScheduledTask(projectId, taskId);
+          return OpenChamberResponse(status: mutationStatus, body: {'ok': true, 'tasks': const <Object?>[]});
+        }
+        if (request.path.startsWith('/api/session/') && request.path.endsWith('/revert')) {
+          if (sessionMutationStatus < 200 || sessionMutationStatus >= 300) {
+            return OpenChamberResponse(status: sessionMutationStatus, body: {'error': 'revert_failed'});
+          }
+          final sourceId = Uri.decodeComponent(request.path.split('/')[request.path.split('/').length - 2]);
+          return OpenChamberResponse(
+            status: sessionMutationStatus,
+            body: {
+              'id': sourceId,
+              'revert': {'messageID': request.body?['messageID']},
             },
           );
         }

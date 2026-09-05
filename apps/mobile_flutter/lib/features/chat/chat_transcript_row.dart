@@ -19,6 +19,8 @@ class ChatTranscriptRow extends StatelessWidget {
     this.onCopy,
     this.onShare,
     this.onFork,
+    this.onRevert,
+    this.onEdit,
   });
 
   final ReverseChatController controller;
@@ -29,6 +31,8 @@ class ChatTranscriptRow extends StatelessWidget {
   final void Function(ChatMessage message)? onCopy;
   final void Function(ChatMessage message)? onShare;
   final void Function(ChatMessage message)? onFork;
+  final void Function(ChatMessage message)? onRevert;
+  final void Function(ChatMessage message)? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -72,6 +76,8 @@ class ChatTranscriptRow extends StatelessWidget {
                         message: message,
                         onCopy: onCopy == null ? null : () => onCopy!(message),
                         onFork: onFork == null ? null : () => onFork!(message),
+                        onRevert: onRevert == null ? null : () => onRevert!(message),
+                        onEdit: onEdit == null ? null : () => onEdit!(message),
                       ),
                     ],
                   ),

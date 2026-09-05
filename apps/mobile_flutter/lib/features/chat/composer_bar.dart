@@ -22,6 +22,10 @@ class ComposerBar extends StatelessWidget {
     this.onRemoveAttachment,
     this.showScrollToBottom = false,
     this.onScrollToBottom,
+    this.commands = const [],
+    this.files = const [],
+    this.skills = const [],
+    this.snippets = const [],
   });
 
   final TextEditingController controller;
@@ -33,6 +37,10 @@ class ComposerBar extends StatelessWidget {
   final ValueChanged<int>? onRemoveAttachment;
   final bool showScrollToBottom;
   final VoidCallback? onScrollToBottom;
+  final List<String> commands;
+  final List<String> files;
+  final List<String> skills;
+  final List<String> snippets;
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +51,13 @@ class ComposerBar extends StatelessWidget {
   }
 
   Widget _build(BuildContext context) {
-    final suggestions = autocompleteStubFor(controller.text);
+    final suggestions = filterComposerSuggestions(
+      controller.text,
+      commands: commands,
+      files: files,
+      skills: skills,
+      snippets: snippets,
+    );
     final sendReady = !busy &&
         (controller.text.trim().isNotEmpty || attachments.isNotEmpty);
     final field = TextField(

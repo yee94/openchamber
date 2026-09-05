@@ -21,6 +21,10 @@ class IosComposerHost extends StatefulWidget {
     required this.onAttach,
     required this.onText,
     this.onOccupancy,
+    this.commands = const [],
+    this.files = const [],
+    this.skills = const [],
+    this.snippets = const [],
   });
 
   final bool visible;
@@ -34,6 +38,10 @@ class IosComposerHost extends StatefulWidget {
   final VoidCallback onAttach;
   final ValueChanged<String> onText;
   final ValueChanged<double>? onOccupancy;
+  final List<String> commands;
+  final List<String> files;
+  final List<String> skills;
+  final List<String> snippets;
 
   @override
   State<IosComposerHost> createState() => _IosComposerHostState();
@@ -87,7 +95,13 @@ class _IosComposerHostState extends State<IosComposerHost> {
       'canSend': widget.canSend,
       'canAbort': widget.canAbort,
       'attachments': widget.attachments,
-      'autocomplete': autocompleteStubFor(widget.text).map((item) => item.label).toList(),
+      'autocomplete': filterComposerSuggestions(
+        widget.text,
+        commands: widget.commands,
+        files: widget.files,
+        skills: widget.skills,
+        snippets: widget.snippets,
+      ).map((item) => item.label).toList(),
       'visible': widget.visible,
     });
   }

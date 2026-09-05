@@ -87,6 +87,7 @@ class ScheduledTaskRecord {
     this.prompt,
     this.scheduleKind,
     this.scheduleTime,
+    this.weekdays,
   });
 
   final String projectId;
@@ -100,6 +101,7 @@ class ScheduledTaskRecord {
   final String? prompt;
   final String? scheduleKind;
   final String? scheduleTime;
+  final List<int>? weekdays;
 
   bool get isRunning => lastStatus == 'running';
 
@@ -123,6 +125,7 @@ class ScheduledTaskRecord {
       prompt: prompt,
       scheduleKind: scheduleKind,
       scheduleTime: scheduleTime,
+      weekdays: weekdays,
     );
   }
 
@@ -228,6 +231,9 @@ List<ScheduledTaskRecord> parseScheduledTasks(Object? payload) {
       prompt: execution['prompt']?.toString(),
       scheduleKind: schedule['kind']?.toString() ?? schedule['type']?.toString(),
       scheduleTime: schedule['time']?.toString() ?? schedule['cron']?.toString(),
+      weekdays: schedule['weekdays'] is List
+          ? (schedule['weekdays'] as List).whereType<num>().map((item) => item.toInt()).toList()
+          : null,
     );
   }).where((item) => item.id.isNotEmpty && item.projectId.isNotEmpty).toList();
 }

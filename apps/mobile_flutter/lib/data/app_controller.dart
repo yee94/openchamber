@@ -21,6 +21,7 @@ import 'assistant_scheduled.dart';
 import 'chat_timeline.dart';
 import 'connection_candidates.dart';
 import 'context_usage.dart';
+import 'composer_autocomplete.dart';
 import 'github_worktree.dart';
 import 'home_session.dart';
 import 'project_id.dart';
@@ -287,6 +288,19 @@ class AppController extends ChangeNotifier {
     ack: _shareInbox.ack,
     releaseFiles: _shareInbox.releaseFiles,
   );
+
+  String? pendingSettingsSlug;
+
+  void requestSettingsSlug(String slug) {
+    pendingSettingsSlug = slug;
+    notifyListeners();
+  }
+
+  String? takePendingSettingsSlug() {
+    final slug = pendingSettingsSlug;
+    pendingSettingsSlug = null;
+    return slug;
+  }
 
   IncomingDeepLink? takePendingSessionDeepLink() {
     final link = pendingDeepLink;
@@ -1351,6 +1365,10 @@ class AppController extends ChangeNotifier {
     required String prompt,
     String scheduleKind = 'daily',
     String scheduleTime = '09:00',
+    String? taskId,
+    bool enabled = true,
+    List<int>? weekdays,
+    String? cron,
   }) async {
     lastMutationErrorKey = null;
     final base = activeBase;
@@ -1360,18 +1378,25 @@ class AppController extends ChangeNotifier {
       return false;
     }
     final model = splitDefaultModel(remoteSettings.blob.value?.defaultModel);
+    final schedule = <String, Object?>{'kind': scheduleKind};
+    if (scheduleKind == 'cron') {
+      schedule['cron'] = (cron ?? scheduleTime).trim();
+    } else {
+      schedule['time'] = scheduleTime;
+      if (scheduleKind == 'weekly' && weekdays != null && weekdays.isNotEmpty) {
+        schedule['weekdays'] = weekdays;
+      }
+    }
     try {
       await _api.upsertScheduledTask(
         base: base,
         bearer: activeBearer,
         projectId: projectId,
         task: {
+          if (taskId != null && taskId.isNotEmpty) 'id': taskId,
           'name': name.trim(),
-          'enabled': true,
-          'schedule': {
-            'kind': scheduleKind,
-            'time': scheduleTime,
-          },
+          'enabled': enabled,
+          'schedule': schedule,
           'execution': {
             'prompt': prompt.trim(),
             'providerID': model.providerId,
@@ -1383,6 +1408,47 @@ class AppController extends ChangeNotifier {
       return true;
     } on OpenChamberHttpException {
       lastMutationErrorKey = 'scheduled.create.failed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> toggleScheduledTask({
+    required ScheduledTaskRecord task,
+    required bool enabled,
+  }) {
+    return createScheduledTask(
+      projectId: task.projectId,
+      taskId: task.id,
+      name: task.name,
+      prompt: task.prompt ?? '',
+      scheduleKind: task.scheduleKind ?? 'daily',
+      scheduleTime: task.scheduleTime ?? '09:00',
+      weekdays: task.weekdays,
+      cron: task.scheduleKind == 'cron' ? task.scheduleTime : null,
+      enabled: enabled,
+    );
+  }
+
+  Future<bool> deleteScheduledTask({required String projectId, required String taskId}) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'settings.error.needsServer';
+      notifyListeners();
+      return false;
+    }
+    try {
+      await _api.deleteScheduledTask(
+        base: base,
+        bearer: activeBearer,
+        projectId: projectId,
+        taskId: taskId,
+      );
+      await loadScheduledTasks();
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'scheduled.delete.failed';
       notifyListeners();
       return false;
     }
@@ -1422,6 +1488,96 @@ class AppController extends ChangeNotifier {
       lastMutationErrorKey = 'chat.messageBody.actions.forkFailed';
       notifyListeners();
       return null;
+    }
+  }
+
+  Future<bool> revertSession({
+    required HomeSessionRow session,
+    required String messageId,
+  }) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'projects.newChat.needsServer';
+      notifyListeners();
+      return false;
+    }
+    try {
+      await _api.revertSession(
+        base: base,
+        bearer: activeBearer,
+        sessionId: session.id,
+        messageId: messageId,
+        directory: session.directory,
+      );
+      await refreshSessions();
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'chat.messageBody.actions.revertFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteAssistantRecord(AssistantRecord assistant) async {
+    lastMutationErrorKey = null;
+    try {
+      await remoteSettings.deleteAssistant(id: assistant.id, expectedRevision: assistant.revision);
+      await loadAssistantSnapshot();
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'assistants.settings.deleteFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<List<ComposerAutocompleteItem>> composerSuggestions({
+    required String text,
+    String? directory,
+  }) async {
+    final trigger = resolveComposerTrigger(text);
+    if (trigger == null) return const [];
+    final base = activeBase;
+    if (base == null) {
+      return filterComposerSuggestions(text, commands: const [], files: const [], skills: const [], snippets: const []);
+    }
+    try {
+      switch (trigger.kind) {
+        case ComposerTriggerKind.command:
+          final catalog = await _api.getCommandCatalog(base: base, bearer: activeBearer);
+          return filterComposerSuggestions(
+            text,
+            commands: parseCommandNames(catalog),
+            files: const [],
+            skills: const [],
+          );
+        case ComposerTriggerKind.mention:
+          final listed = await _api.listFilesystem(
+            base: base,
+            bearer: activeBearer,
+            path: directory ?? '/',
+          );
+          final files = listed
+              .where((entry) => entry.type != 'directory')
+              .map((entry) => entry.name.isNotEmpty ? entry.name : entry.path)
+              .toList();
+          return filterComposerSuggestions(text, commands: const [], files: files, skills: const []);
+        case ComposerTriggerKind.skill:
+          final skills = await _api.getInstalledSkills(base: base, bearer: activeBearer);
+          return filterComposerSuggestions(text, commands: const [], files: const [], skills: parseSkillNames(skills));
+        case ComposerTriggerKind.snippet:
+          final snippets = await _api.getSnippets(base: base, bearer: activeBearer);
+          return filterComposerSuggestions(
+            text,
+            commands: const [],
+            files: const [],
+            skills: const [],
+            snippets: parseSnippetNames(snippets),
+          );
+      }
+    } on OpenChamberHttpException {
+      return const [];
     }
   }
 
@@ -1523,11 +1679,23 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<List<String>> listGitBranches(String directory) async {
+    final base = activeBase;
+    if (base == null) return const [];
+    try {
+      return await _api.listGitBranches(base: base, bearer: activeBearer, directory: directory);
+    } on OpenChamberHttpException {
+      return const [];
+    }
+  }
+
   Future<bool> createWorktree({
     required String directory,
     required String worktreeName,
     String? branchName,
     String? startRef,
+    String mode = 'new',
+    String? existingBranch,
   }) async {
     lastMutationErrorKey = null;
     final base = activeBase;
@@ -1544,6 +1712,8 @@ class AppController extends ChangeNotifier {
         worktreeName: worktreeName,
         branchName: branchName,
         startRef: startRef,
+        mode: mode,
+        existingBranch: existingBranch,
       );
       await refreshSessions();
       return true;

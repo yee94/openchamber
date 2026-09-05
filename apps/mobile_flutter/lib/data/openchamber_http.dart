@@ -31,6 +31,7 @@ abstract final class OpenChamberPaths {
   static const fsClone = '/api/fs/clone';
   static const fsMkdir = '/api/fs/mkdir';
   static const gitCheck = '/api/git/check';
+  static const gitBranches = '/api/git/branches';
   static const gitWorktrees = '/api/git/worktrees';
   static const githubAuthStatus = '/api/github/auth/status';
   static const githubIssuesList = '/api/github/issues/list';
@@ -107,9 +108,13 @@ abstract final class OpenChamberPaths {
       '/api/permission/${Uri.encodeComponent(requestId)}/reply';
   static String scheduledTasksForProject(String projectId) =>
       '/api/projects/${Uri.encodeComponent(projectId)}/scheduled-tasks';
+  static String scheduledTask(String projectId, String taskId) =>
+      '${scheduledTasksForProject(projectId)}/${Uri.encodeComponent(taskId)}';
   static String scheduledTaskRun(String projectId, String taskId) =>
-      '${scheduledTasksForProject(projectId)}/${Uri.encodeComponent(taskId)}/run';
+      '${scheduledTask(projectId, taskId)}/run';
   static String sessionFork(String sessionId) => '${session(sessionId)}/fork';
+  static String sessionRevert(String sessionId) => '${session(sessionId)}/revert';
+  static String sessionUnrevert(String sessionId) => '${session(sessionId)}/unrevert';
   static String configSkill(String name) =>
       '/api/config/skills/${Uri.encodeComponent(name)}';
   static String configCommand(String name) =>

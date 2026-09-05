@@ -58,6 +58,11 @@ class _ChatScreenState extends State<ChatScreen> {
   final ValueNotifier<bool> _atLiveEdge = ValueNotifier(true);
   final ValueNotifier<String?> _errorKey = ValueNotifier<String?>(null);
   Timer? _poll;
+  List<String> _commands = const [];
+  List<String> _files = const [];
+  List<String> _skills = const [];
+  List<String> _snippets = const [];
+  String? _editingMessageId;
 
   LiveActivityController get _live => widget.appController?.liveActivity ?? LiveActivityController();
 
@@ -149,10 +154,27 @@ class _ChatScreenState extends State<ChatScreen> {
       await controller.ensureContextLimits();
       _contextTick.value += 1;
       _syncBusyFromController();
+      unawaited(_loadComposerCatalogs());
     } on OpenChamberHttpException {
       if (!mounted) return;
       _errorKey.value = 'chat.error.loadFailed';
     }
+  }
+
+  Future<void> _loadComposerCatalogs() async {
+    final controller = widget.appController;
+    if (controller == null) return;
+    final slash = await controller.composerSuggestions(text: '/', directory: _session.directory);
+    final at = await controller.composerSuggestions(text: '@', directory: _session.directory ?? '/workspace');
+    final skills = await controller.composerSuggestions(text: ' /', directory: _session.directory);
+    final hash = await controller.composerSuggestions(text: '#', directory: _session.directory);
+    if (!mounted) return;
+    setState(() {
+      _commands = slash.map((item) => item.label.replaceFirst('/', '')).toList();
+      _files = at.map((item) => item.label.replaceFirst('@', '')).toList();
+      _skills = skills.map((item) => item.label.replaceFirst('/', '')).toList();
+      _snippets = hash.map((item) => item.label.replaceFirst('#', '')).toList();
+    });
   }
 
   void _syncBusyFromController() {
@@ -221,6 +243,11 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     try {
+      final editId = _editingMessageId;
+      if (editId != null) {
+        await controller.revertSession(session: _session, messageId: editId);
+        _editingMessageId = null;
+      }
       await controller.sendPrompt(
         session: _session,
         messageId: messageId,
@@ -362,6 +389,28 @@ class _ChatScreenState extends State<ChatScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(t(context, ok ? 'sessions.sidebar.session.menu.copied' : 'sessions.sidebar.session.share.copyUrlError'))),
     );
+  }
+
+  Future<void> _revertMessage(ChatMessage message) async {
+    final controller = widget.appController;
+    if (controller == null) return;
+    final ok = await controller.revertSession(session: _session, messageId: message.id);
+    if (!mounted) return;
+    if (!ok) {
+      final error = controller.lastMutationErrorKey;
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t(context, error))));
+      }
+      return;
+    }
+    await _reloadFromLive();
+  }
+
+  void _editMessage(ChatMessage message) {
+    _editingMessageId = message.id;
+    _composer.text = message.body;
+    _composer.selection = TextSelection.collapsed(offset: _composer.text.length);
+    setState(() {});
   }
 
   Future<void> _forkMessage(ChatMessage message) async {
@@ -520,6 +569,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       onCopy: _copyMessage,
                       onShare: _copyMessage,
                       onFork: widget.appController == null ? null : _forkMessage,
+                      onRevert: widget.appController == null ? null : _revertMessage,
+                      onEdit: _editMessage,
                     );
                   },
                 ),
@@ -598,6 +649,10 @@ class _ChatScreenState extends State<ChatScreen> {
                               onStop: _stop,
                               onAttach: _attach,
                               onText: (value) => _composer.text = value,
+                              commands: _commands,
+                              files: _files,
+                              skills: _skills,
+                              snippets: _snippets,
                             );
                           },
                         ),
@@ -615,6 +670,10 @@ class _ChatScreenState extends State<ChatScreen> {
                             onStop: _stop,
                             onAttach: _attach,
                             onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
+                            commands: _commands,
+                            files: _files,
+                            skills: _skills,
+                            snippets: _snippets,
                           );
                         },
                       ),

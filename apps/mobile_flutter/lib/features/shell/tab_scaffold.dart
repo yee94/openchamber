@@ -14,6 +14,8 @@ import '../chat/ios_composer_host.dart';
 import '../projects/projects_home_screen.dart';
 import '../scheduled/scheduled_tab_screen.dart';
 import '../settings/settings_home_screen.dart';
+import '../settings/settings_pages.dart';
+import '../../data/settings_catalog.dart';
 import '../share/share_recipient_picker.dart';
 import 'floating_tab_bar.dart';
 import 'ios_tab_bar_host.dart';
@@ -55,6 +57,7 @@ class _MobileTabScaffoldState extends State<MobileTabScaffold> {
 
   void _onController() {
     _openPendingSessionLink();
+    _openPendingSettingsSlug();
   }
 
   void _openPendingSessionLink() {
@@ -74,6 +77,38 @@ class _MobileTabScaffoldState extends State<MobileTabScaffold> {
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) setState(() {});
+    });
+  }
+
+  void _openPendingSettingsSlug() {
+    final slug = widget.controller.takePendingSettingsSlug();
+    if (slug == null || !mounted) return;
+    SettingsPageMeta? page;
+    for (final candidate in mobileSettingsPages) {
+      if (candidate.slug == slug) {
+        page = candidate;
+        break;
+      }
+    }
+    if (page == null) return;
+    final settingsIndex = mobileTabIds.indexOf('settings');
+    if (settingsIndex >= 0 && _index != settingsIndex) {
+      setState(() => _index = settingsIndex);
+    }
+    final target = page;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).push(
+        platformPageRoute<void>(
+          builder: (_) => AnimatedBuilder(
+            animation: widget.controller,
+            builder: (context, _) => SettingsDetailPage(
+              controller: widget.controller,
+              page: target,
+            ),
+          ),
+        ),
+      );
     });
   }
 

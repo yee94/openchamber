@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
@@ -9,6 +11,7 @@ import '../../mobile/mobile_assistant_card.dart';
 import '../../mobile/mobile_surface.dart';
 import '../../theme/ios_chrome.dart';
 import '../chat/chat_screen.dart';
+import '../projects/action_dialogs.dart';
 
 class AssistantTabScreen extends StatefulWidget {
   const AssistantTabScreen({super.key, required this.controller});
@@ -39,6 +42,53 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
 
   void _onChanged() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _showAssistantMenu(AssistantRecord item) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Material(
+          key: Key('assistant-menu-${item.id}'),
+          color: context.oc.pageBackground,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                key: Key('assistant-menu-edit-${item.id}'),
+                title: Text(t(context, 'assistants.menu.edit')),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  widget.controller.requestSettingsSlug('assistants');
+                },
+              ),
+              ListTile(
+                key: Key('assistant-menu-delete-${item.id}'),
+                title: Text(t(context, 'assistants.settings.delete')),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  final confirmed = await showConfirmDialog(
+                    context: context,
+                    titleKey: 'assistants.settings.delete',
+                    messageKey: 'assistants.settings.deleteConfirm',
+                    messageParams: {'name': item.name},
+                    confirmKey: 'assistants.settings.delete',
+                    cancelKey: 'sessions.sidebar.session.rename.cancel',
+                    confirmWidgetKey: Key('assistant-delete-confirm-${item.id}'),
+                    destructive: true,
+                  );
+                  if (!confirmed || !mounted) return;
+                  await widget.controller.deleteAssistantRecord(item);
+                  if (mounted) setState(() {});
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _open(String id) async {
@@ -101,6 +151,7 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
                   modeLabel: _modeLabel(context, item),
                   summary: _summary(context, item),
                   onOpen: () => _open(item.id),
+                  onLongPress: () => unawaited(_showAssistantMenu(item)),
                 )
             else if (snapshot != null && !snapshot.enabled)
               MobileFloatingSurface(

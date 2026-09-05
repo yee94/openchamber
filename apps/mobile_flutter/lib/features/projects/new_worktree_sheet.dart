@@ -42,6 +42,8 @@ class _NewWorktreeSheetState extends State<NewWorktreeSheet> {
   String? _errorKey;
   bool _syncName = true;
   GitHubWorktreeItem? _linked;
+  int _mode = 0;
+  List<String> _branches = const [];
 
   @override
   void dispose() {
@@ -62,11 +64,14 @@ class _NewWorktreeSheetState extends State<NewWorktreeSheet> {
       _saving = true;
       _errorKey = null;
     });
+    final existing = _mode == 1;
     final ok = await widget.controller.createWorktree(
       directory: widget.directory,
       worktreeName: name,
-      branchName: branch,
-      startRef: _startRef.text.trim().isEmpty ? null : _startRef.text.trim(),
+      branchName: existing ? null : branch,
+      startRef: existing || _startRef.text.trim().isEmpty ? null : _startRef.text.trim(),
+      mode: existing ? 'existing' : 'new',
+      existingBranch: existing ? branch : null,
     );
     if (!mounted) return;
     setState(() => _saving = false);
@@ -75,6 +80,18 @@ class _NewWorktreeSheetState extends State<NewWorktreeSheet> {
       return;
     }
     setState(() => _errorKey = widget.controller.lastMutationErrorKey ?? 'sessions.sidebar.project.actions.worktreeCreateFailed');
+  }
+
+  Future<void> _loadBranches() async {
+    final branches = await widget.controller.listGitBranches(widget.directory);
+    if (!mounted) return;
+    setState(() {
+      _branches = branches;
+      if (_branch.text.trim().isEmpty && branches.isNotEmpty) {
+        _branch.text = branches.first;
+        if (_syncName) _name.text = slugifyWorktreeName(branches.first);
+      }
+    });
   }
 
   Future<void> _pickGitHub() async {
@@ -116,6 +133,21 @@ class _NewWorktreeSheetState extends State<NewWorktreeSheet> {
               )),
             ),
             const SizedBox(height: 12),
+            SegmentedPill(
+              labels: [
+                t(context, 'session.newWorktree.mode.newBranch'),
+                t(context, 'session.newWorktree.mode.existingBranch'),
+              ],
+              selectedIndex: _mode,
+              onSelected: (index) {
+                setState(() => _mode = index);
+                if (index == 1 && _branches.isEmpty) {
+                  unawaited(_loadBranches());
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            if (_mode == 0)
             Pressable(
               haptic: HapticStrength.light,
               onPressed: () => unawaited(_pickGitHub()),
@@ -133,6 +165,23 @@ class _NewWorktreeSheetState extends State<NewWorktreeSheet> {
                 ),
               ),
             ),
+            if (_mode == 1 && _branches.isNotEmpty)
+              DropdownButton<String>(
+                key: const Key('worktree-existing-branch'),
+                value: _branches.contains(_branch.text.trim()) ? _branch.text.trim() : _branches.first,
+                isExpanded: true,
+                items: [
+                  for (final branch in _branches)
+                    DropdownMenuItem(value: branch, child: Text(branch)),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() {
+                    _branch.text = value;
+                    if (_syncName) _name.text = slugifyWorktreeName(value);
+                  });
+                },
+              ),
             if (_linked != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -162,6 +211,7 @@ class _NewWorktreeSheetState extends State<NewWorktreeSheet> {
               ),
               onChanged: (_) => _syncName = false,
             ),
+            if (_mode == 0) ...[
             const SizedBox(height: 8),
             TextField(
               key: const Key('worktree-start-ref-field'),
@@ -171,6 +221,7 @@ class _NewWorktreeSheetState extends State<NewWorktreeSheet> {
                 hintText: t(context, 'session.newWorktree.selectSourceBranchPlaceholder'),
               ),
             ),
+            ],
             if (_errorKey != null) ...[
               const SizedBox(height: 8),
               Text(t(context, _errorKey!), style: TextStyle(color: Theme.of(context).colorScheme.error)),

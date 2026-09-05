@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
@@ -12,6 +14,7 @@ import '../../theme/ios_chrome.dart';
 import '../projects/highlighted_text.dart';
 import '../../theme/oc_glyphs.dart';
 import '../chat/chat_screen.dart';
+import '../projects/action_dialogs.dart';
 import 'scheduled_task_sheet.dart';
 
 class ScheduledTabScreen extends StatefulWidget {
@@ -77,6 +80,70 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
       if (_filter == 2) return !task.enabled;
       return true;
     }).toList();
+  }
+
+  Future<void> _openTaskActions(ScheduledTaskRecord task) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Material(
+          key: Key('scheduled-task-actions-${task.id}'),
+          color: context.oc.pageBackground,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                key: Key('scheduled-action-run-${task.id}'),
+                title: Text(t(context, 'scheduled.runNow')),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  unawaited(widget.controller.runScheduledTaskNow(projectId: task.projectId, taskId: task.id));
+                },
+              ),
+              ListTile(
+                key: Key('scheduled-action-edit-${task.id}'),
+                title: Text(t(context, 'sessions.scheduledTasks.editor.title.edit')),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await showScheduledTaskSheet(context: context, controller: widget.controller, task: task);
+                  if (mounted) setState(() {});
+                },
+              ),
+              ListTile(
+                key: Key('scheduled-action-toggle-${task.id}'),
+                title: Text(t(context, task.enabled ? 'sessions.scheduledTasks.dialog.actions.pause' : 'sessions.scheduledTasks.dialog.actions.resume')),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await widget.controller.toggleScheduledTask(task: task, enabled: !task.enabled);
+                  if (mounted) setState(() {});
+                },
+              ),
+              ListTile(
+                key: Key('scheduled-action-delete-${task.id}'),
+                title: Text(t(context, 'sessions.scheduledTasks.dialog.actions.delete')),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  final confirmed = await showConfirmDialog(
+                    context: context,
+                    titleKey: 'scheduled.delete.title',
+                    messageKey: 'scheduled.delete.confirm',
+                    confirmKey: 'sessions.scheduledTasks.dialog.actions.delete',
+                    cancelKey: 'sessions.sidebar.session.rename.cancel',
+                    confirmWidgetKey: Key('scheduled-delete-confirm-${task.id}'),
+                    destructive: true,
+                  );
+                  if (!confirmed || !mounted) return;
+                  await widget.controller.deleteScheduledTask(projectId: task.projectId, taskId: task.id);
+                  if (mounted) setState(() {});
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _openTask(String projectId, String taskId) async {
@@ -286,10 +353,7 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   key: Key('scheduled-run-now-${task.id}'),
                   haptic: HapticStrength.light,
                   highlight: false,
-                  onPressed: () => widget.controller.runScheduledTaskNow(
-                    projectId: task.projectId,
-                    taskId: task.id,
-                  ),
+                  onPressed: () => unawaited(_openTaskActions(task)),
                   child: Center(
                     child: OcGlyph(
                       OcGlyphKind.ellipsis,
