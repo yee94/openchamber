@@ -14,6 +14,7 @@ import '../../data/message_queue.dart';
 import '../../data/chat_parts.dart';
 import '../../data/openchamber_http.dart';
 import '../../data/question_request.dart';
+import '../../data/session_swipe.dart';
 import '../projects/action_dialogs.dart';
 import '../../data/prompt_attachment.dart';
 import '../../l10n/app_strings.dart';
@@ -77,13 +78,15 @@ class _ChatScreenState extends State<ChatScreen> {
   MessageQueueScope? _queue;
   int _seenQueueEpoch = 0;
   List<QuestionRequest> _questions = const [];
+  Offset? _swipeStart;
+  Offset? _swipeLast;
 
   LiveActivityController get _live => widget.appController?.liveActivity ?? LiveActivityController();
 
   @override
   void initState() {
     super.initState();
-    _live.selectSession(_session.id);
+    if (!_session.isDraft) _live.selectSession(_session.id);
     _scroll.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -91,24 +94,30 @@ class _ChatScreenState extends State<ChatScreen> {
       _jumpToLatest();
     });
     widget.appController?.addListener(_onApp);
-    unawaited(_load());
+    if (_session.isDraft) {
+      unawaited(_loadComposerCatalogs());
+    } else {
+      unawaited(_load());
+    }
   }
 
   void _onApp() {
     final controller = widget.appController;
     if (controller == null || !mounted) return;
-    final match = controller.sessionById(_session.id);
-    if (match != null &&
-        (match.title != _session.title ||
-            match.kind != _session.kind ||
-            match.shareUrl != _session.shareUrl)) {
-      setState(() => _session = match);
+    if (!_session.isDraft) {
+      final match = controller.sessionById(_session.id);
+      if (match != null &&
+          (match.title != _session.title ||
+              match.kind != _session.kind ||
+              match.shareUrl != _session.shareUrl)) {
+        setState(() => _session = match);
+      }
     }
-    if (controller.transcriptEpoch != _seenEpoch) {
+    if (!_session.isDraft && controller.transcriptEpoch != _seenEpoch) {
       _seenEpoch = controller.transcriptEpoch;
       unawaited(_reloadFromLive());
     }
-    if (controller.messageQueueEpoch != _seenQueueEpoch) {
+    if (!_session.isDraft && controller.messageQueueEpoch != _seenQueueEpoch) {
       _seenQueueEpoch = controller.messageQueueEpoch;
       unawaited(_refreshQueue());
     }
@@ -298,8 +307,18 @@ class _ChatScreenState extends State<ChatScreen> {
     if (controller != null && _attachments.isEmpty && await _handleSlashCommand(body)) {
       return;
     }
+    if (controller != null && _session.isDraft) {
+      final created = await controller.materializeDraft(_session);
+      if (created == null) {
+        _errorKey.value = controller.createSessionErrorKey ?? 'projects.newChat.failed';
+        return;
+      }
+      if (mounted) setState(() => _session = created);
+      _live.selectSession(created.id);
+    }
     final pending = List<AttachmentDraft>.from(_attachments);
     if (controller != null &&
+        !_session.isDraft &&
         controller.followUpBehavior == 'queue' &&
         _busy.value &&
         (body.isNotEmpty || pending.isNotEmpty)) {
@@ -471,10 +490,10 @@ class _ChatScreenState extends State<ChatScreen> {
         }
         return true;
       case 'new':
-        final created = await controller.createSession(directory: _session.directory);
-        if (created != null && mounted) {
+        final draft = controller.openNewSessionDraft(directory: _session.directory);
+        if (draft != null && mounted) {
           await Navigator.of(context).pushReplacement(
-            platformPageRoute<void>(builder: (_) => ChatScreen(session: created, appController: controller)),
+            platformPageRoute<void>(builder: (_) => ChatScreen(session: draft, appController: controller)),
           );
         } else if (mounted) {
           _errorKey.value = controller.createSessionErrorKey ?? 'projects.newChat.needsServer';
@@ -682,9 +701,9 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _newSession(BuildContext context) async {
     final controller = widget.appController;
     if (controller == null) return;
-    final created = await controller.createSession(directory: _session.directory);
+    final draft = controller.openNewSessionDraft(directory: _session.directory);
     if (!context.mounted) return;
-    if (created == null) {
+    if (draft == null) {
       final error = controller.createSessionErrorKey;
       if (error != null) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t(context, error))));
@@ -693,8 +712,60 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     await Navigator.of(context).pushReplacement(
       platformPageRoute<void>(
-        builder: (_) => ChatScreen(session: created, appController: controller),
+        builder: (_) => ChatScreen(session: draft, appController: controller),
       ),
+    );
+  }
+
+  Future<void> _switchSwipeSession(SessionSwipeDirection direction) async {
+    final controller = widget.appController;
+    if (controller == null || _session.isDraft) return;
+    final next = swipeNeighbor(sessions: controller.sessions, currentId: _session.id, direction: direction);
+    if (next == null) return;
+    await NativeHaptics().medium();
+    if (!mounted) return;
+    await Navigator.of(context).pushReplacement(
+      platformPageRoute<void>(
+        builder: (_) => ChatScreen(session: next, appController: controller),
+      ),
+    );
+  }
+
+  Widget _withComposerSwipe(Widget child) {
+    return GestureDetector(
+      key: const Key('composer-session-swipe'),
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: (details) {
+        final composerActive = FocusManager.instance.primaryFocus?.hasFocus == true;
+        final backEdge = defaultTargetPlatform == TargetPlatform.iOS &&
+            details.globalPosition.dx <= nativeIosBackEdgeWidth;
+        if (!shouldStartSessionSwipe(onExplicitSurface: true, composerActive: composerActive, withinNativeBackEdge: backEdge)) {
+          _swipeStart = null;
+          return;
+        }
+        _swipeStart = details.globalPosition;
+        _swipeLast = details.globalPosition;
+      },
+      onHorizontalDragUpdate: (details) {
+        if (_swipeStart == null) return;
+        _swipeLast = details.globalPosition;
+      },
+      onHorizontalDragEnd: (_) {
+        final start = _swipeStart;
+        final last = _swipeLast;
+        _swipeStart = null;
+        _swipeLast = null;
+        if (start == null || last == null) return;
+        final direction = evaluateSwipeDirection(
+          startX: start.dx,
+          startY: start.dy,
+          endX: last.dx,
+          endY: last.dy,
+        );
+        if (direction == null) return;
+        unawaited(_switchSwipeSession(direction));
+      },
+      child: child,
     );
   }
 
@@ -925,7 +996,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   valueListenable: _busy,
                   builder: (context, busy, _) {
                     return PushedNavBar(
-                      title: _session.title,
+                      title: _session.isDraft
+                          ? t(context, 'sessions.switcher.draftTitle')
+                          : _session.title,
                       subtitle: _session.subtitle,
                       leadingKey: const Key('chat-back'),
                       busy: busy,
@@ -1005,27 +1078,51 @@ class _ChatScreenState extends State<ChatScreen> {
                         onEdit: (item) => unawaited(_editQueued(item)),
                         onReorder: (from, to) => unawaited(_reorderQueued(from, to)),
                       ),
-                    ios
-                        ? SizedBox(
-                            height: collapsedComposerOccupancy + padding.bottom,
-                            child: ListenableBuilder(
-                              listenable: Listenable.merge([_busy, _composer]),
+                    _withComposerSwipe(
+                      child: ios
+                          ? SizedBox(
+                              height: collapsedComposerOccupancy + padding.bottom,
+                              child: ListenableBuilder(
+                                listenable: Listenable.merge([_busy, _composer]),
+                                builder: (context, _) {
+                                  final busy = _busy.value;
+                                  final queueFollowUp = widget.appController?.followUpBehavior == 'queue';
+                                  final hasDraft = _composer.text.trim().isNotEmpty || _attachments.isNotEmpty;
+                                  return IosComposerHost(
+                                    visible: true,
+                                    warm: false,
+                                    text: _composer.text,
+                                    canSend: hasDraft,
+                                    canAbort: busy && !(queueFollowUp && hasDraft),
+                                    attachments: _attachments.map((item) => item.name).toList(),
+                                    onSend: _send,
+                                    onStop: _stop,
+                                    onAttach: _attach,
+                                    onPickedFiles: (drafts) => unawaited(_acceptAttachments(drafts)),
+                                    onText: (value) => _composer.text = value,
+                                    commands: _commands,
+                                    files: _files,
+                                    skills: _skills,
+                                    snippets: _snippets,
+                                  );
+                                },
+                              ),
+                            )
+                          : ListenableBuilder(
+                              listenable: Listenable.merge([_busy, _atLiveEdge, _timeline]),
                               builder: (context, _) {
-                                final busy = _busy.value;
-                                final queueFollowUp = widget.appController?.followUpBehavior == 'queue';
-                                final hasDraft = _composer.text.trim().isNotEmpty || _attachments.isNotEmpty;
-                                return IosComposerHost(
-                                  visible: true,
-                                  warm: false,
-                                  text: _composer.text,
-                                  canSend: hasDraft,
-                                  canAbort: busy && !(queueFollowUp && hasDraft),
-                                  attachments: _attachments.map((item) => item.name).toList(),
+                                return ComposerBar(
+                                  controller: _composer,
+                                  busy: _busy.value,
+                                  queueFollowUp: widget.appController?.followUpBehavior == 'queue',
+                                  attachments: _attachments,
+                                  showScrollToBottom: !_atLiveEdge.value || _timeline.length >= 2,
+                                  onScrollToBottom: _jumpToLatest,
                                   onSend: _send,
                                   onStop: _stop,
                                   onAttach: _attach,
-                                  onPickedFiles: (drafts) => unawaited(_acceptAttachments(drafts)),
-                                  onText: (value) => _composer.text = value,
+                                  onAttachFiles: _attachFiles,
+                                  onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
                                   commands: _commands,
                                   files: _files,
                                   skills: _skills,
@@ -1033,29 +1130,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 );
                               },
                             ),
-                          )
-                        : ListenableBuilder(
-                            listenable: Listenable.merge([_busy, _atLiveEdge, _timeline]),
-                            builder: (context, _) {
-                              return ComposerBar(
-                                controller: _composer,
-                                busy: _busy.value,
-                                queueFollowUp: widget.appController?.followUpBehavior == 'queue',
-                                attachments: _attachments,
-                                showScrollToBottom: !_atLiveEdge.value || _timeline.length >= 2,
-                                onScrollToBottom: _jumpToLatest,
-                                onSend: _send,
-                                onStop: _stop,
-                                onAttach: _attach,
-                                onAttachFiles: _attachFiles,
-                                onRemoveAttachment: (index) => setState(() => _attachments.removeAt(index)),
-                                commands: _commands,
-                                files: _files,
-                                skills: _skills,
-                                snippets: _snippets,
-                              );
-                            },
-                          ),
+                    ),
                   ],
                 ),
               ),

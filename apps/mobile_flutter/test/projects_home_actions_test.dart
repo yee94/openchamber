@@ -341,14 +341,11 @@ void main() {
     expect(find.byKey(const Key('session-overflow-newWorktree')), findsOneWidget);
     await tester.tap(find.byKey(const Key('session-overflow-newSession')));
     await tester.pumpAndSettle();
+    expect(find.text('New session'), findsWidgets);
+    expect(find.byKey(const Key('composer-field')), findsOneWidget);
     expect(
-      env.transport.calls.any(
-        (call) =>
-            call.method == 'POST' &&
-            call.path == OpenChamberPaths.sessionCreate &&
-            call.query['directory'] == '/workspace/openchamber',
-      ),
-      isTrue,
+      env.transport.calls.any((call) => call.method == 'POST' && call.path == OpenChamberPaths.sessionCreate),
+      isFalse,
     );
   });
 }

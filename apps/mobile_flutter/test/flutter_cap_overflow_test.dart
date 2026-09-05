@@ -146,7 +146,7 @@ void main() {
     );
   });
 
-  testWidgets('chat overflow new session POSTs /api/session', (tester) async {
+  testWidgets('chat overflow new session opens a draft without POSTing /api/session', (tester) async {
     final env = await pumpApp(tester);
     await tester.tap(find.byKey(const Key('home-session-sess-catalog')));
     await tester.pumpAndSettle();
@@ -154,9 +154,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('session-overflow-newSession')));
     await tester.pumpAndSettle();
+    expect(find.text('New session'), findsWidgets);
+    expect(find.byKey(const Key('composer-session-swipe')), findsOneWidget);
     expect(
       env.transport.calls.any((call) => call.method == 'POST' && call.path == OpenChamberPaths.sessionCreate),
-      isTrue,
+      isFalse,
     );
   });
 

@@ -89,8 +89,14 @@ class _EntityEditorSettingsPageState extends State<EntityEditorSettingsPage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await _load();
+      if (!mounted) return;
+      if (widget.kind == SettingsEditorKind.assistants &&
+          widget.controller.takePendingAssistantCreate()) {
+        await _openEditor();
+      }
     });
   }
 

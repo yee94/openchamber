@@ -465,7 +465,7 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
   }
 
   Future<void> _createSession(BuildContext context, {String? directory}) async {
-    final row = await controller.createSession(directory: directory);
+    final row = controller.openNewSessionDraft(directory: directory);
     if (!context.mounted) return;
     if (row != null) {
       _openChat(context, row);

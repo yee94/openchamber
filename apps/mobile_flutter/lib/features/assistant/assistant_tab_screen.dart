@@ -10,6 +10,7 @@ import '../../navigation/platform_route.dart';
 import '../../mobile/mobile_assistant_card.dart';
 import '../../mobile/mobile_surface.dart';
 import '../../theme/ios_chrome.dart';
+import '../../theme/oc_glyphs.dart';
 import '../chat/chat_screen.dart';
 import '../projects/action_dialogs.dart';
 
@@ -181,10 +182,35 @@ class _AssistantTabScreenState extends State<AssistantTabScreen> {
               )
             else
               MobileFloatingSurface(
-                child: ListTile(
-                  key: const Key('assistant-empty'),
-                  title: Text(t(context, 'assistant.empty.title')),
-                  subtitle: Text(t(context, 'assistant.empty.description')),
+                child: Padding(
+                  key: const Key('assistant-onboarding'),
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      OcGlyph(
+                        OcGlyphKind.robot,
+                        size: OcOptical.settingsNavIcon,
+                        color: context.oc.foreground,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        t(context, 'assistants.onboarding.title'),
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        t(context, 'assistants.onboarding.description'),
+                        style: TextStyle(color: context.oc.mutedForeground),
+                      ),
+                      const SizedBox(height: 14),
+                      FilledButton(
+                        key: const Key('assistant-onboarding-create'),
+                        onPressed: widget.controller.requestAssistantCreate,
+                        child: Text(t(context, 'assistants.onboarding.action')),
+                      ),
+                    ],
+                  ),
                 ),
               ),
       ],

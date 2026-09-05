@@ -38,6 +38,19 @@ class HomeSessionRow {
 
   bool get isShared => shareUrl != null && shareUrl!.trim().isNotEmpty;
 
+  /// Cap `currentSessionId == null` / `sessionId == ''` until first send.
+  bool get isDraft => id.isEmpty;
+
+  factory HomeSessionRow.draft({required String directory, String projectLabel = ''}) {
+    return HomeSessionRow(
+      id: '',
+      title: '',
+      projectLabel: projectLabel,
+      kind: HomeSessionKind.catalog,
+      directory: directory,
+    );
+  }
+
   String get subtitle => formatHomeSessionSubtitle(projectLabel, branch);
 
   HomeSessionRow copyWith({

@@ -867,6 +867,41 @@ Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hoste
 
 Validated on Flutter **3.32.8 / Dart 3.8.1**: focused `flutter_files_changes_extras_test.dart` (10 cases) + `flutter_cap_overflow_test.dart` + `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **283 passed**. Screenshot PNGs were **not** recaptured. Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native`.
 
+## Twenty-ninth-slice status (2026-09-05) — Draft New Session + composer swipe + empty-assistant create
+
+Stacked on `5ed02f126` (`work/flutter-native` after the twenty-eighth Files/Changes extras slice). Do **not** merge `main`. No 1.18 TanStack. No Flutter UI golden recapture. OpenChamber v2 `.debug` applicationId unchanged. Do **not** invent Flexoki, Finder, Capgo, plan/notes/Todo, Chat dock, `iosNativeUi`, Bonjour, Pierre, mermaid SVG, or Android launcher badge.
+
+Read on this checkout: Cap `openNewSessionDraft` / `materializeClaimedDraftSession` (`POST /api/session` only at first send); `useEdgeSwipeSessionSwitch.ts` (composer surface, 64px / 0.6 off-axis, iOS 28px back-edge, no swipe while composer focused); `MobileAssistantTab` empty catalog → `requestCreate` + `openSettings('assistants')`. Official locales `sessions.switcher.draftTitle` and `assistants.onboarding.*`.
+
+### Landed this slice (code)
+
+| Surface | Official Cap mobile | Flutter | Notes |
+|---|---|---|---|
+| New Session as draft | `sessionId == ''` until first send | `HomeSessionRow.draft` / `openNewSessionDraft` | Plus-menu, project overflow, chat overflow, `/new` — no create POST. |
+| First send | `POST /api/session` then `prompt_async` | `materializeDraft` single-flight then existing send | Queue skipped while still a draft. |
+| Composer swipe | Left=next/older, right=prev/newer | Same geometry + newest-first neighbors | iOS back-edge 28px; focused composer does not start a swipe. |
+| Empty assistants | Onboarding → Settings create form | Same keys + pending create flag | Existing assistants create already `POST /api/openchamber/assistants`. |
+
+### Still code / will-not-port
+
+| Gap | Why leftover |
+|---|---|
+| Assigned-share → composer handoff | Android Cap fills composer; iOS stays POST `/api/openchamber/assistants/:id/share`. Cleaner after this draft plumbing — next CODE slice. |
+| About diagnostics export | Needs `saveFile` native port. Skip Capgo About rows. |
+| Appearance Flexoki picker | **Do not invent.** Official **mobile** Appearance is language + Light/Dark/System. |
+| Finder | **Do not invent.** Cap `handleOpenInFinder` is desktop-only. |
+| Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` / Bonjour / Pierre / mermaid SVG / Android launcher badge | Will not port. |
+
+### 真机-only
+
+Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hosted OAuth; ActivityKit / Dynamic Island / widget tap; Impeller 16ms; FCM on `.debug` if Firebase init fails; share-extension → inbox POST. Code/plist may exist — do not fake 真机过.
+
+### EXHAUSTED
+
+**false.** Draft / swipe / empty-assistant create are landed. Remaining Cap-mobile CODE is assigned-share composer handoff and About diagnostics export.
+
+Validated on Flutter **3.32.8 / Dart 3.8.1**: focused `flutter_draft_swipe_assistants_test.dart` + overflow/home new-session regressions + `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test`. Screenshot PNGs were **not** recaptured. Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native`.
+
 
 ## Twenty-fourth-slice status (2026-09-05) — Cap phone overflow + composer no-ops
 

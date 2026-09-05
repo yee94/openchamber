@@ -297,10 +297,45 @@ class AppController extends ChangeNotifier {
   );
 
   String? pendingSettingsSlug;
+  bool pendingAssistantCreate = false;
+  bool _draftSubmitting = false;
 
   void requestSettingsSlug(String slug) {
     pendingSettingsSlug = slug;
     notifyListeners();
+  }
+
+  void requestAssistantCreate() {
+    pendingAssistantCreate = true;
+    requestSettingsSlug('assistants');
+  }
+
+  bool takePendingAssistantCreate() {
+    final pending = pendingAssistantCreate;
+    pendingAssistantCreate = false;
+    return pending;
+  }
+
+  HomeSessionRow? openNewSessionDraft({String? directory}) {
+    createSessionErrorKey = null;
+    final target = (directory != null && directory.isNotEmpty) ? directory : _preferredCreateDirectory();
+    if (activeBase == null || target == null || target.isEmpty) {
+      createSessionErrorKey = 'projects.newChat.needsServer';
+      notifyListeners();
+      return null;
+    }
+    return HomeSessionRow.draft(directory: target);
+  }
+
+  Future<HomeSessionRow?> materializeDraft(HomeSessionRow draft) async {
+    if (!draft.isDraft) return draft;
+    if (_draftSubmitting) return null;
+    _draftSubmitting = true;
+    try {
+      return await createSession(directory: draft.directory);
+    } finally {
+      _draftSubmitting = false;
+    }
   }
 
   String? takePendingSettingsSlug() {
