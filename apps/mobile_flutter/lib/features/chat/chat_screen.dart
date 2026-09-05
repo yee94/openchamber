@@ -449,7 +449,7 @@ class _ChatScreenState extends State<ChatScreen> {
         final forked = await controller.forkSession(session: _session);
         if (forked != null && mounted) {
           await Navigator.of(context).pushReplacement(
-            platformRoute<void>(builder: (_) => ChatScreen(session: forked, appController: controller)),
+            platformPageRoute<void>(builder: (_) => ChatScreen(session: forked, appController: controller)),
           );
         } else if (mounted) {
           _errorKey.value = controller.lastMutationErrorKey ?? 'chat.messageBody.actions.forkFailed';
@@ -459,7 +459,7 @@ class _ChatScreenState extends State<ChatScreen> {
         final created = await controller.createSession(directory: _session.directory);
         if (created != null && mounted) {
           await Navigator.of(context).pushReplacement(
-            platformRoute<void>(builder: (_) => ChatScreen(session: created, appController: controller)),
+            platformPageRoute<void>(builder: (_) => ChatScreen(session: created, appController: controller)),
           );
         } else if (mounted) {
           _errorKey.value = controller.createSessionErrorKey ?? 'projects.newChat.needsServer';
