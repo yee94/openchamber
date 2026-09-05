@@ -1,10 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
 import '../../data/app_version.dart';
+import '../../data/diagnostics_export.dart';
 import '../../data/settings_catalog.dart';
 import '../../data/settings_remote.dart';
 import '../../l10n/app_strings.dart';
+import '../../native/media_channel.dart';
 import '../../navigation/platform_route.dart';
 import '../../theme/ios_hero.dart';
 import '../../theme/oc_glyphs.dart';
@@ -335,14 +339,41 @@ class NotificationsSettingsPage extends StatelessWidget {
   }
 }
 
-class AboutSettingsPage extends StatelessWidget {
-  const AboutSettingsPage({super.key, required this.controller});
+class AboutSettingsPage extends StatefulWidget {
+  const AboutSettingsPage({super.key, required this.controller, this.media});
 
   final AppController controller;
+  final MediaChannel? media;
+
+  @override
+  State<AboutSettingsPage> createState() => _AboutSettingsPageState();
+}
+
+class _AboutSettingsPageState extends State<AboutSettingsPage> {
+  bool _exporting = false;
+
+  Future<void> _exportDiagnostics() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    final content = exportClientDiagnosticsReport();
+    final result = await (widget.media ?? MediaChannel()).saveFile(
+      dataBase64: base64Encode(utf8.encode(content)),
+      filename: diagnosticsExportFileName(),
+    );
+    if (!mounted) return;
+    setState(() => _exporting = false);
+    if (result.cancelled) return;
+    final key = result.failed
+        ? 'settings.openchamber.about.diagnostics.toast.failed'
+        : diagnosticsExportEventCount(content) == 0
+            ? 'settings.openchamber.about.diagnostics.toast.empty'
+            : 'settings.openchamber.about.diagnostics.toast.exported';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t(context, key))));
+  }
 
   @override
   Widget build(BuildContext context) {
-    final instance = controller.activeInstance;
+    final instance = widget.controller.activeInstance;
     return SettingsPageScaffold(
       title: t(context, 'settings.about.title'),
       child: ListView(
@@ -366,9 +397,29 @@ class AboutSettingsPage extends StatelessWidget {
               ListTile(
                 title: Text(t(context, 'settings.about.instanceVersion')),
                 subtitle: Text(
-                  controller.instanceVersion ??
+                  widget.controller.instanceVersion ??
                       (instance == null ? t(context, 'settings.about.instanceUnknown') : instance.displayLabel),
                 ),
+              ),
+            ],
+          ),
+          SettingsGroup(
+            label: t(context, 'settings.openchamber.about.diagnostics.label'),
+            children: [
+              ListTile(
+                title: Text(t(context, 'settings.openchamber.about.diagnostics.description')),
+              ),
+              ListTile(
+                key: const Key('about-diagnostics-export'),
+                title: Text(
+                  t(
+                    context,
+                    _exporting
+                        ? 'settings.openchamber.about.diagnostics.exporting'
+                        : 'settings.openchamber.about.diagnostics.export',
+                  ),
+                ),
+                onTap: _exporting ? null : _exportDiagnostics,
               ),
             ],
           ),

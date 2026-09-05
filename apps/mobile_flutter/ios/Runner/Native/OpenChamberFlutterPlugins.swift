@@ -815,10 +815,61 @@ final class OpenChamberMediaPlugin: NSObject {
             result(FlutterError(code: "transcode", message: error.localizedDescription, details: nil))
           }
         }
+      case "saveFile":
+        Task { @MainActor in
+          presentSaveFile(args: call.arguments as? [String: Any] ?? [:], result: result)
+        }
       default:
         result(FlutterMethodNotImplemented)
       }
     }
+  }
+
+  static var saveFileCoordinator: OpenChamberSaveFileCoordinator?
+
+  @MainActor
+  private static func presentSaveFile(args: [String: Any], result: @escaping FlutterResult) {
+    var dataBase64 = args["dataBase64"] as? String ?? ""
+    if dataBase64.lowercased().hasPrefix("data:"), let comma = dataBase64.firstIndex(of: ",") {
+      dataBase64 = String(dataBase64[dataBase64.index(after: comma)...])
+    }
+    guard let data = Data(base64Encoded: dataBase64, options: [.ignoreUnknownCharacters]), !data.isEmpty else {
+      result(FlutterError(code: "invalid", message: "dataBase64 is required", details: nil))
+      return
+    }
+    guard data.count <= maxBytes else {
+      result(FlutterError(code: "too_large", message: "File exceeds maximum size", details: nil))
+      return
+    }
+    var filename = (args["filename"] as? String ?? "export.json").trimmingCharacters(in: .whitespacesAndNewlines)
+    filename = (filename as NSString).lastPathComponent
+    if filename.isEmpty { filename = "export.json" }
+    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+    do {
+      try data.write(to: tempURL, options: .atomic)
+    } catch {
+      result(FlutterError(code: "save", message: error.localizedDescription, details: nil))
+      return
+    }
+    guard let root = UIApplication.shared.connectedScenes
+      .compactMap({ $0 as? UIWindowScene })
+      .flatMap(\.windows)
+      .first(where: \.isKeyWindow)?
+      .rootViewController else {
+      try? FileManager.default.removeItem(at: tempURL)
+      result(FlutterError(code: "no_window", message: "No window", details: nil))
+      return
+    }
+    let picker = UIDocumentPickerViewController(forExporting: [tempURL], asCopy: true)
+    picker.shouldShowFileExtensions = true
+    let host = OpenChamberSaveFileCoordinator { saved in
+      try? FileManager.default.removeItem(at: tempURL)
+      saveFileCoordinator = nil
+      result(["cancelled": !saved])
+    }
+    saveFileCoordinator = host
+    picker.delegate = host
+    root.present(picker, animated: true)
   }
 
   @MainActor
@@ -897,6 +948,22 @@ enum OpenChamberMediaError: LocalizedError {
     case .decodeFailed: return "Could not decode HEIC/HEIF image"
     case .encodeFailed: return "Could not encode JPEG"
     }
+  }
+}
+
+final class OpenChamberSaveFileCoordinator: NSObject, UIDocumentPickerDelegate {
+  private let finish: (Bool) -> Void
+
+  init(finish: @escaping (Bool) -> Void) {
+    self.finish = finish
+  }
+
+  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    finish(!urls.isEmpty)
+  }
+
+  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    finish(false)
   }
 }
 

@@ -1,5 +1,9 @@
+import 'package:flutter/foundation.dart';
+
 import 'assistant_scheduled.dart';
+import 'home_session.dart';
 import 'message_id.dart';
+import 'prompt_attachment.dart';
 import '../native/share_targeting.dart';
 
 /// Official `MobileShareState` plus cleanup phases from `MobileShareBridge.tsx`.
@@ -212,6 +216,46 @@ List<AssistantSharePart> partsForShareEnvelope(NativeShareEnvelope envelope) {
     throw const FormatException('empty_share');
   }
   return parts;
+}
+
+const maxAndroidShareAttachmentBytes = 20 * 1024 * 1024;
+const maxAndroidShareTotalBytes = 20 * 1024 * 1024;
+
+/// Cap Android assigned drafts fill the composer; iOS envelopes still POST share.
+bool usesAndroidShareComposerHandoff({TargetPlatform? platform}) {
+  return (platform ?? defaultTargetPlatform) == TargetPlatform.android;
+}
+
+bool isValidAndroidShareHandoffAttachment(NativeShareAttachment attachment) {
+  return attachment.mime.startsWith('image/') &&
+      attachment.byteSize > 0 &&
+      attachment.byteSize <= maxAndroidShareAttachmentBytes;
+}
+
+bool isValidAndroidShareHandoffDraft(NativeShareDraft draft) {
+  if (draft.attachments.length > 10) return false;
+  if (!draft.attachments.every(isValidAndroidShareHandoffAttachment)) return false;
+  var total = 0;
+  for (final attachment in draft.attachments) {
+    total += attachment.byteSize;
+  }
+  return total <= maxAndroidShareTotalBytes;
+}
+
+class ComposerShareHandoff {
+  const ComposerShareHandoff({
+    required this.draftID,
+    required this.assistantID,
+    required this.session,
+    required this.text,
+    this.attachments = const [],
+  });
+
+  final String draftID;
+  final String assistantID;
+  final HomeSessionRow session;
+  final String text;
+  final List<AttachmentDraft> attachments;
 }
 
 NativeShareEnvelope envelopeFromAssignedDraft(NativeShareDraft draft) {

@@ -6,6 +6,15 @@ import 'package:flutter/services.dart';
 import '../data/prompt_attachment.dart';
 import 'platform_channels.dart';
 
+class SaveFileResult {
+  const SaveFileResult({this.cancelled = false, this.failed = false});
+
+  final bool cancelled;
+  final bool failed;
+
+  bool get saved => !cancelled && !failed;
+}
+
 /// Capacitor contract names: `OpenChamberMedia` / `OpenChamberVirtualAsset`.
 /// Flutter uses MethodChannels; JSON keys stay the same.
 class MediaChannel {
@@ -63,6 +72,28 @@ class MediaChannel {
       );
     } on MissingPluginException {
       throw const PromptAttachmentUploadError(0, 'transcode');
+    }
+  }
+
+  Future<SaveFileResult> saveFile({
+    required String dataBase64,
+    String mimeType = 'application/json',
+    String filename = 'export.json',
+  }) async {
+    try {
+      final raw = await _media.invokeMethod<Object>('saveFile', {
+        'dataBase64': dataBase64,
+        'mimeType': mimeType,
+        'filename': filename,
+      });
+      if (raw is Map && raw['cancelled'] == true) {
+        return const SaveFileResult(cancelled: true);
+      }
+      return const SaveFileResult();
+    } on MissingPluginException {
+      return const SaveFileResult(failed: true);
+    } on PlatformException {
+      return const SaveFileResult(failed: true);
     }
   }
 

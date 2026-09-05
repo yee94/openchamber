@@ -87,6 +87,11 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     if (!_session.isDraft) _live.selectSession(_session.id);
+    final handoff = widget.appController?.takePendingComposerHandoff(_session.id);
+    if (handoff != null) {
+      _composer.text = handoff.text;
+      _attachments.addAll(handoff.attachments);
+    }
     _scroll.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;

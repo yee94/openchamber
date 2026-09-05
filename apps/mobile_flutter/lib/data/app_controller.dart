@@ -251,6 +251,7 @@ class AppController extends ChangeNotifier {
 
   IncomingDeepLink? pendingDeepLink;
   NativeShareDraft? pendingShareDraft;
+  ComposerShareHandoff? pendingComposerHandoff;
   List<ShareTarget> shareCatalog = const [];
   bool shareRecipientBusy = false;
   bool _shareDrainInFlight = false;
@@ -3423,20 +3424,25 @@ class AppController extends ChangeNotifier {
       final drafts = await _shareInbox.listDrafts();
       final assigned = [for (final draft in drafts) if (draft.isAssigned) draft];
       final unassigned = [for (final draft in drafts) if (!draft.isAssigned) draft];
+      final handoffAssigned = usesAndroidShareComposerHandoff() ? assigned : const <NativeShareDraft>[];
+      final envelopeAssigned = usesAndroidShareComposerHandoff() ? const <NativeShareDraft>[] : assigned;
+      for (final draft in handoffAssigned) {
+        await handoffAssignedShareDraft(draft);
+      }
       final envelopes = <String, NativeShareEnvelope>{
         for (final envelope in pending) envelope.operationID: envelope,
-        for (final draft in assigned) draft.draftID: envelopeFromAssignedDraft(draft),
+        for (final draft in envelopeAssigned) draft.draftID: envelopeFromAssignedDraft(draft),
       };
       await drainShareItems(
         [
           for (final envelope in pending) ShareDrainItem(operationID: envelope.operationID),
-          for (final draft in assigned) ShareDrainItem(operationID: draft.draftID),
+          for (final draft in envelopeAssigned) ShareDrainItem(operationID: draft.draftID),
         ],
         deliver: (operationID) async {
           final envelope = envelopes[operationID];
           if (envelope == null) return;
           final result = await _shareDelivery.deliverOne(envelope);
-          if (assigned.any((draft) => draft.draftID == operationID)) {
+          if (envelopeAssigned.any((draft) => draft.draftID == operationID)) {
             await _shareInbox.cancelDraft(operationID);
           }
           if (result.state == ShareDeliveryState.delivered && result.sessionID != null && result.sessionID!.isNotEmpty) {
@@ -3464,18 +3470,22 @@ class AppController extends ChangeNotifier {
     shareRecipientBusy = true;
     notifyListeners();
     try {
-      final result = await _shareDelivery.deliverOne(
-        NativeShareEnvelope(
-          operationID: draft.draftID,
-          serverInstanceID: target.serverInstanceId,
-          assistantID: target.assistantId,
-          text: draft.text,
-          attachments: draft.attachments,
-          source: draft.source,
-          createdAt: draft.createdAt,
-          expiresAt: draft.expiresAt,
-        ),
+      final assigned = NativeShareDraft(
+        draftID: draft.draftID,
+        serverInstanceID: target.serverInstanceId,
+        assistantID: target.assistantId,
+        text: draft.text,
+        attachments: draft.attachments,
+        source: draft.source,
+        createdAt: draft.createdAt,
+        expiresAt: draft.expiresAt,
       );
+      if (usesAndroidShareComposerHandoff()) {
+        await handoffAssignedShareDraft(assigned);
+        if (pendingShareDraft?.draftID == draft.draftID) pendingShareDraft = null;
+        return;
+      }
+      final result = await _shareDelivery.deliverOne(envelopeFromAssignedDraft(assigned));
       await _shareInbox.cancelDraft(draft.draftID);
       if (pendingShareDraft?.draftID == draft.draftID) pendingShareDraft = null;
       if (result.state == ShareDeliveryState.delivered && result.sessionID != null && result.sessionID!.isNotEmpty) {
@@ -3485,6 +3495,65 @@ class AppController extends ChangeNotifier {
       shareRecipientBusy = false;
       notifyListeners();
     }
+  }
+
+  ComposerShareHandoff? takePendingComposerHandoff(String sessionId) {
+    final handoff = pendingComposerHandoff;
+    if (handoff == null || handoff.session.id != sessionId) return null;
+    pendingComposerHandoff = null;
+    return handoff;
+  }
+
+  Future<HomeSessionRow?> handoffAssignedShareDraft(NativeShareDraft draft) async {
+    if (!draft.isAssigned || !isValidAndroidShareHandoffDraft(draft)) return null;
+    final assistantId = draft.assistantID!;
+    AssistantRecord? match;
+    for (final item in assistantSnapshot.value?.assistants ?? const <AssistantRecord>[]) {
+      if (item.id == assistantId && item.enabled) {
+        match = item;
+        break;
+      }
+    }
+    if (match == null) {
+      await loadAssistantSnapshot();
+      for (final item in assistantSnapshot.value?.assistants ?? const <AssistantRecord>[]) {
+        if (item.id == assistantId && item.enabled) {
+          match = item;
+          break;
+        }
+      }
+    }
+    if (match == null) return null;
+    final HomeSessionRow? session;
+    try {
+      session = await openAssistant(match);
+    } on OpenChamberHttpException {
+      return null;
+    }
+    if (session == null) return null;
+    final attachments = <AttachmentDraft>[];
+    try {
+      for (final attachment in draft.attachments) {
+        final bytes = await File(attachment.stagedPath).readAsBytes();
+        if (bytes.length != attachment.byteSize) return null;
+        attachments.add(
+          AttachmentDraft(name: attachment.originalName, mime: attachment.mime, bytes: bytes),
+        );
+      }
+    } on FileSystemException {
+      return null;
+    }
+    pendingComposerHandoff = ComposerShareHandoff(
+      draftID: draft.draftID,
+      assistantID: assistantId,
+      session: session,
+      text: draft.text ?? '',
+      attachments: attachments,
+    );
+    pendingDeepLink = classifyDeepLink(liveActivityRowUri(session.id).toString());
+    await _shareInbox.cancelDraft(draft.draftID);
+    notifyListeners();
+    return session;
   }
 
   Future<void> cancelShareRecipient(NativeShareDraft draft) async {

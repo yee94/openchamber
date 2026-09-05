@@ -24,6 +24,8 @@ class MediaPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAwar
     private lateinit var channel: MethodChannel
     private var activity: Activity? = null
     private var pending: MethodChannel.Result? = null
+    private var pendingSave: MethodChannel.Result? = null
+    private var pendingSavePath: String? = null
     private val executor = Executors.newSingleThreadExecutor()
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -58,6 +60,7 @@ class MediaPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAwar
             "pickMedia" -> pickMedia(call, result)
             "pickFiles" -> pickFiles(call, result)
             "transcode" -> transcode(call, result)
+            "saveFile" -> saveFile(call, result)
             else -> result.notImplemented()
         }
     }
@@ -128,7 +131,102 @@ class MediaPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAwar
         }
     }
 
+    private fun saveFile(call: MethodCall, result: MethodChannel.Result) {
+        var data = call.argument<String>("dataBase64").orEmpty()
+        val comma = data.indexOf(',')
+        if (data.startsWith("data:", ignoreCase = true) && comma >= 0) {
+            data = data.substring(comma + 1)
+        }
+        if (data.isEmpty()) {
+            result.error("invalid", "dataBase64 is required", null)
+            return
+        }
+        val filename = sanitizeExportFilename(call.argument<String>("filename") ?: "export.json")
+        val host = activity
+        if (host == null) {
+            result.error("no_activity", "No activity to present the save picker", null)
+            return
+        }
+        if (pendingSave != null || pending != null) {
+            result.error("busy", "Picker already open", null)
+            return
+        }
+        executor.execute {
+            try {
+                val bytes = Base64.decode(data, Base64.DEFAULT)
+                if (bytes == null || bytes.isEmpty() || bytes.size > MAX_BYTES) {
+                    host.runOnUiThread { result.error("invalid", "File data is empty or too large", null) }
+                    return@execute
+                }
+                val dir = File(host.cacheDir, "save-file")
+                dir.mkdirs()
+                dir.listFiles()?.forEach { it.delete() }
+                val cacheFile = File(dir, filename)
+                cacheFile.outputStream().use { it.write(bytes) }
+                host.runOnUiThread {
+                    pendingSave = result
+                    pendingSavePath = cacheFile.absolutePath
+                    val intent = Intent(Intent.ACTION_CREATE_DOCUMENT)
+                    intent.addCategory(Intent.CATEGORY_OPENABLE)
+                    intent.type = "application/octet-stream"
+                    intent.putExtra(Intent.EXTRA_TITLE, filename)
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    try {
+                        host.startActivityForResult(intent, REQUEST_SAVE)
+                    } catch (error: ActivityNotFoundException) {
+                        pendingSave = null
+                        pendingSavePath = null
+                        cacheFile.delete()
+                        result.error("unavailable", error.message ?: "Save picker is unavailable", null)
+                    }
+                }
+            } catch (error: Exception) {
+                host.runOnUiThread { result.error("save", error.message ?: "Could not stage file", null) }
+            }
+        }
+    }
+
+    private fun sanitizeExportFilename(raw: String): String {
+        val trimmed = raw.trim().ifEmpty { "export.json" }
+        return trimmed.replace(Regex("[\\\\/]+"), "-")
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
+        if (requestCode == REQUEST_SAVE) {
+            val reply = pendingSave
+            val path = pendingSavePath
+            pendingSave = null
+            pendingSavePath = null
+            val cache = path?.let { File(it) }
+            if (reply == null) {
+                cache?.delete()
+                return true
+            }
+            if (resultCode != Activity.RESULT_OK || data?.data == null || cache == null || !cache.exists()) {
+                cache?.delete()
+                reply.success(mapOf("cancelled" to true))
+                return true
+            }
+            val host = activity
+            if (host == null) {
+                cache.delete()
+                reply.error("no_activity", "No activity to write the file", null)
+                return true
+            }
+            executor.execute {
+                try {
+                    host.contentResolver.openOutputStream(data.data!!)?.use { output ->
+                        cache.inputStream().use { it.copyTo(output) }
+                    } ?: throw IllegalStateException("Could not open destination")
+                    cache.delete()
+                    host.runOnUiThread { reply.success(mapOf("cancelled" to false)) }
+                } catch (error: Exception) {
+                    cache.delete()
+                    host.runOnUiThread { reply.error("save", error.message ?: "Save failed", null) }
+                }
+            }
+            return true
+        }
         if (requestCode != REQUEST && requestCode != REQUEST_FILES) return false
         val reply = pending ?: return true
         pending = null
@@ -237,6 +335,7 @@ class MediaPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAwar
     companion object {
         private const val REQUEST = 7102
         private const val REQUEST_FILES = 7103
+        private const val REQUEST_SAVE = 7104
         private const val MAX_BYTES = 32 * 1024 * 1024
     }
 }

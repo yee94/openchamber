@@ -902,6 +902,40 @@ Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hoste
 
 Validated on Flutter **3.32.8 / Dart 3.8.1**: focused `flutter_draft_swipe_assistants_test.dart` (6 cases) + overflow/home new-session regressions + `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **289 passed**. Screenshot PNGs were **not** recaptured (`07-chat*.png` rewritten by screenshot tests and reverted). Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native`.
 
+## Thirtieth-slice status (2026-09-05) — Android share composer handoff + About diagnostics export
+
+Stacked on `1bbeda3c8` (`work/flutter-native` after the twenty-ninth draft/swipe/assistant slice). Do **not** merge `main`. No 1.18 TanStack. No Flutter UI golden recapture. OpenChamber v2 `.debug` applicationId unchanged. Do **not** invent Flexoki, Finder, Capgo, plan/notes/Todo, Chat dock, `iosNativeUi`, Bonjour, Pierre, mermaid SVG, or Android launcher badge.
+
+Read on this checkout: Cap `MobileShareBridge` `processAssignedNativeDraft` / `handoffMobileShareDraft` (Android only) and About `OpenChamberMedia.saveFile` (`settings.openchamber.about.diagnostics.*`). iOS assigned share stays `POST /api/openchamber/assistants/:id/share`. Skip Capgo About beta-update rows.
+
+### Landed this slice (code)
+
+| Surface | Official Cap mobile | Flutter | Notes |
+|---|---|---|---|
+| Android assigned share | Composer handoff, then cancel native draft | Same: fill composer + open assistant session | Envelopes / iOS still POST share. |
+| Untargeted Android draft | Recipient picker then handoff | Picker then composer, not POST | Existing picker UI. |
+| About diagnostics export | `saveFile` + official v1 JSON | Same schema / filename / toasts | Empty ring is official empty toast. No Capgo rows. |
+
+### Still code / will-not-port
+
+| Gap | Why leftover |
+|---|---|
+| Transcript feat recorder | Cap IndexedDB ring. Flutter exports the official empty schema until feats are recorded. |
+| Appearance Flexoki picker | **Do not invent.** Official **mobile** Appearance is language + Light/Dark/System. |
+| Finder | **Do not invent.** Cap `handleOpenInFinder` is desktop-only. |
+| Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` / Bonjour / Pierre / mermaid SVG / Android launcher badge | Will not port. |
+
+### 真机-only
+
+Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hosted OAuth; ActivityKit / Dynamic Island / widget tap; Impeller 16ms; FCM on `.debug` if Firebase init fails; share-extension → inbox POST; system save-file picker on device. Code/plist may exist — do not fake 真机过.
+
+### EXHAUSTED
+
+**false.** Assigned-share composer handoff and About `saveFile` export are landed. Residual is the live feat recorder (empty official export is honest) plus 真机-only surfaces.
+
+Validated on Flutter **3.32.8 / Dart 3.8.1**: focused share/about tests + `flutter analyze --no-fatal-infos` + `flutter test`. Screenshot PNGs were **not** recaptured. Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native`.
+
+
 
 ## Twenty-fourth-slice status (2026-09-05) — Cap phone overflow + composer no-ops
 

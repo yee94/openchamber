@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openchamber/app.dart';
 import 'package:openchamber/data/app_controller.dart';
@@ -146,8 +146,53 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(inbox.cancelled, ['draft-1']);
-    expect(transport.shareCalls.single['operationID'], 'draft-1');
+    expect(transport.shareCalls, isEmpty);
     expect(find.byType(ChatScreen), findsOneWidget);
     expect(find.byKey(const Key('share-recipient-picker')), findsNothing);
+    expect(find.text('pick me'), findsWidgets);
+  });
+
+  test('Android assigned draft fills composer and does not POST /share', () async {
+    final transport = MemoryOpenChamberTransport();
+    final inbox = MemoryShareInbox();
+    inbox.drafts.add(
+      const NativeShareDraft(
+        draftID: 'draft-assigned',
+        serverInstanceID: 'srv-memory',
+        assistantID: 'asst-1',
+        text: 'assigned hello',
+        source: 'android-share',
+      ),
+    );
+    final controller = AppController(store: MemorySecureStore(), api: OpenChamberApi(transport: transport), shareInbox: inbox);
+    await controller.bootstrap(skipDelay: true);
+    await controller.connect(url: 'http://192.168.1.74:2606', label: 'lan');
+    await controller.drainShares();
+    expect(transport.shareCalls, isEmpty);
+    expect(inbox.cancelled, ['draft-assigned']);
+    expect(controller.pendingComposerHandoff?.text, 'assigned hello');
+    expect(controller.pendingComposerHandoff?.session.id, 'sess-catalog');
+  });
+
+  test('iOS assigned draft still POSTs official assistant share', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final transport = MemoryOpenChamberTransport();
+    final inbox = MemoryShareInbox();
+    inbox.drafts.add(
+      const NativeShareDraft(
+        draftID: 'draft-ios',
+        serverInstanceID: 'srv-memory',
+        assistantID: 'asst-1',
+        text: 'ios share',
+        source: 'ios-share',
+      ),
+    );
+    final controller = AppController(store: MemorySecureStore(), api: OpenChamberApi(transport: transport), shareInbox: inbox);
+    await controller.bootstrap(skipDelay: true);
+    await controller.connect(url: 'http://192.168.1.74:2606', label: 'lan');
+    await controller.drainShares();
+    expect(transport.shareCalls.single['operationID'], 'draft-ios');
+    expect(controller.pendingComposerHandoff, isNull);
   });
 }
