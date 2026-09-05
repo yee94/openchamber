@@ -216,10 +216,10 @@ What still keys off the **base** id / class namespace (not broken by the suffix)
 
 Preferred: the GitHub **prerelease** (no Actions Artifacts UI):
 
-- Tag `flutter-v2-debug-ec50d2b` (prerelease, not draft): https://github.com/yee94/openchambery/releases/tag/flutter-v2-debug-ec50d2b
-- APK: https://github.com/yee94/openchambery/releases/download/flutter-v2-debug-ec50d2b/openchamber-v2-debug-ec50d2b.apk
-- Built from `ec50d2ba9` / Flutter Mobile CI [run 33949263955](https://github.com/yee94/openchambery/actions/runs/33949263955) (analyze + Android debug APK + iOS simulator all green). Official OpenChamber launcher icon.
-- Includes voice UI removal + standard IME keyboard. Side-by-side `com.yee94.openchamber.debug` / **OpenChamber v2**. Relay-first walk — Yee has no LAN.
+- Tag `flutter-v2-debug-5b8c479` (prerelease, not draft, not Latest): https://github.com/yee94/openchambery/releases/tag/flutter-v2-debug-5b8c479
+- APK: https://github.com/yee94/openchambery/releases/download/flutter-v2-debug-5b8c479/openchamber-v2-debug-5b8c479.apk
+- Built from `5b8c4795e` / Flutter Mobile CI [run 33952793498](https://github.com/yee94/openchambery/actions/runs/33952793498) (analyze + Android debug APK + iOS simulator all green). Official OpenChamber launcher icon.
+- Includes session overflow, Projects home, and honest context ring on top of the Firebase `getInitialMessage` APK fix. Side-by-side `com.yee94.openchamber.debug` / **OpenChamber v2**. Relay-first walk — Yee has no LAN.
 
 Actions artifact fallback (14-day retention):
 
@@ -611,7 +611,7 @@ Close automated gaps that do not need Yee's phone. Visual goldens / pixel chrome
 | Pairing v2 redeem | landed (memory + widget) | Parse-only-relay payload; `POST /api/client-auth/pairing/redeem`; Instances page shows `Connected · Relay` / `已连接 · 中继`. |
 | HEIC attach plumbing | landed (memory) | `prepareComposerAttachments` owns HEIC→JPEG + 25 MiB cap. Composer still publishes virtual assets. `sendPrompt` keeps official PUT headers + `file://` parts. |
 | OAuth callback URLs | landed (unit) | Query `code`/`state`/`error`; http(s)-only external browser. Live system-browser OAuth remains ❌ 真机过. |
-| Debug APK prerelease | published | `flutter-v2-debug-ec50d2b` from CI run 33949263955 / `ec50d2ba9` (official launcher icon). |
+| Debug APK prerelease | published | `flutter-v2-debug-5b8c479` from CI run 33952793498 / `5b8c4795e` (official launcher icon). |
 
 ## Seventeenth-slice status (main 1.19.5-beta.14 parity, no 真机过)
 
@@ -697,6 +697,8 @@ Continues `d9e793ac1` rebased onto `cb655f0d8` on `work/flutter-native` (Firebas
 | Session overflow | landed | Rename PATCH `{title}`; pin/unpin POST/DELETE `/api/openchamber/session-index/session/:id/pin` (501 rolls back); refresh reloads `GET .../messages?turns=6`; archive PATCH `{time.archived}`; delete DELETE (404 = success) with a confirm dialog. Official undo-toast archive is not ported. Share/copy/unshare stay off this sheet. |
 | Projects home | landed | Plus-menu New Project opens a path + `fs/list` browse sheet and PUTs `projects[]` (`createProjectIdFromPath`). Home `···` opens official-order project (new session / new worktree if `GET /api/git/check` / sync / edit label / close) and worktree (new session / remove) sheets. Settings projects overlay so an empty newly-added project appears. |
 | Chat context ring | landed (honest) | Ring is **tokens / `limit.context`**, not provider quota. Baseline = newest token-bearing assistant; a newer compaction part resets to unknown. No tokens or catalog limit → hide the percentage (`common.unavailable`) and paint the ring at 0 — **not** stub 35%. Quotas stay a metadata-sheet section from `GET /api/quota/{id}`. |
+
+Debug APK prerelease: `flutter-v2-debug-5b8c479` from CI run 33952793498 / `5b8c4795e`. Download: https://github.com/yee94/openchambery/releases/download/flutter-v2-debug-5b8c479/openchamber-v2-debug-5b8c479.apk
 
 Residuals: share/copy/unshare on the session sheet; full DirectoryExplorer (clone / git identity / hidden files); full `NewWorktreeDialog` (branch / startRef); full `MobileProjectEditSurface`; ActivityKit / true-device rows; no 真机过.
 
