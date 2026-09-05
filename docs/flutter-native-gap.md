@@ -787,4 +787,4 @@ Stacked on `852e101f2` (`work/flutter-native` after PR **#20**). Do **not** merg
 
 Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hosted OAuth; ActivityKit / Dynamic Island / widget tap; Impeller 16ms; FCM on `.debug` if Firebase init fails; share-extension → inbox POST. Code/plist may exist — do not fake 真机过.
 
-Validation and merge notes for this stacked branch are updated after `flutter analyze` / `flutter test` on 3.32.8.
+Validated on Flutter **3.32.8 / Dart 3.8.1**: `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **241 passed**, including `flutter_remaining_gaps_test.dart`, `composer_occupancy_test.dart`, `flutter_deep_gap_test.dart`, and `slice7_oauth_tools_scheduled_test.dart`. Screenshot PNGs were **not** recaptured. Not 真机过.
