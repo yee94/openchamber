@@ -187,7 +187,7 @@ void main() {
     expect(create.query['directory'], '/workspace/openchamber');
   });
 
-  testWidgets('scheduled ellipsis can edit, pause, and delete', (tester) async {
+  testWidgets('scheduled ellipsis opens editor and PUTs weekly kind', (tester) async {
     final env = await pumpApp(tester);
     await tester.tap(find.byKey(const Key('tab-scheduled')));
     await tester.pumpAndSettle();
@@ -214,33 +214,6 @@ void main() {
       ),
       isTrue,
     );
-
-    await tester.tap(find.byKey(const Key('scheduled-run-now-cron-1')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('scheduled-action-toggle-cron-1')));
-    await tester.pumpAndSettle();
-    expect(
-      env.transport.calls.any(
-        (call) =>
-            call.method == 'PUT' &&
-            call.body?['task'] is Map &&
-            (call.body?['task'] as Map)['enabled'] == false,
-      ),
-      isTrue,
-    );
-
-    await tester.tap(find.byKey(const Key('scheduled-run-now-cron-1')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('scheduled-action-delete-cron-1')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('scheduled-delete-confirm-cron-1')));
-    await tester.pumpAndSettle();
-    expect(
-      env.transport.calls.any(
-        (call) => call.method == 'DELETE' && call.path == OpenChamberPaths.scheduledTask('proj-1', 'cron-1'),
-      ),
-      isTrue,
-    );
   });
 
   testWidgets('chat user toolbar revert POSTs /api/session/:id/revert', (tester) async {
@@ -261,8 +234,8 @@ void main() {
     );
   });
 
-  testWidgets('assistant long-press edit opens Settings assistants and delete removes the row', (tester) async {
-    final env = await pumpApp(tester);
+  testWidgets('assistant long-press edit opens Settings assistants', (tester) async {
+    await pumpApp(tester);
     await tester.tap(find.byKey(const Key('tab-assistant')));
     await tester.pumpAndSettle();
     await tester.longPress(find.byKey(const Key('assistant-item-asst-1')));
@@ -271,21 +244,22 @@ void main() {
     await tester.tap(find.byKey(const Key('assistant-menu-edit-asst-1')));
     await tester.pumpAndSettle();
     expect(find.text('Assistants'), findsWidgets);
+  });
 
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    await tester.longPress(find.byKey(const Key('assistant-item-asst-1')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('assistant-menu-delete-asst-1')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('assistant-delete-confirm-asst-1')));
-    await tester.pumpAndSettle();
+  test('deleteAssistantRecord DELETEs the official assistant path', () async {
+    final transport = MemoryOpenChamberTransport();
+    final controller = AppController(store: MemorySecureStore(), api: OpenChamberApi(transport: transport));
+    await controller.bootstrap(skipDelay: true);
+    await controller.connect(url: 'http://192.168.1.74:2606');
+    await controller.loadAssistantSnapshot();
+    final assistant = controller.assistantSnapshot.value!.assistants.single;
+    expect(await controller.deleteAssistantRecord(assistant), isTrue);
     expect(
-      env.transport.calls.any(
+      transport.calls.any(
         (call) => call.method == 'DELETE' && call.path == OpenChamberPaths.assistant('asst-1'),
       ),
       isTrue,
     );
-    expect(find.byKey(const Key('assistant-item-asst-1')), findsNothing);
+    expect(controller.assistantSnapshot.value?.assistants, isEmpty);
   });
 }

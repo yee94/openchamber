@@ -235,6 +235,8 @@ void main() {
     expect(find.textContaining('02:00'), findsWidgets);
     await tester.tap(find.byKey(const Key('scheduled-run-now-cron-1')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('scheduled-action-run-cron-1')));
+    await tester.pumpAndSettle();
     expect(find.textContaining('running'), findsWidgets);
 
     await tester.tap(find.byKey(const Key('tab-projects')));

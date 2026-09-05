@@ -1,4 +1,3 @@
-import '../../data/composer_autocomplete.dart';
 import '../../theme/ios_hero.dart';
 
 export '../../data/composer_autocomplete.dart';
