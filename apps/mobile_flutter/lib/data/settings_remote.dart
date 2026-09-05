@@ -225,6 +225,7 @@ class SettingsRemoteStore {
       run: () async {
         await _api.putBehaviorAgentsMd(base: _requireBase(), bearer: _bearer(), content: content);
         await patchBlob({'globalBehaviorPrompt': content});
+        return null;
       },
     );
   }
