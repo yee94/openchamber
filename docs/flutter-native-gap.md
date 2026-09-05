@@ -729,7 +729,7 @@ Validated on Flutter **3.32.8 / Dart 3.8.1**: `flutter analyze --no-fatal-infos`
 
 ## Twenty-second-slice status (2026-09-05) — Cap mobile code-gap audit
 
-Deep Flutter vs official Capacitor mobile (main 1.19 LegendList — not 1.18 TanStack) after PR **#19** (`4c48e9926`). Draft stacked on `work/flutter-native`. Do **not** merge `main`. No Flutter UI golden recapture. OpenChamber v2 `.debug` applicationId (`com.yee94.openchamber.debug`) unchanged. No release publish.
+Deep Flutter vs official Capacitor mobile (main 1.19 LegendList — not 1.18 TanStack) after PR **#19** landed on `work/flutter-native` at `4c48e9926` (2026-09-05T07:55:04Z). Sibling published tip APK [`flutter-v2-debug-4c48e99`](https://github.com/yee94/openchambery/releases/tag/flutter-v2-debug-4c48e99) without moving the branch. This slice stays a stacked PR onto that tip — do **not** race-force `work/flutter-native`. Do **not** merge `main`. No Flutter UI golden recapture. OpenChamber v2 `.debug` applicationId (`com.yee94.openchamber.debug`) unchanged.
 
 Read on this checkout: Cap `DirectoryExplorerDialog.shouldCreateTarget` + `handleOpenInFinder` (desktop-only early return); `NewWorktreeDialog` + `GitHubIntegrationDialog`; `MobileProjectEditSurface` `@dnd-kit` → `useWorktreeOrderStore.setWorktreeOrder`; `ScheduledTasksDialog` / `ScheduledTaskEditorDialog` `PUT /api/projects/:id/scheduled-tasks`; Cap `MessageBody` / `ChatMessage` copy / share / `session.fork`; `MobileAssistantTab` long-press edit/delete; official mobile Appearance (language + Light/Dark/System only).
 
