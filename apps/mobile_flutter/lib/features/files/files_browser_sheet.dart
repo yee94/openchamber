@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../data/app_controller.dart';
 import '../../data/file_preview.dart';
 import '../../data/openchamber_api.dart';
+import '../../data/openchamber_http.dart';
 import '../../data/project_id.dart';
 import '../../l10n/app_strings.dart';
 import '../../motion/pressable.dart';
@@ -272,7 +272,14 @@ class _FilesBrowserSheetState extends State<FilesBrowserSheet> {
               TextField(
                 key: const Key('files-browser-search'),
                 controller: _search,
+                textInputAction: TextInputAction.search,
                 onChanged: _onSearchChanged,
+                onSubmitted: (value) {
+                  _debounce?.cancel();
+                  final query = value.trim();
+                  if (query.isEmpty) return;
+                  unawaited(_runSearch(query));
+                },
                 decoration: InputDecoration(
                   hintText: t(context, 'mobile.files.search.placeholder'),
                   prefixIcon: const Padding(

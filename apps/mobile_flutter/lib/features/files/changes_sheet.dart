@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
 import '../../data/openchamber_api.dart';
+import '../../data/openchamber_http.dart';
 import '../../l10n/app_strings.dart';
 import '../../motion/pressable.dart';
 import '../../native/haptics.dart';
@@ -396,9 +397,11 @@ class _ChangesSheetState extends State<ChangesSheet> {
                                 ],
                                 if (unstaged.isNotEmpty) ...[
                                   const SizedBox(height: 12),
-                                  Row(
+                                  Wrap(
+                                    spacing: 8,
+                                    crossAxisAlignment: WrapCrossAlignment.center,
                                     children: [
-                                      Expanded(child: Text(t(context, 'gitView.changes.title'), style: ocCssInk(TextStyle(fontWeight: FontWeight.w600, color: tokens.foreground)))),
+                                      Text(t(context, 'gitView.changes.title'), style: ocCssInk(TextStyle(fontWeight: FontWeight.w600, color: tokens.foreground))),
                                       Pressable(
                                         key: const Key('changes-revert-all'),
                                         haptic: HapticStrength.light,
@@ -445,7 +448,9 @@ class _ChangesSheetState extends State<ChangesSheet> {
                 decoration: InputDecoration(hintText: t(context, 'gitView.commit.messagePlaceholder')),
               ),
               const SizedBox(height: 8),
-              Row(
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
                 children: [
                   Pressable(
                     key: const Key('changes-generate'),
@@ -453,14 +458,12 @@ class _ChangesSheetState extends State<ChangesSheet> {
                     onPressed: _saving || _generating ? null : () => unawaited(_generate()),
                     child: Text(t(context, 'gitView.commit.generate')),
                   ),
-                  const SizedBox(width: 12),
                   Pressable(
                     key: const Key('changes-commit'),
                     haptic: HapticStrength.medium,
                     onPressed: _saving || staged.isEmpty ? null : () => unawaited(_commit(pushAfter: false)),
                     child: Text(_saving ? t(context, 'gitView.commit.committing') : t(context, 'gitView.commit.commit')),
                   ),
-                  const SizedBox(width: 12),
                   Pressable(
                     key: const Key('changes-commit-push'),
                     haptic: HapticStrength.medium,
