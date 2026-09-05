@@ -58,9 +58,12 @@ class _ProjectsHomeScreenState extends State<ProjectsHomeScreen> {
       animation: controller,
       builder: (context, _) {
         final groups = overlaySettingsProjects(
-          sessionGroups: groupSessionsByProject(controller.sessions.where((row) {
-            return sessionMatchesQuery(row, _query);
-          }).toList()),
+          sessionGroups: groupSessionsByProject(
+            controller.sessions.where((row) {
+              return sessionMatchesQuery(row, _query);
+            }).toList(),
+            worktreeOrderByDirectory: controller.worktreeOrderByDirectory,
+          ),
           settingsProjects: controller.settingsProjectRecords(),
         );
 

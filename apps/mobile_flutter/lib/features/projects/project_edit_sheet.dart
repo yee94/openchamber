@@ -71,6 +71,7 @@ class ProjectEditSheet extends StatefulWidget {
 
 class _ProjectEditSheetState extends State<ProjectEditSheet> {
   late final TextEditingController _name = TextEditingController(text: widget.group.name);
+  late List<WorktreeHomeGroup> _worktrees = List<WorktreeHomeGroup>.from(widget.group.worktrees);
   String? _icon;
   String? _color;
   bool _saving = false;
@@ -93,6 +94,29 @@ class _ProjectEditSheetState extends State<ProjectEditSheet> {
     final record = _record;
     _icon = record['icon']?.toString();
     _color = record['color']?.toString();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await widget.controller.loadWorktreeOrder(widget.group.path);
+      if (!mounted) return;
+      setState(() {
+        _worktrees = orderWorktrees(
+          widget.controller.worktreeOrderByDirectory[normalizeProjectDirectory(widget.group.path)],
+          _worktrees,
+        );
+      });
+    });
+  }
+
+  Future<void> _reorder(int from, int to) async {
+    setState(() {
+      final next = [..._worktrees];
+      final item = next.removeAt(from);
+      next.insert(to > from ? to - 1 : to, item);
+      _worktrees = next;
+    });
+    await widget.controller.setWorktreeOrder(
+      projectDirectory: widget.group.path,
+      orderedPaths: _worktrees.map((tree) => tree.path).toList(),
+    );
   }
 
   @override
@@ -136,14 +160,20 @@ class _ProjectEditSheetState extends State<ProjectEditSheet> {
     );
     if (!confirmed || !mounted) return;
     await widget.controller.deleteWorktree(projectDirectory: widget.group.path, worktreePath: tree.path);
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {
+      _worktrees = _worktrees.where((item) => item.path != tree.path).toList();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final tokens = context.oc;
     final colors = projectEditColors(tokens);
-    final worktrees = widget.group.worktrees;
+    final worktrees = orderWorktrees(
+      widget.controller.worktreeOrderByDirectory[normalizeProjectDirectory(widget.group.path)],
+      _worktrees,
+    );
     return Material(
       key: const Key('project-edit-sheet'),
       color: tokens.pageBackground,
@@ -271,18 +301,31 @@ class _ProjectEditSheetState extends State<ProjectEditSheet> {
                   ),
                 )
               else
-                for (final tree in worktrees)
-                  ListTile(
-                    key: Key('project-edit-worktree-${tree.path}'),
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(tree.name),
-                    subtitle: Text(tree.path, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    trailing: IconButton(
-                      key: Key('project-edit-worktree-delete-${tree.path}'),
-                      onPressed: () => unawaited(_deleteWorktree(tree)),
-                      icon: OcGlyph(OcGlyphKind.xmark, size: 16, color: tokens.statusError),
-                    ),
-                  ),
+                ReorderableListView(
+                  key: const Key('project-edit-worktree-list'),
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  onReorder: (from, to) => unawaited(_reorder(from, to)),
+                  children: [
+                    for (var i = 0; i < worktrees.length; i++)
+                      ListTile(
+                        key: Key('project-edit-worktree-${worktrees[i].path}'),
+                        contentPadding: EdgeInsets.zero,
+                        leading: ReorderableDragStartListener(
+                          key: Key('project-edit-worktree-drag-${worktrees[i].path}'),
+                          index: i,
+                          child: OcGlyph(OcGlyphKind.ellipsis, size: 16, color: tokens.mutedForeground),
+                        ),
+                        title: Text(worktrees[i].name),
+                        subtitle: Text(worktrees[i].path, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        trailing: IconButton(
+                          key: Key('project-edit-worktree-delete-${worktrees[i].path}'),
+                          onPressed: () => unawaited(_deleteWorktree(worktrees[i])),
+                          icon: OcGlyph(OcGlyphKind.xmark, size: 16, color: tokens.statusError),
+                        ),
+                      ),
+                  ],
+                ),
             ],
           ),
         ),

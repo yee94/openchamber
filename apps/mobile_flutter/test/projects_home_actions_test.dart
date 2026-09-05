@@ -24,6 +24,50 @@ void main() {
     return (controller: controller, transport: transport);
   }
 
+  test('shouldCreateMissingDirectory matches DirectoryExplorer shouldCreateTarget', () {
+    final listed = [
+      const FilesystemEntry(name: 'notes', path: '/workspace/notes', type: 'directory'),
+    ];
+    expect(
+      shouldCreateMissingDirectory(
+        query: '/workspace/brand-new',
+        listedPath: '/workspace',
+        entries: listed,
+        addedProjects: const [],
+      ),
+      isTrue,
+    );
+    expect(
+      shouldCreateMissingDirectory(
+        query: '/workspace/notes',
+        listedPath: '/workspace',
+        entries: listed,
+        addedProjects: const [],
+      ),
+      isFalse,
+    );
+    expect(
+      shouldCreateMissingDirectory(
+        query: '/workspace/notes',
+        listedPath: '/workspace/notes',
+        entries: const [],
+        addedProjects: const [],
+      ),
+      isFalse,
+    );
+    expect(
+      shouldCreateMissingDirectory(
+        query: '/workspace/notes',
+        listedPath: '/workspace',
+        entries: listed,
+        addedProjects: [
+          {'path': '/workspace/notes'},
+        ],
+      ),
+      isFalse,
+    );
+  });
+
   test('explorer hidden/parent helpers match DirectoryExplorer mobile rules', () {
     expect(isHiddenDirectoryName('.hidden'), isTrue);
     expect(isHiddenDirectoryName('notes'), isFalse);
@@ -190,6 +234,74 @@ void main() {
     expect(create.body?['startRef'], 'main');
     expect(create.body?['worktreeName'], 'feat/gap');
     expect(create.body?['mode'], 'new');
+  });
+
+  testWidgets('new-project create-missing-dir POSTs /api/fs/mkdir then PUTs projects', (tester) async {
+    final env = await pumpHome(tester);
+    await tester.tap(find.byKey(const Key('projects-plus-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('New Project'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('new-project-path')), '/workspace/brand-new');
+    await tester.pump();
+    expect(find.text('Create & add'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('new-project-add')));
+    await tester.pumpAndSettle();
+    expect(
+      env.transport.calls.any(
+        (call) =>
+            call.method == 'POST' &&
+            call.path == OpenChamberPaths.fsMkdir &&
+            call.body?['path'] == '/workspace/brand-new',
+      ),
+      isTrue,
+    );
+    expect(
+      env.transport.calls.any((call) => call.method == 'PUT' && call.path == OpenChamberPaths.configSettings),
+      isTrue,
+    );
+  });
+
+  testWidgets('new worktree GitHub issue prefills branch and creates worktree', (tester) async {
+    final env = await pumpHome(tester);
+    await tester.tap(find.byKey(const Key('home-project-actions-openchamber')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('session-overflow-newWorktree')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('worktree-github-start')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('github-item-sheet')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('github-item-issue-42')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('worktree-github-linked-issue-42')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('worktree-name-save')));
+    await tester.pumpAndSettle();
+    final create = env.transport.calls.lastWhere(
+      (call) => call.method == 'POST' && call.path == OpenChamberPaths.gitWorktrees,
+    );
+    expect(create.body?['branchName'], 'issue-42-native-gap-audit');
+    expect(create.body?['worktreeName'], 'issue-42-native-gap-audit');
+  });
+
+  test('setWorktreeOrder PUTs official message-queue worktrees/order', () async {
+    final transport = MemoryOpenChamberTransport();
+    final controller = AppController(store: MemorySecureStore(), api: OpenChamberApi(transport: transport));
+    await controller.bootstrap(skipDelay: true);
+    await controller.connect(url: 'http://192.168.1.74:2606');
+    final ok = await controller.setWorktreeOrder(
+      projectDirectory: '/workspace/openchamber',
+      orderedPaths: ['/workspace/openchamber/.worktrees/beta', '/workspace/openchamber/.worktrees/alpha'],
+    );
+    expect(ok, isTrue);
+    final put = transport.calls.lastWhere(
+      (call) => call.method == 'PUT' && call.path == OpenChamberPaths.messageQueueWorktreeOrder,
+    );
+    expect(put.body?['projectDirectory'], '/workspace/openchamber');
+    expect(put.body?['orderedPaths'], [
+      '/workspace/openchamber/.worktrees/beta',
+      '/workspace/openchamber/.worktrees/alpha',
+    ]);
+    expect(controller.worktreeOrderByDirectory['/workspace/openchamber']?.first, endsWith('/beta'));
   });
 
   testWidgets('project edit sheet PUTs icon/color and discovers favicon', (tester) async {

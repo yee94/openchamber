@@ -16,6 +16,9 @@ class ChatTranscriptRow extends StatelessWidget {
     required this.reverseIndex,
     required this.busy,
     this.onPermission,
+    this.onCopy,
+    this.onShare,
+    this.onFork,
   });
 
   final ReverseChatController controller;
@@ -23,6 +26,9 @@ class ChatTranscriptRow extends StatelessWidget {
   final int reverseIndex;
   final ValueNotifier<bool> busy;
   final void Function(String requestId, String reply)? onPermission;
+  final void Function(ChatMessage message)? onCopy;
+  final void Function(ChatMessage message)? onShare;
+  final void Function(ChatMessage message)? onFork;
 
   @override
   Widget build(BuildContext context) {
@@ -57,9 +63,16 @@ class ChatTranscriptRow extends StatelessWidget {
                           isLastAssistant: isLastAssistant,
                           isTurnLive: isTurnLive,
                           isStreaming: isStreamingAssistant,
+                          onCopy: onCopy == null ? null : () => onCopy!(message),
+                          onShare: onShare == null ? null : () => onShare!(message),
+                          onFork: onFork == null ? null : () => onFork!(message),
                         ),
                       ),
-                      UserTurnToolbar(message: message),
+                      UserTurnToolbar(
+                        message: message,
+                        onCopy: onCopy == null ? null : () => onCopy!(message),
+                        onFork: onFork == null ? null : () => onFork!(message),
+                      ),
                     ],
                   ),
                 ),
@@ -74,6 +87,9 @@ class ChatTranscriptRow extends StatelessWidget {
                 isTurnLive: isTurnLive,
                 isStreaming: isStreamingAssistant,
                 onPermission: onPermission,
+                onCopy: onCopy == null ? null : () => onCopy!(message),
+                onShare: onShare == null ? null : () => onShare!(message),
+                onFork: onFork == null ? null : () => onFork!(message),
               ),
             );
           },

@@ -69,6 +69,23 @@ void _sortByActivity(List<HomeSessionRow> rows) {
   });
 }
 
+List<WorktreeHomeGroup> orderWorktrees(
+  List<String>? orderedPaths,
+  List<WorktreeHomeGroup> worktrees,
+) {
+  if (orderedPaths == null || orderedPaths.isEmpty) return worktrees;
+  final rank = <String, int>{
+    for (var i = 0; i < orderedPaths.length; i++) normalizeProjectPath(orderedPaths[i]): i,
+  };
+  final ranked = [...worktrees];
+  ranked.sort((left, right) {
+    final byRank = (rank[normalizeProjectPath(left.path)] ?? 1 << 20) -
+        (rank[normalizeProjectPath(right.path)] ?? 1 << 20);
+    return byRank;
+  });
+  return ranked;
+}
+
 /// Official `useMobileProjectsHomeModel` buckets by **worktree directory**,
 /// not git branch (`packages/ui/src/mobile/projects/useMobileProjectsHomeModel.ts`).
 ///
@@ -76,7 +93,10 @@ void _sortByActivity(List<HomeSessionRow> rows) {
 /// list flat under one project `MobileFloatingSurface`. Linked worktrees are
 /// other directories on the same project and render as inset labeled groups
 /// inside that shell. Branch names never become their own cards.
-List<ProjectHomeGroup> groupSessionsByProject(List<HomeSessionRow> rows) {
+List<ProjectHomeGroup> groupSessionsByProject(
+  List<HomeSessionRow> rows, {
+  Map<String, List<String>> worktreeOrderByDirectory = const {},
+}) {
   final byProject = <String, List<HomeSessionRow>>{};
   for (final row in rows) {
     byProject.putIfAbsent(row.projectLabel, () => []).add(row);
@@ -118,19 +138,20 @@ List<ProjectHomeGroup> groupSessionsByProject(List<HomeSessionRow> rows) {
       _sortByActivity(bucket);
     }
 
+    final worktrees = [
+      for (final item in linked.entries)
+        WorktreeHomeGroup(
+          name: projectPathLabel(item.key),
+          path: item.key,
+          sessions: item.value,
+        ),
+    ];
     return ProjectHomeGroup(
       id: entry.key,
       name: entry.key,
       path: mainPath,
       sessions: main,
-      worktrees: [
-        for (final item in linked.entries)
-          WorktreeHomeGroup(
-            name: projectPathLabel(item.key),
-            path: item.key,
-            sessions: item.value,
-          ),
-      ],
+      worktrees: orderWorktrees(worktreeOrderByDirectory[mainPath], worktrees),
     );
   }).toList();
 }

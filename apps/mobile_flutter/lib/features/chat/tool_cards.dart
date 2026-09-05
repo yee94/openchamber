@@ -19,6 +19,9 @@ class ChatTranscriptBody extends StatelessWidget {
     super.key,
     required this.message,
     this.onPermission,
+    this.onCopy,
+    this.onShare,
+    this.onFork,
     this.isLastAssistant = false,
     this.isTurnLive = false,
     this.isStreaming = false,
@@ -26,6 +29,9 @@ class ChatTranscriptBody extends StatelessWidget {
 
   final ChatMessage message;
   final void Function(String requestId, String reply)? onPermission;
+  final VoidCallback? onCopy;
+  final VoidCallback? onShare;
+  final VoidCallback? onFork;
   final bool isLastAssistant;
   final bool isTurnLive;
   /// Busy last-assistant turn. Independent of a running tool so text-only
@@ -166,7 +172,7 @@ class ChatTranscriptBody extends StatelessWidget {
       ));
     }
     if (!message.isUser) {
-      out.add(_TurnFooter(message: message));
+      out.add(_TurnFooter(message: message, onCopy: onCopy, onShare: onShare, onFork: onFork));
     }
     return out;
   }
@@ -404,9 +410,16 @@ class _FileChangeCard extends StatelessWidget {
 }
 
 class UserTurnToolbar extends StatelessWidget {
-  const UserTurnToolbar({super.key, required this.message});
+  const UserTurnToolbar({
+    super.key,
+    required this.message,
+    this.onCopy,
+    this.onFork,
+  });
 
   final ChatMessage message;
+  final VoidCallback? onCopy;
+  final VoidCallback? onFork;
 
   @override
   Widget build(BuildContext context) {
@@ -431,9 +444,9 @@ class UserTurnToolbar extends StatelessWidget {
           ],
           _icon(context, key: const Key('chat-action-revert'), glyph: OcGlyphKind.undo, tooltip: t(context, 'chat.messageBody.actions.revert')),
           _icon(context, key: const Key('chat-action-edit'), glyph: OcGlyphKind.edit, tooltip: t(context, 'chat.messageBody.actions.edit')),
-          _icon(context, key: const Key('chat-action-fork'), glyph: OcGlyphKind.branch, tooltip: t(context, 'chat.messageBody.actions.fork')),
-          _icon(context, key: const Key('chat-action-link'), glyph: OcGlyphKind.link, tooltip: t(context, 'chat.messageBody.actions.copyMessage')),
-          _icon(context, key: const Key('chat-action-copy-user'), glyph: OcGlyphKind.copy, tooltip: t(context, 'chat.messageBody.actions.copyMessage')),
+          _icon(context, key: const Key('chat-action-fork'), glyph: OcGlyphKind.branch, tooltip: t(context, 'chat.messageBody.actions.fork'), onTap: onFork),
+          _icon(context, key: const Key('chat-action-link'), glyph: OcGlyphKind.link, tooltip: t(context, 'chat.messageBody.actions.copyMessage'), onTap: onCopy),
+          _icon(context, key: const Key('chat-action-copy-user'), glyph: OcGlyphKind.copy, tooltip: t(context, 'chat.messageBody.actions.copyMessage'), onTap: onCopy),
         ],
       ),
     );
@@ -444,13 +457,14 @@ class UserTurnToolbar extends StatelessWidget {
     required Key key,
     required OcGlyphKind glyph,
     required String tooltip,
+    VoidCallback? onTap,
   }) {
     return Tooltip(
       message: tooltip,
       child: InkWell(
         key: key,
         customBorder: const CircleBorder(),
-        onTap: () {},
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(3),
           child: OcGlyph(glyph, size: OcOptical.footerGlyph, strokeWidth: OcOptical.footerGlyphStrokeVisual, color: context.oc.mutedForeground),
@@ -582,9 +596,15 @@ class _FileTypeSpritePainter extends CustomPainter {
 class _TurnFooter extends StatelessWidget {
   const _TurnFooter({
     required this.message,
+    this.onCopy,
+    this.onShare,
+    this.onFork,
   });
 
   final ChatMessage message;
+  final VoidCallback? onCopy;
+  final VoidCallback? onShare;
+  final VoidCallback? onFork;
 
   @override
   Widget build(BuildContext context) {
@@ -598,13 +618,14 @@ class _TurnFooter extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _footerIcon(context, key: const Key('chat-action-copy'), glyph: OcGlyphKind.copy, tooltip: t(context, 'chat.messageBody.actions.copyAnswer')),
-              _footerIcon(context, key: const Key('chat-action-share'), glyph: OcGlyphKind.share, tooltip: t(context, 'chat.messageBody.actions.shareAnswer')),
+              _footerIcon(context, key: const Key('chat-action-copy'), glyph: OcGlyphKind.copy, tooltip: t(context, 'chat.messageBody.actions.copyAnswer'), onPressed: onCopy),
+              _footerIcon(context, key: const Key('chat-action-share'), glyph: OcGlyphKind.share, tooltip: t(context, 'chat.messageBody.actions.shareAnswer'), onPressed: onShare),
               _footerIcon(
                 context,
                 key: Key('chat-action-fork-${message.id}'),
                 glyph: OcGlyphKind.branch,
                 tooltip: t(context, 'chat.messageBody.actions.fork'),
+                onPressed: onFork,
               ),
             ],
           ),

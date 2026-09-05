@@ -12,6 +12,7 @@ import '../../data/openchamber_http.dart';
 import '../projects/action_dialogs.dart';
 import '../../data/prompt_attachment.dart';
 import '../../l10n/app_strings.dart';
+import '../../navigation/platform_route.dart';
 import '../../data/file_preview.dart';
 import '../../native/haptics.dart';
 import '../../native/live_activity_controller.dart';
@@ -353,6 +354,35 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Future<void> _copyMessage(ChatMessage message) async {
+    final text = message.body.trim();
+    if (text.isEmpty) return;
+    final ok = await copyTextToClipboard(text);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(t(context, ok ? 'sessions.sidebar.session.menu.copied' : 'sessions.sidebar.session.share.copyUrlError'))),
+    );
+  }
+
+  Future<void> _forkMessage(ChatMessage message) async {
+    final controller = widget.appController;
+    if (controller == null) return;
+    final forked = await controller.forkSession(session: _session, messageId: message.id);
+    if (!mounted) return;
+    if (forked == null) {
+      final error = controller.lastMutationErrorKey;
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t(context, error))));
+      }
+      return;
+    }
+    await Navigator.of(context).pushReplacement(
+      platformPageRoute<void>(
+        builder: (_) => ChatScreen(session: forked, appController: controller),
+      ),
+    );
+  }
+
   Future<void> _copyShareUrl(BuildContext context, String url) async {
     final ok = await copyTextToClipboard(url);
     if (!context.mounted) return;
@@ -487,6 +517,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       reverseIndex: reverseIndex,
                       busy: _busy,
                       onPermission: widget.appController == null ? null : _replyPermission,
+                      onCopy: _copyMessage,
+                      onShare: _copyMessage,
+                      onFork: widget.appController == null ? null : _forkMessage,
                     );
                   },
                 ),

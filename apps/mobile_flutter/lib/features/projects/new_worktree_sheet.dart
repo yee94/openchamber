@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
+import '../../data/github_worktree.dart';
 import '../../l10n/app_strings.dart';
 import '../../motion/pressable.dart';
 import '../../native/haptics.dart';
 import '../../theme/ios_chrome.dart';
+import 'github_item_sheet.dart';
 
 Future<bool> showNewWorktreeSheet({
   required BuildContext context,
@@ -39,6 +41,7 @@ class _NewWorktreeSheetState extends State<NewWorktreeSheet> {
   bool _saving = false;
   String? _errorKey;
   bool _syncName = true;
+  GitHubWorktreeItem? _linked;
 
   @override
   void dispose() {
@@ -74,6 +77,23 @@ class _NewWorktreeSheetState extends State<NewWorktreeSheet> {
     setState(() => _errorKey = widget.controller.lastMutationErrorKey ?? 'sessions.sidebar.project.actions.worktreeCreateFailed');
   }
 
+  Future<void> _pickGitHub() async {
+    final item = await showGitHubItemSheet(
+      context: context,
+      controller: widget.controller,
+      directory: widget.directory,
+    );
+    if (!mounted || item == null) return;
+    final branch = item.isIssue
+        ? githubIssueBranchName(number: item.number, title: item.title)
+        : githubPrBranchName(item.head ?? item.title);
+    setState(() {
+      _linked = item;
+      _branch.text = branch;
+      if (_syncName) _name.text = slugifyWorktreeName(branch);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = context.oc;
@@ -96,6 +116,32 @@ class _NewWorktreeSheetState extends State<NewWorktreeSheet> {
               )),
             ),
             const SizedBox(height: 12),
+            Pressable(
+              haptic: HapticStrength.light,
+              onPressed: () => unawaited(_pickGitHub()),
+              child: SizedBox(
+                key: const Key('worktree-github-start'),
+                height: 40,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _linked == null
+                        ? t(context, 'session.newWorktree.actions.startFromGitHubIssuePr')
+                        : t(context, 'session.newWorktree.actions.change'),
+                    style: TextStyle(color: tokens.primary, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ),
+            if (_linked != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  key: Key('worktree-github-linked-${githubItemKey(_linked!)}'),
+                  '#${_linked!.number} ${_linked!.title}',
+                  style: TextStyle(fontSize: OcTokens.textMeta, color: tokens.mutedForeground),
+                ),
+              ),
             TextField(
               key: const Key('worktree-branch-field'),
               controller: _branch,

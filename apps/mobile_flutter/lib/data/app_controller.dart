@@ -21,6 +21,7 @@ import 'assistant_scheduled.dart';
 import 'chat_timeline.dart';
 import 'connection_candidates.dart';
 import 'context_usage.dart';
+import 'github_worktree.dart';
 import 'home_session.dart';
 import 'project_id.dart';
 import 'instance_store.dart';
@@ -135,6 +136,8 @@ class AppController extends ChangeNotifier {
   SessionIndexSnapshot? lastIndex;
   String? createSessionErrorKey;
   String? lastMutationErrorKey;
+  Map<String, List<String>> worktreeOrderByDirectory = {};
+  Map<String, int> worktreeOrderRevisionByDirectory = {};
   Map<String, num> contextLimits = const {};
   SettingsResource<AssistantSnapshotView> assistantSnapshot = const SettingsResource();
   SettingsResource<List<ScheduledTaskRecord>> scheduledTasks = const SettingsResource();
@@ -1230,6 +1233,195 @@ class AppController extends ChangeNotifier {
       lastMutationErrorKey = 'projectEditDialog.toast.failedToDiscoverIcon';
       notifyListeners();
       return false;
+    }
+  }
+
+  Future<bool> createAndAddProject({required String path, String? label}) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'projects.newProject.needsServer';
+      notifyListeners();
+      return false;
+    }
+    try {
+      final created = await _api.createDirectory(base: base, bearer: activeBearer, path: path);
+      return addProject(path: created, label: label);
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'directoryExplorerDialog.toast.failedToSelectDirectory';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> githubAuthConnected() async {
+    final base = activeBase;
+    if (base == null) return false;
+    try {
+      return await _api.githubAuthConnected(base: base, bearer: activeBearer);
+    } on OpenChamberHttpException {
+      return false;
+    }
+  }
+
+  Future<List<GitHubWorktreeItem>> listGithubItems({
+    required String directory,
+    required String kind,
+  }) async {
+    final base = activeBase;
+    if (base == null) return const [];
+    try {
+      final body = kind == 'pr'
+          ? await _api.listGithubPulls(base: base, bearer: activeBearer, directory: directory)
+          : await _api.listGithubIssues(base: base, bearer: activeBearer, directory: directory);
+      if (body['connected'] == false) return const [];
+      return kind == 'pr' ? parseGitHubPulls(body) : parseGitHubIssues(body);
+    } on OpenChamberHttpException {
+      return const [];
+    }
+  }
+
+  Future<bool> setWorktreeOrder({
+    required String projectDirectory,
+    required List<String> orderedPaths,
+  }) async {
+    lastMutationErrorKey = null;
+    final directory = normalizeProjectDirectory(projectDirectory);
+    worktreeOrderByDirectory = {
+      ...worktreeOrderByDirectory,
+      directory: orderedPaths.map(normalizeProjectDirectory).toList(),
+    };
+    notifyListeners();
+    final base = activeBase;
+    if (base == null) return true;
+    try {
+      final result = await _api.putWorktreeOrder(
+        base: base,
+        bearer: activeBearer,
+        requestId: 'wt-order-${DateTime.now().microsecondsSinceEpoch}',
+        projectDirectory: directory,
+        expectedRevision: worktreeOrderRevisionByDirectory[directory] ?? 0,
+        orderedPaths: worktreeOrderByDirectory[directory] ?? orderedPaths,
+      );
+      final revision = result['revision'];
+      if (revision is num) {
+        worktreeOrderRevisionByDirectory = {
+          ...worktreeOrderRevisionByDirectory,
+          directory: revision.toInt(),
+        };
+      }
+      return true;
+    } on OpenChamberHttpException catch (error) {
+      if (error.status == 501) return true;
+      lastMutationErrorKey = 'mobile.projectEdit.worktreeOrderFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> loadWorktreeOrder(String projectDirectory) async {
+    final base = activeBase;
+    if (base == null) return;
+    final directory = normalizeProjectDirectory(projectDirectory);
+    try {
+      final body = await _api.fetchWorktreeOrder(
+        base: base,
+        bearer: activeBearer,
+        projectDirectory: directory,
+      );
+      final raw = body['orderedPaths'];
+      final paths = raw is List ? raw.map((item) => normalizeProjectDirectory(item.toString())).toList() : const <String>[];
+      final revision = body['revision'];
+      worktreeOrderByDirectory = {...worktreeOrderByDirectory, directory: paths};
+      if (revision is num) {
+        worktreeOrderRevisionByDirectory = {
+          ...worktreeOrderRevisionByDirectory,
+          directory: revision.toInt(),
+        };
+      }
+      notifyListeners();
+    } on OpenChamberHttpException {
+      // 501 / missing queue is local-only order, not empty success wipe.
+    }
+  }
+
+  Future<bool> createScheduledTask({
+    required String projectId,
+    required String name,
+    required String prompt,
+    String scheduleKind = 'daily',
+    String scheduleTime = '09:00',
+  }) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'settings.error.needsServer';
+      notifyListeners();
+      return false;
+    }
+    final model = splitDefaultModel(remoteSettings.blob.value?.defaultModel);
+    try {
+      await _api.upsertScheduledTask(
+        base: base,
+        bearer: activeBearer,
+        projectId: projectId,
+        task: {
+          'name': name.trim(),
+          'enabled': true,
+          'schedule': {
+            'kind': scheduleKind,
+            'time': scheduleTime,
+          },
+          'execution': {
+            'prompt': prompt.trim(),
+            'providerID': model.providerId,
+            'modelID': model.modelId,
+          },
+        },
+      );
+      await loadScheduledTasks();
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'scheduled.create.failed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<HomeSessionRow?> forkSession({
+    required HomeSessionRow session,
+    String? messageId,
+  }) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'projects.newChat.needsServer';
+      notifyListeners();
+      return null;
+    }
+    try {
+      final body = await _api.forkSession(
+        base: base,
+        bearer: activeBearer,
+        sessionId: session.id,
+        messageId: messageId,
+        directory: session.directory,
+      );
+      await refreshSessions();
+      final id = body['id']?.toString() ?? '';
+      if (id.isEmpty) return null;
+      return sessionById(id) ??
+          HomeSessionRow(
+            id: id,
+            title: body['title']?.toString() ?? session.title,
+            projectLabel: session.projectLabel,
+            kind: HomeSessionKind.catalog,
+            directory: body['directory']?.toString() ?? session.directory,
+          );
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'chat.messageBody.actions.forkFailed';
+      notifyListeners();
+      return null;
     }
   }
 

@@ -821,6 +821,162 @@ class OpenChamberApi {
     );
   }
 
+  /// Official DirectoryExplorer `POST /api/fs/mkdir`.
+  Future<String> createDirectory({
+    required Uri base,
+    String? bearer,
+    required String path,
+  }) async {
+    final body = await _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.fsMkdir,
+        body: {'path': path},
+      ),
+      bearer,
+    );
+    final created = body['path']?.toString().trim();
+    if (created != null && created.isNotEmpty) return created;
+    return path;
+  }
+
+  Future<bool> githubAuthConnected({
+    required Uri base,
+    String? bearer,
+  }) async {
+    final body = await _requireMap(
+      base,
+      const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.githubAuthStatus),
+      bearer,
+    );
+    return body['connected'] == true;
+  }
+
+  Future<Map<String, Object?>> listGithubIssues({
+    required Uri base,
+    String? bearer,
+    required String directory,
+    int page = 1,
+    String? query,
+  }) {
+    return _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'GET',
+        path: OpenChamberPaths.githubIssuesList,
+        query: {
+          'directory': directory,
+          'page': '$page',
+          if (query != null && query.isNotEmpty) 'query': query,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<Map<String, Object?>> listGithubPulls({
+    required Uri base,
+    String? bearer,
+    required String directory,
+    int page = 1,
+    String? query,
+  }) {
+    return _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'GET',
+        path: OpenChamberPaths.githubPullsList,
+        query: {
+          'directory': directory,
+          'page': '$page',
+          if (query != null && query.isNotEmpty) 'query': query,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<Map<String, Object?>> fetchWorktreeOrder({
+    required Uri base,
+    String? bearer,
+    required String projectDirectory,
+  }) {
+    return _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'GET',
+        path: OpenChamberPaths.messageQueueWorktreeOrder,
+        query: {'projectDirectory': projectDirectory},
+      ),
+      bearer,
+    );
+  }
+
+  Future<Map<String, Object?>> putWorktreeOrder({
+    required Uri base,
+    String? bearer,
+    required String requestId,
+    required String projectDirectory,
+    required int expectedRevision,
+    required List<String> orderedPaths,
+  }) {
+    return _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'PUT',
+        path: OpenChamberPaths.messageQueueWorktreeOrder,
+        body: {
+          'requestID': requestId,
+          'projectDirectory': projectDirectory,
+          'expectedRevision': expectedRevision,
+          'orderedPaths': orderedPaths,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<Map<String, Object?>> upsertScheduledTask({
+    required Uri base,
+    String? bearer,
+    required String projectId,
+    required Map<String, Object?> task,
+  }) {
+    return _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'PUT',
+        path: OpenChamberPaths.scheduledTasksForProject(projectId),
+        body: {'task': task},
+      ),
+      bearer,
+    );
+  }
+
+  Future<Map<String, Object?>> forkSession({
+    required Uri base,
+    String? bearer,
+    required String sessionId,
+    String? messageId,
+    String? directory,
+  }) {
+    return _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.sessionFork(sessionId),
+        query: {
+          if (directory != null && directory.isNotEmpty) 'directory': directory,
+        },
+        body: {
+          if (messageId != null && messageId.isNotEmpty) 'messageID': messageId,
+        },
+      ),
+      bearer,
+    );
+  }
+
   /// Official DirectoryExplorer `POST /api/fs/clone`.
   Future<String> cloneRepository({
     required Uri base,
@@ -1336,6 +1492,18 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   ];
   final Map<String, String> sessionShareUrls = {};
   int cloneStatus = 200;
+  int mkdirStatus = 200;
+  int githubStatus = 200;
+  bool githubConnected = true;
+  List<Map<String, Object?>> githubIssues = [
+    {'number': 42, 'title': 'Native gap audit'},
+  ];
+  List<Map<String, Object?>> githubPulls = [
+    {'number': 19, 'title': 'Session share', 'head': 'feat/share'},
+  ];
+  int worktreeOrderStatus = 200;
+  final Map<String, List<String>> worktreeOrders = {};
+  final Map<String, int> worktreeOrderRevisions = {};
   int discoverStatus = 200;
   int settingsStatus = 200;
   int catalogStatus = 200;
@@ -1437,6 +1605,16 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         .toList();
     root['files'] = list;
     plugins = root;
+  }
+
+  void _upsertMemoryScheduledTask(String projectId, Map<String, Object?> task) {
+    final root = scheduledTasks is Map
+        ? Map<String, Object?>.from((scheduledTasks as Map).map((key, value) => MapEntry(key.toString(), value)))
+        : <String, Object?>{};
+    final tasks = [...(root['tasks'] is List ? (root['tasks'] as List) : const [])];
+    tasks.add({'projectId': projectId, 'task': task});
+    root['tasks'] = tasks;
+    scheduledTasks = root;
   }
 
   void _markScheduledRunning(String path) {
@@ -2091,6 +2269,72 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         return OpenChamberResponse(status: catalogStatus, body: magicPrompts);
       case OpenChamberPaths.gitIdentities:
         return OpenChamberResponse(status: catalogStatus, body: gitIdentities);
+      case OpenChamberPaths.fsMkdir:
+        if (mkdirStatus < 200 || mkdirStatus >= 300) {
+          return OpenChamberResponse(status: mkdirStatus, body: {'error': 'mkdir_failed'});
+        }
+        final createdPath = request.body?['path']?.toString() ?? '';
+        if (createdPath.isNotEmpty) {
+          final name = createdPath.contains('/') ? createdPath.split('/').last : createdPath;
+          fsEntries = [
+            ...fsEntries,
+            {'name': name, 'path': createdPath, 'type': 'directory'},
+          ];
+        }
+        return OpenChamberResponse(status: mkdirStatus, body: {'success': true, 'path': createdPath});
+      case OpenChamberPaths.githubAuthStatus:
+        return OpenChamberResponse(status: githubStatus, body: {'connected': githubConnected});
+      case OpenChamberPaths.githubIssuesList:
+        if (githubStatus < 200 || githubStatus >= 300) {
+          return OpenChamberResponse(status: githubStatus, body: {'error': 'issues_failed'});
+        }
+        return OpenChamberResponse(
+          status: githubStatus,
+          body: {'connected': githubConnected, 'issues': githubIssues},
+        );
+      case OpenChamberPaths.githubPullsList:
+        if (githubStatus < 200 || githubStatus >= 300) {
+          return OpenChamberResponse(status: githubStatus, body: {'error': 'prs_failed'});
+        }
+        return OpenChamberResponse(
+          status: githubStatus,
+          body: {'connected': githubConnected, 'prs': githubPulls},
+        );
+      case OpenChamberPaths.messageQueueWorktreeOrder:
+        if (worktreeOrderStatus < 200 || worktreeOrderStatus >= 300) {
+          return OpenChamberResponse(status: worktreeOrderStatus, body: {'error': 'order_failed'});
+        }
+        final directory = request.method == 'PUT'
+            ? request.body?['projectDirectory']?.toString() ?? ''
+            : request.query['projectDirectory'] ?? '';
+        if (request.method == 'PUT') {
+          final raw = request.body?['orderedPaths'];
+          final paths = raw is List ? raw.map((item) => item.toString()).toList() : <String>[];
+          final nextRevision = (worktreeOrderRevisions[directory] ?? 0) + 1;
+          worktreeOrders[directory] = paths;
+          worktreeOrderRevisions[directory] = nextRevision;
+          return OpenChamberResponse(
+            status: worktreeOrderStatus,
+            body: {
+              'revision': nextRevision,
+              'projectDirectory': directory,
+              'worktreeOrder': {
+                'projectDirectory': directory,
+                'orderedPaths': paths,
+                'revision': nextRevision,
+              },
+            },
+          );
+        }
+        final revision = worktreeOrderRevisions[directory] ?? 0;
+        return OpenChamberResponse(
+          status: worktreeOrderStatus,
+          body: {
+            'projectDirectory': directory,
+            'orderedPaths': worktreeOrders[directory] ?? const <String>[],
+            'revision': revision,
+          },
+        );
       case OpenChamberPaths.behaviorAgentsMd:
         return OpenChamberResponse(status: catalogStatus, body: agentsMd);
       case OpenChamberPaths.authUrlToken:
@@ -2320,7 +2564,8 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         if (request.path.startsWith('/api/session/') &&
             !request.path.contains('/prompt_async') &&
             !request.path.contains('/abort') &&
-            !request.path.contains('/messages')) {
+            !request.path.contains('/messages') &&
+            !request.path.endsWith('/fork')) {
           final shareId = _sessionIdFromSharePath(request.path);
           if (shareId != null) {
             if (sessionMutationStatus < 200 || sessionMutationStatus >= 300) {
@@ -2388,6 +2633,52 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
             ];
           }
           return OpenChamberResponse(status: cloneStatus, body: {'success': true, 'path': destination});
+        }
+        if (request.path.startsWith('/api/projects/') &&
+            request.path.endsWith('/scheduled-tasks') &&
+            request.method == 'PUT') {
+          final parts = request.path.split('/');
+          final projectId = parts.length >= 4 ? Uri.decodeComponent(parts[3]) : '';
+          final taskInput = request.body?['task'];
+          if (taskInput is! Map) {
+            return const OpenChamberResponse(status: 400, body: {'error': 'task payload is required'});
+          }
+          final created = <String, Object?>{
+            'id': taskInput['id']?.toString().isNotEmpty == true
+                ? taskInput['id']
+                : 'task-${DateTime.now().microsecondsSinceEpoch}',
+            ...taskInput.map((key, value) => MapEntry(key.toString(), value)),
+          };
+          _upsertMemoryScheduledTask(projectId, created);
+          return OpenChamberResponse(
+            status: mutationStatus,
+            body: {
+              'created': true,
+              'task': created,
+              'tasks': [created],
+            },
+          );
+        }
+        if (request.path.startsWith('/api/session/') && request.path.endsWith('/fork')) {
+          if (sessionMutationStatus < 200 || sessionMutationStatus >= 300) {
+            return OpenChamberResponse(status: sessionMutationStatus, body: {'error': 'fork_failed'});
+          }
+          final sourceId = Uri.decodeComponent(request.path.split('/')[request.path.split('/').length - 2]);
+          final id = 'ses_fork_${createdSessions.length + 1}';
+          final directory = request.query['directory'] ?? '/workspace/openchamber';
+          final created = <String, Object?>{
+            'id': id,
+            'title': 'Fork of $sourceId',
+            'directory': directory,
+          };
+          createdSessions.add(created);
+          _upsertIndexedSession({
+            ...created,
+            'parentID': sourceId,
+            'project': {'name': _basename(directory)},
+            'time': {'updated': DateTime.now().millisecondsSinceEpoch},
+          });
+          return OpenChamberResponse(status: sessionMutationStatus, body: created);
         }
         if (request.path.startsWith('/api/projects/') && request.path.endsWith('/icon/discover')) {
           if (discoverStatus < 200 || discoverStatus >= 300) {

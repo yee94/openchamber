@@ -43,6 +43,7 @@ class _NewProjectSheetState extends State<NewProjectSheet> {
   List<SettingsNamedItem> _identities = const [];
   String? _identityId;
   String? _errorKey;
+  String _listedPath = '';
   bool _loading = true;
   bool _saving = false;
   bool _showHidden = false;
@@ -106,6 +107,7 @@ class _NewProjectSheetState extends State<NewProjectSheet> {
       if (!mounted) return;
       setState(() {
         _entries = entries.where((entry) => entry.isDirectory).toList();
+        _listedPath = normalizeProjectDirectory(path);
         _loading = false;
       });
     } on OpenChamberHttpException {
@@ -121,6 +123,15 @@ class _NewProjectSheetState extends State<NewProjectSheet> {
     return _entries.where((entry) => _showHidden || !isHiddenDirectoryName(entry.name));
   }
 
+  bool get _shouldCreate =>
+      !_cloneMode &&
+      shouldCreateMissingDirectory(
+        query: _path.text,
+        listedPath: _listedPath,
+        entries: _visibleEntries,
+        addedProjects: widget.controller.settingsProjectRecords(),
+      );
+
   Future<void> _add() async {
     setState(() => _saving = true);
     final bool ok;
@@ -130,6 +141,8 @@ class _NewProjectSheetState extends State<NewProjectSheet> {
         destinationPath: normalizeProjectDirectory(_path.text),
         gitIdentityId: _identityId,
       );
+    } else if (_shouldCreate) {
+      ok = await widget.controller.createAndAddProject(path: _path.text);
     } else {
       ok = await widget.controller.addProject(path: _path.text);
     }
@@ -190,6 +203,7 @@ class _NewProjectSheetState extends State<NewProjectSheet> {
               decoration: InputDecoration(
                 hintText: t(context, 'directoryExplorerDialog.pathInput.placeholder'),
               ),
+              onChanged: (_) => setState(() {}),
               onSubmitted: _list,
             ),
             if (_cloneMode) ...[
@@ -320,7 +334,9 @@ class _NewProjectSheetState extends State<NewProjectSheet> {
                               context,
                               _cloneMode
                                   ? 'directoryExplorerDialog.actions.cloneAndAdd'
-                                  : 'directoryExplorerDialog.actions.addProject',
+                                  : _shouldCreate
+                                      ? 'directoryExplorerDialog.actions.createAndAdd'
+                                      : 'directoryExplorerDialog.actions.addProject',
                             ),
                             style: ocCssInk(TextStyle(
                               fontSize: OcTokens.textUiLabel,

@@ -29,8 +29,13 @@ abstract final class OpenChamberPaths {
   static const fsHome = '/api/fs/home';
   static const fsList = '/api/fs/list';
   static const fsClone = '/api/fs/clone';
+  static const fsMkdir = '/api/fs/mkdir';
   static const gitCheck = '/api/git/check';
   static const gitWorktrees = '/api/git/worktrees';
+  static const githubAuthStatus = '/api/github/auth/status';
+  static const githubIssuesList = '/api/github/issues/list';
+  static const githubPullsList = '/api/github/pulls/list';
+  static const messageQueueWorktreeOrder = '/api/openchamber/message-queue/worktrees/order';
   static const globalEvent = '/api/global/event';
   static const globalEventWs = '/api/global/event/ws';
   static const pushApnsToken = '/api/push/apns-token';
@@ -100,8 +105,11 @@ abstract final class OpenChamberPaths {
       '/api/mcp/${Uri.encodeComponent(name)}/auth/callback';
   static String permissionReply(String requestId) =>
       '/api/permission/${Uri.encodeComponent(requestId)}/reply';
+  static String scheduledTasksForProject(String projectId) =>
+      '/api/projects/${Uri.encodeComponent(projectId)}/scheduled-tasks';
   static String scheduledTaskRun(String projectId, String taskId) =>
-      '/api/projects/${Uri.encodeComponent(projectId)}/scheduled-tasks/${Uri.encodeComponent(taskId)}/run';
+      '${scheduledTasksForProject(projectId)}/${Uri.encodeComponent(taskId)}/run';
+  static String sessionFork(String sessionId) => '${session(sessionId)}/fork';
   static String configSkill(String name) =>
       '/api/config/skills/${Uri.encodeComponent(name)}';
   static String configCommand(String name) =>

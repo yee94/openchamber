@@ -12,6 +12,7 @@ import '../../theme/ios_chrome.dart';
 import '../projects/highlighted_text.dart';
 import '../../theme/oc_glyphs.dart';
 import '../chat/chat_screen.dart';
+import 'scheduled_task_sheet.dart';
 
 class ScheduledTabScreen extends StatefulWidget {
   const ScheduledTabScreen({super.key, required this.controller});
@@ -129,7 +130,13 @@ class _ScheduledTabScreenState extends State<ScheduledTabScreen> {
                   ink: true,
                   size: OcTokens.formControlHeight,
                   tooltip: t(context, 'scheduled.add'),
-                  onPressed: () {},
+                  onPressed: () async {
+                    final created = await showScheduledTaskSheet(
+                      context: context,
+                      controller: widget.controller,
+                    );
+                    if (created && mounted) setState(() {});
+                  },
                 ),
               ),
             if (tasks.errorKey != null)

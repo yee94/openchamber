@@ -59,6 +59,44 @@ void main() {
     expect(groups.single.worktrees.single.sessions.single.id, 'wt-1');
   });
 
+  test('worktree order ranks linked directories by persisted paths', () {
+    final groups = groupSessionsByProject(
+      [
+        const HomeSessionRow(
+          id: 'main-1',
+          title: 'Root session',
+          projectLabel: 'openchamber',
+          kind: HomeSessionKind.catalog,
+          directory: '/workspace/openchamber',
+          updated: 3,
+        ),
+        const HomeSessionRow(
+          id: 'wt-a',
+          title: 'A',
+          projectLabel: 'openchamber',
+          kind: HomeSessionKind.catalog,
+          directory: '/workspace/openchamber/.worktrees/alpha',
+          updated: 2,
+        ),
+        const HomeSessionRow(
+          id: 'wt-b',
+          title: 'B',
+          projectLabel: 'openchamber',
+          kind: HomeSessionKind.catalog,
+          directory: '/workspace/openchamber/.worktrees/beta',
+          updated: 1,
+        ),
+      ],
+      worktreeOrderByDirectory: {
+        '/workspace/openchamber': [
+          '/workspace/openchamber/.worktrees/beta',
+          '/workspace/openchamber/.worktrees/alpha',
+        ],
+      },
+    );
+    expect(groups.single.worktrees.map((tree) => tree.name), ['beta', 'alpha']);
+  });
+
   test('relative time ignores small counters and formats minutes', () {
     expect(formatRelativeTime(3), isNull);
     final now = DateTime.fromMillisecondsSinceEpoch(1756900800000);

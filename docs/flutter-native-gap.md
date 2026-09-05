@@ -668,7 +668,7 @@ Read on this checkout: `apps/mobile_flutter/**` vs `packages/ui/src/mobile/*`, `
 | **HTML preview render** | Files iframe/WebView | **landed** preview mode `UiKitView`/`AndroidView` (`openchamber/html_preview_view`). Source stays selectable text. No new pub dep. | Scripted HTML / Impeller WebView compositing is 真机-only. |
 | **Chat context ring + quotas** | `MobileContextProgressButton.tsx` `buildMobileContextDisplay` | **landed** tokens/`limit.context` (hide % when unknown; ring `?? 0`). Quotas load into the metadata sheet from `GET /api/quota/{id}`. Not a stub 35%. |
 | **Session overflow actions** | `MobileRowActionsSheet.tsx` | **landed** rename / pin / share / copy / unshare / refresh / archive / delete. Share is POST `/api/session/:id/share`; unshare is DELETE the same path; copy uses the official `share.url`. |
-| **Projects new-project + row/worktree actions** | `MobileProjectsHomeContainer.tsx` | **landed** DirectoryExplorer essentials (list/navigate/up, hidden toggle, clone + git identity via POST `/api/fs/clone`); NewWorktreeDialog essentials (`branchName` / `startRef`); MobileProjectEditSurface essentials (name / color / icon / discover POST `/api/projects/:id/icon/discover` / worktree list+delete). GitHub Issue/PR worktree mode and worktree drag-reorder stay residual. |
+| **Projects new-project + row/worktree actions** | `MobileProjectsHomeContainer.tsx` | **landed** DirectoryExplorer essentials (list/navigate/up, hidden toggle, clone + git identity via POST `/api/fs/clone`, create-missing-dir POST `/api/fs/mkdir`); NewWorktreeDialog essentials (`branchName` / `startRef` + GitHub Issue/PR picker); MobileProjectEditSurface essentials (name / color / icon / discover POST `/api/projects/:id/icon/discover` / worktree list+delete + drag-reorder PUT `/api/openchamber/message-queue/worktrees/order`). Finder stays desktop-only. |
 | Composer `/` `@` `#` | Official Cap ships **full** `OpenChamberComposerAutocomplete` (not a pan-only stub) | Flutter keeps the existing frost/pan chrome stub | Full command / mention / file autocomplete is residual — do not invent a second stub. |
 | Appearance Flexoki JSON | WebView ThemeSystem default (`flexoki-light` / `flexoki-dark`). Official **mobile Appearance** is language + Light/Dark/System only — no Flexoki picker. | `OcTokens` Light/Dark/System from design-system OKLCH | Honest residual. Do not add a Flexoki picker Flutter Appearance does not have. |
 
@@ -707,10 +707,10 @@ Capgo OTA; plan/notes/Todo; Chat dock tab; `iosNativeUi`; Bonjour 「附近」; 
 ### Remaining gaps (updated)
 
 1. Device-only rows above — still ❌ 真机过.
-2. Context ring / session overflow mutations / new-project + home `···` landed in the twentieth slice. Share/copy/unshare + DirectoryExplorer clone/hidden/identity + worktree branch/startRef + project-edit essentials landed in the twenty-first (真机 still residual).
+2. Context ring / session overflow mutations / new-project + home `···` landed in the twentieth slice. Share/copy/unshare + DirectoryExplorer clone/hidden/identity + worktree branch/startRef + project-edit essentials landed in the twenty-first (真机 still residual). Create-missing-dir + GitHub Issue/PR worktree + worktree drag-reorder + scheduled daily create + chat copy/share/fork landed in the twenty-second.
 3. Android launcher badge — honest host-side gap.
 4. Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` — will not port.
-5. Composer full `/` `@` `#` autocomplete (Cap ships it; Flutter keeps the frost/pan stub). NewWorktree GitHub Issue/PR mode + worktree drag-reorder. Flexoki JSON tokens (official mobile Appearance has no picker).
+5. Composer full `/` `@` `#` autocomplete (Cap ships it; Flutter keeps the frost/pan stub). Flexoki JSON tokens (official mobile Appearance has no picker). NewWorktree GitHub Issue/PR + worktree drag-reorder + create-missing-dir landed in the twenty-second slice.
 
 ## Twenty-first-slice status (2026-09-05) — session share + project explorer/edit
 
@@ -726,3 +726,37 @@ Continues `5b8c4795e` on `work/flutter-native`. Draft stacked on that tip. No me
 | Appearance Flexoki | honest residual | Official mobile Appearance is language + theme only. Flexoki is the WebView ThemeSystem default, not a mobile picker. Flutter keeps design-system Light/Dark/System. |
 
 Validated on Flutter **3.32.8 / Dart 3.8.1**: `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **222 passed**, including `session_mutations_test.dart` and `projects_home_actions_test.dart`. `Flutter Mobile CI` is push-only on `work/flutter-native` — this stacked branch does not start that Actions run. Not 真机过.
+
+## Twenty-second-slice status (2026-09-05) — Cap mobile code-gap audit
+
+Deep Flutter vs official Capacitor mobile (main 1.19 LegendList — not 1.18 TanStack) after PR **#19** (`4c48e9926`). Draft stacked on `work/flutter-native`. Do **not** merge `main`. No Flutter UI golden recapture. OpenChamber v2 `.debug` applicationId (`com.yee94.openchamber.debug`) unchanged. No release publish.
+
+Read on this checkout: Cap `DirectoryExplorerDialog.shouldCreateTarget` + `handleOpenInFinder` (desktop-only early return); `NewWorktreeDialog` + `GitHubIntegrationDialog`; `MobileProjectEditSurface` `@dnd-kit` → `useWorktreeOrderStore.setWorktreeOrder`; `ScheduledTasksDialog` / `ScheduledTaskEditorDialog` `PUT /api/projects/:id/scheduled-tasks`; Cap `MessageBody` / `ChatMessage` copy / share / `session.fork`; `MobileAssistantTab` long-press edit/delete; official mobile Appearance (language + Light/Dark/System only).
+
+### Landed this slice (code)
+
+| Surface | Official Cap mobile | Flutter | Notes |
+|---|---|---|---|
+| Create-missing-dir | `shouldCreateTarget` → `POST /api/fs/mkdir` `{path}` then add project | `shouldCreateMissingDirectory` + `createAndAddProject` | Button label switches to `Create & add`. Finder **not** ported (`handleOpenInFinder` returns unless `isDesktop`). |
+| NewWorktree GitHub Issue/PR | `GitHubIntegrationDialog` | Issues/PRs picker | Auth `GET /api/github/auth/status`. Issues `GET /api/github/issues/list?directory=&page=`. PRs `GET /api/github/pulls/list` (`prs`). Issue branch `issue-${number}-${slug}`; PR branch = `head`. Then official `POST /api/git/worktrees`. |
+| Worktree drag-reorder | `MobileProjectEditSurface` `@dnd-kit` | `ReorderableListView` (no new pub dep) | GET/PUT `/api/openchamber/message-queue/worktrees/order` `{requestID, projectDirectory, expectedRevision, orderedPaths}`. 501 = local-only success. Home `groupSessionsByProject` ranks by persisted paths. |
+| Scheduled create | Cap `+` opens editor | Daily create sheet | `PUT /api/projects/:projectId/scheduled-tasks` `{task:{name,enabled,schedule:{kind:daily,time},execution:{prompt,providerID,modelID}}}`. Provider/model from settings `defaultModel`. |
+| Chat copy / share / fork | `MessageBody` / `session.fork` | Transcript footer + user toolbar | Copy/share write the clipboard (no `share_plus`). Fork `POST /api/session/:id/fork` `{messageID?}` then `pushReplacement` the forked chat. Revert/edit stay no-ops. |
+
+### Still code (Cap ships; Flutter does not invent extras)
+
+| Gap | Why leftover |
+|---|---|
+| Composer `/` `@` `#` autocomplete | Cap ships full `OpenChamberComposerAutocomplete`. Flutter frost/pan stub stays — documented out of scope. |
+| NewWorktree existing-branch mode | Cap dialog has it; this slice closed GitHub + create-new only. |
+| Scheduled full editor | Cap `ScheduledTaskEditorDialog` (cron/weekly/edit/toggle/delete). Flutter shipped daily create + existing list/run. |
+| Chat revert / edit | Cap `MessageBody` actions. Flutter icons remain; handlers are still no-ops (need official session mutation paths). |
+| Assistant long-press edit/delete | Cap `MobileAssistantTab` context menu → Settings assistants / `AssistantDeleteConfirmDialog`. Flutter tab is tap-to-open; Settings already deletes. |
+| Appearance Flexoki picker | **Do not invent.** Official **mobile** Appearance is language + Light/Dark/System. Flexoki is WebView ThemeSystem default, not a mobile picker. |
+| Finder | **Do not invent.** Cap `handleOpenInFinder` is desktop-only. |
+
+### 真机-only
+
+Same device rows as earlier slices: ActivityKit / Dynamic Island / widget tap; APNs/FCM tap; HEIC/album picker; hosted OAuth; live `wss://` relay; Impeller 16ms; share-extension → inbox POST; FCM on `.debug` if Firebase init fails. This slice did not recapture goldens and did not claim 真机过.
+
+Validated on Flutter **3.32.8 / Dart 3.8.1** (this agent): `flutter analyze --no-fatal-infos` + `flutter test` including `projects_home_actions_test.dart`, `project_groups_test.dart`, and `flutter_deep_gap_test.dart`. `Flutter Mobile CI` is push-only on `work/flutter-native` — this stacked branch does not start that Actions run until the tip is merged there. Not 真机过.
