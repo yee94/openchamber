@@ -273,11 +273,13 @@ class OcOptical {
   static const double settingsSearchMinHeight = 44;
   /// Official nav `Icon` `h-4 w-4`.
   static const double settingsNavIcon = 16;
-  /// Official settings stroke is 1.5. Flutter round-cap dpr-3 bloom;
-  /// same dock visual as header so 16px nav glyphs are not chunky bricks.
-  /// Settings nav is official `h-4` (16). Keep dock visual so 05 is
-  /// not pulled into the search / leading small-chrome restore.
-  static const double settingsGlyphStrokeVisual = dockGlyphStrokeVisual;
+  /// Official settings `Icon` stroke is 1.5. 0.12 (dock hairline alias)
+  /// vanished row icons on warm sand (Yee P0). Paint 1.25 — readable
+  /// official 1.5 at dpr 3, not a brick, not a hairline. Decoupled
+  /// from [dockGlyphStrokeVisual].
+  static const double settingsGlyphStrokeVisual = 1.25;
+  /// Trailing chevron — softer than the 16px nav glyph, still visible.
+  static const double settingsChevronStrokeVisual = 1.0;
 
   /// `.oc-mobile-root-page-title` letter-spacing: −0.04em + 0.02em × collapse.
   static double rootTitleTracking(double collapse) =>
@@ -294,12 +296,12 @@ class OcOptical {
   /// Flutter round-cap bloom at dpr 3; paint under 2 so slim filled-medium
   /// 23px stays delicate — not bricks, not hairlines.
   static const double dockGlyphStroke = 2;
-  /// Official medium is 2; Flutter bloom at dpr 3. 0.16 still read a
-  /// touch heavy vs README liquid-glass — 0.12 is the optical weight,
-  /// not a size spike (23px box stays). Not a hairline.
-  static const double dockGlyphStrokeVisual = 0.12;
-  /// Folder / sparkles share the same slim outline-medium.
-  static const double dockStrokeGlyphStrokeVisual = 0.12;
+  /// Official medium is 2. 0.12 was an anti-bloom overcorrection —
+  /// folder / calendar / gear vanished on cream (Yee P0). 1.25 is
+  /// readable medium outline at dpr 3. Box stays 23. Not a hairline.
+  static const double dockGlyphStrokeVisual = 1.25;
+  /// Folder / sparkles share the restored outline-medium.
+  static const double dockStrokeGlyphStrokeVisual = 1.25;
   /// Official dock `Icon weight="medium"` is outline, not filled bodies.
   /// Filling calendar/gear at dpr 3 reads as chunky bricks.
   static const bool dockGlyphFillBodies = false;
@@ -354,9 +356,9 @@ class OcOptical {
   /// (14/18 + [cardTitleHalfLead]), not session 12/16.
   static const double worktreeMeta = 11;
   static const double worktreeMetaHeight = 14 / 11;
-  /// Official session `more-2` is `size-3.5` (14). Trailing ··· / chevron
-  /// stay dock visual — not small-chrome 0.28 (that fattened meatballs
-  /// vs README). Search / leading keep 0.28.
+  /// Official session `more-2` is `size-3.5` (14). Trailing ··· follows
+  /// the restored dock outline so root-tab meatballs are visible.
+  /// Search / leading keep small-chrome 0.28.
   static const double sessionMore = 14;
   static const double sessionMoreStroke = dockGlyphStrokeVisual;
   /// Official visible more is `min-w-9` + `mr-1`. Open the trailing air a
@@ -416,9 +418,9 @@ class OcOptical {
 
   /// Official `FileTypeIcon` mobile size `h-3 w-3` (12px).
   static const double fileTypeSize = 12;
-  /// Flutter bloom at 12px; paint at dock visual so silhouettes
-  /// are not header-weight bricks. Header discs share dock visual.
-  static const double fileTypeStrokeVisual = dockGlyphStrokeVisual;
+  /// 12px file marks — own 1.0 so they stay silhouettes when dock
+  /// outline returns to 1.25. Not the 0.12 vanish.
+  static const double fileTypeStrokeVisual = 1.0;
   static const double fileTypeMark = 7;
   /// Official mobile turn-changes row is `h-6` (24) / `leading-none`.
   /// WidgetTester packs that band — open toward desktop `h-7` (28).
@@ -461,9 +463,9 @@ class OcOptical {
   /// Official `MESSAGE_ACTION_ICON_CLASS` `size-3.5` / medium stroke.
   static const double footerGlyph = 14;
   static const double footerGlyphStroke = 2;
-  /// Official medium is 2; Flutter bloom at dpr 3. Share dock visual so
-  /// copy / fork / clock stay filled-medium, not chunky bricks.
-  static const double footerGlyphStrokeVisual = dockGlyphStrokeVisual;
+  /// Official medium is 2. Own 1.0 so 14px footer marks stay visible
+  /// when dock outline is 1.25 — not the 0.12 vanish.
+  static const double footerGlyphStrokeVisual = 1.0;
   /// Official ProgressiveGroup expanded rail: header must not sit flush
   /// on the first skill/terminal row (Yee P0 2026-09-04).
   static const double activityExpandedGap = 10;

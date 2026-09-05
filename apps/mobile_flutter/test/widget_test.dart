@@ -312,6 +312,21 @@ void main() {
     final appearance = tester.widget<SettingsNavRow>(find.byKey(const Key('settings-slug-appearance')));
     expect(appearance.icon, OcGlyphKind.palette);
     expect(appearance.subtitle, isNull);
+    final settingsRowGlyph = tester.widget<OcGlyph>(find.descendant(
+      of: find.byKey(const Key('settings-slug-appearance')),
+      matching: find.byType(OcGlyph),
+    ).first);
+    expect(settingsRowGlyph.size, OcOptical.settingsNavIcon);
+    expect(settingsRowGlyph.strokeWidth, OcOptical.settingsGlyphStrokeVisual);
+    expect(settingsRowGlyph.strokeWidth, greaterThanOrEqualTo(1.0));
+    final dockGlyphs = tester.widgetList<OcGlyph>(
+      find.descendant(of: find.byKey(const Key('dock-capsule')), matching: find.byType(OcGlyph)),
+    );
+    for (final glyph in dockGlyphs) {
+      expect(glyph.size, OcOptical.dockGlyphVisual);
+      expect(glyph.strokeWidth, greaterThanOrEqualTo(0.9));
+      expect(glyph.strokeWidth, isNot(0.12));
+    }
     for (final page in mobileSettingsPages) {
       expect(settingsNavIcon(page.slug), isNot(OcGlyphKind.gear), reason: page.slug);
     }

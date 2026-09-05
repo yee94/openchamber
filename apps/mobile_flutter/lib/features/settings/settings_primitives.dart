@@ -181,7 +181,7 @@ class SettingsNavRow extends StatelessWidget {
                   OcGlyph(
                     OcGlyphKind.chevronRight,
                     size: OcOptical.settingsNavIcon,
-                    strokeWidth: OcOptical.settingsGlyphStrokeVisual,
+                    strokeWidth: OcOptical.settingsChevronStrokeVisual,
                     color: tokens.mutedForeground.withValues(alpha: 0.6),
                   ),
             ],

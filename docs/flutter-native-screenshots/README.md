@@ -985,3 +985,13 @@ needs macOS. macos-15 CI only *compiles* `Runner.app`.
 **Do not fake glass in Flutter. Do not invent tester knobs.**
 No dart. No recapture. Goldens unchanged. Next proof needs a
 real iPhone or Mac Simulator pool. **精致: 还没有.**
+
+**2026-09-05 P0 icon stroke (Yee: setting页的对比 / 图标都看不到):**
+`settingsGlyphStrokeVisual` **0.12 → 1.25** (decoupled from dock
+hairline; official settings Icon 1.5). Chevron **1.0**. Dock
+`dockGlyphStrokeVisual` / folder-sparkles **0.12 → 1.25**
+(official medium 2, bloom-safe; box 23 / fillBodies false /
+wash 0.55 stay). Session more + schedule ellipsis inherit dock
+1.25. File/footer marks own **1.0**. Search 14 / discs 34/28/24
+/ gap-0.5 **2** / 20+10+20 / secondary-nav 0.68 stay. Recapture
+05 + dock-bearing catalog / chat if strokes move. **Not 精致.**
