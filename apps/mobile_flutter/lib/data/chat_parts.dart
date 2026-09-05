@@ -102,7 +102,7 @@ List<ChatMessage> parseTurnPageMessages(
   final alreadyQuestions = messages.expand((message) => message.parts).map((part) => part.questionId).whereType<String>().toSet();
   final extras = [
     ...permissions.where((item) => !alreadyPermissions.contains(item.id)).map(_permissionPart),
-    ...questions.where((item) => !alreadyQuestions.contains(item.id)).map(_questionPart),
+    ...questions.where((item) => !alreadyQuestions.contains(item.id)).map(questionPartFromRequest),
   ];
   if (extras.isEmpty) return messages;
   final target = messages.lastIndexWhere((message) => !message.isUser);
@@ -284,7 +284,7 @@ ChatPart _permissionPart(PermissionRequestRecord request) {
   );
 }
 
-ChatPart _questionPart(QuestionRequest request) {
+ChatPart questionPartFromRequest(QuestionRequest request) {
   final first = request.questions.isEmpty ? null : request.questions.first;
   return ChatPart(
     id: request.id,

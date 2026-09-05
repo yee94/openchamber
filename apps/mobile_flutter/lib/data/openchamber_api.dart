@@ -260,14 +260,7 @@ class OpenChamberApi {
     } on OpenChamberHttpException {
       // Transcript still renders; missing permission list is not empty success.
     }
-    List<QuestionRequest> questions = const [];
-    try {
-      final questionPayload = await getQuestions(base: base, bearer: bearer, directory: directory);
-      questions = parseQuestionList(questionPayload, sessionId: sessionId);
-    } on OpenChamberHttpException {
-      // Transcript still renders; missing question list is not empty success.
-    }
-    return parseTurnPageMessages(response.body, permissions: permissions, questions: questions);
+    return parseTurnPageMessages(response.body, permissions: permissions);
   }
 
   Future<Object?> getPermissions({required Uri base, String? bearer, String? directory}) {
@@ -303,6 +296,16 @@ class OpenChamberApi {
       ),
       bearer,
     );
+  }
+
+  Future<List<QuestionRequest>> listQuestions({
+    required Uri base,
+    String? bearer,
+    String? directory,
+    String? sessionId,
+  }) async {
+    final payload = await getQuestions(base: base, bearer: bearer, directory: directory);
+    return parseQuestionList(payload, sessionId: sessionId);
   }
 
   Future<Object?> getQuestions({required Uri base, String? bearer, String? directory}) {

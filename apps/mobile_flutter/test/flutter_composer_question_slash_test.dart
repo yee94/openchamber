@@ -146,17 +146,12 @@ void main() {
     await controller.replyToQuestion(session: session, requestId: 'q-1', answers: const [
       ['Yes'],
     ]);
-    expect(
-      transport.calls.any(
-        (call) =>
-            call.method == 'POST' &&
-            call.path == OpenChamberPaths.questionReply('q-1') &&
-            call.body?['answers'] == [
-              ['Yes'],
-            ],
-      ),
-      isTrue,
+    final reply = transport.calls.lastWhere(
+      (call) => call.method == 'POST' && call.path == OpenChamberPaths.questionReply('q-1'),
     );
+    expect(reply.body?['answers'], [
+      ['Yes'],
+    ]);
     transport.questions = [
       {'id': 'q-2', 'sessionID': 'sess-catalog', 'questions': const []},
     ];
@@ -251,18 +246,14 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('chat-question-q-1-option-0-Yes')));
     await tester.tap(find.byKey(const Key('chat-question-q-1-option-0-Yes')));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('chat-permission-question-submit-q-1')));
     await tester.tap(find.byKey(const Key('chat-permission-question-submit-q-1')));
     await tester.pumpAndSettle();
-    expect(
-      env.transport.calls.any(
-        (call) =>
-            call.method == 'POST' &&
-            call.path == OpenChamberPaths.questionReply('q-1') &&
-            call.body?['answers'] == [
-              ['Yes'],
-            ],
-      ),
-      isTrue,
+    final reply = env.transport.calls.lastWhere(
+      (call) => call.method == 'POST' && call.path == OpenChamberPaths.questionReply('q-1'),
     );
+    expect(reply.body?['answers'], [
+      ['Yes'],
+    ]);
   });
 }

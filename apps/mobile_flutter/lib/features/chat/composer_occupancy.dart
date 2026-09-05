@@ -26,9 +26,18 @@ double composerListReserve({
   required bool showScrollToBottom,
   double queuedChipHeight = 0,
   double sessionChipHeight = 0,
+  double questionFooterHeight = 0,
 }) {
-  if (ios) return collapsedComposerOccupancy + paddingBottom + queuedChipHeight + sessionChipHeight;
+  if (ios) {
+    return collapsedComposerOccupancy + paddingBottom + queuedChipHeight + sessionChipHeight + questionFooterHeight;
+  }
   final fab = showScrollToBottom ? OcOptical.scrollFab + 6 : 0.0;
-  return collapsedComposerOccupancy + paddingBottom + fab + composerPillBottomPad + queuedChipHeight + sessionChipHeight;
+  return collapsedComposerOccupancy +
+      paddingBottom +
+      fab +
+      composerPillBottomPad +
+      queuedChipHeight +
+      sessionChipHeight +
+      questionFooterHeight;
 }
 

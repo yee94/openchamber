@@ -32,6 +32,7 @@ import 'openchamber_api.dart';
 import 'openchamber_http.dart';
 import 'pairing_payload.dart';
 import 'prompt_attachment.dart';
+import 'question_request.dart';
 import 'relay/codec.dart';
 import 'relay/tunnel_client.dart';
 import 'secure_store.dart';
@@ -399,6 +400,23 @@ class AppController extends ChangeNotifier {
       answers: answers,
       directory: session.directory,
     );
+  }
+
+  Future<List<QuestionRequest>?> loadQuestions(HomeSessionRow session) async {
+    final base = activeBase;
+    final directory = session.directory ?? '';
+    if (base == null || directory.isEmpty) return null;
+    try {
+      return await _api.listQuestions(
+        base: base,
+        bearer: activeBearer,
+        directory: directory,
+        sessionId: session.id,
+      );
+    } on OpenChamberHttpException {
+      // Failure is not authoritative empty success.
+      return null;
+    }
   }
 
   Future<void> rejectQuestion({

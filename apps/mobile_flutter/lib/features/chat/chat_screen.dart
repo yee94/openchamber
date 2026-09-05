@@ -11,7 +11,9 @@ import '../../data/home_session.dart';
 import '../../data/local_chat_commands.dart';
 import '../../data/message_id.dart';
 import '../../data/message_queue.dart';
+import '../../data/chat_parts.dart';
 import '../../data/openchamber_http.dart';
+import '../../data/question_request.dart';
 import '../projects/action_dialogs.dart';
 import '../../data/prompt_attachment.dart';
 import '../../l10n/app_strings.dart';
@@ -34,6 +36,7 @@ import 'composer_occupancy.dart';
 import 'composer_session_chips.dart';
 import 'ios_composer_host.dart';
 import 'queued_message_chips.dart';
+import 'tool_cards.dart';
 import 'reverse_chat_list.dart';
 import 'session_metadata_sheet.dart';
 import 'session_overflow_sheet.dart';
@@ -73,6 +76,7 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _editingMessageId;
   MessageQueueScope? _queue;
   int _seenQueueEpoch = 0;
+  List<QuestionRequest> _questions = const [];
 
   LiveActivityController get _live => widget.appController?.liveActivity ?? LiveActivityController();
 
@@ -146,6 +150,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _timeline.applyMessages(messages);
       _contextTick.value += 1;
       _syncBusyFromController();
+      unawaited(_refreshQuestions());
     } on OpenChamberHttpException {
       // Keep the last transcript; failure is not empty success.
     }
@@ -169,6 +174,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _contextTick.value += 1;
       _syncBusyFromController();
       unawaited(_refreshQueue());
+      unawaited(_refreshQuestions());
       unawaited(_loadComposerCatalogs());
       unawaited(controller.remoteSettings.loadAgents());
       if (mounted) setState(() {});
@@ -255,6 +261,15 @@ class _ChatScreenState extends State<ChatScreen> {
     } on PromptAttachmentUploadError {
       if (mounted) _errorKey.value = 'chat.error.attachFailed';
     }
+  }
+
+  Future<void> _refreshQuestions() async {
+    final controller = widget.appController;
+    if (controller == null) return;
+    final next = await controller.loadQuestions(_session);
+    if (!mounted) return;
+    if (next == null) return;
+    setState(() => _questions = next);
   }
 
   Future<void> _refreshQueue() async {
@@ -868,6 +883,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       showScrollToBottom: length >= 2,
                       queuedChipHeight: (_queue?.items.isNotEmpty ?? false) ? queuedMessageChipsOccupancy : 0,
                       sessionChipHeight: widget.appController == null ? 0 : composerSessionChipHeight,
+                      questionFooterHeight: _questions.isEmpty ? 0 : 220,
                     );
                     return EdgeInsets.fromLTRB(12, navH, 12, composerReserve + 12);
                   },
@@ -949,6 +965,26 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (_questions.isNotEmpty)
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.45),
+                        child: ListView(
+                          key: const Key('chat-question-footer'),
+                          shrinkWrap: true,
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          children: [
+                            for (final question in _questions)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: QuestionReplyCard(
+                                  part: questionPartFromRequest(question),
+                                  onReply: _replyQuestion,
+                                  onReject: _rejectQuestion,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     if (widget.appController != null)
                       ListenableBuilder(
                         listenable: widget.appController!,

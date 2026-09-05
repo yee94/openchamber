@@ -798,7 +798,7 @@ Stacked on `1c2514999` (`work/flutter-native` after the twenty-sixth queue/setti
 | Surface | Official Cap mobile | Flutter | Notes |
 |---|---|---|---|
 | Composer model/agent pick | `MobileModelPickerPanel` + `prompt_async` `{model,agent,variant}` | Session-scoped chips + sheets | Catalogs: `GET /api/config/catalog/providers`, `GET /api/agent`. Last pick stays in session memory. Settings `defaultModel` / `defaultAgent` / `defaultVariant` seed the first send. |
-| Question reply / reject | `question.reply` / `question.reject` | Interactive card from `GET /api/question` | `POST /api/question/:id/reply` `{answers:string[][]}`; `POST /api/question/:id/reject`. Failed list is not empty success. |
+| Question reply / reject | `question.reply` / `question.reject` | Footer card from `GET /api/question` (Cap `footerSlot`) | `POST /api/question/:id/reply` `{answers:string[][]}`; `POST /api/question/:id/reject`. Failed list is not empty success. |
 | Immediate slash | Cap `IMMEDIATE_LOCAL_CHAT_COMMANDS` + `/model` | Intercept on send / autocomplete tap | `/compact` → `POST /api/session/:id/summarize` `{providerID,modelID}`. `/undo` → existing revert. `/redo` → `POST /api/session/:id/unrevert`. `/model` opens the picker. `/new` `/fork` use existing session APIs. Tokens are not `prompt_async` text. |
 
 ### Still code / will-not-port
