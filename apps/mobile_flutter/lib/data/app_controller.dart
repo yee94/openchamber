@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +24,7 @@ import 'connection_candidates.dart';
 import 'context_usage.dart';
 import 'composer_autocomplete.dart';
 import 'composer_session_pick.dart';
+import 'git_commit_generate.dart';
 import 'github_worktree.dart';
 import 'home_session.dart';
 import 'message_queue.dart';
@@ -2210,6 +2212,32 @@ class AppController extends ChangeNotifier {
     return _api.listFilesystem(base: base, bearer: activeBearer, path: path);
   }
 
+  Future<List<FileSearchResult>> searchFilesystemFiles({
+    required String directory,
+    required String query,
+    int limit = 40,
+  }) {
+    final base = activeBase;
+    if (base == null) {
+      throw const OpenChamberHttpException(0, OpenChamberPaths.findFile, code: 'not_connected');
+    }
+    return _api.searchFiles(
+      base: base,
+      bearer: activeBearer,
+      directory: directory,
+      query: query,
+      limit: limit,
+    );
+  }
+
+  Future<Uint8List> readWorkspaceRawFile(String path) {
+    final base = activeBase;
+    if (base == null) {
+      throw const OpenChamberHttpException(0, OpenChamberPaths.fsRaw, code: 'not_connected');
+    }
+    return _api.readRawFile(base: base, bearer: activeBearer ?? '', path: path);
+  }
+
   Future<GitStatusSnapshot> loadGitStatus(String directory) {
     final base = activeBase;
     if (base == null) {
@@ -2254,11 +2282,11 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<bool> commitGitChanges(String directory, String message) async {
+  Future<bool> commitGitChanges(String directory, String message, {List<String>? files}) async {
     lastMutationErrorKey = null;
     final base = activeBase;
     if (base == null || message.trim().isEmpty) {
-      lastMutationErrorKey = 'mobile.changes.error.commitFailed';
+      lastMutationErrorKey = 'gitView.toast.enterCommitMessage';
       notifyListeners();
       return false;
     }
@@ -2268,13 +2296,225 @@ class AppController extends ChangeNotifier {
         bearer: activeBearer,
         directory: directory,
         message: message.trim(),
+        files: files,
       );
       return true;
     } on OpenChamberHttpException {
-      lastMutationErrorKey = 'mobile.changes.error.commitFailed';
+      lastMutationErrorKey = 'gitView.toast.createCommitFailed';
       notifyListeners();
       return false;
     }
+  }
+
+  Future<bool> revertGitChanges(String directory, String path) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'gitView.toast.revertFailed';
+      notifyListeners();
+      return false;
+    }
+    try {
+      await _api.revertGitFile(base: base, bearer: activeBearer, directory: directory, path: path);
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'gitView.toast.revertFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<List<GitRemote>> loadGitRemotes(String directory) {
+    final base = activeBase;
+    if (base == null) {
+      throw const OpenChamberHttpException(0, OpenChamberPaths.gitRemotes, code: 'not_connected');
+    }
+    return _api.getGitRemotes(base: base, bearer: activeBearer, directory: directory);
+  }
+
+  Future<GeneratedCommitMessage?> generateGitCommitMessage({
+    required String directory,
+    required List<String> files,
+  }) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'gitView.toast.generateCommitMessageFailed';
+      notifyListeners();
+      return null;
+    }
+    if (files.isEmpty) {
+      lastMutationErrorKey = 'gitView.toast.selectFileToDescribe';
+      notifyListeners();
+      return null;
+    }
+    try {
+      final diffs = await _collectCommitDiffs(directory: directory, files: files);
+      var system = officialCommitVisiblePrompt;
+      try {
+        final prompts = await _api.getMagicPrompts(base: base, bearer: activeBearer);
+        final overrides = prompts is Map ? prompts['overrides'] : null;
+        if (overrides is Map && overrides['git.commit.generate.visible'] != null) {
+          final visible = overrides['git.commit.generate.visible']?.toString().trim() ?? '';
+          if (visible.isNotEmpty) system = visible;
+        }
+        if (overrides is Map && overrides['git.commit.generate.instructions'] != null) {
+          final instructions = overrides['git.commit.generate.instructions']?.toString().trim() ?? '';
+          if (instructions.isNotEmpty) {
+            final selected = files.map((file) => '- $file').join('\n');
+            final prompt = '${instructions.replaceAll('{{selected_files}}', selected)}\n\nDiffs of the selected files:\n$diffs';
+            return _api.generateCommitMessage(
+              base: base,
+              bearer: activeBearer,
+              directory: directory,
+              system: system,
+              prompt: prompt,
+              preferredProviderID: splitDefaultModel(remoteSettings.blob.value?.defaultModel).providerId,
+              preferredModelID: splitDefaultModel(remoteSettings.blob.value?.defaultModel).modelId,
+            );
+          }
+        }
+      } on OpenChamberHttpException {
+        // Official catalog templates remain the fallback.
+      }
+      final prompt = '${renderCommitInstructions(files)}\n\nDiffs of the selected files:\n$diffs';
+      final model = splitDefaultModel(remoteSettings.blob.value?.defaultModel);
+      return _api.generateCommitMessage(
+        base: base,
+        bearer: activeBearer,
+        directory: directory,
+        system: system,
+        prompt: prompt,
+        preferredProviderID: model.providerId,
+        preferredModelID: model.modelId,
+      );
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'gitView.toast.generateCommitMessageFailed';
+      notifyListeners();
+      return null;
+    } on FormatException {
+      lastMutationErrorKey = 'gitView.toast.generateCommitMessageFailed';
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<String> _collectCommitDiffs({required String directory, required List<String> files}) async {
+    final limited = files.take(commitDiffFileLimit).toList();
+    final chunks = <String>[];
+    for (final path in limited) {
+      try {
+        final staged = await _api.getGitDiff(
+          base: activeBase!,
+          bearer: activeBearer,
+          directory: directory,
+          path: path,
+          staged: true,
+        );
+        final unstaged = await _api.getGitDiff(
+          base: activeBase!,
+          bearer: activeBearer,
+          directory: directory,
+          path: path,
+        );
+        final text = [staged, unstaged].where((diff) => diff.trim().isNotEmpty).join('\n');
+        chunks.add(text.isEmpty ? '--- $path (no textual diff available)' : text);
+      } on OpenChamberHttpException {
+        chunks.add('--- $path (diff unavailable)');
+      }
+    }
+    var total = '';
+    for (final chunk in chunks) {
+      if (total.length + chunk.length > commitDiffTotalCharLimit) {
+        return '$total\n[remaining diffs truncated]';
+      }
+      total = total.isEmpty ? chunk : '$total\n\n$chunk';
+    }
+    if (files.length > limited.length) {
+      total += '\n[${files.length - limited.length} more selected files omitted]';
+    }
+    return total;
+  }
+
+  Future<bool> syncGitChanges(String directory) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'gitView.toast.syncActionFailed';
+      notifyListeners();
+      return false;
+    }
+    try {
+      final remotes = await _api.getGitRemotes(base: base, bearer: activeBearer, directory: directory);
+      var status = await _api.getGitStatus(base: base, bearer: activeBearer, directory: directory);
+      final remote = _trackingRemote(remotes, status.tracking);
+      if (remote == null) {
+        lastMutationErrorKey = 'mobile.changes.noRemote';
+        notifyListeners();
+        return false;
+      }
+      await _api.gitFetch(base: base, bearer: activeBearer, directory: directory, remote: remote.name);
+      status = await _api.getGitStatus(base: base, bearer: activeBearer, directory: directory);
+      if (status.behind > 0) {
+        if (status.files.isNotEmpty) {
+          lastMutationErrorKey = 'gitView.toast.commitOrStashBeforeSync';
+          notifyListeners();
+          return false;
+        }
+        await _api.gitPull(
+          base: base,
+          bearer: activeBearer,
+          directory: directory,
+          remote: remote.name,
+          branch: _trackedBranch(status.tracking, remote.name),
+        );
+      }
+      status = await _api.getGitStatus(base: base, bearer: activeBearer, directory: directory);
+      if (status.ahead > 0) {
+        await _api.gitPush(base: base, bearer: activeBearer, directory: directory);
+      }
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'gitView.toast.syncActionFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> commitAndPushGitChanges(String directory, String message, {required List<String> files}) async {
+    lastMutationErrorKey = null;
+    if (message.trim().isEmpty) {
+      lastMutationErrorKey = 'gitView.toast.enterCommitMessage';
+      notifyListeners();
+      return false;
+    }
+    if (files.isEmpty) {
+      lastMutationErrorKey = 'gitView.toast.selectFileToCommit';
+      notifyListeners();
+      return false;
+    }
+    final committed = await commitGitChanges(directory, message, files: files);
+    if (!committed) return false;
+    return syncGitChanges(directory);
+  }
+
+  GitRemote? _trackingRemote(List<GitRemote> remotes, String? tracking) {
+    final trackingName = tracking?.split('/').first;
+    if (trackingName != null && trackingName.isNotEmpty) {
+      for (final remote in remotes) {
+        if (remote.name == trackingName) return remote;
+      }
+      if (remotes.isEmpty) return GitRemote(name: trackingName);
+    }
+    return remotes.isEmpty ? null : remotes.first;
+  }
+
+  String? _trackedBranch(String? tracking, String remoteName) {
+    final prefix = '$remoteName/';
+    if (tracking != null && tracking.startsWith(prefix)) {
+      return tracking.substring(prefix.length);
+    }
+    return null;
   }
 
   Future<String> loadGitDiff({

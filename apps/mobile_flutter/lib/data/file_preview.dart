@@ -1,3 +1,21 @@
+/// Official `IMAGE_EXTENSIONS` (`packages/ui/src/lib/toolHelpers.ts`).
+const _imageExtensions = {'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp', 'avif'};
+
+String fileExtension(String path) {
+  final name = fileNameFromPath(path).toLowerCase();
+  final dot = name.lastIndexOf('.');
+  if (dot < 0 || dot == name.length - 1) return '';
+  return name.substring(dot + 1);
+}
+
+/// Official `isImageFile`.
+bool isImageFile(String path) => _imageExtensions.contains(fileExtension(path));
+
+/// Cap `getImageSrc` is empty for `.svg`, so SVG is read as text.
+bool isRasterPreviewImage(String path) => isImageFile(path) && fileExtension(path) != 'svg';
+
+const mobileFilePreviewCharLimit = 250000;
+
 /// Official `isHtmlFile` (`packages/ui/src/lib/toolHelpers.ts`).
 bool isHtmlFile(String path) {
   final trimmed = path.trim();

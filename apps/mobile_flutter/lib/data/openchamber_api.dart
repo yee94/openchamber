@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'chat_parts.dart';
+import 'git_commit_generate.dart';
 import 'chat_timeline.dart';
 import 'home_session.dart';
 import 'message_queue.dart';
@@ -50,12 +52,33 @@ class GitStatusSnapshot {
   const GitStatusSnapshot({
     required this.current,
     required this.files,
+    this.tracking,
+    this.ahead = 0,
+    this.behind = 0,
     this.isClean = false,
   });
 
   final String current;
+  final String? tracking;
+  final int ahead;
+  final int behind;
   final List<GitChangeFile> files;
   final bool isClean;
+}
+
+class GitRemote {
+  const GitRemote({required this.name, this.fetchUrl = '', this.pushUrl = ''});
+
+  final String name;
+  final String fetchUrl;
+  final String pushUrl;
+}
+
+class FileSearchResult {
+  const FileSearchResult({required this.path, required this.relativePath});
+
+  final String path;
+  final String relativePath;
 }
 
 class McpRuntimeStatus {
@@ -928,6 +951,9 @@ class OpenChamberApi {
     }
     return GitStatusSnapshot(
       current: body['current']?.toString() ?? '',
+      tracking: body['tracking']?.toString(),
+      ahead: _asInt(body['ahead']),
+      behind: _asInt(body['behind']),
       files: files,
       isClean: body['isClean'] == true || files.isEmpty,
     );
@@ -976,6 +1002,7 @@ class OpenChamberApi {
     String? bearer,
     required String directory,
     required String message,
+    List<String>? files,
   }) {
     return _requireOk(
       base,
@@ -984,7 +1011,11 @@ class OpenChamberApi {
         path: OpenChamberPaths.gitCommit,
         bearer: bearer,
         query: {'directory': directory},
-        body: {'message': message, 'addAll': false},
+        body: {
+          'message': message,
+          'addAll': false,
+          if (files != null) 'files': files,
+        },
       ),
       bearer,
     );
@@ -1011,6 +1042,180 @@ class OpenChamberApi {
       bearer,
     );
     return body['diff']?.toString() ?? '';
+  }
+
+  Future<void> revertGitFile({
+    required Uri base,
+    String? bearer,
+    required String directory,
+    required String path,
+    String? scope,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.gitRevert,
+        bearer: bearer,
+        query: {'directory': directory},
+        body: {
+          'path': path,
+          if (scope != null) 'scope': scope,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<void> gitFetch({
+    required Uri base,
+    String? bearer,
+    required String directory,
+    required String remote,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.gitFetch,
+        bearer: bearer,
+        query: {'directory': directory},
+        body: {'remote': remote},
+      ),
+      bearer,
+    );
+  }
+
+  Future<void> gitPull({
+    required Uri base,
+    String? bearer,
+    required String directory,
+    required String remote,
+    String? branch,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.gitPull,
+        bearer: bearer,
+        query: {'directory': directory},
+        body: {
+          'remote': remote,
+          if (branch != null && branch.isNotEmpty) 'branch': branch,
+          'rebase': true,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<void> gitPush({
+    required Uri base,
+    String? bearer,
+    required String directory,
+    String? remote,
+    String? branch,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.gitPush,
+        bearer: bearer,
+        query: {'directory': directory},
+        body: {
+          if (remote != null && remote.isNotEmpty) 'remote': remote,
+          if (branch != null && branch.isNotEmpty) 'branch': branch,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<List<GitRemote>> getGitRemotes({
+    required Uri base,
+    String? bearer,
+    required String directory,
+  }) async {
+    final body = await _requireOk(
+      base,
+      OpenChamberRequest(method: 'GET', path: OpenChamberPaths.gitRemotes, query: {'directory': directory}),
+      bearer,
+    );
+    final raw = body is List ? body : (body is Map ? body['remotes'] : null);
+    if (raw is! List) return const [];
+    return raw.whereType<Map>().map((item) {
+      return GitRemote(
+        name: item['name']?.toString() ?? '',
+        fetchUrl: item['fetchUrl']?.toString() ?? '',
+        pushUrl: item['pushUrl']?.toString() ?? '',
+      );
+    }).where((remote) => remote.name.isNotEmpty).toList();
+  }
+
+  Future<GeneratedCommitMessage> generateCommitMessage({
+    required Uri base,
+    String? bearer,
+    required String directory,
+    required String system,
+    required String prompt,
+    String? preferredProviderID,
+    String? preferredModelID,
+  }) async {
+    final body = await _requireMap(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.smallModelGenerate,
+        bearer: bearer,
+        body: {
+          'purpose': 'commit',
+          'system': system,
+          'prompt': prompt,
+          'directory': directory,
+          if (preferredProviderID != null && preferredProviderID.isNotEmpty) 'preferredProviderID': preferredProviderID,
+          if (preferredModelID != null && preferredModelID.isNotEmpty) 'preferredModelID': preferredModelID,
+        },
+      ),
+      bearer,
+    );
+    final text = body['text']?.toString() ?? '';
+    return parseGeneratedCommitMessage(text);
+  }
+
+  Future<List<FileSearchResult>> searchFiles({
+    required Uri base,
+    String? bearer,
+    required String directory,
+    required String query,
+    int limit = 40,
+  }) async {
+    final response = await transport.send(
+      base,
+      OpenChamberRequest(
+        method: 'GET',
+        path: OpenChamberPaths.findFile,
+        bearer: bearer,
+        query: {
+          'directory': directory,
+          'query': query,
+          'dirs': 'false',
+          'type': 'file',
+          'limit': '$limit',
+        },
+      ),
+    );
+    if (!response.ok) {
+      throw OpenChamberHttpException(response.status, OpenChamberPaths.findFile);
+    }
+    final raw = response.body is List ? response.body as List : const [];
+    final prefix = directory.endsWith('/') ? directory.substring(0, directory.length - 1) : directory;
+    return raw.map((item) {
+      final relative = item.toString();
+      final path = relative.startsWith('/') ? relative : (relative.isEmpty ? prefix : '$prefix/$relative');
+      return FileSearchResult(path: path, relativePath: relative);
+    }).where((item) => item.path.isNotEmpty).toList();
   }
 
   Future<Map<String, McpRuntimeStatus>> getMcpRuntimeStatus({
@@ -2195,6 +2400,31 @@ class OpenChamberApi {
     return body?.toString() ?? '';
   }
 
+  Future<Uint8List> readRawFile({
+    required Uri base,
+    required String bearer,
+    required String path,
+  }) async {
+    final response = await transport.send(
+      base,
+      OpenChamberRequest(
+        method: 'GET',
+        path: OpenChamberPaths.fsRaw,
+        bearer: bearer,
+        query: {'path': path},
+        rawResponse: true,
+      ),
+    );
+    if (!response.ok) {
+      throw OpenChamberHttpException(response.status, OpenChamberPaths.fsRaw);
+    }
+    final body = response.body;
+    if (body is Uint8List) return body;
+    if (body is List<int>) return Uint8List.fromList(body);
+    if (body is String) return Uint8List.fromList(utf8.encode(body));
+    throw OpenChamberHttpException(200, OpenChamberPaths.fsRaw, code: 'malformed');
+  }
+
   Future<Object?> installSkillFromSource({
     required Uri base,
     String? bearer,
@@ -2205,6 +2435,12 @@ class OpenChamberApi {
       OpenChamberRequest(method: 'POST', path: OpenChamberPaths.skillsInstall, body: request),
       bearer,
     );
+  }
+
+  static int _asInt(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   Future<Map<String, Object?>> _requireMap(Uri base, OpenChamberRequest request, String? bearer) async {
@@ -2320,6 +2556,7 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
     {'name': 'README.md', 'path': '/workspace/openchamber/README.md', 'type': 'file'},
     {'name': 'docs', 'path': '/workspace/openchamber/docs', 'type': 'directory'},
     {'name': 'index.html', 'path': '/workspace/openchamber/docs/index.html', 'type': 'file'},
+    {'name': 'photo.png', 'path': '/workspace/openchamber/photo.png', 'type': 'file'},
   ];
   final Map<String, String> sessionShareUrls = {};
   int cloneStatus = 200;
@@ -2355,6 +2592,9 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
     '/workspace/README.md': '# OpenChamber\n',
     '/workspace/openchamber/README.md': '# Flutter native\n',
   };
+  final Map<String, List<int>> fileRawBytes = {
+    '/workspace/openchamber/photo.png': List<int>.from(_oneByOnePng),
+  };
 
   Map<String, Object?> settings = Map<String, Object?>.from(defaultTestSettings);
   Object? providerCatalog = defaultTestProviderCatalog;
@@ -2371,6 +2611,13 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
     {'path': 'README.md', 'index': '', 'working_dir': 'M'},
   ];
   String gitCurrentBranch = 'main';
+  String? gitTracking = 'origin/main';
+  int gitAhead = 1;
+  int gitBehind = 0;
+  List<Map<String, Object?>> gitRemotes = const [
+    {'name': 'origin', 'fetchUrl': 'https://example.invalid/repo.git', 'pushUrl': 'https://example.invalid/repo.git'},
+  ];
+  Object? generatedCommit = const {'text': '{"subject":"docs: note","highlights":["README"]}'} ;
   Map<String, Object?> mcpRuntime = {
     'filesystem': {'status': 'connected'},
   };
@@ -3654,9 +3901,9 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
           status: gitStatus,
           body: {
             'current': gitCurrentBranch,
-            'tracking': null,
-            'ahead': 0,
-            'behind': 0,
+            'tracking': gitTracking,
+            'ahead': gitAhead,
+            'behind': gitBehind,
             'files': gitStatusFiles,
             'isClean': gitStatusFiles.isEmpty,
           },
@@ -3694,6 +3941,68 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
           status: gitStatus,
           body: {'diff': '--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-old\n+new\n'},
         );
+      case OpenChamberPaths.gitRevert:
+        if (gitStatus < 200 || gitStatus >= 300) {
+          return OpenChamberResponse(status: gitStatus, body: {'error': 'git_failed'});
+        }
+        final revertPath = request.body?['path']?.toString() ?? '';
+        gitStatusFiles = gitStatusFiles.where((file) => file['path']?.toString() != revertPath).toList();
+        return OpenChamberResponse(status: gitStatus, body: const {'success': true});
+      case OpenChamberPaths.gitFetch:
+        if (gitStatus < 200 || gitStatus >= 300) {
+          return OpenChamberResponse(status: gitStatus, body: {'error': 'git_failed'});
+        }
+        return OpenChamberResponse(status: gitStatus, body: const {'success': true});
+      case OpenChamberPaths.gitPull:
+        if (gitStatus < 200 || gitStatus >= 300) {
+          return OpenChamberResponse(status: gitStatus, body: {'error': 'git_failed'});
+        }
+        gitBehind = 0;
+        return OpenChamberResponse(status: gitStatus, body: const {'success': true});
+      case OpenChamberPaths.gitPush:
+        if (gitStatus < 200 || gitStatus >= 300) {
+          return OpenChamberResponse(status: gitStatus, body: {'error': 'git_failed'});
+        }
+        gitAhead = 0;
+        return OpenChamberResponse(status: gitStatus, body: const {'success': true});
+      case OpenChamberPaths.gitRemotes:
+        return OpenChamberResponse(status: gitStatus, body: gitRemotes);
+      case OpenChamberPaths.findFile:
+        if (fsStatus < 200 || fsStatus >= 300) {
+          return OpenChamberResponse(status: fsStatus, body: {'error': 'find_failed'});
+        }
+        final directory = request.query['directory'] ?? '';
+        final query = (request.query['query'] ?? '').toLowerCase();
+        final limit = int.tryParse(request.query['limit'] ?? '') ?? 40;
+        final prefix = directory.endsWith('/') ? directory.substring(0, directory.length - 1) : directory;
+        final matches = fsEntries.where((entry) {
+          if (entry['type']?.toString() != 'file') return false;
+          final path = entry['path']?.toString() ?? '';
+          if (prefix.isNotEmpty && path != prefix && !path.startsWith('$prefix/')) return false;
+          final name = entry['name']?.toString().toLowerCase() ?? '';
+          return query.isEmpty || name.contains(query) || path.toLowerCase().contains(query);
+        }).take(limit).map((entry) {
+          final path = entry['path']?.toString() ?? '';
+          if (prefix.isNotEmpty && path.startsWith('$prefix/')) return path.substring(prefix.length + 1);
+          return path;
+        }).toList();
+        return OpenChamberResponse(status: fsStatus, body: matches);
+      case OpenChamberPaths.fsRaw:
+        final rawPath = request.query['path'] ?? '';
+        final bytes = fileRawBytes[rawPath];
+        if (bytes != null) {
+          return OpenChamberResponse(status: fileStatus, body: Uint8List.fromList(bytes));
+        }
+        final text = fileContents[rawPath];
+        if (text == null) {
+          return OpenChamberResponse(status: 404, body: 'not found');
+        }
+        return OpenChamberResponse(status: fileStatus, body: Uint8List.fromList(utf8.encode(text)));
+      case OpenChamberPaths.smallModelGenerate:
+        if (catalogStatus < 200 || catalogStatus >= 300) {
+          return OpenChamberResponse(status: catalogStatus, body: {'error': 'generate_failed'});
+        }
+        return OpenChamberResponse(status: catalogStatus, body: generatedCommit);
       case OpenChamberPaths.mcpRuntime:
         return OpenChamberResponse(status: catalogStatus, body: mcpRuntime);
       case OpenChamberPaths.fsMkdir:
@@ -4269,5 +4578,13 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
     }
   }
 }
+
+const _oneByOnePng = <int>[
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+  0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+  0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+  0x42, 0x60, 0x82,
+];
 
 List<HomeSessionRow> fixtureHomeSessions() => rowsFromSessionIndex(parseSessionIndexSnapshot(MemoryOpenChamberTransport.defaultTestSessionIndex)!);

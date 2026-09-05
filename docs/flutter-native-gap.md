@@ -826,6 +826,45 @@ Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hoste
 
 Validated on Flutter **3.32.8 / Dart 3.8.1**: focused `flutter_composer_question_slash_test.dart` (10 cases) + `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **273 passed**. Screenshot PNGs were **not** recaptured. Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native`.
 
+## Twenty-eighth-slice status (2026-09-05) — Files search/copy/raw + Changes extras
+
+Stacked on `eaf404471` (`work/flutter-native` after the twenty-seventh composer/question/slash slice). Do **not** merge `main`. No 1.18 TanStack. No Flutter UI golden recapture. OpenChamber v2 `.debug` applicationId unchanged. Do **not** invent Flexoki, Finder, Capgo, plan/notes/Todo, Chat dock, `iosNativeUi`, Bonjour, Pierre, mermaid SVG, or Android launcher badge.
+
+Read on this checkout: Cap `MobileFilesSurface` (`GET /api/find/file`, copy path/content, image via `/api/fs/raw`) and `MobileChangesSurface` (`POST /api/small-model/generate` purpose `commit`, `POST /api/git/revert`, fetch/pull/push sync, commit-and-push). Cap mobile does **not** call `POST /api/git/commit-message`.
+
+### Landed this slice (code)
+
+| Surface | Official Cap mobile | Flutter | Notes |
+|---|---|---|---|
+| File search | Debounced `GET /api/find/file` | Same 250ms / `dirs=false` / `type=file` / `limit=40` | Failed list is not empty success. |
+| Copy path / content | Absolute path; text content only | Clipboard + official toasts | Images hide copy-content. 250k truncation. |
+| Image preview | `/api/fs/raw` (not `.svg`) | `Image.memory` from raw bytes | `.svg` still `GET /api/fs/read`. No Pierre. |
+| Generate commit message | `POST /api/small-model/generate` `{purpose:commit}` | Same; subject + highlights | Official magic-prompt templates; no session fallback. |
+| Revert | `POST /api/git/revert` `{path}` | Unstaged per-file + revert-all confirm | Default Cap scope (omit / `all`). |
+| Sync | Header fetch → pull(rebase) → push | Same; disabled when behind + dirty | Toasts `alreadyUpToDate` / `commitOrStashBeforeSync`. |
+| Commit-and-push | Commit `{files}` then sync | `changes-commit-push` | Aligns `files` on `POST /api/git/commit`. |
+
+### Still code / will-not-port
+
+| Gap | Why leftover |
+|---|---|
+| Assistant empty-catalog create | Cap empty assistants → Settings assistants create. |
+| Composer swipe to switch sessions | Cap horizontal swipe between sessions. |
+| New Session as draft | Cap `sessionId == ''` until first send. |
+| Assigned-share → composer handoff | Cap assigned share fills composer, not inbox POST. |
+| About diagnostics export | Cap save-file via existing media path (skip Capgo rows). |
+| Appearance Flexoki picker | **Do not invent.** Official **mobile** Appearance is language + Light/Dark/System. |
+| Finder | **Do not invent.** Cap `handleOpenInFinder` is desktop-only. |
+| Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` / Bonjour / Pierre / mermaid SVG / Android launcher badge | Will not port. |
+
+### 真机-only
+
+Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hosted OAuth; ActivityKit / Dynamic Island / widget tap; Impeller 16ms; FCM on `.debug` if Firebase init fails; share-extension → inbox POST. Code/plist may exist — do not fake 真机过.
+
+### EXHAUSTED
+
+**false.** Files/Changes extras are landed. Remaining Cap-mobile CODE is draft New Session, composer swipe, assigned-share composer handoff, assistant empty-create, and About diagnostics export.
+
 
 ## Twenty-fourth-slice status (2026-09-05) — Cap phone overflow + composer no-ops
 
