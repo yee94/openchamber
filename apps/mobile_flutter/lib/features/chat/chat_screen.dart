@@ -273,19 +273,43 @@ class _ChatScreenState extends State<ChatScreen> {
     if (controller != null &&
         controller.followUpBehavior == 'queue' &&
         _busy.value &&
-        pending.isEmpty &&
-        body.isNotEmpty) {
+        (body.isNotEmpty || pending.isNotEmpty)) {
       _composer.clear();
+      setState(() => _attachments.clear());
       _errorKey.value = null;
       try {
-        final admitted = await controller.admitQueuedFollowUp(session: _session, text: body, current: _queue);
+        final admitted = await controller.admitQueuedFollowUp(
+          session: _session,
+          text: body,
+          current: _queue,
+          attachments: pending,
+        );
         if (admitted != null) {
           await _refreshQueue();
           return;
         }
         _composer.text = body;
+        setState(() {
+          _attachments
+            ..clear()
+            ..addAll(pending);
+        });
+      } on PromptAttachmentUploadError {
+        _composer.text = body;
+        setState(() {
+          _attachments
+            ..clear()
+            ..addAll(pending);
+        });
+        _errorKey.value = 'chat.error.attachFailed';
+        return;
       } on OpenChamberHttpException {
         _composer.text = body;
+        setState(() {
+          _attachments
+            ..clear()
+            ..addAll(pending);
+        });
         _errorKey.value = 'chat.queuedMessage.admitFailed';
         return;
       }
@@ -623,9 +647,31 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _editQueued(MessageQueueItem item) async {
-    _composer.text = item.content;
+    final controller = widget.appController;
+    final scope = _queue;
+    if (controller == null || scope == null) return;
+    final restored = await controller.editQueuedItemIntoComposer(
+      session: _session,
+      item: item,
+      scope: scope,
+    );
+    if (restored == null || !mounted) return;
+    _composer.text = restored.text;
     _composer.selection = TextSelection.collapsed(offset: _composer.text.length);
-    await _removeQueued(item);
+    setState(() {
+      _attachments
+        ..clear()
+        ..addAll(restored.attachments);
+    });
+    await _refreshQueue();
+  }
+
+  Future<void> _reorderQueued(int from, int to) async {
+    final controller = widget.appController;
+    final scope = _queue;
+    if (controller == null || scope == null) return;
+    final ok = await controller.reorderQueuedItems(session: _session, scope: scope, from: from, to: to);
+    if (ok) await _refreshQueue();
   }
 
   Future<void> _deleteSession(BuildContext context) async {
@@ -797,6 +843,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         onSendNow: (item) => unawaited(_sendQueuedNow(item)),
                         onRemove: (item) => unawaited(_removeQueued(item)),
                         onEdit: (item) => unawaited(_editQueued(item)),
+                        onReorder: (from, to) => unawaited(_reorderQueued(from, to)),
                       ),
                     ios
                         ? SizedBox(

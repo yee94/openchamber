@@ -293,16 +293,22 @@ class SettingsValueRow extends StatelessWidget {
     super.key,
     required this.label,
     this.subtitle,
+    this.onTap,
   });
 
   final String label;
   final String? subtitle;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
       title: Text(label),
       subtitle: subtitle == null ? null : Text(subtitle!),
+      trailing: onTap == null
+          ? null
+          : OcGlyph(OcGlyphKind.chevronRight, size: OcOptical.settingsNavIcon, color: context.oc.mutedForeground),
+      onTap: onTap,
     );
   }
 }

@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../data/message_queue.dart';
 import '../../l10n/app_strings.dart';
-import '../../motion/pressable.dart';
 import '../../theme/ios_chrome.dart';
 import '../../theme/oc_glyphs.dart';
 import 'composer_occupancy.dart';
 
-/// Cap `QueuedMessageChips` essentials: count + prompt + send-now + remove.
+/// Cap `QueuedMessageChips`: send-now + remove + reserve-edit + drag-reorder.
 /// Official `/api/openchamber/message-queue` items only — no local ledger.
 class QueuedMessageChips extends StatelessWidget {
   const QueuedMessageChips({
@@ -16,12 +15,14 @@ class QueuedMessageChips extends StatelessWidget {
     required this.onSendNow,
     required this.onRemove,
     required this.onEdit,
+    required this.onReorder,
   });
 
   final List<MessageQueueItem> items;
   final ValueChanged<MessageQueueItem> onSendNow;
   final ValueChanged<MessageQueueItem> onRemove;
   final ValueChanged<MessageQueueItem> onEdit;
+  final void Function(int from, int to) onReorder;
 
   @override
   Widget build(BuildContext context) {
@@ -30,21 +31,26 @@ class QueuedMessageChips extends StatelessWidget {
     return SizedBox(
       key: const Key('queued-message-chips'),
       height: queuedMessageChipsOccupancy,
-      child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: ReorderableListView.builder(
         scrollDirection: Axis.horizontal,
+        buildDefaultDragHandles: false,
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        proxyDecorator: (child, index, animation) => child,
+        onReorder: onReorder,
         itemCount: items.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final item = items[index];
           final preview = item.content.trim().isEmpty
-              ? t(context, 'chat.queuedMessage.empty')
+              ? (item.attachments.isEmpty
+                  ? t(context, 'chat.queuedMessage.empty')
+                  : item.attachments.first.filename)
               : item.content.trim();
-          return Pressable(
-            onPressed: () => onEdit(item),
+          return ReorderableDelayedDragStartListener(
+            key: Key('queued-chip-${item.queueItemID}'),
+            index: index,
             child: Container(
-              key: Key('queued-chip-${item.queueItemID}'),
               constraints: const BoxConstraints(maxWidth: 220, minHeight: 40),
+              margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
               decoration: BoxDecoration(
                 color: oc.glassChipFill,
@@ -54,14 +60,22 @@ class QueuedMessageChips extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (item.attachments.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: OcGlyph(OcGlyphKind.file, size: 12, color: oc.mutedForeground),
+                    ),
                   Flexible(
-                    child: Text(
-                      preview,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: OcTokens.textMicro,
-                        color: oc.foreground,
+                    child: GestureDetector(
+                      onTap: () => onEdit(item),
+                      child: Text(
+                        preview,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: OcTokens.textMicro,
+                          color: oc.foreground,
+                        ),
                       ),
                     ),
                   ),

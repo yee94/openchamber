@@ -1292,6 +1292,182 @@ class OpenChamberApi {
         (throw OpenChamberHttpException(200, path, code: 'unavailable'));
   }
 
+  /// POST `/api/openchamber/message-queue/attachments/uploads`.
+  Future<MessageQueueUpload> createMessageQueueAttachmentUpload({
+    required Uri base,
+    String? bearer,
+  }) async {
+    final body = await _requireMessageQueue(
+      base,
+      const OpenChamberRequest(method: 'POST', path: OpenChamberPaths.messageQueueAttachmentUploads, body: {}),
+      bearer,
+    );
+    return parseMessageQueueUpload(body) ??
+        (throw const OpenChamberHttpException(200, OpenChamberPaths.messageQueueAttachmentUploads, code: 'unavailable'));
+  }
+
+  /// PUT `/api/openchamber/message-queue/attachments/uploads/:id`.
+  Future<void> uploadMessageQueueAttachment({
+    required Uri base,
+    String? bearer,
+    required MessageQueueUpload upload,
+    required List<int> bytes,
+    required String sha256,
+  }) async {
+    final path = OpenChamberPaths.messageQueueAttachmentUpload(upload.uploadID);
+    final response = await transport.send(
+      base,
+      OpenChamberRequest(
+        method: 'PUT',
+        path: path,
+        bearer: bearer,
+        bytes: bytes,
+        extraHeaders: {
+          'Content-Length': '${bytes.length}',
+          'X-Message-Queue-Content-Length': '${bytes.length}',
+          'X-Message-Queue-Upload-Token': upload.uploadToken,
+          'X-Message-Queue-Sha256': sha256,
+        },
+        timeout: const Duration(seconds: 30),
+      ),
+    );
+    if (!response.ok) {
+      throw OpenChamberHttpException(
+        response.status,
+        path,
+        code: parseMessageQueueErrorCode(response.body, response.status) ?? 'unavailable',
+      );
+    }
+  }
+
+  /// POST `/api/openchamber/message-queue/items/:id/reserve`.
+  Future<MessageQueueEditReservation> reserveMessageQueueItem({
+    required Uri base,
+    String? bearer,
+    required String queueItemId,
+    required String requestId,
+    required int expectedRevision,
+    required int rowVersion,
+    String owner = 'ui-edit',
+    int ttlMs = 60000,
+  }) async {
+    final path = OpenChamberPaths.messageQueueItemReserve(queueItemId);
+    final body = await _requireMessageQueue(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: path,
+        body: {
+          'requestID': requestId,
+          'expectedRevision': expectedRevision,
+          'rowVersion': rowVersion,
+          'owner': owner,
+          'ttlMs': ttlMs,
+        },
+      ),
+      bearer,
+    );
+    return parseMessageQueueReservation(body) ??
+        (throw OpenChamberHttpException(200, path, code: 'unavailable'));
+  }
+
+  /// POST `/api/openchamber/message-queue/items/:id/release`.
+  Future<void> releaseMessageQueueItem({
+    required Uri base,
+    String? bearer,
+    required String queueItemId,
+    required String token,
+  }) async {
+    final path = OpenChamberPaths.messageQueueItemRelease(queueItemId);
+    await _requireMessageQueue(
+      base,
+      OpenChamberRequest(method: 'POST', path: path, body: {'token': token}),
+      bearer,
+    );
+  }
+
+  /// DELETE `/api/openchamber/message-queue/items/:id/reserved-remove`.
+  Future<MessageQueueMutation> removeReservedMessageQueueItem({
+    required Uri base,
+    String? bearer,
+    required String queueItemId,
+    required String requestId,
+    required int expectedRevision,
+    required int expectedRowVersion,
+    required String token,
+    required int generation,
+  }) async {
+    final path = OpenChamberPaths.messageQueueItemReservedRemove(queueItemId);
+    final body = await _requireMessageQueue(
+      base,
+      OpenChamberRequest(
+        method: 'DELETE',
+        path: path,
+        body: {
+          'requestID': requestId,
+          'expectedRevision': expectedRevision,
+          'expectedRowVersion': expectedRowVersion,
+          'token': token,
+          'generation': generation,
+        },
+      ),
+      bearer,
+    );
+    return parseMessageQueueMutation(body) ??
+        (throw OpenChamberHttpException(200, path, code: 'unavailable'));
+  }
+
+  /// GET `/api/openchamber/message-queue/items/:id/attachments/:attachmentID/content`.
+  Future<List<int>> downloadMessageQueueAttachment({
+    required Uri base,
+    String? bearer,
+    required String queueItemId,
+    required MessageQueueAttachment attachment,
+  }) async {
+    final path = OpenChamberPaths.messageQueueItemAttachmentContent(queueItemId, attachment.attachmentID);
+    final response = await transport.send(
+      base,
+      OpenChamberRequest(method: 'GET', path: path, bearer: bearer, rawResponse: true),
+    );
+    if (!response.ok) {
+      throw OpenChamberHttpException(
+        response.status,
+        path,
+        code: parseMessageQueueErrorCode(response.body, response.status) ?? 'unavailable',
+      );
+    }
+    final body = response.body;
+    if (body is List<int> && body.length == attachment.size) return body;
+    throw OpenChamberHttpException(response.status, path, code: 'unavailable');
+  }
+
+  /// PUT `/api/openchamber/message-queue/scopes/:id/order`.
+  Future<MessageQueueMutation> reorderMessageQueueScope({
+    required Uri base,
+    String? bearer,
+    required String scopeId,
+    required String requestId,
+    required int expectedRevision,
+    required List<String> queueItemIds,
+  }) async {
+    final path = OpenChamberPaths.messageQueueScopeOrder(scopeId);
+    final body = await _requireMessageQueue(
+      base,
+      OpenChamberRequest(
+        method: 'PUT',
+        path: path,
+        body: {
+          'requestID': requestId,
+          'expectedRevision': expectedRevision,
+          'queueItemIDs': queueItemIds,
+        },
+      ),
+      bearer,
+    );
+    return parseMessageQueueMutation(body) ??
+        (throw OpenChamberHttpException(200, path, code: 'unavailable'));
+  }
+
   Future<Map<String, Object?>> _requireMessageQueue(
     Uri base,
     OpenChamberRequest request,
@@ -1304,6 +1480,9 @@ class OpenChamberApi {
         path: request.path,
         query: request.query,
         body: request.body,
+        bytes: request.bytes,
+        extraHeaders: request.extraHeaders,
+        rawResponse: request.rawResponse,
         bearer: bearer,
       ),
     );
@@ -1556,6 +1735,112 @@ class OpenChamberApi {
 
   Future<Object?> getBehaviorAgentsMd({required Uri base, String? bearer}) {
     return _requireOk(base, const OpenChamberRequest(method: 'GET', path: OpenChamberPaths.behaviorAgentsMd), bearer);
+  }
+
+  Future<Object?> putBehaviorAgentsMd({required Uri base, String? bearer, required String content}) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(method: 'PUT', path: OpenChamberPaths.behaviorAgentsMd, body: {'content': content}),
+      bearer,
+    );
+  }
+
+  Future<Object?> saveMagicPromptOverride({
+    required Uri base,
+    String? bearer,
+    required String id,
+    required String text,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(method: 'PUT', path: OpenChamberPaths.magicPrompt(id), body: {'text': text}),
+      bearer,
+    );
+  }
+
+  Future<Object?> resetMagicPromptOverride({required Uri base, String? bearer, required String id}) {
+    return _requireOk(base, OpenChamberRequest(method: 'DELETE', path: OpenChamberPaths.magicPrompt(id)), bearer);
+  }
+
+  Future<Object?> createSnippet({
+    required Uri base,
+    String? bearer,
+    required String name,
+    required String content,
+    String? description,
+    List<String>? aliases,
+    String scope = 'global',
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.snippet(name),
+        body: {
+          'content': content,
+          'scope': scope,
+          if (description != null) 'description': description,
+          if (aliases != null) 'aliases': aliases,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> updateSnippet({
+    required Uri base,
+    String? bearer,
+    required String name,
+    required String content,
+    String? description,
+    List<String>? aliases,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'PATCH',
+        path: OpenChamberPaths.snippet(name),
+        body: {
+          'content': content,
+          if (description != null) 'description': description,
+          if (aliases != null) 'aliases': aliases,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> deleteSnippet({required Uri base, String? bearer, required String name}) {
+    return _requireOk(base, OpenChamberRequest(method: 'DELETE', path: OpenChamberPaths.snippet(name)), bearer);
+  }
+
+  Future<Object?> createGitIdentity({
+    required Uri base,
+    String? bearer,
+    required Map<String, Object?> profile,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(method: 'POST', path: OpenChamberPaths.gitIdentities, body: profile),
+      bearer,
+    );
+  }
+
+  Future<Object?> updateGitIdentity({
+    required Uri base,
+    String? bearer,
+    required String id,
+    required Map<String, Object?> profile,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(method: 'PUT', path: OpenChamberPaths.gitIdentity(id), body: profile),
+      bearer,
+    );
+  }
+
+  Future<Object?> deleteGitIdentity({required Uri base, String? bearer, required String id}) {
+    return _requireOk(base, OpenChamberRequest(method: 'DELETE', path: OpenChamberPaths.gitIdentity(id)), bearer);
   }
 
   Future<String?> mintUrlToken({required Uri base, String? bearer}) async {
@@ -1931,6 +2216,10 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   int messageQueueStatus = 200;
   int messageQueueRevision = 0;
   final List<Map<String, Object?>> messageQueueItems = [];
+  final Map<String, List<int>> messageQueueUploads = {};
+  final Map<String, String> messageQueueUploadTokens = {};
+  final Map<String, List<int>> messageQueueAttachmentBytes = {};
+  int _messageQueueUploadSeq = 0;
   int discoverStatus = 200;
   int settingsStatus = 200;
   int catalogStatus = 200;
@@ -2625,6 +2914,104 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         .toList();
   }
 
+  List<Map<String, Object?>> _asMutableObjectList(Object? value) {
+    if (value is! List) return <Map<String, Object?>>[];
+    return value
+        .whereType<Map>()
+        .map((item) => item.map((key, entry) => MapEntry(key.toString(), entry)))
+        .toList();
+  }
+
+  OpenChamberResponse _handleSnippetWrite(OpenChamberRequest request, {required String name}) {
+    if (catalogStatus < 200 || catalogStatus >= 300) {
+      return OpenChamberResponse(status: catalogStatus, body: {'error': 'unavailable'});
+    }
+    final items = _asMutableObjectList(snippets);
+    if (request.method == 'POST' || request.method == 'PATCH') {
+      final content = request.body?['content']?.toString() ?? '';
+      final description = request.body?['description']?.toString();
+      final aliases = request.body?['aliases'];
+      final scope = request.body?['scope']?.toString() ?? 'global';
+      final next = <String, Object?>{
+        'name': name,
+        'content': content,
+        'source': scope,
+        if (description != null) 'description': description,
+        if (aliases is List) 'aliases': aliases,
+      };
+      final index = items.indexWhere((item) => item['name'] == name);
+      if (index >= 0) {
+        items[index] = next;
+      } else {
+        items.add(next);
+      }
+      snippets = items;
+      return OpenChamberResponse(status: 200, body: next);
+    }
+    if (request.method == 'DELETE') {
+      snippets = items.where((item) => item['name'] != name).toList();
+      return const OpenChamberResponse(status: 200, body: {'ok': true});
+    }
+    return const OpenChamberResponse(status: 405, body: {'error': 'method'});
+  }
+
+  OpenChamberResponse _handleMagicPromptWrite(OpenChamberRequest request, {required String id}) {
+    if (catalogStatus < 200 || catalogStatus >= 300) {
+      return OpenChamberResponse(status: catalogStatus, body: {'error': 'unavailable'});
+    }
+    final root = magicPrompts is Map
+        ? (magicPrompts as Map).map((key, value) => MapEntry(key.toString(), value))
+        : <String, Object?>{'version': 1, 'overrides': <String, Object?>{}};
+    final overrides = root['overrides'] is Map
+        ? (root['overrides'] as Map).map((key, value) => MapEntry(key.toString(), value))
+        : <String, Object?>{};
+    if (request.method == 'PUT') {
+      overrides[id] = request.body?['text']?.toString() ?? '';
+    } else if (request.method == 'DELETE') {
+      overrides.remove(id);
+    } else {
+      return const OpenChamberResponse(status: 405, body: {'error': 'method'});
+    }
+    magicPrompts = {'version': root['version'] ?? 1, 'overrides': overrides};
+    return OpenChamberResponse(status: 200, body: magicPrompts);
+  }
+
+  OpenChamberResponse _handleGitIdentityWrite(OpenChamberRequest request, {required String id}) {
+    if (catalogStatus < 200 || catalogStatus >= 300) {
+      return OpenChamberResponse(status: catalogStatus, body: {'error': 'unavailable'});
+    }
+    final items = _asMutableObjectList(gitIdentities);
+    if (request.method == 'POST') {
+      final profile = <String, Object?>{
+        ...(request.body ?? const {}),
+        'id': (request.body?['id']?.toString().isNotEmpty ?? false)
+            ? request.body!['id']
+            : 'git-${items.length + 1}',
+      };
+      items.add(profile);
+      gitIdentities = items;
+      return OpenChamberResponse(status: 200, body: profile);
+    }
+    if (id.isEmpty) {
+      return const OpenChamberResponse(status: 400, body: {'error': 'missing_id'});
+    }
+    final index = items.indexWhere((item) => item['id'] == id);
+    if (index < 0) {
+      return const OpenChamberResponse(status: 404, body: {'error': 'not_found'});
+    }
+    if (request.method == 'PUT') {
+      items[index] = {...items[index], ...(request.body ?? const {}), 'id': id};
+      gitIdentities = items;
+      return OpenChamberResponse(status: 200, body: items[index]);
+    }
+    if (request.method == 'DELETE') {
+      items.removeAt(index);
+      gitIdentities = items;
+      return const OpenChamberResponse(status: 200, body: {'ok': true});
+    }
+    return const OpenChamberResponse(status: 405, body: {'error': 'method'});
+  }
+
   OpenChamberResponse _handleMessageQueue(OpenChamberRequest request) {
     if (messageQueueStatus == 501) {
       return const OpenChamberResponse(status: 501, body: {'code': 'unavailable'});
@@ -2667,6 +3054,32 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         },
       );
     }
+    if (request.path == OpenChamberPaths.messageQueueAttachmentUploads && request.method == 'POST') {
+      _messageQueueUploadSeq += 1;
+      final uploadID = 'upload-$_messageQueueUploadSeq';
+      final token = 'mq-token-$_messageQueueUploadSeq';
+      messageQueueUploadTokens[uploadID] = token;
+      return OpenChamberResponse(
+        status: 200,
+        body: {
+          'uploadID': uploadID,
+          'uploadToken': token,
+          'expiresAt': DateTime.now().millisecondsSinceEpoch + 600000,
+        },
+      );
+    }
+    if (request.path.startsWith('${OpenChamberPaths.messageQueueAttachmentUploads}/') && request.method == 'PUT') {
+      final uploadID = Uri.decodeComponent(
+        request.path.substring('${OpenChamberPaths.messageQueueAttachmentUploads}/'.length),
+      );
+      final expected = messageQueueUploadTokens[uploadID];
+      final token = request.extraHeaders['X-Message-Queue-Upload-Token'];
+      if (expected == null || token != expected || request.bytes == null) {
+        return const OpenChamberResponse(status: 400, body: {'code': 'validation_error'});
+      }
+      messageQueueUploads[uploadID] = List<int>.from(request.bytes!);
+      return const OpenChamberResponse(status: 200, body: {'ok': true});
+    }
     if (request.path == OpenChamberPaths.messageQueueItems && request.method == 'POST') {
       final body = request.body ?? const <String, Object?>{};
       final scope = body['scope'];
@@ -2695,6 +3108,23 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
       }
       messageQueueRevision += 1;
       final peers = _memoryQueueItemsFor(directory, sessionID);
+      final attachments = item['attachments'] is List
+          ? (item['attachments'] as List)
+              .whereType<Map>()
+              .map((entry) => entry.map((key, value) => MapEntry(key.toString(), value)))
+              .toList()
+          : const <Map<String, Object?>>[];
+      for (final attachment in attachments) {
+        final locator = attachment['locator'];
+        final attachmentID = attachment['attachmentID']?.toString() ?? '';
+        if (locator is Map && locator['kind'] == 'upload') {
+          final uploadID = locator['uploadID']?.toString() ?? '';
+          final bytes = messageQueueUploads[uploadID];
+          if (bytes != null && attachmentID.isNotEmpty) {
+            messageQueueAttachmentBytes['$queueItemID/$attachmentID'] = bytes;
+          }
+        }
+      }
       messageQueueItems.add({
         'queueItemID': queueItemID,
         'operationID': operationID,
@@ -2707,6 +3137,7 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         'createdAt': createdAt.toInt(),
         'directory': directory,
         'sessionID': sessionID,
+        if (attachments.isNotEmpty) 'attachments': attachments,
       });
       return OpenChamberResponse(
         status: 200,
@@ -2715,6 +3146,52 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
           'scopeID': _memoryQueueScopeId(directory, sessionID),
           'queueItemID': queueItemID,
           'rowVersion': 1,
+        },
+      );
+    }
+    if (request.path.startsWith('${OpenChamberPaths.messageQueue}/scopes/') &&
+        request.path.endsWith('/order') &&
+        request.method == 'PUT') {
+      final encoded = request.path.substring(
+        '${OpenChamberPaths.messageQueue}/scopes/'.length,
+        request.path.length - '/order'.length,
+      );
+      final scopeID = Uri.decodeComponent(encoded);
+      final expected = request.body?['expectedRevision'];
+      if (expected != null && expected != messageQueueRevision) {
+        return const OpenChamberResponse(status: 409, body: {'code': 'revision_conflict'});
+      }
+      final rawIds = request.body?['queueItemIDs'];
+      if (rawIds is! List) {
+        return const OpenChamberResponse(status: 400, body: {'code': 'validation_error'});
+      }
+      final ids = rawIds.map((item) => item.toString()).toList();
+      final match = messageQueueItems.cast<Map<String, Object?>?>().firstWhere(
+        (item) => _memoryQueueScopeId(item!['directory']?.toString() ?? '', item['sessionID']?.toString() ?? '') == scopeID,
+        orElse: () => null,
+      );
+      if (match == null) {
+        return const OpenChamberResponse(status: 404, body: {'code': 'not_found'});
+      }
+      final directory = match['directory']?.toString() ?? '';
+      final sessionID = match['sessionID']?.toString() ?? '';
+      final scoped = _memoryQueueItemsFor(directory, sessionID);
+      if (ids.length != scoped.length || ids.toSet().length != ids.length) {
+        return const OpenChamberResponse(status: 400, body: {'code': 'validation_error'});
+      }
+      messageQueueRevision += 1;
+      for (var i = 0; i < ids.length; i++) {
+        final index = messageQueueItems.indexWhere((item) => item['queueItemID'] == ids[i]);
+        if (index < 0) {
+          return const OpenChamberResponse(status: 400, body: {'code': 'validation_error'});
+        }
+        messageQueueItems[index] = {...messageQueueItems[index], 'position': i};
+      }
+      return OpenChamberResponse(
+        status: 200,
+        body: {
+          'revision': messageQueueRevision,
+          'scopeID': scopeID,
         },
       );
     }
@@ -2752,6 +3229,7 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
                   'rowVersion': item['rowVersion'],
                   'createdAt': item['createdAt'],
                   if (item['manualDispatchRequested'] == true) 'manualDispatchRequested': true,
+                  if (item['attachments'] is List) 'attachments': item['attachments'],
                 },
               )
               .toList(),
@@ -2792,6 +3270,95 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
           'scopeID': _memoryQueueScopeId(current['directory']?.toString() ?? '', current['sessionID']?.toString() ?? ''),
           'queueItemID': queueItemID,
           'rowVersion': nextVersion,
+        },
+      );
+    }
+    if (request.path.startsWith('${OpenChamberPaths.messageQueueItems}/') &&
+        request.path.contains('/attachments/') &&
+        request.path.endsWith('/content') &&
+        request.method == 'GET') {
+      final rest = request.path.substring('${OpenChamberPaths.messageQueueItems}/'.length);
+      final parts = rest.split('/attachments/');
+      if (parts.length != 2) {
+        return const OpenChamberResponse(status: 404, body: {'code': 'not_found'});
+      }
+      final queueItemID = Uri.decodeComponent(parts[0]);
+      final attachmentID = Uri.decodeComponent(parts[1].substring(0, parts[1].length - '/content'.length));
+      final bytes = messageQueueAttachmentBytes['$queueItemID/$attachmentID'];
+      if (bytes == null) {
+        return const OpenChamberResponse(status: 404, body: {'code': 'not_found'});
+      }
+      return OpenChamberResponse(status: 200, body: bytes);
+    }
+    if (request.path.startsWith('${OpenChamberPaths.messageQueueItems}/') &&
+        request.path.endsWith('/reserve') &&
+        request.method == 'POST') {
+      final queueItemID = Uri.decodeComponent(
+        request.path.substring('${OpenChamberPaths.messageQueueItems}/'.length, request.path.length - '/reserve'.length),
+      );
+      final expected = request.body?['expectedRevision'];
+      final rowVersion = request.body?['rowVersion'];
+      if (expected != null && expected != messageQueueRevision) {
+        return const OpenChamberResponse(status: 409, body: {'code': 'revision_conflict'});
+      }
+      final index = messageQueueItems.indexWhere((item) => item['queueItemID'] == queueItemID);
+      if (index < 0) return const OpenChamberResponse(status: 404, body: {'code': 'not_found'});
+      final current = messageQueueItems[index];
+      if (rowVersion != null && rowVersion != current['rowVersion']) {
+        return const OpenChamberResponse(status: 409, body: {'code': 'row_version_conflict'});
+      }
+      final token = 'reserve-$queueItemID-${current['rowVersion']}';
+      messageQueueItems[index] = {...current, 'editToken': token, 'editGeneration': 1};
+      return OpenChamberResponse(
+        status: 200,
+        body: {
+          'revision': messageQueueRevision,
+          'scopeID': _memoryQueueScopeId(current['directory']?.toString() ?? '', current['sessionID']?.toString() ?? ''),
+          'queueItemID': queueItemID,
+          'rowVersion': current['rowVersion'],
+          'token': token,
+          'expiresAt': DateTime.now().millisecondsSinceEpoch + 60000,
+          'generation': 1,
+        },
+      );
+    }
+    if (request.path.startsWith('${OpenChamberPaths.messageQueueItems}/') &&
+        request.path.endsWith('/release') &&
+        request.method == 'POST') {
+      return const OpenChamberResponse(status: 200, body: {'ok': true});
+    }
+    if (request.path.startsWith('${OpenChamberPaths.messageQueueItems}/') &&
+        request.path.endsWith('/reserved-remove') &&
+        request.method == 'DELETE') {
+      final queueItemID = Uri.decodeComponent(
+        request.path.substring(
+          '${OpenChamberPaths.messageQueueItems}/'.length,
+          request.path.length - '/reserved-remove'.length,
+        ),
+      );
+      final expected = request.body?['expectedRevision'];
+      final rowVersion = request.body?['expectedRowVersion'];
+      final token = request.body?['token']?.toString();
+      if (expected != null && expected != messageQueueRevision) {
+        return const OpenChamberResponse(status: 409, body: {'code': 'revision_conflict'});
+      }
+      final index = messageQueueItems.indexWhere((item) => item['queueItemID'] == queueItemID);
+      if (index < 0) return const OpenChamberResponse(status: 404, body: {'code': 'not_found'});
+      final current = messageQueueItems[index];
+      if (rowVersion != null && rowVersion != current['rowVersion']) {
+        return const OpenChamberResponse(status: 409, body: {'code': 'row_version_conflict'});
+      }
+      if (token != current['editToken']) {
+        return const OpenChamberResponse(status: 409, body: {'code': 'reserved'});
+      }
+      messageQueueRevision += 1;
+      messageQueueItems.removeAt(index);
+      return OpenChamberResponse(
+        status: 200,
+        body: {
+          'revision': messageQueueRevision,
+          'scopeID': _memoryQueueScopeId(current['directory']?.toString() ?? '', current['sessionID']?.toString() ?? ''),
+          'removedQueueItemID': queueItemID,
         },
       );
     }
@@ -3065,12 +3632,42 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
           },
         );
       case OpenChamberPaths.behaviorAgentsMd:
+        if (request.method == 'PUT') {
+          final content = request.body?['content']?.toString() ?? '';
+          agentsMd = {'content': content};
+          return OpenChamberResponse(status: catalogStatus, body: agentsMd);
+        }
         return OpenChamberResponse(status: catalogStatus, body: agentsMd);
       case OpenChamberPaths.authUrlToken:
         return OpenChamberResponse(status: catalogStatus, body: {'token': 'oc_url_test', 'expiresAt': DateTime.now().millisecondsSinceEpoch + 60000});
       case OpenChamberPaths.smallModel:
         return OpenChamberResponse(status: catalogStatus, body: smallModel);
       default:
+        if (request.path == OpenChamberPaths.gitIdentities && request.method == 'POST') {
+          return _handleGitIdentityWrite(request, id: '');
+        }
+        if (request.path.startsWith('${OpenChamberPaths.gitIdentities}/')) {
+          return _handleGitIdentityWrite(
+            request,
+            id: Uri.decodeComponent(request.path.substring('${OpenChamberPaths.gitIdentities}/'.length)),
+          );
+        }
+        if (request.path.startsWith('${OpenChamberPaths.snippets}/')) {
+          return _handleSnippetWrite(
+            request,
+            name: Uri.decodeComponent(request.path.substring('${OpenChamberPaths.snippets}/'.length)),
+          );
+        }
+        if (request.path == OpenChamberPaths.magicPrompts && request.method == 'DELETE') {
+          magicPrompts = {'version': 1, 'overrides': <String, Object?>{}};
+          return OpenChamberResponse(status: catalogStatus, body: magicPrompts);
+        }
+        if (request.path.startsWith('${OpenChamberPaths.magicPrompts}/')) {
+          return _handleMagicPromptWrite(
+            request,
+            id: Uri.decodeComponent(request.path.substring('${OpenChamberPaths.magicPrompts}/'.length)),
+          );
+        }
         if (request.path.startsWith('/api/quota/')) {
           final id = Uri.decodeComponent(request.path.substring('/api/quota/'.length));
           return OpenChamberResponse(status: catalogStatus, body: quotas[id] ?? {'providerId': id, 'ok': false, 'configured': false});

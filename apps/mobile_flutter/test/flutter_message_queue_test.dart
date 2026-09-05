@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openchamber/app.dart';
@@ -5,6 +7,7 @@ import 'package:openchamber/data/app_controller.dart';
 import 'package:openchamber/data/home_session.dart';
 import 'package:openchamber/data/openchamber_api.dart';
 import 'package:openchamber/data/openchamber_http.dart';
+import 'package:openchamber/data/prompt_attachment.dart';
 import 'package:openchamber/data/secure_store.dart';
 import 'package:openchamber/features/shell/secondary_chrome.dart';
 
@@ -32,6 +35,86 @@ void main() {
     final session = env.controller.sessionById('sess-catalog')!;
     expect(await env.controller.loadMessageQueueScope(session), isNull);
     expect(await env.controller.admitQueuedFollowUp(session: session, text: 'later'), isNull);
+  });
+
+  test('admit with attachments uses official message-queue upload APIs', () async {
+    final env = await connected();
+    final session = env.controller.sessionById('sess-catalog')!;
+    final admitted = await env.controller.admitQueuedFollowUp(
+      session: session,
+      text: 'see screenshot',
+      attachments: [
+        AttachmentDraft(name: 'shot.png', mime: 'image/png', bytes: Uint8List.fromList(List<int>.filled(16, 7))),
+      ],
+    );
+    expect(admitted, isNotNull);
+    expect(
+      env.transport.calls.any((call) => call.method == 'POST' && call.path == OpenChamberPaths.messageQueueAttachmentUploads),
+      isTrue,
+    );
+    expect(
+      env.transport.calls.any((call) => call.method == 'PUT' && call.path.startsWith('${OpenChamberPaths.messageQueueAttachmentUploads}/')),
+      isTrue,
+    );
+    final admit = env.transport.calls.lastWhere((call) => call.method == 'POST' && call.path == OpenChamberPaths.messageQueueItems);
+    final item = admit.body?['item'] as Map;
+    final attachments = item['attachments'] as List;
+    expect(attachments, isNotEmpty);
+    expect((attachments.first as Map)['source'], 'local');
+    expect(((attachments.first as Map)['locator'] as Map)['kind'], 'upload');
+    expect(env.transport.calls.any((call) => call.path.contains('prompt-attachments')), isFalse);
+  });
+
+  test('reserve-edit downloads attachments then reserved-removes', () async {
+    final env = await connected();
+    final session = env.controller.sessionById('sess-catalog')!;
+    await env.controller.admitQueuedFollowUp(
+      session: session,
+      text: 'edit me',
+      attachments: [
+        AttachmentDraft(name: 'note.txt', mime: 'text/plain', bytes: Uint8List.fromList('hello'.codeUnits)),
+      ],
+    );
+    final scope = await env.controller.loadMessageQueueScope(session);
+    expect(scope, isNotNull);
+    final restored = await env.controller.editQueuedItemIntoComposer(
+      session: session,
+      item: scope!.items.single,
+      scope: scope,
+    );
+    expect(restored, isNotNull);
+    expect(restored!.text, 'edit me');
+    expect(restored.attachments.single.name, 'note.txt');
+    expect(String.fromCharCodes(restored.attachments.single.bytes), 'hello');
+    expect(
+      env.transport.calls.any((call) => call.method == 'POST' && call.path == OpenChamberPaths.messageQueueItemReserve(scope.items.single.queueItemID)),
+      isTrue,
+    );
+    expect(
+      env.transport.calls.any(
+        (call) => call.method == 'DELETE' && call.path == OpenChamberPaths.messageQueueItemReservedRemove(scope.items.single.queueItemID),
+      ),
+      isTrue,
+    );
+    expect(await env.controller.loadMessageQueueScope(session), isNotNull);
+    expect((await env.controller.loadMessageQueueScope(session))!.items, isEmpty);
+  });
+
+  test('reorder PUTs official scope order', () async {
+    final env = await connected();
+    final session = env.controller.sessionById('sess-catalog')!;
+    await env.controller.admitQueuedFollowUp(session: session, text: 'first');
+    var scope = await env.controller.loadMessageQueueScope(session);
+    await env.controller.admitQueuedFollowUp(session: session, text: 'second', current: scope);
+    scope = await env.controller.loadMessageQueueScope(session);
+    expect(scope!.items.map((item) => item.content), ['first', 'second']);
+    expect(await env.controller.reorderQueuedItems(session: session, scope: scope, from: 0, to: 2), isTrue);
+    expect(
+      env.transport.calls.any((call) => call.method == 'PUT' && call.path == OpenChamberPaths.messageQueueScopeOrder(scope!.scopeID)),
+      isTrue,
+    );
+    final reordered = await env.controller.loadMessageQueueScope(session);
+    expect(reordered!.items.map((item) => item.content), ['second', 'first']);
   });
 
   test('admit / send-now / remove hit official message-queue paths', () async {

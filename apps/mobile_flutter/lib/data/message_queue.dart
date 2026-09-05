@@ -37,6 +37,36 @@ class MessageQueueSendConfig {
       };
 }
 
+class MessageQueueAttachment {
+  const MessageQueueAttachment({
+    required this.attachmentID,
+    required this.filename,
+    required this.mimeType,
+    required this.size,
+    required this.source,
+    required this.locator,
+    this.occurrenceRefID = const [],
+  });
+
+  final String attachmentID;
+  final String filename;
+  final String mimeType;
+  final int size;
+  final String source;
+  final Map<String, Object?> locator;
+  final List<String> occurrenceRefID;
+
+  Map<String, Object?> toJson() => {
+        'attachmentID': attachmentID,
+        'occurrenceRefID': occurrenceRefID,
+        'filename': filename,
+        'mimeType': mimeType,
+        'size': size,
+        'source': source,
+        'locator': locator,
+      };
+}
+
 class MessageQueueItem {
   const MessageQueueItem({
     required this.queueItemID,
@@ -49,6 +79,7 @@ class MessageQueueItem {
     required this.rowVersion,
     required this.createdAt,
     this.manualDispatchRequested = false,
+    this.attachments = const [],
   });
 
   final String queueItemID;
@@ -61,6 +92,39 @@ class MessageQueueItem {
   final int rowVersion;
   final int createdAt;
   final bool manualDispatchRequested;
+  final List<MessageQueueAttachment> attachments;
+}
+
+class MessageQueueUpload {
+  const MessageQueueUpload({
+    required this.uploadID,
+    required this.uploadToken,
+    required this.expiresAt,
+  });
+
+  final String uploadID;
+  final String uploadToken;
+  final int expiresAt;
+}
+
+class MessageQueueEditReservation {
+  const MessageQueueEditReservation({
+    required this.revision,
+    required this.scopeID,
+    required this.queueItemID,
+    required this.rowVersion,
+    required this.token,
+    required this.expiresAt,
+    required this.generation,
+  });
+
+  final int revision;
+  final String scopeID;
+  final String queueItemID;
+  final int rowVersion;
+  final String token;
+  final int expiresAt;
+  final int generation;
 }
 
 class MessageQueueScopeDescriptor {
@@ -203,6 +267,8 @@ MessageQueueItem? parseMessageQueueItem(Object? value) {
       createdAt == null) {
     return null;
   }
+  final attachments = parseMessageQueueAttachments(value['attachments']);
+  if (value.containsKey('attachments') && attachments == null) return null;
   return MessageQueueItem(
     queueItemID: queueItemID,
     operationID: operationID,
@@ -214,7 +280,95 @@ MessageQueueItem? parseMessageQueueItem(Object? value) {
     rowVersion: rowVersion,
     createdAt: createdAt,
     manualDispatchRequested: value['manualDispatchRequested'] == true,
+    attachments: attachments ?? const [],
   );
+}
+
+List<MessageQueueAttachment>? parseMessageQueueAttachments(Object? value) {
+  if (value == null) return const [];
+  if (value is! List) return null;
+  final attachments = <MessageQueueAttachment>[];
+  for (final entry in value) {
+    final attachment = parseMessageQueueAttachment(entry);
+    if (attachment == null) return null;
+    attachments.add(attachment);
+  }
+  return attachments;
+}
+
+MessageQueueAttachment? parseMessageQueueAttachment(Object? value) {
+  if (value is! Map) return null;
+  final attachmentID = value['attachmentID']?.toString() ?? '';
+  final filename = value['filename']?.toString() ?? '';
+  final mimeType = value['mimeType']?.toString() ?? '';
+  final size = _asRevision(value['size']);
+  final source = value['source']?.toString() ?? '';
+  final locator = value['locator'];
+  if (attachmentID.isEmpty || filename.isEmpty || mimeType.isEmpty || size == null || source.isEmpty || locator is! Map) {
+    return null;
+  }
+  final occurrence = value['occurrenceRefID'];
+  final refs = occurrence is List ? occurrence.map((item) => item.toString()).toList() : <String>[];
+  return MessageQueueAttachment(
+    attachmentID: attachmentID,
+    filename: filename,
+    mimeType: mimeType,
+    size: size,
+    source: source,
+    locator: locator.map((key, item) => MapEntry(key.toString(), item)),
+    occurrenceRefID: refs,
+  );
+}
+
+MessageQueueUpload? parseMessageQueueUpload(Object? value) {
+  if (value is! Map) return null;
+  final uploadID = value['uploadID']?.toString() ?? '';
+  final uploadToken = value['uploadToken']?.toString() ?? '';
+  final expiresAt = _asRevision(value['expiresAt']);
+  if (uploadID.isEmpty || uploadToken.isEmpty || expiresAt == null) return null;
+  return MessageQueueUpload(uploadID: uploadID, uploadToken: uploadToken, expiresAt: expiresAt);
+}
+
+MessageQueueEditReservation? parseMessageQueueReservation(Object? value) {
+  if (value is! Map) return null;
+  final revision = _asRevision(value['revision']);
+  final scopeID = value['scopeID']?.toString() ?? '';
+  final queueItemID = value['queueItemID']?.toString() ?? '';
+  final rowVersion = _asRevision(value['rowVersion']);
+  final token = value['token']?.toString() ?? '';
+  final expiresAt = _asRevision(value['expiresAt']);
+  final generation = _asRevision(value['generation']);
+  if (revision == null ||
+      scopeID.isEmpty ||
+      queueItemID.isEmpty ||
+      rowVersion == null ||
+      token.isEmpty ||
+      expiresAt == null ||
+      generation == null) {
+    return null;
+  }
+  return MessageQueueEditReservation(
+    revision: revision,
+    scopeID: scopeID,
+    queueItemID: queueItemID,
+    rowVersion: rowVersion,
+    token: token,
+    expiresAt: expiresAt,
+    generation: generation,
+  );
+}
+
+/// Cap `arrayMove` for `PUT /scopes/:id/order`.
+List<String> reorderQueueItemIds(List<MessageQueueItem> items, int from, int to) {
+  final ids = items.map((item) => item.queueItemID).toList();
+  if (from < 0 || from >= ids.length) return ids;
+  var target = to;
+  if (target > from) target -= 1;
+  if (target < 0) target = 0;
+  if (target > ids.length) target = ids.length;
+  final moved = ids.removeAt(from);
+  ids.insert(target > ids.length ? ids.length : target, moved);
+  return ids;
 }
 
 MessageQueueScope? parseMessageQueueScope(Object? value) {

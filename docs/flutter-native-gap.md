@@ -707,7 +707,7 @@ Capgo OTA; plan/notes/Todo; Chat dock tab; `iosNativeUi`; Bonjour 「附近」; 
 ### Remaining gaps (updated)
 
 1. Device-only rows above — still ❌ 真机过.
-2. Context ring / session overflow mutations / new-project + home `···` landed in the twentieth slice. Share/copy/unshare + DirectoryExplorer clone/hidden/identity + worktree branch/startRef + project-edit essentials landed in the twenty-first (真机 still residual). Create-missing-dir + GitHub Issue/PR worktree + worktree drag-reorder + scheduled daily create + chat copy/share/fork landed in the twenty-second. Existing-branch worktree + scheduled full editor + chat revert/edit + assistant long-press + Cap-parity composer autocomplete landed in the twenty-third. Chat overflow Files/Changes/MCP/New session + iOS autocomplete accept + Files attach + compaction activity landed in the twenty-fourth. Server message-queue chips + archive undo landed in the twenty-fifth.
+2. Context ring / session overflow mutations / new-project + home `···` landed in the twentieth slice. Share/copy/unshare + DirectoryExplorer clone/hidden/identity + worktree branch/startRef + project-edit essentials landed in the twenty-first (真机 still residual). Create-missing-dir + GitHub Issue/PR worktree + worktree drag-reorder + scheduled daily create + chat copy/share/fork landed in the twenty-second. Existing-branch worktree + scheduled full editor + chat revert/edit + assistant long-press + Cap-parity composer autocomplete landed in the twenty-third. Chat overflow Files/Changes/MCP/New session + iOS autocomplete accept + Files attach + compaction activity landed in the twenty-fourth. Server message-queue chips + archive undo landed in the twenty-fifth. Queue attachments / reserve-edit / drag-reorder + Cap-editable settings slugs landed in the twenty-sixth.
 3. Android launcher badge — honest host-side gap.
 4. Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` — will not port.
 5. Appearance Flexoki picker and Finder stay **will-not-invent**. Composer `/` `@` `#` is no longer a frost stub.
@@ -855,3 +855,39 @@ Same device rows as earlier slices: live `wss://` relay + LAN hot-switch + iOS L
 **false.** High-value missing/stubbed/no-op surfaces that Cap ships on mobile are closed (queue chips + archive undo). Leftover CODE is thinner Cap-editable settings slugs and richer queue attachment/reorder — not empty stubs. 真机 residuals remain.
 
 Validated on Flutter **3.32.8 / Dart 3.8.1**: `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **254 passed**, including `flutter_message_queue_test.dart`, `flutter_cap_overflow_test.dart`, and `composer_occupancy_test.dart`. Screenshot PNGs were **not** recaptured. Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native` — this stacked branch does not start that Actions run. No APK publish (tip of `work/flutter-native` was not advanced).
+
+## Twenty-sixth-slice status (2026-09-05) — queue attachments + Cap settings editors
+
+Continues after PR **#22** merged onto `work/flutter-native` (`b165d5cdf`, post-merge tip after `0cd5bc9f9`). Draft stacked on that tip. Do **not** merge `main`. No 1.18 TanStack. No Flutter UI golden recapture. OpenChamber v2 `.debug` applicationId (`com.yee94.openchamber.debug`) unchanged. Do **not** invent Flexoki / Finder / Capgo / Bonjour / `iosNativeUi` / Chat dock.
+
+Read on this checkout + official Cap (not merged from `main`): `message-queue-server.ts` `/attachments/uploads` + reserve / reserved-remove / `PUT /scopes/:id/order`; `message-queue-server-edit-bridge.ts` reserve → download → reserved-remove; `message-queue-server-attachment-adapter.ts` 25 MiB / 50 MiB; Cap mobile Settings `sessions` / `summary-ai` / `git` identities / `behavior` AGENTS.md / `magic-prompts` / `snippets`.
+
+### Landed this slice (code)
+
+| Surface | Official Cap mobile | Flutter | Notes |
+|---|---|---|---|
+| Queue attachments | `uploadQueueAttachments` via `/attachments/uploads` then admit `{source:'local', locator:{kind:'upload', uploadID}}` | Same; composer drafts ride the official MQ upload, **not** `prompt-attachments` | 25 MiB each / 50 MiB total. `occurrenceRefID: ['root', id]`. Failed admit restores composer + drafts. |
+| Reserve-edit | `editServerQueueItemIntoDraft`: reserve → download → restore composer → reserved-remove | `editQueuedItemIntoComposer` | Failed download releases the lease. Do **not** regular-DELETE on edit. |
+| Drag-reorder | `PUT /scopes/:id/order` `{requestID, expectedRevision, queueItemIDs}` | Horizontal `ReorderableListView` + `reorderQueueItemIds` | Long-press delayed handle. 501 = unavailable. |
+| Sessions editor | Settings blob defaults + retention | Tap editors + archive/delete radios | `defaultModel` / `defaultVariant` / `defaultAgent` / `autoDeleteAfterDays` 1–365 / `sessionRetentionAction`. No desktop launch-at-login / tray / LAN. |
+| Summary AI editor | Provider/custom + callable `/api/small-model` + prompts | Same radios + custom URL/model/token + commit/title prompts | Token row never echoes the secret. |
+| Git identities | `POST/PUT/DELETE /api/git/identities/:id` | Entity editor from Git slug | `{name, userName, userEmail, authType, host}`. No SSH file picker / Finder. |
+| AGENTS.md + response style | `PUT /api/behavior/agents-md` `{content}` + blob `globalBehaviorPrompt`; official presets | Tap editor + preset radios | Presets are Cap `RESPONSE_STYLE_PRESETS` + `custom`. |
+| Magic prompts | Official `MagicPromptId` catalog; `PUT/DELETE /api/magic-prompts/:id` | Catalog merge + override editor | No invented IDs. No “create new prompt” row. |
+| Snippets | `POST/PATCH/DELETE /api/config/snippets/:name` | Entity editor | `{content, aliases, description, scope}`. |
+
+### Still code / will-not-port
+
+| Gap | Why leftover |
+|---|---|
+| Appearance Flexoki picker | **Do not invent.** Official **mobile** Appearance is language + Light/Dark/System. |
+| Finder | **Do not invent.** Cap `handleOpenInFinder` is desktop-only. |
+| Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` / Bonjour / Pierre / mermaid SVG / Android launcher badge | Will not port. |
+
+### 真机-only
+
+Same device rows as earlier slices: live `wss://` relay + LAN hot-switch + iOS Local Network; HEIC/album + Files picker on a phone; hosted OAuth; ActivityKit / Dynamic Island / widget tap; Impeller 16ms; FCM on `.debug` if Firebase init fails; share-extension → inbox POST; iOS UIKit autocomplete tap / document picker / queue-while-busy + attachment upload on a real iPhone.
+
+### EXHAUSTED
+
+**true.** Allowed Cap-mobile CODE that this track can close without inventing surfaces is landed. Leftovers are will-not-port (Flexoki / Finder / Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` / Bonjour / Pierre / mermaid SVG / Android launcher badge) plus 真机 residuals. Not 真机过.

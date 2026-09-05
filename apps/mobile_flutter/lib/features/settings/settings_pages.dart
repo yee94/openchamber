@@ -5,11 +5,24 @@ import '../../data/app_version.dart';
 import '../../data/settings_catalog.dart';
 import '../../data/settings_remote.dart';
 import '../../l10n/app_strings.dart';
+import '../../navigation/platform_route.dart';
 import '../../theme/ios_hero.dart';
 import '../../theme/oc_glyphs.dart';
 import '../../theme/oc_tokens.dart';
 import 'settings_editors.dart';
 import 'settings_primitives.dart';
+
+/// Official `RESPONSE_STYLE_PRESETS` plus Cap `custom` from `packages/ui/src/lib/responseStyle.ts`.
+const List<String> _responseStylePresetIds = [
+  'concise',
+  'detailed',
+  'mentor',
+  'pushback',
+  'noFiller',
+  'matchEnergy',
+  'warmPeer',
+  'custom',
+];
 
 class SettingsDetailPage extends StatelessWidget {
   const SettingsDetailPage({
@@ -87,20 +100,18 @@ class SettingsDetailPage extends StatelessWidget {
           emptyKey: 'settings.plugins.empty',
         );
       case 'magic-prompts':
-        return RemoteListSettingsPage(
+        return EntityEditorSettingsPage(
           controller: controller,
+          kind: SettingsEditorKind.magicPrompts,
           titleKey: 'settings.magicPrompts.title',
           emptyKey: 'settings.magicPrompts.empty',
-          resource: () => controller.remoteSettings.magicPrompts,
-          load: controller.remoteSettings.loadMagicPrompts,
         );
       case 'snippets':
-        return RemoteListSettingsPage(
+        return EntityEditorSettingsPage(
           controller: controller,
+          kind: SettingsEditorKind.snippets,
           titleKey: 'settings.snippets.title',
           emptyKey: 'settings.snippets.empty',
-          resource: () => controller.remoteSettings.snippets,
-          load: controller.remoteSettings.loadSnippets,
         );
       case 'skills.installed':
         return EntityEditorSettingsPage(
@@ -480,18 +491,63 @@ class SessionsSettingsPage extends StatelessWidget {
       title: t(context, 'settings.sessions.title'),
       child: _BlobSettingsBody(
         controller: controller,
+        extra: () => controller.remoteSettings.loadAgents(),
         builder: (context, blob) {
+          final agents = controller.remoteSettings.agents.value ?? const <SettingsNamedItem>[];
           return [
             SettingsGroup(
               label: t(context, 'settings.sessions.defaults'),
               children: [
                 SettingsValueRow(
+                  key: const Key('settings-sessions-default-model'),
                   label: t(context, 'settings.sessions.defaultModel'),
                   subtitle: blob.stringField('defaultModel') ?? t(context, 'settings.value.unset'),
+                  onTap: () => showSettingsFieldsDialog(
+                    context: context,
+                    titleKey: 'settings.sessions.defaultModel',
+                    fields: [
+                      SettingsFieldSpec(
+                        id: 'defaultModel',
+                        labelKey: 'settings.sessions.defaultModel',
+                        initial: blob.stringField('defaultModel'),
+                      ),
+                    ],
+                    onSave: (values) => controller.patchChatSetting('defaultModel', values['defaultModel'] ?? ''),
+                  ),
                 ),
                 SettingsValueRow(
+                  key: const Key('settings-sessions-default-thinking'),
+                  label: t(context, 'settings.sessions.defaultThinking'),
+                  subtitle: blob.stringField('defaultVariant') ?? t(context, 'settings.value.unset'),
+                  onTap: () => showSettingsFieldsDialog(
+                    context: context,
+                    titleKey: 'settings.sessions.defaultThinking',
+                    fields: [
+                      SettingsFieldSpec(
+                        id: 'defaultVariant',
+                        labelKey: 'settings.sessions.defaultThinking',
+                        initial: blob.stringField('defaultVariant'),
+                      ),
+                    ],
+                    onSave: (values) => controller.patchChatSetting('defaultVariant', values['defaultVariant'] ?? ''),
+                  ),
+                ),
+                SettingsValueRow(
+                  key: const Key('settings-sessions-default-agent'),
                   label: t(context, 'settings.sessions.defaultAgent'),
                   subtitle: blob.stringField('defaultAgent') ?? t(context, 'settings.value.unset'),
+                  onTap: () => showSettingsFieldsDialog(
+                    context: context,
+                    titleKey: 'settings.sessions.defaultAgent',
+                    fields: [
+                      SettingsFieldSpec(
+                        id: 'defaultAgent',
+                        labelKey: 'settings.sessions.defaultAgent',
+                        initial: blob.stringField('defaultAgent') ?? (agents.isEmpty ? '' : agents.first.id),
+                      ),
+                    ],
+                    onSave: (values) => controller.patchChatSetting('defaultAgent', values['defaultAgent'] ?? ''),
+                  ),
                 ),
               ],
             ),
@@ -504,12 +560,43 @@ class SessionsSettingsPage extends StatelessWidget {
                   onChanged: (value) => controller.patchChatSetting('autoDeleteEnabled', value),
                 ),
                 SettingsValueRow(
+                  key: const Key('settings-sessions-days'),
                   label: t(context, 'settings.sessions.autoDeleteDays'),
                   subtitle: '${blob.numField('autoDeleteAfterDays') ?? 30}',
+                  onTap: () => showSettingsFieldsDialog(
+                    context: context,
+                    titleKey: 'settings.sessions.autoDeleteDays',
+                    fields: [
+                      SettingsFieldSpec(
+                        id: 'days',
+                        labelKey: 'settings.sessions.autoDeleteDays',
+                        initial: '${blob.numField('autoDeleteAfterDays') ?? 30}',
+                      ),
+                    ],
+                    onSave: (values) {
+                      final days = int.tryParse(values['days'] ?? '') ?? 30;
+                      final clamped = days < 1 ? 1 : (days > 365 ? 365 : days);
+                      return controller.patchChatSetting('autoDeleteAfterDays', clamped);
+                    },
+                  ),
                 ),
-                SettingsValueRow(
-                  label: t(context, 'settings.sessions.retentionAction'),
-                  subtitle: blob.stringField('sessionRetentionAction') ?? 'archive',
+                RadioListTile<String>(
+                  key: const Key('settings-sessions-retention-archive'),
+                  title: Text(t(context, 'settings.sessions.retentionAction.archive')),
+                  value: 'archive',
+                  groupValue: blob.stringField('sessionRetentionAction') ?? 'archive',
+                  onChanged: (value) {
+                    if (value != null) controller.patchChatSetting('sessionRetentionAction', value);
+                  },
+                ),
+                RadioListTile<String>(
+                  key: const Key('settings-sessions-retention-delete'),
+                  title: Text(t(context, 'settings.sessions.retentionAction.delete')),
+                  value: 'delete',
+                  groupValue: blob.stringField('sessionRetentionAction') ?? 'archive',
+                  onChanged: (value) {
+                    if (value != null) controller.patchChatSetting('sessionRetentionAction', value);
+                  },
                 ),
               ],
             ),
@@ -534,29 +621,158 @@ class SummaryAiSettingsPage extends StatelessWidget {
         extra: () => controller.remoteSettings.loadSummaryModels(),
         builder: (context, blob) {
           final models = controller.remoteSettings.summaryModels;
+          final mode = blob.stringField('summaryModelMode') ?? 'provider';
           return [
             SettingsGroup(
               label: t(context, 'settings.summaryAi.model'),
               children: [
-                SettingsValueRow(
-                  label: t(context, 'settings.summaryAi.mode'),
-                  subtitle: blob.stringField('summaryModelMode') ?? 'provider',
+                RadioListTile<String>(
+                  key: const Key('settings-summary-mode-provider'),
+                  title: Text(t(context, 'settings.summaryAi.mode.provider')),
+                  value: 'provider',
+                  groupValue: mode,
+                  onChanged: (value) {
+                    if (value != null) controller.patchChatSetting('summaryModelMode', value);
+                  },
                 ),
-                SettingsValueRow(
-                  label: t(context, 'settings.summaryAi.provider'),
-                  subtitle: blob.stringField('summaryProviderID') ?? t(context, 'settings.value.unset'),
+                RadioListTile<String>(
+                  key: const Key('settings-summary-mode-custom'),
+                  title: Text(t(context, 'settings.summaryAi.mode.custom')),
+                  value: 'custom',
+                  groupValue: mode,
+                  onChanged: (value) {
+                    if (value != null) controller.patchChatSetting('summaryModelMode', value);
+                  },
                 ),
-                SettingsValueRow(
-                  label: t(context, 'settings.summaryAi.modelId'),
-                  subtitle: blob.stringField('summaryModelID') ?? t(context, 'settings.value.unset'),
-                ),
+                if (mode == 'custom') ...[
+                  SettingsValueRow(
+                    key: const Key('settings-summary-custom-url'),
+                    label: t(context, 'settings.summaryAi.customUrl'),
+                    subtitle: blob.stringField('summaryCustomBaseURL') ?? t(context, 'settings.value.unset'),
+                    onTap: () => showSettingsFieldsDialog(
+                      context: context,
+                      titleKey: 'settings.summaryAi.customUrl',
+                      fields: [
+                        SettingsFieldSpec(
+                          id: 'url',
+                          labelKey: 'settings.summaryAi.customUrl',
+                          initial: blob.stringField('summaryCustomBaseURL'),
+                        ),
+                      ],
+                      onSave: (values) => controller.patchChatSetting('summaryCustomBaseURL', values['url'] ?? ''),
+                    ),
+                  ),
+                  SettingsValueRow(
+                    key: const Key('settings-summary-custom-model'),
+                    label: t(context, 'settings.summaryAi.modelId'),
+                    subtitle: blob.stringField('summaryModelID') ?? t(context, 'settings.value.unset'),
+                    onTap: () => showSettingsFieldsDialog(
+                      context: context,
+                      titleKey: 'settings.summaryAi.modelId',
+                      fields: [
+                        SettingsFieldSpec(
+                          id: 'model',
+                          labelKey: 'settings.summaryAi.modelId',
+                          initial: blob.stringField('summaryModelID'),
+                        ),
+                      ],
+                      onSave: (values) => controller.patchChatSetting('summaryModelID', values['model'] ?? ''),
+                    ),
+                  ),
+                  SettingsValueRow(
+                    key: const Key('settings-summary-custom-token'),
+                    label: t(context, 'settings.summaryAi.customToken'),
+                    subtitle: (blob.boolField('hasSummaryCustomAPIToken') ?? false)
+                        ? t(context, 'settings.summaryAi.customTokenStored')
+                        : t(context, 'settings.value.unset'),
+                    onTap: () => showSettingsFieldsDialog(
+                      context: context,
+                      titleKey: 'settings.summaryAi.customToken',
+                      fields: [
+                        const SettingsFieldSpec(
+                          id: 'token',
+                          labelKey: 'settings.summaryAi.customToken',
+                          obscure: true,
+                        ),
+                      ],
+                      onSave: (values) => controller.patchChatSetting('summaryCustomAPIToken', values['token'] ?? ''),
+                    ),
+                  ),
+                ],
               ],
             ),
-            _resourceGroup(
-              context,
+            SettingsGroup(
               label: t(context, 'settings.summaryAi.callable'),
-              resource: models,
-              emptyKey: 'settings.summaryAi.empty',
+              children: [
+                if (models.errorKey != null)
+                  ListTile(
+                    key: const Key('settings-resource-error'),
+                    title: Text(t(context, models.errorKey!)),
+                  )
+                else if (models.loading && !models.hasValue)
+                  const ListTile(title: LinearProgressIndicator())
+                else if (models.value == null || models.value!.isEmpty)
+                  ListTile(
+                    key: const Key('settings-resource-empty'),
+                    title: Text(t(context, 'settings.summaryAi.empty')),
+                  )
+                else
+                  ...models.value!.map(
+                    (item) => ListTile(
+                      key: Key('settings-summary-model-${item.id}'),
+                      title: Text(item.title),
+                      subtitle: Text(item.subtitle ?? ''),
+                      selected: blob.stringField('summaryProviderID') == item.subtitle &&
+                          blob.stringField('summaryModelID') == item.title,
+                      onTap: mode == 'provider'
+                          ? () => controller.patchChatSetting('summaryProviderID', item.subtitle ?? '').then(
+                                (_) => controller.patchChatSetting('summaryModelID', item.title),
+                              )
+                          : null,
+                    ),
+                  ),
+              ],
+            ),
+            SettingsGroup(
+              label: t(context, 'settings.summaryAi.prompts'),
+              children: [
+                SettingsValueRow(
+                  key: const Key('settings-summary-commit-prompt'),
+                  label: t(context, 'settings.summaryAi.commitPrompt'),
+                  subtitle: blob.stringField('summaryCommitPrompt') ?? t(context, 'settings.value.unset'),
+                  onTap: () => showSettingsFieldsDialog(
+                    context: context,
+                    titleKey: 'settings.summaryAi.commitPrompt',
+                    fields: [
+                      SettingsFieldSpec(
+                        id: 'prompt',
+                        labelKey: 'settings.summaryAi.commitPrompt',
+                        initial: blob.stringField('summaryCommitPrompt'),
+                        maxLines: 6,
+                      ),
+                    ],
+                    onSave: (values) => controller.patchChatSetting('summaryCommitPrompt', values['prompt'] ?? ''),
+                  ),
+                ),
+                SettingsValueRow(
+                  key: const Key('settings-summary-title-prompt'),
+                  label: t(context, 'settings.summaryAi.sessionTitlePrompt'),
+                  subtitle: blob.stringField('summarySessionTitlePrompt') ?? t(context, 'settings.value.unset'),
+                  onTap: () => showSettingsFieldsDialog(
+                    context: context,
+                    titleKey: 'settings.summaryAi.sessionTitlePrompt',
+                    fields: [
+                      SettingsFieldSpec(
+                        id: 'prompt',
+                        labelKey: 'settings.summaryAi.sessionTitlePrompt',
+                        initial: blob.stringField('summarySessionTitlePrompt'),
+                        maxLines: 6,
+                      ),
+                    ],
+                    onSave: (values) => controller.patchChatSetting('summarySessionTitlePrompt', values['prompt'] ?? ''),
+                  ),
+                ),
+              ],
             ),
           ];
         },
@@ -626,17 +842,53 @@ class GitSettingsPage extends StatelessWidget {
                   value: blob.boolField('gitmojiEnabled') ?? false,
                   onChanged: (value) => controller.patchChatSetting('gitmojiEnabled', value),
                 ),
-                SettingsValueRow(
-                  label: t(context, 'settings.git.changesView'),
-                  subtitle: blob.stringField('gitChangesViewMode') ?? 'tree',
+                RadioListTile<String>(
+                  key: const Key('settings-git-view-tree'),
+                  title: Text(t(context, 'settings.git.changesView.tree')),
+                  value: 'tree',
+                  groupValue: blob.stringField('gitChangesViewMode') ?? 'tree',
+                  onChanged: (value) {
+                    if (value != null) controller.patchChatSetting('gitChangesViewMode', value);
+                  },
+                ),
+                RadioListTile<String>(
+                  key: const Key('settings-git-view-list'),
+                  title: Text(t(context, 'settings.git.changesView.list')),
+                  value: 'list',
+                  groupValue: blob.stringField('gitChangesViewMode') ?? 'tree',
+                  onChanged: (value) {
+                    if (value != null) controller.patchChatSetting('gitChangesViewMode', value);
+                  },
                 ),
               ],
             ),
-            _resourceGroup(
-              context,
+            SettingsGroup(
               label: t(context, 'settings.git.identities'),
-              resource: controller.remoteSettings.gitIdentities,
-              emptyKey: 'settings.git.empty',
+              children: [
+                SettingsNavRow(
+                  key: const Key('settings-git-identities-open'),
+                  label: t(context, 'settings.git.identities'),
+                  subtitle: controller.remoteSettings.gitIdentities.value == null ||
+                          controller.remoteSettings.gitIdentities.value!.isEmpty
+                      ? t(context, 'settings.git.empty')
+                      : '${controller.remoteSettings.gitIdentities.value!.length}',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      platformPageRoute<void>(
+                        builder: (_) => AnimatedBuilder(
+                          animation: controller,
+                          builder: (context, _) => EntityEditorSettingsPage(
+                            controller: controller,
+                            kind: SettingsEditorKind.gitIdentities,
+                            titleKey: 'settings.git.identities',
+                            emptyKey: 'settings.git.empty',
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
           ];
         },
@@ -668,10 +920,40 @@ class BehaviorSettingsPage extends StatelessWidget {
                   value: blob.boolField('responseStyleEnabled') ?? false,
                   onChanged: (value) => controller.patchChatSetting('responseStyleEnabled', value),
                 ),
-                SettingsValueRow(
-                  label: t(context, 'settings.behavior.preset'),
-                  subtitle: blob.stringField('responseStylePreset') ?? t(context, 'settings.value.unset'),
+                ..._responseStylePresetIds.map(
+                  (preset) => RadioListTile<String>(
+                    key: Key('settings-behavior-preset-$preset'),
+                    title: Text(t(context, 'settings.behavior.preset.$preset')),
+                    value: preset,
+                    groupValue: blob.stringField('responseStylePreset') ?? 'concise',
+                    onChanged: (value) {
+                      if (value != null) controller.patchChatSetting('responseStylePreset', value);
+                    },
+                  ),
                 ),
+                if ((blob.stringField('responseStylePreset') ?? 'concise') == 'custom')
+                  SettingsValueRow(
+                    key: const Key('settings-behavior-custom-instructions'),
+                    label: t(context, 'settings.behavior.customInstructions'),
+                    subtitle: blob.stringField('responseStyleCustomInstructions') ??
+                        t(context, 'settings.value.unset'),
+                    onTap: () => showSettingsFieldsDialog(
+                      context: context,
+                      titleKey: 'settings.behavior.customInstructions',
+                      fields: [
+                        SettingsFieldSpec(
+                          id: 'custom',
+                          labelKey: 'settings.behavior.customInstructions',
+                          initial: blob.stringField('responseStyleCustomInstructions'),
+                          maxLines: 6,
+                        ),
+                      ],
+                      onSave: (values) => controller.patchChatSetting(
+                        'responseStyleCustomInstructions',
+                        values['custom'] ?? '',
+                      ),
+                    ),
+                  ),
               ],
             ),
             SettingsGroup(
@@ -685,14 +967,24 @@ class BehaviorSettingsPage extends StatelessWidget {
                 else if (agentsMd.loading && !agentsMd.hasValue)
                   const ListTile(title: LinearProgressIndicator())
                 else
-                  ListTile(
+                  SettingsValueRow(
                     key: const Key('settings-behavior-agents-md'),
-                    title: Text(
-                      (agentsMd.value == null || agentsMd.value!.trim().isEmpty)
-                          ? t(context, 'settings.behavior.agentsMdEmpty')
-                          : agentsMd.value!,
-                      maxLines: 8,
-                      overflow: TextOverflow.ellipsis,
+                    label: t(context, 'settings.behavior.agentsMd'),
+                    subtitle: (agentsMd.value == null || agentsMd.value!.trim().isEmpty)
+                        ? t(context, 'settings.behavior.agentsMdEmpty')
+                        : agentsMd.value,
+                    onTap: () => showSettingsFieldsDialog(
+                      context: context,
+                      titleKey: 'settings.behavior.agentsMd',
+                      fields: [
+                        SettingsFieldSpec(
+                          id: 'content',
+                          labelKey: 'settings.behavior.agentsMd',
+                          initial: agentsMd.value ?? '',
+                          maxLines: 10,
+                        ),
+                      ],
+                      onSave: (values) => controller.remoteSettings.saveAgentsMd(values['content'] ?? ''),
                     ),
                   ),
               ],

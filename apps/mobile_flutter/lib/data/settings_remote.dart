@@ -219,6 +219,133 @@ class SettingsRemoteStore {
         fetch: () async => parseSmallModels(await _api.getSmallModel(base: _requireBase(), bearer: _bearer())),
       );
 
+  Future<void> saveAgentsMd(String content) {
+    return _mutate(
+      after: loadAgentsMd,
+      run: () async {
+        await _api.putBehaviorAgentsMd(base: _requireBase(), bearer: _bearer(), content: content);
+        await patchBlob({'globalBehaviorPrompt': content});
+      },
+    );
+  }
+
+  Future<void> saveMagicPrompt({required String id, required String text}) {
+    return _mutate(
+      after: loadMagicPrompts,
+      run: () => _api.saveMagicPromptOverride(base: _requireBase(), bearer: _bearer(), id: id, text: text),
+    );
+  }
+
+  Future<void> resetMagicPrompt(String id) {
+    return _mutate(
+      after: loadMagicPrompts,
+      run: () => _api.resetMagicPromptOverride(base: _requireBase(), bearer: _bearer(), id: id),
+    );
+  }
+
+  Future<void> createSnippet({
+    required String name,
+    required String content,
+    String? description,
+    List<String>? aliases,
+    String scope = 'global',
+  }) {
+    return _mutate(
+      after: loadSnippets,
+      run: () => _api.createSnippet(
+        base: _requireBase(),
+        bearer: _bearer(),
+        name: name,
+        content: content,
+        description: description,
+        aliases: aliases,
+        scope: scope,
+      ),
+    );
+  }
+
+  Future<void> updateSnippet({
+    required String name,
+    required String content,
+    String? description,
+    List<String>? aliases,
+  }) {
+    return _mutate(
+      after: loadSnippets,
+      run: () => _api.updateSnippet(
+        base: _requireBase(),
+        bearer: _bearer(),
+        name: name,
+        content: content,
+        description: description,
+        aliases: aliases,
+      ),
+    );
+  }
+
+  Future<void> deleteSnippet(String name) {
+    return _mutate(
+      after: loadSnippets,
+      run: () => _api.deleteSnippet(base: _requireBase(), bearer: _bearer(), name: name),
+    );
+  }
+
+  Future<void> createGitIdentity({
+    required String name,
+    required String userName,
+    required String userEmail,
+    String authType = 'ssh',
+    String? host,
+  }) {
+    return _mutate(
+      after: loadGitIdentities,
+      run: () => _api.createGitIdentity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        profile: {
+          'name': name,
+          'userName': userName,
+          'userEmail': userEmail,
+          'authType': authType,
+          if (host != null && host.isNotEmpty) 'host': host,
+        },
+      ),
+    );
+  }
+
+  Future<void> updateGitIdentity({
+    required String id,
+    required String name,
+    required String userName,
+    required String userEmail,
+    String authType = 'ssh',
+    String? host,
+  }) {
+    return _mutate(
+      after: loadGitIdentities,
+      run: () => _api.updateGitIdentity(
+        base: _requireBase(),
+        bearer: _bearer(),
+        id: id,
+        profile: {
+          'id': id,
+          'name': name,
+          'userName': userName,
+          'userEmail': userEmail,
+          'authType': authType,
+          if (host != null && host.isNotEmpty) 'host': host,
+        },
+      ),
+    );
+  }
+
+  Future<void> deleteGitIdentity(String id) {
+    return _mutate(
+      after: loadGitIdentities,
+      run: () => _api.deleteGitIdentity(base: _requireBase(), bearer: _bearer(), id: id),
+    );
+  }
+
   Future<void> saveProviderApiKey(String providerId, String key) {
     return _mutate(
       after: loadProviders,
@@ -863,20 +990,85 @@ List<SettingsNamedItem> parseSkills(Object? payload) {
 List<SettingsNamedItem> parseSnippets(Object? payload) {
   return asObjectList(payload).map((item) {
     final name = item['name']?.toString() ?? '';
+    final aliases = item['aliases'] is List
+        ? (item['aliases'] as List).map((alias) => alias.toString()).where((alias) => alias.isNotEmpty).join(', ')
+        : '';
     return SettingsNamedItem(
       id: name,
       title: name,
       subtitle: item['description']?.toString() ?? item['source']?.toString(),
+      meta: {
+        if (item['content'] != null) 'content': item['content'].toString(),
+        if (item['description'] != null) 'description': item['description'].toString(),
+        if (aliases.isNotEmpty) 'aliases': aliases,
+        if (item['source'] != null) 'scope': item['source'].toString(),
+        if (item['scope'] != null) 'scope': item['scope'].toString(),
+      },
     );
   }).where((item) => item.id.isNotEmpty).toList();
 }
 
+/// Official `MagicPromptId` catalog from `packages/ui/src/lib/magicPrompts.ts`.
+const List<String> officialMagicPromptIds = [
+  'git.commit.generate.visible',
+  'git.commit.generate.instructions',
+  'git.pr.generate.visible',
+  'git.pr.generate.instructions',
+  'git.conflict.resolve.visible',
+  'git.conflict.resolve.instructions',
+  'git.integrate.cherrypick.resolve.visible',
+  'git.integrate.cherrypick.resolve.instructions',
+  'github.pr.review.visible',
+  'github.pr.review.instructions',
+  'github.issue.review.visible',
+  'github.issue.review.instructions',
+  'github.pr.checks.review.visible',
+  'github.pr.checks.review.instructions',
+  'github.pr.comments.review.visible',
+  'github.pr.comments.review.instructions',
+  'github.pr.comment.single.visible',
+  'github.pr.comment.single.instructions',
+  'session.summary.visible',
+  'session.summary.instructions',
+  'session.review.visible',
+  'session.review.instructions',
+  'session.reviewHandoff.visible',
+  'session.reviewHandoff.instructions',
+  'session.reviewSession.visible',
+  'session.reviewSessionWithoutHandoff.visible',
+  'session.reviewFeedbackToImplementer.visible',
+  'session.implementationResponseToReviewer.visible',
+  'session.craftGoal.visible',
+  'session.craftGoal.instructions',
+  'session.catchup.visible',
+  'session.catchup.instructions',
+  'session.debug.visible',
+  'session.debug.instructions',
+  'session.weigh.visible',
+  'session.weigh.instructions',
+  'session.explore.visible',
+  'session.explore.instructions',
+  'session.fusion.visible',
+  'session.fusion.instructions',
+];
+
 List<SettingsNamedItem> parseMagicPromptOverrides(Object? payload) {
   final root = asObjectMap(payload);
   final overrides = asObjectMap(root['overrides']);
-  return overrides.entries
-      .map((entry) => SettingsNamedItem(id: entry.key, title: entry.key, subtitle: entry.value?.toString()))
-      .toList();
+  final seen = <String>{};
+  final ids = <String>[
+    ...officialMagicPromptIds,
+    ...overrides.keys.where((id) => !officialMagicPromptIds.contains(id)),
+  ];
+  return ids.where((id) => seen.add(id)).map((id) {
+    final text = overrides[id]?.toString();
+    return SettingsNamedItem(
+      id: id,
+      title: id,
+      subtitle: text,
+      meta: {'text': text ?? ''},
+    );
+  }).toList();
 }
 
 List<SettingsNamedItem> parseGitIdentities(Object? payload) {
@@ -884,7 +1076,18 @@ List<SettingsNamedItem> parseGitIdentities(Object? payload) {
     final id = item['id']?.toString() ?? '';
     final name = item['name']?.toString() ?? id;
     final email = item['userEmail']?.toString() ?? item['userName']?.toString();
-    return SettingsNamedItem(id: id, title: name, subtitle: email);
+    return SettingsNamedItem(
+      id: id,
+      title: name,
+      subtitle: email,
+      meta: {
+        'name': name,
+        if (item['userName'] != null) 'userName': item['userName'].toString(),
+        if (item['userEmail'] != null) 'userEmail': item['userEmail'].toString(),
+        if (item['authType'] != null) 'authType': item['authType'].toString(),
+        if (item['host'] != null) 'host': item['host'].toString(),
+      },
+    );
   }).where((item) => item.id.isNotEmpty).toList();
 }
 

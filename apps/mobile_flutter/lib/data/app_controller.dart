@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -763,10 +764,53 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<List<MessageQueueAttachment>> uploadQueueAttachments(List<AttachmentDraft> drafts) async {
+    final base = activeBase;
+    if (base == null) {
+      throw const OpenChamberHttpException(0, OpenChamberPaths.messageQueueAttachmentUploads, code: 'not_connected');
+    }
+    var total = 0;
+    for (final draft in drafts) {
+      if (draft.bytes.length > maxPromptAttachmentBytes) {
+        throw const PromptAttachmentUploadError(413, 'too-large');
+      }
+      total += draft.bytes.length;
+    }
+    if (total > 50 * 1024 * 1024) {
+      throw const PromptAttachmentUploadError(413, 'too-large');
+    }
+    final uploaded = <MessageQueueAttachment>[];
+    for (final draft in drafts) {
+      final upload = await _api.createMessageQueueAttachmentUpload(base: base, bearer: activeBearer);
+      final digest = sha256Hex(draft.bytes);
+      await _api.uploadMessageQueueAttachment(
+        base: base,
+        bearer: activeBearer,
+        upload: upload,
+        bytes: draft.bytes,
+        sha256: digest,
+      );
+      final attachmentID = attachmentIdFor(draft.name);
+      uploaded.add(
+        MessageQueueAttachment(
+          attachmentID: attachmentID,
+          filename: draft.name,
+          mimeType: draft.mime,
+          size: draft.bytes.length,
+          source: 'local',
+          locator: {'kind': 'upload', 'uploadID': upload.uploadID},
+          occurrenceRefID: ['root', attachmentID],
+        ),
+      );
+    }
+    return uploaded;
+  }
+
   Future<MessageQueueMutation?> admitQueuedFollowUp({
     required HomeSessionRow session,
     required String text,
     MessageQueueScope? current,
+    List<AttachmentDraft> attachments = const [],
   }) async {
     final base = activeBase;
     final directory = session.directory ?? '';
@@ -777,6 +821,7 @@ class AppController extends ChangeNotifier {
     final model = splitDefaultModel(remoteSettings.blob.value?.defaultModel);
     final agent = remoteSettings.blob.value?.stringField('defaultAgent');
     final identity = createServerQueueAdmissionIdentity();
+    final queueAttachments = attachments.isEmpty ? const <MessageQueueAttachment>[] : await uploadQueueAttachments(attachments);
     final body = <String, Object?>{
       'requestID': identity.requestID,
       if (current != null && current.scopeID.isNotEmpty) 'expectedRevision': current.revision,
@@ -793,6 +838,8 @@ class AppController extends ChangeNotifier {
           agent: agent,
         ).toJson(),
         'deliveryTarget': const {'kind': 'primary'},
+        'attachments': queueAttachments.map((item) => item.toJson()).toList(),
+        'attachmentIssues': const <Map<String, Object?>>[],
       },
     };
     try {
@@ -859,6 +906,101 @@ class AppController extends ChangeNotifier {
     } on OpenChamberHttpException catch (error) {
       if (error.status == 501 || error.code == 'unavailable') return false;
       lastMutationErrorKey = 'chat.queuedMessage.sendFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Cap `editServerQueueItemIntoDraft`: reserve → restore composer → reserved-remove.
+  Future<({String text, List<AttachmentDraft> attachments})?> editQueuedItemIntoComposer({
+    required HomeSessionRow session,
+    required MessageQueueItem item,
+    required MessageQueueScope scope,
+  }) async {
+    final base = activeBase;
+    if (base == null || scope.scopeID.isEmpty) return null;
+    MessageQueueEditReservation? reservation;
+    try {
+      reservation = await _api.reserveMessageQueueItem(
+        base: base,
+        bearer: activeBearer,
+        queueItemId: item.queueItemID,
+        requestId: createServerQueueAdmissionIdentity().requestID,
+        expectedRevision: scope.revision,
+        rowVersion: item.rowVersion,
+      );
+    } on OpenChamberHttpException catch (error) {
+      if (error.status == 501 || error.code == 'unavailable') return null;
+      lastMutationErrorKey = 'chat.queuedMessage.editFailed';
+      notifyListeners();
+      return null;
+    }
+    final drafts = <AttachmentDraft>[];
+    try {
+      for (final attachment in item.attachments) {
+        final bytes = await _api.downloadMessageQueueAttachment(
+          base: base,
+          bearer: activeBearer,
+          queueItemId: item.queueItemID,
+          attachment: attachment,
+        );
+        drafts.add(AttachmentDraft(name: attachment.filename, mime: attachment.mimeType, bytes: Uint8List.fromList(bytes)));
+      }
+    } on OpenChamberHttpException {
+      try {
+        await _api.releaseMessageQueueItem(
+          base: base,
+          bearer: activeBearer,
+          queueItemId: item.queueItemID,
+          token: reservation.token,
+        );
+      } on OpenChamberHttpException {
+        // Lease release is best-effort after a failed download.
+      }
+      lastMutationErrorKey = 'chat.queuedMessage.editFailed';
+      notifyListeners();
+      return null;
+    }
+    try {
+      await _api.removeReservedMessageQueueItem(
+        base: base,
+        bearer: activeBearer,
+        queueItemId: item.queueItemID,
+        requestId: createServerQueueAdmissionIdentity().requestID,
+        expectedRevision: reservation.revision,
+        expectedRowVersion: reservation.rowVersion,
+        token: reservation.token,
+        generation: reservation.generation,
+      );
+    } on OpenChamberHttpException {
+      // Cap `queue-retained`: draft is already materialised; item stays queued.
+    }
+    return (text: item.content, attachments: drafts);
+  }
+
+  Future<bool> reorderQueuedItems({
+    required HomeSessionRow session,
+    required MessageQueueScope scope,
+    required int from,
+    required int to,
+  }) async {
+    final base = activeBase;
+    if (base == null || scope.scopeID.isEmpty) return false;
+    final ids = reorderQueueItemIds(scope.items, from, to);
+    if (ids.join() == scope.items.map((item) => item.queueItemID).join()) return true;
+    try {
+      await _api.reorderMessageQueueScope(
+        base: base,
+        bearer: activeBearer,
+        scopeId: scope.scopeID,
+        requestId: createServerQueueAdmissionIdentity().requestID,
+        expectedRevision: scope.revision,
+        queueItemIds: ids,
+      );
+      return true;
+    } on OpenChamberHttpException catch (error) {
+      if (error.status == 501 || error.code == 'unavailable') return false;
+      lastMutationErrorKey = 'chat.queuedMessage.reorderFailed';
       notifyListeners();
       return false;
     }

@@ -56,6 +56,22 @@ abstract final class OpenChamberPaths {
       '$messageQueueItems/${Uri.encodeComponent(queueItemId)}';
   static String messageQueueItemSend(String queueItemId) =>
       '${messageQueueItem(queueItemId)}/send';
+  static const messageQueueAttachmentUploads = '$messageQueue/attachments/uploads';
+  static String messageQueueAttachmentUpload(String uploadId) =>
+      '$messageQueueAttachmentUploads/${Uri.encodeComponent(uploadId)}';
+  static String messageQueueItemReserve(String queueItemId) =>
+      '${messageQueueItem(queueItemId)}/reserve';
+  static String messageQueueItemRelease(String queueItemId) =>
+      '${messageQueueItem(queueItemId)}/release';
+  static String messageQueueItemReservedRemove(String queueItemId) =>
+      '${messageQueueItem(queueItemId)}/reserved-remove';
+  static String messageQueueItemAttachmentContent(String queueItemId, String attachmentId) =>
+      '${messageQueueItem(queueItemId)}/attachments/${Uri.encodeComponent(attachmentId)}/content';
+  static String messageQueueScopeOrder(String scopeId) =>
+      '${messageQueueScope(scopeId)}/order';
+  static String snippet(String name) => '$snippets/${Uri.encodeComponent(name)}';
+  static String magicPrompt(String id) => '$magicPrompts/${Uri.encodeComponent(id)}';
+  static String gitIdentity(String id) => '$gitIdentities/${Uri.encodeComponent(id)}';
   static const globalEvent = '/api/global/event';
   static const globalEventWs = '/api/global/event/ws';
   static const pushApnsToken = '/api/push/apns-token';

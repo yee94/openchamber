@@ -11,7 +11,7 @@ import '../../theme/oc_glyphs.dart';
 import '../../theme/oc_tokens.dart';
 import 'settings_primitives.dart';
 
-enum SettingsEditorKind { providers, agents, assistants, commands, mcp, plugins, skills }
+enum SettingsEditorKind { providers, agents, assistants, commands, mcp, plugins, skills, gitIdentities, magicPrompts, snippets }
 
 class EntityEditorSettingsPage extends StatefulWidget {
   const EntityEditorSettingsPage({
@@ -51,6 +51,12 @@ class _EntityEditorSettingsPageState extends State<EntityEditorSettingsPage> {
         return store.plugins;
       case SettingsEditorKind.skills:
         return store.skills;
+      case SettingsEditorKind.gitIdentities:
+        return store.gitIdentities;
+      case SettingsEditorKind.magicPrompts:
+        return store.magicPrompts;
+      case SettingsEditorKind.snippets:
+        return store.snippets;
     }
   }
 
@@ -71,6 +77,12 @@ class _EntityEditorSettingsPageState extends State<EntityEditorSettingsPage> {
         return store.loadPlugins();
       case SettingsEditorKind.skills:
         return store.loadSkills();
+      case SettingsEditorKind.gitIdentities:
+        return store.loadGitIdentities();
+      case SettingsEditorKind.magicPrompts:
+        return store.loadMagicPrompts();
+      case SettingsEditorKind.snippets:
+        return store.loadSnippets();
     }
   }
 
@@ -310,6 +322,82 @@ class _EntityEditorSettingsPageState extends State<EntityEditorSettingsPage> {
           }),
           onDelete: item == null ? null : () => _run(() => widget.controller.remoteSettings.deleteSkill(item.id)),
         );
+      case SettingsEditorKind.gitIdentities:
+        await _showFields(
+          titleKey: item == null ? 'settings.editor.create' : 'settings.editor.edit',
+          fields: [
+            _FieldSpec(id: 'name', labelKey: 'settings.editor.name', initial: item?.meta['name'] ?? item?.title),
+            _FieldSpec(id: 'userName', labelKey: 'settings.git.userName', initial: item?.meta['userName']),
+            _FieldSpec(id: 'userEmail', labelKey: 'settings.git.userEmail', initial: item?.meta['userEmail']),
+            _FieldSpec(id: 'authType', labelKey: 'settings.git.authType', initial: item?.meta['authType'] ?? 'ssh'),
+            _FieldSpec(id: 'host', labelKey: 'settings.git.host', initial: item?.meta['host']),
+          ],
+          onSave: (values) => _run(() {
+            if (item == null) {
+              return widget.controller.remoteSettings.createGitIdentity(
+                name: values['name'] ?? '',
+                userName: values['userName'] ?? '',
+                userEmail: values['userEmail'] ?? '',
+                authType: values['authType'] ?? 'ssh',
+                host: values['host'],
+              );
+            }
+            return widget.controller.remoteSettings.updateGitIdentity(
+              id: item.id,
+              name: values['name'] ?? item.title,
+              userName: values['userName'] ?? '',
+              userEmail: values['userEmail'] ?? '',
+              authType: values['authType'] ?? 'ssh',
+              host: values['host'],
+            );
+          }),
+          onDelete: item == null ? null : () => _run(() => widget.controller.remoteSettings.deleteGitIdentity(item.id)),
+        );
+      case SettingsEditorKind.magicPrompts:
+        await _showFields(
+          titleKey: item == null ? 'settings.editor.create' : 'settings.editor.edit',
+          fields: [
+            _FieldSpec(id: 'id', labelKey: 'settings.editor.name', initial: item?.id, readOnly: item != null),
+            _FieldSpec(id: 'text', labelKey: 'settings.editor.prompt', initial: item?.meta['text'] ?? item?.subtitle, maxLines: 6),
+          ],
+          onSave: (values) => _run(() => widget.controller.remoteSettings.saveMagicPrompt(
+                id: item?.id ?? values['id'] ?? '',
+                text: values['text'] ?? '',
+              )),
+          onDelete: item == null ? null : () => _run(() => widget.controller.remoteSettings.resetMagicPrompt(item.id)),
+        );
+      case SettingsEditorKind.snippets:
+        await _showFields(
+          titleKey: item == null ? 'settings.editor.create' : 'settings.editor.edit',
+          fields: [
+            _FieldSpec(id: 'name', labelKey: 'settings.editor.name', initial: item?.id, readOnly: item != null),
+            _FieldSpec(id: 'description', labelKey: 'settings.editor.description', initial: item?.meta['description']),
+            _FieldSpec(id: 'aliases', labelKey: 'settings.snippets.aliases', initial: item?.meta['aliases']),
+            _FieldSpec(id: 'content', labelKey: 'settings.snippets.content', initial: item?.meta['content'], maxLines: 6),
+          ],
+          onSave: (values) => _run(() {
+            final aliases = (values['aliases'] ?? '')
+                .split(',')
+                .map((alias) => alias.trim())
+                .where((alias) => alias.isNotEmpty)
+                .toList();
+            if (item == null) {
+              return widget.controller.remoteSettings.createSnippet(
+                name: values['name'] ?? '',
+                content: values['content'] ?? '',
+                description: values['description'],
+                aliases: aliases,
+              );
+            }
+            return widget.controller.remoteSettings.updateSnippet(
+              name: item.id,
+              content: values['content'] ?? '',
+              description: values['description'],
+              aliases: aliases,
+            );
+          }),
+          onDelete: item == null ? null : () => _run(() => widget.controller.remoteSettings.deleteSnippet(item.id)),
+        );
     }
   }
 
@@ -367,7 +455,8 @@ class _EntityEditorSettingsPageState extends State<EntityEditorSettingsPage> {
                     onTap: () => _openEditor(item: item),
                   ),
                 ),
-              if (widget.kind != SettingsEditorKind.providers)
+              if (widget.kind != SettingsEditorKind.providers &&
+                  widget.kind != SettingsEditorKind.magicPrompts)
                 ListTile(
                   key: const Key('settings-editor-add'),
                   leading: OcGlyph(
@@ -597,6 +686,55 @@ class _OAuthActionsState extends State<_OAuthActions> {
       ],
     );
   }
+}
+
+Future<void> showSettingsFieldsDialog({
+  required BuildContext context,
+  required String titleKey,
+  required List<SettingsFieldSpec> fields,
+  required Future<void> Function(Map<String, String> values) onSave,
+  Future<void> Function()? onDelete,
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (context) {
+      return _EditorDialog(
+        titleKey: titleKey,
+        fields: fields
+            .map(
+              (field) => _FieldSpec(
+                id: field.id,
+                labelKey: field.labelKey,
+                initial: field.initial,
+                obscure: field.obscure,
+                readOnly: field.readOnly,
+                maxLines: field.maxLines,
+              ),
+            )
+            .toList(),
+        onSave: onSave,
+        onDelete: onDelete,
+      );
+    },
+  );
+}
+
+class SettingsFieldSpec {
+  const SettingsFieldSpec({
+    required this.id,
+    required this.labelKey,
+    this.initial,
+    this.obscure = false,
+    this.readOnly = false,
+    this.maxLines = 1,
+  });
+
+  final String id;
+  final String labelKey;
+  final String? initial;
+  final bool obscure;
+  final bool readOnly;
+  final int maxLines;
 }
 
 class _FieldSpec {
