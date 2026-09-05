@@ -56,7 +56,8 @@ class FloatingCapsuleTabBar extends StatelessWidget {
               // stadium into a cream plate over the list.
               boxShadow: OcElevation.dock(context),
             ),
-            child: ClipRRect(
+            child: RepaintBoundary(
+              child: ClipRRect(
               borderRadius: radius,
               child: OcFrosted(
                 fill: tokens.dockPlate,
@@ -88,6 +89,7 @@ class FloatingCapsuleTabBar extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
             ),
           ),
         ),

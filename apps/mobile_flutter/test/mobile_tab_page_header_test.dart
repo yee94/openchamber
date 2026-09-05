@@ -44,6 +44,11 @@ void main() {
       findsNothing,
     );
     expect(find.byType(OcHeaderFade), findsOneWidget);
+    expect(find.byKey(const Key('mobile-tab-page-header-fill')), findsOneWidget);
+    final headerFill = tester.widget<ColoredBox>(find.byKey(const Key('mobile-tab-page-header-fill')));
+    expect(headerFill.color, OcTokens.light.headerFill);
+    expect(headerFill.color, OcTokens.light.pageBackground);
+    expect(headerFill.color.a, closeTo(1.0, 0.001));
     expect(find.byKey(const Key('mobile-tab-page-header-slot')), findsOneWidget);
     expect(find.byKey(const Key('mobile-tab-page-header-leading-gap')), findsOneWidget);
     expect(find.byKey(const Key('mobile-tab-page-header-spacer')), findsOneWidget);
@@ -79,7 +84,7 @@ void main() {
     expect(collapsed.height, expanded.height);
 
     final header = tester.widget<MobileTabPageHeader>(find.byType(MobileTabPageHeader));
-    expect(header.collapse, closeTo(1, 0.02));
+    expect(header.currentCollapse, closeTo(1, 0.02));
     final titleCollapsed = tester.widget<Transform>(find.byKey(const Key('mobile-tab-page-title')));
     expect(titleCollapsed.transform.storage[0], closeTo(0.625, 0.02));
 
@@ -237,6 +242,15 @@ void main() {
     expect(backChip.fill, OcTokens.light.glassFill);
     expect(backChip.sigma, OcOptical.glassBlur);
     expect(backChip.lift, isTrue);
+    expect(find.byKey(const Key('pushed-nav-header-fill')), findsOneWidget);
+    final navFill = tester.widget<ColoredBox>(find.byKey(const Key('pushed-nav-header-fill')));
+    expect(navFill.color, OcTokens.light.headerFill);
+    expect(navFill.color.a, closeTo(1.0, 0.001));
+    final fade = tester.widget<OcHeaderFade>(find.descendant(
+      of: find.byType(PushedNavBar),
+      matching: find.byType(OcHeaderFade),
+    ));
+    expect(fade.opacity, 1);
     final backGlyph = tester.widget<OcGlyph>(find.descendant(
       of: find.byKey(const Key('chat-back')),
       matching: find.byType(OcGlyph),

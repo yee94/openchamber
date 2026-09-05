@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../features/projects/highlighted_text.dart';
@@ -8,11 +9,13 @@ import '../theme/ios_chrome.dart';
 /// Source: `packages/ui/src/mobile/MobileTabPageHeader.tsx` +
 /// `packages/ui/src/styles/mobile.css` `.oc-mobile-collapsing-header*`.
 ///
-/// Layout height is FIXED (`safe-area + 0.75rem + 2.5rem`). Background is
-/// transparent. Scroll only drives compositor props (title scale 1→0.625,
-/// inner translateY, fade opacity, letter-spacing). The 0.625rem spacer and
-/// official `--oc-mobile-page-gap` clearance live in [MobileTabPageScaffold]
-/// as real siblings — not folded into padding, not a per-tab restPeek.
+/// Layout height is FIXED (`safe-area + 0.75rem + 2.5rem`). The title band
+/// paints solid [OcTokens.headerFill] (`--oc-mobile-page-background`) so
+/// sticky titles do not wash through body cards. Scroll only drives
+/// compositor props (title scale 1→0.625, inner translateY, fade opacity
+/// below the band, letter-spacing). The 0.625rem spacer and official
+/// `--oc-mobile-page-gap` clearance live in [MobileTabPageScaffold] as
+/// real siblings — not folded into padding, not a per-tab restPeek.
 class MobileTabPageHeader extends StatelessWidget {
   const MobileTabPageHeader({
     super.key,
@@ -20,14 +23,22 @@ class MobileTabPageHeader extends StatelessWidget {
     this.eyebrow,
     this.trailing,
     this.collapse = 0,
+    this.collapseListenable,
   });
 
   final String title;
   final String? eyebrow;
   final Widget? trailing;
 
-  /// 0 expanded → 1 collapsed. Never changes this widget's layout height.
+  /// 0 expanded → 1 collapsed. Used when [collapseListenable] is null.
   final double collapse;
+
+  /// Scroll-driven collapse. Fade + title listen; [trailing] stays a
+  /// stable child so search/frost chips are not rebuilt every frame.
+  final ValueListenable<double>? collapseListenable;
+
+  /// Latest collapse, whether from a static value or the live notifier.
+  double get currentCollapse => (collapseListenable?.value ?? collapse).clamp(0.0, 1.0);
 
   static const double collapseDistance = OcOptical.titleCollapseDistance;
   static const double actionSize = OcOptical.collapsingActionSize;
@@ -82,9 +93,21 @@ class MobileTabPageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.oc;
     final safeTop = MediaQuery.viewPaddingOf(context).top;
-    final t = collapse.clamp(0.0, 1.0);
     final fadeH = fadeHeight(safeTop);
     final headerH = layoutHeight(safeTop);
+    final inner = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: _CollapsingTitle(title: title, eyebrow: eyebrow, collapse: collapse, collapseListenable: collapseListenable)),
+        if (trailing != null) ...[
+          const SizedBox(width: OcOptical.collapsingInnerGap),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: actionSize),
+            child: trailing,
+          ),
+        ],
+      ],
+    );
 
     return SizedBox(
       key: const Key('mobile-tab-page-header'),
@@ -92,15 +115,24 @@ class MobileTabPageHeader extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Official `.oc-mobile-collapsing-header` is `background:
-          // transparent`. Fade `::after` only follows collapse. An
-          // always-on OcFrosted plate was invented banner chrome.
           Positioned(
             top: 0,
             left: 0,
             right: 0,
             height: fadeH,
-            child: OcHeaderFade(safeTop: safeTop, opacity: t),
+            child: _CollapseFade(safeTop: safeTop, collapse: collapse, collapseListenable: collapseListenable),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: headerH,
+            child: IgnorePointer(
+              child: ColoredBox(
+                key: const Key('mobile-tab-page-header-fill'),
+                color: tokens.headerFill,
+              ),
+            ),
           ),
           Padding(
             padding: EdgeInsets.fromLTRB(
@@ -109,83 +141,144 @@ class MobileTabPageHeader extends StatelessWidget {
               OcChrome.pageGutter + OcOptical.collapsingInlineExtra,
               0,
             ),
-            child: Transform.translate(
-              offset: Offset(0, expandShift * (1 - t)),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: actionSize,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (eyebrow != null)
-                            Opacity(
-                              opacity: 1 - t,
-                              child: Transform.scale(
-                                alignment: Alignment.topLeft,
-                                scaleY: 1 - t,
-                                child: Text(
-                                  eyebrow!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: OcTokens.textMicro,
-                                    fontWeight: FontWeight.w400,
-                                    color: tokens.mutedForeground,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          Transform.scale(
-                            key: const Key('mobile-tab-page-title'),
-                            alignment: Alignment.centerLeft,
-                            scale: 1 - (OcOptical.titleCollapseScaleReduce * t),
-                            child: Text.rich(
-                              TextSpan(
-                                children: [
-                                  for (final run in scriptRuns(title))
-                                    TextSpan(
-                                      text: run.text,
-                                      style: run.cjk && !ocLiveIosType
-                                          ? const TextStyle(fontWeight: FontWeight.w400)
-                                          : null,
-                                    ),
-                                ],
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: OcOptical.largeTitle,
-                                // Official `.oc-mobile-root-page-title` is
-                                // font-semibold. Latin keeps ReviewSans
-                                // Medium. WidgetTester / Android CJK uses
-                                // Regular Micro Hei (32px DemiLight@500
-                                // bricks vs PingFang Semibold). Live iOS
-                                // inherits this w600 so PingFang SC
-                                // Semibold paints. Session/card stay
-                                // DemiLight on the tester path.
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: OcOptical.rootTitleTracking(t),
-                                height: OcOptical.largeTitleHeight,
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+            child: _CollapseShift(collapse: collapse, collapseListenable: collapseListenable, child: inner),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CollapseFade extends StatelessWidget {
+  const _CollapseFade({
+    required this.safeTop,
+    required this.collapse,
+    required this.collapseListenable,
+  });
+
+  final double safeTop;
+  final double collapse;
+  final ValueListenable<double>? collapseListenable;
+
+  @override
+  Widget build(BuildContext context) {
+    final fade = OcHeaderFade(safeTop: safeTop, opacity: collapse.clamp(0.0, 1.0));
+    final listenable = collapseListenable;
+    if (listenable == null) return fade;
+    return ValueListenableBuilder<double>(
+      valueListenable: listenable,
+      builder: (context, t, _) => OcHeaderFade(safeTop: safeTop, opacity: t.clamp(0.0, 1.0)),
+    );
+  }
+}
+
+class _CollapseShift extends StatelessWidget {
+  const _CollapseShift({
+    required this.collapse,
+    required this.collapseListenable,
+    required this.child,
+  });
+
+  final double collapse;
+  final ValueListenable<double>? collapseListenable;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final listenable = collapseListenable;
+    if (listenable == null) {
+      return Transform.translate(
+        offset: Offset(0, MobileTabPageHeader.expandShift * (1 - collapse.clamp(0.0, 1.0))),
+        child: child,
+      );
+    }
+    return ValueListenableBuilder<double>(
+      valueListenable: listenable,
+      child: child,
+      builder: (context, t, child) {
+        return Transform.translate(
+          offset: Offset(0, MobileTabPageHeader.expandShift * (1 - t.clamp(0.0, 1.0))),
+          child: child,
+        );
+      },
+    );
+  }
+}
+
+class _CollapsingTitle extends StatelessWidget {
+  const _CollapsingTitle({
+    required this.title,
+    required this.eyebrow,
+    required this.collapse,
+    required this.collapseListenable,
+  });
+
+  final String title;
+  final String? eyebrow;
+  final double collapse;
+  final ValueListenable<double>? collapseListenable;
+
+  @override
+  Widget build(BuildContext context) {
+    final listenable = collapseListenable;
+    if (listenable == null) return _titleAt(context, collapse);
+    return ValueListenableBuilder<double>(
+      valueListenable: listenable,
+      builder: (context, t, _) => _titleAt(context, t),
+    );
+  }
+
+  Widget _titleAt(BuildContext context, double raw) {
+    final tokens = context.oc;
+    final t = raw.clamp(0.0, 1.0);
+    return SizedBox(
+      height: MobileTabPageHeader.actionSize,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (eyebrow != null)
+            Opacity(
+              opacity: 1 - t,
+              child: Transform.scale(
+                alignment: Alignment.topLeft,
+                scaleY: 1 - t,
+                child: Text(
+                  eyebrow!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: OcTokens.textMicro,
+                    fontWeight: FontWeight.w400,
+                    color: tokens.mutedForeground,
                   ),
-                  if (trailing != null) ...[
-                    const SizedBox(width: OcOptical.collapsingInnerGap),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: actionSize),
-                      child: trailing,
+                ),
+              ),
+            ),
+          Transform.scale(
+            key: const Key('mobile-tab-page-title'),
+            alignment: Alignment.centerLeft,
+            scale: 1 - (OcOptical.titleCollapseScaleReduce * t),
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  for (final run in scriptRuns(title))
+                    TextSpan(
+                      text: run.text,
+                      style: run.cjk && !ocLiveIosType
+                          ? const TextStyle(fontWeight: FontWeight.w400)
+                          : null,
                     ),
-                  ],
                 ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: OcOptical.largeTitle,
+                fontWeight: FontWeight.w600,
+                letterSpacing: OcOptical.rootTitleTracking(t),
+                height: OcOptical.largeTitleHeight,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ),

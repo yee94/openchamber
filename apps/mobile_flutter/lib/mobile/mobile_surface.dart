@@ -72,18 +72,22 @@ class MobileLabeledSurfaceGroup extends StatelessWidget {
 
 /// Official `MobileTabPageScaffold` — one page rhythm for the four root tabs.
 ///
-/// Flutter analogue of sticky `.oc-mobile-collapsing-header`: a [Stack] overlay
-/// so scrolling content passes **under** the translucent header / status area.
-/// The scroll body keeps an in-flow [MobileTabPageHeader.layoutSlot], then
-/// official `gap-5` (20) + expand-shift spacer (10) + `gap-5` (20) as real
-/// siblings — the flattened React fragment + `flex gap-5` 空档. Do not
-/// pull children up through that air — peek is the overlay Stack, not a
+/// Flutter analogue of sticky `.oc-mobile-collapsing-header`: a [Stack]
+/// overlay. The header band is solid [OcTokens.headerFill]; content may
+/// still pass under the fade below that band. The scroll body keeps an
+/// in-flow [MobileTabPageHeader.layoutSlot], then official `gap-5` (20) +
+/// expand-shift spacer (10) + `gap-5` (20) as real siblings. Do not pull
+/// children up through that air — peek is the overlay Stack, not a
 /// per-tab restPeek or negative translate. [OcOptical.pageProjectGap] is
-/// card-stack spacing after this shared clearance. Children stay a built
-/// [Column] (not a lazy sliver)
-/// so settings slugs remain hittable via `ensureVisible`.
-/// Official header is transparent plus fade-on-collapse. WidgetTester
-/// cannot prove live UIKit `UIGlassEffect` on the iOS `UITabBar`.
+/// card-stack spacing after this shared clearance.
+///
+/// Scroll stays a [SingleChildScrollView] + eager [Column] so Settings
+/// `ensureVisible` can reveal off-screen slugs (a sliver adapter treats
+/// the whole column as already visible). Collapse updates a
+/// [ValueNotifier] only — the tab body is not `setState`d on scroll.
+/// Card plates are solid [OcTokens.floatPlate], not live BackdropFilter.
+/// WidgetTester cannot prove live UIKit `UIGlassEffect` on the iOS
+/// `UITabBar`.
 class MobileTabPageScaffold extends StatefulWidget {
   const MobileTabPageScaffold({
     super.key,
@@ -157,7 +161,8 @@ class _MobileTabPageScaffoldState extends State<MobileTabPageScaffold> {
             MobileTabPageHeader.leadingPageGap,
             MobileTabPageHeader.expandShiftSpacer,
             MobileTabPageHeader.titleClearance,
-            ...widget.children,
+            for (final child in widget.children)
+              RepaintBoundary(child: child),
           ],
         ),
       ),
@@ -177,16 +182,13 @@ class _MobileTabPageScaffoldState extends State<MobileTabPageScaffold> {
             top: 0,
             left: 0,
             right: 0,
-            child: ValueListenableBuilder<double>(
-              valueListenable: _collapse,
-              builder: (context, collapse, _) {
-                return MobileTabPageHeader(
-                  title: widget.title,
-                  eyebrow: widget.eyebrow,
-                  trailing: widget.trailing,
-                  collapse: collapse,
-                );
-              },
+            child: RepaintBoundary(
+              child: MobileTabPageHeader(
+                title: widget.title,
+                eyebrow: widget.eyebrow,
+                trailing: widget.trailing,
+                collapseListenable: _collapse,
+              ),
             ),
           ),
         ],

@@ -565,19 +565,16 @@ class GroupedInsetCard extends StatelessWidget {
           decoration: BoxDecoration(
             boxShadow: OcElevation.highlight(context),
           ),
-          // Frost + 0.45 float fill stay *behind* the child. Wrapping
-          // titles in OcFrosted's ColoredBox composites 12px CJK through
-          // the plate (cores floor at ~L 129). Official backdrop-filter
-          // frosts the surface, not the ink. Search / dock OcFrosted
-          // chips are unchanged.
+          // Solid [OcTokens.floatPlate] — official 45% elevated over the
+          // page canvas, without a live BackdropFilter. Per-card frost
+          // re-blurs every scroll frame and was the home-tab jank source.
+          // Dock / search chips keep OcFrosted (fixed chrome, not a list).
           child: Stack(
             children: [
               Positioned.fill(
-                child: OcFrosted(
-                  fill: context.oc.floatSurface,
-                  sigma: OcOptical.floatBlur,
-                  saturate: OcOptical.floatSaturate,
-                  child: const SizedBox.expand(),
+                child: ColoredBox(
+                  key: const Key('mobile-float-plate'),
+                  color: context.oc.floatPlate,
                 ),
               ),
               padding == null ? child : Padding(padding: padding!, child: child),
@@ -723,13 +720,12 @@ class SegmentedPill extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(OcChrome.pageGutter, 0, OcChrome.pageGutter, OcTokens.pageGap),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(trackRadius),
+        color: context.oc.floatPlate,
         boxShadow: OcElevation.highlight(context),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(trackRadius),
-        child: OcFrosted(
-          fill: context.oc.glassChipFill,
-          child: Padding(
+        child: Padding(
             padding: const EdgeInsets.all(pad),
             child: Row(
               children: [
@@ -792,7 +788,6 @@ class SegmentedPill extends StatelessWidget {
                 ],
               ],
             ),
-          ),
         ),
       ),
     );
@@ -822,14 +817,13 @@ class FilterChipBar extends StatelessWidget {
           Expanded(
             child: DecoratedBox(
               decoration: BoxDecoration(
+                color: context.oc.floatPlate,
                 borderRadius: BorderRadius.circular(OcTokens.surfaceRadius),
                 boxShadow: OcElevation.highlight(context),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(OcTokens.surfaceRadius),
-                child: OcFrosted(
-                  fill: context.oc.glassChipFill,
-                  child: Padding(
+                child: Padding(
                     padding: const EdgeInsets.all(4),
                     child: Row(
                       children: [
@@ -879,7 +873,6 @@ class FilterChipBar extends StatelessWidget {
                         ],
                       ],
                     ),
-                  ),
                 ),
               ),
             ),
@@ -894,8 +887,9 @@ class FilterChipBar extends StatelessWidget {
   }
 }
 
-/// Official `.oc-mobile-detail-navigation`: sticky, transparent, 56px band
-/// under the status bar. Content scrolls underneath. Not a frosted banner.
+/// Official `.oc-mobile-detail-navigation`: sticky 56px band under the
+/// status bar. The band paints solid [OcTokens.headerFill]; the official
+/// fade sits below it so transcript/body content does not wash the title.
 class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
   const PushedNavBar({
     super.key,
@@ -942,7 +936,19 @@ class PushedNavBar extends StatelessWidget implements PreferredSizeWidget {
             left: 0,
             right: 0,
             height: fadeH,
-            child: OcHeaderFade(safeTop: view.top, opacity: 0.42),
+            child: OcHeaderFade(safeTop: view.top, opacity: 1),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: bandH,
+            child: IgnorePointer(
+              child: ColoredBox(
+                key: const Key('pushed-nav-header-fill'),
+                color: tokens.headerFill,
+              ),
+            ),
           ),
           Padding(
             padding: EdgeInsets.fromLTRB(inlineLeft, view.top, inlineRight, 0),

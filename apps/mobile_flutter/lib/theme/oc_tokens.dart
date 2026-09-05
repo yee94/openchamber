@@ -124,8 +124,18 @@ class OcTokens extends ThemeExtension<OcTokens> {
   Color get settingsGroupBackground => Color.lerp(surfaceElevated, muted, 0.55)!;
 
   /// Official `--oc-mobile-float-background`: elevated 45% over transparent.
-  /// Pair with [OcFrosted] / `BackdropFilter` — not an opaque Material slab.
+  /// Keep the authored alpha for dock / glass recipes. Scrolling cards use
+  /// [floatPlate] so they do not run a live [BackdropFilter] every frame.
   Color get floatSurface => card.withValues(alpha: 0.45);
+
+  /// Scroll-safe stand-in for floatSurface + backdrop blur over a uniform
+  /// [pageBackground]. Same mix as official 45% elevated over the page
+  /// canvas, without a per-card `saveLayer`.
+  Color get floatPlate => Color.lerp(pageBackground, card, 0.45)!;
+
+  /// Sticky / collapsing header fill. Official page canvas — not glass
+  /// and not a transparent wash over scrolling body content.
+  Color get headerFill => pageBackground;
 
   /// Official `--oc-mobile-float-highlight` (elevated 92%).
   Color get floatHighlight => (isDark ? Colors.white : card).withValues(alpha: isDark ? 0.18 : 0.92);
@@ -209,7 +219,8 @@ class OcTokens extends ThemeExtension<OcTokens> {
         mutedForeground,
       ];
 
-  /// `--oc-mobile-header-fade` = surface-background 85%.
+  /// `--oc-mobile-header-fade` = surface-background 85%. Used for the
+  /// blend *below* the solid [headerFill] band, not as the title plate.
   Color get headerFade => background.withValues(alpha: 0.85);
 
   bool get isDark => brightness == Brightness.dark;

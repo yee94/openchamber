@@ -147,7 +147,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 16));
     expect(projectsScroll.controller!.offset, closeTo(scrolledOffset, 0.5));
     final collapsedHeader = tester.widget<MobileTabPageHeader>(find.byType(MobileTabPageHeader));
-    expect(collapsedHeader.collapse, closeTo(1, 0.02));
+    expect(collapsedHeader.currentCollapse, closeTo(1, 0.02));
     final titleCollapsed = tester.widget<Transform>(find.byKey(const Key('mobile-tab-page-title')));
     expect(titleCollapsed.transform.storage[0], closeTo(OcOptical.titleCollapseScaleEnd, 0.02));
     expect(find.textContaining('openchamber'), findsWidgets);

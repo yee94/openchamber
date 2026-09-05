@@ -622,3 +622,67 @@ Port of official `15cf6643e` Live Activity row→session + HTML preview fullscre
 | Live Activity rows → session | landed (Dart + Swift wiring) | Catalog of every busy/retry session. Each row URI is `openchamber://session/{id}`. Shell opens that chat. ActivityKit / Dynamic Island tap on a real iPhone is still residual |
 | HTML preview | landed (Flutter sheet) | Fullscreen + view source. `GET /api/fs/read`. Sheet flush to the physical bottom. Pull/release at scroll-top stays stable. Scripted WKWebView/Android WebView execution is device residual — WidgetTester shows fetched HTML text |
 | Composer `/` `@` `#` frost | landed | Android / WidgetTester: translucent `OcFrosted` plate. iOS: `UIBlurEffect.systemUltraThinMaterial` (Android may degrade frost) |
+
+## Eighteenth-slice status (2026-09-05) — home jank + header fill + deep audit
+
+Yee device walk: root-tab scroll still stuttered, and 「正文里面的 header 没有常规的背景色」. This slice ships those two product fixes, then re-audits Flutter vs official Capacitor/WebView (`packages/ui` mobile + `packages/mobile`, main 1.19 / LegendList — not 1.18 TanStack).
+
+### Urgent product fixes (this SHA)
+
+| Bug | Cause | Fix | Files |
+|---|---|---|---|
+| Root-tab scroll jank (Projects / lists / shell, not only chat) | Every `MobileFloatingSurface` / scheduled track ran live `BackdropFilter` (`OcFrosted` σ22) on every scroll frame. Collapse also rebuilt search frost chips. | Scrolling cards + 任务/历史记录 + filter tracks use opaque `OcTokens.floatPlate` (45% elevated over `pageBackground`, no `saveLayer`). Collapse is a `ValueNotifier`; title/fade listen, trailing chrome is a stable child. Dock frost stays (fixed chrome) behind `RepaintBoundary`. Body stays `SingleChildScrollView` + eager `Column` so Settings `ensureVisible` still works — a sliver adapter treats the whole column as already visible. | `lib/theme/ios_chrome.dart` `GroupedInsetCard` / `SegmentedPill` / `FilterChipBar`; `lib/mobile/mobile_surface.dart`; `lib/mobile/mobile_tab_page_header.dart`; `lib/features/shell/floating_tab_bar.dart`; `test/home_scroll_perf_test.dart` |
+| Sticky / collapsing / chat headers wash into body | Overlay headers were transparent (`OcHeaderFade` only; chat fade opacity **0.42**). Titles sat on scrolling cards. | Solid `OcTokens.headerFill` (= `pageBackground`) on `MobileTabPageHeader` and `PushedNavBar`. Official fade stays *below* the band (collapse-linked on root tabs; always-on opacity **1** on detail nav). Fill is `IgnorePointer` so Settings taps / `ensureVisible` still hit rows. | `lib/mobile/mobile_tab_page_header.dart`; `lib/theme/ios_chrome.dart` `PushedNavBar`; `lib/theme/oc_tokens.dart` |
+
+Validated here: `flutter analyze --no-fatal-infos` (pre-existing infos only) + `flutter test` **188 passed** on Flutter **3.32.8**. Not 真机过 — Impeller/Skia frames still need a phone Timeline.
+
+### Deep audit vs official Cap/WebView (2026-09-05)
+
+Read on this checkout: `apps/mobile_flutter/**` vs `packages/ui/src/mobile/*`, `packages/ui/src/apps/MobileApp.tsx`, `packages/ui/src/lib/settings/metadata.ts`, `packages/mobile` contracts. Baseline remains main 1.19 LegendList.
+
+#### Landed (code complete; 真机 walk still ❌)
+
+| Surface | Official | Flutter | Notes |
+|---|---|---|---|
+| QR v2 + redeem + full candidates | `connectionPayload.ts`, `mobileQrScan.ts`, `mobileConnections.ts` | `pairing_payload.dart`, `qr_scanner.dart`, `app_controller.dart` | Persist LAN+relay; redeem on winning transport |
+| Relay-only skip 1.5s + `已连接 · 局域网` / `已连接 · 中继` | `mobileConnections.ts` | `connection_candidates.dart`, `app_strings.dart` | Memory/widget only |
+| Hot-switch candidate refresh | `refreshConnectionCandidates` | `refreshActiveConnectionCandidates` | Memory only |
+| 4 dock tabs; chat pushed; dock hidden | `mobileTabs.ts`, `MobileTabsRoot.tsx` | `tab_scaffold.dart`, `secondary_chrome.dart` | |
+| Chat Markdown / reasoning / tools / stick-to-bottom / 64ms stream | `TimelineList.tsx`, `ReasoningPart.tsx` | `reverse_chat_list.dart`, `reasoning_block.dart`, `chat_markdown_body.dart` | LegendList analogue; no TanStack |
+| Composer paperclip; no mic/TTS; standard IME | Cap hides mic; no Flutter FLIP | `composer_bar.dart`, Scaffold IME | Intentional |
+| HEIC / prompt-attachments / picker | Cap media contracts | `media_channel.dart`, `prompt_attachment.dart` | Memory |
+| Settings slugs except Voice | `MOBILE_SETTINGS_PAGE_SLUGS` | `settings_catalog.dart` | Voice omitted (Yee) |
+| Password Keychain/Keystore; OAuth browser paths | SecureStore + authorize/callback | `secure_store.dart`, `external_browser.dart` | Live OAuth 真机-only |
+| APNs/FCM register + visibility | `useNativePushRegistration.ts` | `push_registration.dart` | Token null if Firebase fails |
+| Live Activity rows → `openchamber://session/{id}` | `OpenChamberLiveActivity.swift` | `live_activity_controller.dart` | ActivityKit tap 真机-only |
+| HTML sheet chrome + source + `GET /api/fs/read` | `FilesView.tsx` | `html_preview_sheet.dart` | Preview **mode is still text** (see code-gap) |
+| Share *capture* + widget snapshot + official launcher icon | Cap Share/Widget/AppIcon | iOS/Android targets; `launcher_icon_test.dart` | Icon landed `ec50d2ba9` |
+| NSE / WidgetKit / Control Center targets | Cap four-target project | Same four targets | |
+
+#### Code-gap (user-visible product, not goldens)
+
+| Gap | Official | Flutter today | Next-agent prompt |
+|---|---|---|---|
+| **Share delivery** | `MobileShareBridge.tsx` `listPending` / `deliverOne` / recipient picker | Native inbox + `openchamber://share-inbox` only; **no Dart drain** | Wire Dart `pending`/`ack` + assistant POST like Cap `deliverOne`. Fix `_publishShareCatalog` — it sets `assistantID = instance.id`. |
+| **Push tap → session** | `deepLinkNavigation.ts` `pushNotificationActionPerformed` | Token register only; no `sessionId` handler in AppDelegate/Dart | Route notification `data.sessionId` → `openchamber://session/{id}` (same as Live Activity). |
+| **HTML preview render** | Files iframe/WebView | `_PreviewView` always `Text(content)` (`kDebugMode` included) | Platform WKWebView/Android WebView for preview mode; keep source `SelectableText`. No new pub dep unless Yee asks (`webview_flutter`). |
+| **Chat context ring + quotas** | `MobileContextProgressButton.tsx` `buildMobileContextDisplay` | Stub `OcOptical.contextProgressStubPercent` (35%); metadata sheet branch-only | Live token/limit % + quota groups. |
+| **Session overflow actions** | `MobileRowActionsSheet.tsx` | `session_overflow_sheet.dart` + `_stubSessionAction` | Implement rename/pin/refresh/archive/delete against official session APIs. |
+| **Projects new-project + row/worktree actions** | `MobileProjectsHomeContainer.tsx` | Snackbar `projects.newProject.todo`; no row `···` sheet | Create-project API + home row actions + worktree new-session/delete. |
+| Composer `/` `@` `#` | Native accessory | Pan-scroll stub | Full autocomplete if Yee still wants it. |
+| Appearance Flexoki JSON | WebView ThemeSystem | `OcTokens` Light/Dark only | Honest leftover; theme picker not on Flutter Appearance. |
+
+#### 真机-only (code exists or plist-only)
+
+Relay-only live `wss://`; LAN/relay hot-switch on a phone; iOS Local Network prompt; HEIC/album picker; hosted OAuth browser; ActivityKit / Dynamic Island / widget tap; Impeller 16ms budget after this jank fix; FCM token on `.debug` APK if Firebase init fails.
+
+#### Will not port
+
+Capgo OTA; plan/notes/Todo; Chat dock tab; `iosNativeUi`; Bonjour 「附近」; Pierre diffs / mermaid SVG; Android launcher badge (no official FCM send).
+
+### Remaining gaps (updated)
+
+1. Device-only rows above — still ❌ 真机过.
+2. Share delivery + catalog assistant IDs; push-tap → session; HTML WebView preview; context ring; session overflow; new-project / home row actions.
+3. Android launcher badge — honest host-side gap.
+4. Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` — will not port.
