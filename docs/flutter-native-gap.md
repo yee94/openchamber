@@ -900,7 +900,7 @@ Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hoste
 
 **false.** Draft / swipe / empty-assistant create are landed. Remaining Cap-mobile CODE is assigned-share composer handoff and About diagnostics export.
 
-Validated on Flutter **3.32.8 / Dart 3.8.1**: focused `flutter_draft_swipe_assistants_test.dart` + overflow/home new-session regressions + `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test`. Screenshot PNGs were **not** recaptured. Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native`.
+Validated on Flutter **3.32.8 / Dart 3.8.1**: focused `flutter_draft_swipe_assistants_test.dart` (6 cases) + overflow/home new-session regressions + `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **289 passed**. Screenshot PNGs were **not** recaptured (`07-chat*.png` rewritten by screenshot tests and reverted). Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native`.
 
 
 ## Twenty-fourth-slice status (2026-09-05) — Cap phone overflow + composer no-ops
