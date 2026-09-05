@@ -41,12 +41,13 @@ void main() {
     await controller.bootstrap(skipDelay: true);
     await controller.connect(url: 'http://192.168.1.74:2606', label: 'lan');
     await tester.pumpWidget(OpenChamberApp(controller: controller));
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     final uri = sessionDeepLinkFromPushData({'sessionId': 'sess-catalog'});
     expect(uri, 'openchamber://session/sess-catalog');
     await controller.handleIncomingLink(uri!);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     expect(find.byType(ChatScreen), findsOneWidget);
     expect(find.text('New Session'), findsWidgets);
   });

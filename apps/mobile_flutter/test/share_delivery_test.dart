@@ -111,9 +111,10 @@ void main() {
     await controller.bootstrap(skipDelay: true);
     await controller.connect(url: 'http://192.168.1.74:2606', label: 'lan');
     await tester.pumpWidget(OpenChamberApp(controller: controller));
-    await tester.pumpAndSettle();
+    await tester.pump();
     await controller.handleIncomingLink('openchamber://share-inbox');
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     expect(find.byType(ChatScreen), findsOneWidget);
     expect(inbox.acked, ['op-link']);
   });
@@ -134,12 +135,15 @@ void main() {
     await controller.connect(url: 'http://192.168.1.74:2606', label: 'lan');
     await controller.drainShares();
     await tester.pumpWidget(OpenChamberApp(controller: controller));
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.byKey(const Key('share-recipient-picker')), findsOneWidget);
     expect(find.text('Choose an assistant'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('share-recipient-asst-1')));
-    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(of: find.byKey(const Key('share-recipient-picker')), matching: find.text('Home')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
     expect(inbox.cancelled, ['draft-1']);
     expect(transport.shareCalls.single['operationID'], 'draft-1');

@@ -127,7 +127,9 @@ class _RecipientRow extends StatelessWidget {
         button: true,
         enabled: !busy,
         label: '${entry.name}. ${entry.serverLabel}',
-        child: Padding(
+        child: SizedBox(
+          width: double.infinity,
+          child: Padding(
           key: Key('share-recipient-${entry.assistantId}'),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
           child: Row(
@@ -156,6 +158,7 @@ class _RecipientRow extends StatelessWidget {
               ),
             ],
           ),
+        ),
         ),
       ),
     );

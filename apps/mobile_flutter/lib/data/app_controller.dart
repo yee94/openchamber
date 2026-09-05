@@ -186,10 +186,11 @@ class AppController extends ChangeNotifier {
       await Future<void>.delayed(const Duration(milliseconds: 350));
     }
     String? initial;
+    String? openedPush;
     if (_useNativeLinks) {
       initial = await _deepLinks.takeInitial();
+      openedPush = await _push.takeInitialOpen();
     }
-    final openedPush = await _push.takeInitialOpen();
     if (initial != null && initial.isNotEmpty) {
       await handleIncomingLink(initial);
       if (phase == AppPhase.shell) {

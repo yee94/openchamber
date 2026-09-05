@@ -64,7 +64,7 @@ class NativePush {
   Future<String?> takeInitialOpen() async {
     if (BindingBase.debugBindingType() == null) return null;
     try {
-      final value = await _channel.invokeMethod<dynamic>('takeInitialOpen');
+      final value = await _channel.invokeMethod<dynamic>('takeInitialOpen').timeout(const Duration(milliseconds: 80));
       return sessionDeepLinkFromPushArguments(value);
     } catch (_) {
       return null;
