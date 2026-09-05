@@ -664,7 +664,7 @@ Read on this checkout: `apps/mobile_flutter/**` vs `packages/ui/src/mobile/*`, `
 | Gap | Official | Flutter today | Next-agent prompt |
 |---|---|---|---|
 | **Share delivery** | `MobileShareBridge.tsx` `listPending` / `deliverOne` / recipient picker | **landed** Dart `ShareDelivery` + `ShareInbox` `listPending`/`ack`/`releaseFiles`/`listDrafts`. Catalog uses snapshot `assistant.id` + capability `serverInstanceID`. Recipient picker for untargeted Android drafts. | Device share-extension → inbox → POST is 真机-only. Composer handoff for assigned drafts is not this slice. |
-| **Push tap → session** | `deepLinkNavigation.ts` `pushNotificationActionPerformed` | **landed** `sessionDeepLinkFromPushData` + iOS `remoteNotification` / `didReceive` + Android intent extras / `getInitialMessage` → `openchamber://session/{id}` | Real APNs/FCM tap on a phone is still residual. |
+| **Push tap → session** | `deepLinkNavigation.ts` `pushNotificationActionPerformed` | **landed** `sessionDeepLinkFromPushData` + iOS `remoteNotification` / `didReceive` + Android intent extras → `openchamber://session/{id}` | Real APNs/FCM tap on a phone is still residual. Native FirebaseMessaging 24.x has no `getInitialMessage` (FlutterFire Dart only). |
 | **HTML preview render** | Files iframe/WebView | **landed** preview mode `UiKitView`/`AndroidView` (`openchamber/html_preview_view`). Source stays selectable text. No new pub dep. | Scripted HTML / Impeller WebView compositing is 真机-only. |
 | **Chat context ring + quotas** | `MobileContextProgressButton.tsx` `buildMobileContextDisplay` | Stub `OcOptical.contextProgressStubPercent` (35%); metadata sheet branch-only | Live token/limit % + quota groups. |
 | **Session overflow actions** | `MobileRowActionsSheet.tsx` | `session_overflow_sheet.dart` + `_stubSessionAction` | Implement rename/pin/refresh/archive/delete against official session APIs. |
@@ -683,7 +683,7 @@ Closes the three code-gaps called out after the eighteenth slice. No merge to `m
 | Surface | Status | Notes |
 |---|---|---|
 | Share delivery | landed (Dart + native aliases) | `ShareDelivery.deliverOne` matches official admit → connect → capability/snapshot → POST `/share` → wait → binding check → ack → releaseFiles. Drain concurrency 1; one failure yields. Catalog is `shareCatalogFromSnapshot` (capability `serverInstanceID` + snapshot assistant ids). Untargeted Android shares write a draft; `ShareRecipientPicker` assigns then delivers. iOS plugin exposes official `listPending`/`ack`/`releaseFiles` (aliases for `pending`/`acknowledge`). |
-| Push tap → session | landed | `sessionDeepLinkFromPushData` prefers `url`/`deeplink`, else `data.sessionId` → `openchamber://session/{id}`. iOS launch `remoteNotification` + `userNotificationCenter:didReceive`. Android intent extras + `FirebaseMessaging.getInitialMessage`. |
+| Push tap → session | landed | `sessionDeepLinkFromPushData` prefers `url`/`deeplink`, else `data.sessionId` → `openchamber://session/{id}`. iOS launch `remoteNotification` + `userNotificationCenter:didReceive`. Android notification-tap extras via `capturePushOpen` (no FlutterFire `getInitialMessage`). |
 | HTML preview render | landed (platform view) | `openchamber/html_preview_view`: WKWebView `loadHTMLString`, Android `WebView.loadDataWithBaseURL`. WidgetTester placeholder key `html-preview-platform`. Existing `html-preview-frame` ListView kept for sheet-dismiss. |
 
 Validated: focused Flutter analyze + `flutter test` on 3.32.8 (this agent). Session overflow / new-project stubs left for a later agent.
