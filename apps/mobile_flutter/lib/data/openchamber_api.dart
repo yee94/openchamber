@@ -2305,8 +2305,8 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
           return OpenChamberResponse(status: worktreeOrderStatus, body: {'error': 'order_failed'});
         }
         final directory = request.method == 'PUT'
-            ? request.body?['projectDirectory']?.toString() ?? ''
-            : request.query['projectDirectory'] ?? '';
+            ? (request.body?['projectDirectory']?.toString() ?? '')
+            : (request.query['projectDirectory'] ?? '');
         if (request.method == 'PUT') {
           final raw = request.body?['orderedPaths'];
           final paths = raw is List ? raw.map((item) => item.toString()).toList() : <String>[];

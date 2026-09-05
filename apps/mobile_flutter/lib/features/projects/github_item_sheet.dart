@@ -5,8 +5,6 @@ import 'package:flutter/material.dart';
 import '../../data/app_controller.dart';
 import '../../data/github_worktree.dart';
 import '../../l10n/app_strings.dart';
-import '../../motion/pressable.dart';
-import '../../native/haptics.dart';
 import '../../theme/ios_chrome.dart';
 
 Future<GitHubWorktreeItem?> showGitHubItemSheet({
