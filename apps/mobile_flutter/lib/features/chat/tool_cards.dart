@@ -4,6 +4,7 @@ import '../../data/chat_timeline.dart';
 import '../../data/context_tool_grouping.dart';
 import '../../data/file_preview.dart';
 import '../../data/generated_result.dart';
+import '../../data/question_request.dart';
 import '../../data/skill_tool_grouping.dart';
 import '../../l10n/app_strings.dart';
 import '../../motion/pressable.dart';
@@ -19,6 +20,8 @@ class ChatTranscriptBody extends StatelessWidget {
     super.key,
     required this.message,
     this.onPermission,
+    this.onQuestionReply,
+    this.onQuestionReject,
     this.onCopy,
     this.onShare,
     this.onFork,
@@ -29,6 +32,8 @@ class ChatTranscriptBody extends StatelessWidget {
 
   final ChatMessage message;
   final void Function(String requestId, String reply)? onPermission;
+  final void Function(String requestId, List<List<String>> answers)? onQuestionReply;
+  final ValueChanged<String>? onQuestionReject;
   final VoidCallback? onCopy;
   final VoidCallback? onShare;
   final VoidCallback? onFork;
@@ -122,6 +127,15 @@ class ChatTranscriptBody extends StatelessWidget {
         out.add(Padding(
           padding: const EdgeInsets.only(top: 8),
           child: _PermissionCard(part: part, onPermission: onPermission),
+        ));
+      } else if (part.isPendingQuestion) {
+        out.add(Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: QuestionReplyCard(
+            part: part,
+            onReply: onQuestionReply,
+            onReject: onQuestionReject,
+          ),
         ));
       } else if (_isImagePreviewPart(part)) {
         out.add(Padding(
@@ -714,7 +728,7 @@ bool _isImagePreviewPart(ChatPart part) =>
 
 bool _isActivityPart(ChatPart part) {
   if (_isImagePreviewPart(part)) return false;
-  if (part.kind == ChatPartKind.diff || part.kind == ChatPartKind.permission) return false;
+  if (part.kind == ChatPartKind.diff || part.kind == ChatPartKind.permission || part.isPendingQuestion) return false;
   return part.kind == ChatPartKind.fileOp ||
       part.kind == ChatPartKind.task ||
       part.kind == ChatPartKind.tool ||
@@ -1408,6 +1422,13 @@ class ToolPartCard extends StatelessWidget {
           );
         }
         if (isQuestionTool(part.toolName)) {
+          if (part.isPendingQuestion) {
+            return QuestionReplyCard(
+              part: part,
+              onReply: null,
+              onReject: null,
+            );
+          }
           return _CardShell(
             key: Key('chat-tool-question-${part.id}'),
             title: t(context, 'chat.tools.display.question'),
@@ -1620,6 +1641,163 @@ class _MermaidCard extends StatelessWidget {
         style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
       ),
     );
+  }
+}
+
+class QuestionReplyCard extends StatefulWidget {
+  const QuestionReplyCard({
+    super.key,
+    required this.part,
+    this.onReply,
+    this.onReject,
+  });
+
+  final ChatPart part;
+  final void Function(String requestId, List<List<String>> answers)? onReply;
+  final ValueChanged<String>? onReject;
+
+  @override
+  State<QuestionReplyCard> createState() => _QuestionReplyCardState();
+}
+
+class _QuestionReplyCardState extends State<QuestionReplyCard> {
+  final Map<int, List<String>> _selected = {};
+  final Map<int, bool> _custom = {};
+  final Map<int, TextEditingController> _customText = {};
+
+  @override
+  void dispose() {
+    for (final controller in _customText.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  TextEditingController _controllerFor(int index) {
+    return _customText.putIfAbsent(index, TextEditingController.new);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final questions = questionsFromPartMetadata(widget.part.metadata);
+    final requestId = widget.part.questionId ?? widget.part.id;
+    return DecoratedBox(
+      key: Key('chat-question-$requestId'),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              t(context, 'chat.questionCard.inputNeeded'),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: OcTokens.of(context).mutedForeground),
+            ),
+            for (var index = 0; index < questions.length; index += 1) ...[
+              const SizedBox(height: 10),
+              Text(
+                questions[index].header.isNotEmpty ? questions[index].header : t(context, 'chat.questionCard.questionFallback', {'index': '${index + 1}'}),
+                style: TextStyle(fontWeight: FontWeight.w600, color: context.oc.foreground),
+              ),
+              if (questions[index].question.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(questions[index].question, style: TextStyle(color: context.oc.foreground)),
+                ),
+              if (questions[index].multiple)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(t(context, 'chat.questionCard.selectMultiple'), style: TextStyle(fontSize: 11, color: OcTokens.of(context).mutedForeground)),
+                ),
+              for (final option in questions[index].options)
+                CheckboxListTile(
+                  key: Key('chat-question-$requestId-option-$index-${option.label}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  value: (_selected[index] ?? const []).contains(option.label),
+                  title: Text(option.label),
+                  subtitle: option.description.isEmpty ? null : Text(option.description),
+                  onChanged: (_) => _toggle(index, option.label, questions[index].multiple),
+                ),
+              CheckboxListTile(
+                key: Key('chat-question-$requestId-other-$index'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                value: _custom[index] == true,
+                title: Text(t(context, 'chat.questionCard.other')),
+                onChanged: (_) => setState(() {
+                  _custom[index] = !(_custom[index] == true);
+                  if (_custom[index] == true) _selected[index] = [];
+                }),
+              ),
+              if (_custom[index] == true)
+                TextField(
+                  key: Key('chat-question-$requestId-custom-$index'),
+                  controller: _controllerFor(index),
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    hintText: t(context, 'chat.questionCard.yourAnswer'),
+                  ),
+                ),
+            ],
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _ReplyButton(
+                    id: 'question-submit-$requestId',
+                    label: t(context, 'chat.questionCard.submit'),
+                    onTap: () {
+                      final answers = <List<String>>[];
+                      for (var index = 0; index < questions.length; index += 1) {
+                        if (_custom[index] == true) {
+                          final value = _controllerFor(index).text.trim();
+                          answers.add(value.isEmpty ? const [] : [value]);
+                        } else {
+                          answers.add(_selected[index] ?? const []);
+                        }
+                      }
+                      if (answers.any((item) => item.isEmpty)) return;
+                      widget.onReply?.call(requestId, answers);
+                    },
+                  ),
+                ),
+                Expanded(
+                  child: _ReplyButton(
+                    id: 'question-dismiss-$requestId',
+                    label: t(context, 'chat.questionCard.dismiss'),
+                    destructive: true,
+                    onTap: () => widget.onReject?.call(requestId),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _toggle(int index, String label, bool multiple) {
+    setState(() {
+      _custom[index] = false;
+      final current = [...(_selected[index] ?? const <String>[])];
+      if (multiple) {
+        if (current.contains(label)) {
+          current.remove(label);
+        } else {
+          current.add(label);
+        }
+        _selected[index] = current;
+      } else {
+        _selected[index] = [label];
+      }
+    });
   }
 }
 

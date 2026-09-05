@@ -16,6 +16,8 @@ class ChatTranscriptRow extends StatelessWidget {
     required this.reverseIndex,
     required this.busy,
     this.onPermission,
+    this.onQuestionReply,
+    this.onQuestionReject,
     this.onCopy,
     this.onShare,
     this.onFork,
@@ -28,6 +30,8 @@ class ChatTranscriptRow extends StatelessWidget {
   final int reverseIndex;
   final ValueNotifier<bool> busy;
   final void Function(String requestId, String reply)? onPermission;
+  final void Function(String requestId, List<List<String>> answers)? onQuestionReply;
+  final ValueChanged<String>? onQuestionReject;
   final void Function(ChatMessage message)? onCopy;
   final void Function(ChatMessage message)? onShare;
   final void Function(ChatMessage message)? onFork;
@@ -93,6 +97,8 @@ class ChatTranscriptRow extends StatelessWidget {
                 isTurnLive: isTurnLive,
                 isStreaming: isStreamingAssistant,
                 onPermission: onPermission,
+                onQuestionReply: onQuestionReply,
+                onQuestionReject: onQuestionReject,
                 onCopy: onCopy == null ? null : () => onCopy!(message),
                 onShare: onShare == null ? null : () => onShare!(message),
                 onFork: onFork == null ? null : () => onFork!(message),

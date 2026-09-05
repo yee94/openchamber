@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'chat_timeline.dart';
 import 'context_tool_grouping.dart';
 import 'context_usage.dart';
+import 'question_request.dart';
+import 'skill_tool_grouping.dart';
 
 class PermissionRequestRecord {
   const PermissionRequestRecord({
@@ -20,7 +22,11 @@ class PermissionRequestRecord {
   final Map<String, Object?> metadata;
 }
 
-List<ChatMessage> parseTurnPageMessages(Object? payload, {List<PermissionRequestRecord> permissions = const []}) {
+List<ChatMessage> parseTurnPageMessages(
+  Object? payload, {
+  List<PermissionRequestRecord> permissions = const [],
+  List<QuestionRequest> questions = const [],
+}) {
   if (payload is! Map) return const [];
   final records = payload['records'];
   if (records is! List) return const [];
@@ -91,9 +97,13 @@ List<ChatMessage> parseTurnPageMessages(Object? payload, {List<PermissionRequest
       hasCompactionPart: hasCompaction,
     ));
   }
-  if (permissions.isEmpty || messages.isEmpty) return messages;
-  final already = messages.expand((message) => message.parts).map((part) => part.permissionId).whereType<String>().toSet();
-  final extras = permissions.where((item) => !already.contains(item.id)).map(_permissionPart).toList();
+  if ((permissions.isEmpty && questions.isEmpty) || messages.isEmpty) return messages;
+  final alreadyPermissions = messages.expand((message) => message.parts).map((part) => part.permissionId).whereType<String>().toSet();
+  final alreadyQuestions = messages.expand((message) => message.parts).map((part) => part.questionId).whereType<String>().toSet();
+  final extras = [
+    ...permissions.where((item) => !alreadyPermissions.contains(item.id)).map(_permissionPart),
+    ...questions.where((item) => !alreadyQuestions.contains(item.id)).map(_questionPart),
+  ];
   if (extras.isEmpty) return messages;
   final target = messages.lastIndexWhere((message) => !message.isUser);
   final index = target >= 0 ? target : messages.length - 1;
@@ -226,6 +236,26 @@ List<ChatPart> parseChatParts(Object? parts, {required String messageId}) {
       )));
       continue;
     }
+    if (isQuestionTool(tool)) {
+      final infos = parseQuestionInfos(input['questions'] ?? state['questions']);
+      final requestId = state['id']?.toString() ?? part['requestID']?.toString() ?? '';
+      out.add(ChatPart(
+        id: id,
+        kind: ChatPartKind.tool,
+        title: infos.isNotEmpty && infos.first.header.isNotEmpty
+            ? infos.first.header
+            : (infos.isNotEmpty && infos.first.question.isNotEmpty ? infos.first.question : _toolTitle(lower, input, path)),
+        subtitle: status,
+        status: status,
+        toolName: tool,
+        questionId: requestId.isEmpty ? null : requestId,
+        metadata: {
+          if (infos.isNotEmpty) 'questions': input['questions'] ?? state['questions'],
+        },
+        body: _short(output.isNotEmpty ? output : infos.map((item) => item.question).where((text) => text.isNotEmpty).join('\n')),
+      ));
+      continue;
+    }
     out.add(ChatPart(
       id: id,
       kind: ChatPartKind.tool,
@@ -251,6 +281,37 @@ ChatPart _permissionPart(PermissionRequestRecord request) {
     toolName: request.permission,
     patterns: request.patterns,
     metadata: request.metadata,
+  );
+}
+
+ChatPart _questionPart(QuestionRequest request) {
+  final first = request.questions.isEmpty ? null : request.questions.first;
+  return ChatPart(
+    id: request.id,
+    kind: ChatPartKind.tool,
+    title: (first?.header.isNotEmpty ?? false)
+        ? first!.header
+        : (first?.question.isNotEmpty ?? false)
+            ? first!.question
+            : 'question',
+    subtitle: 'pending',
+    status: 'pending',
+    toolName: 'question',
+    questionId: request.id,
+    metadata: {
+      'sessionID': request.sessionId,
+      'questions': [
+        for (final item in request.questions)
+          {
+            'question': item.question,
+            'header': item.header,
+            'multiple': item.multiple,
+            'options': [
+              for (final option in item.options) {'label': option.label, 'description': option.description},
+            ],
+          },
+      ],
+    },
   );
 }
 

@@ -6,6 +6,7 @@ import 'home_session.dart';
 import 'message_queue.dart';
 import 'openchamber_http.dart';
 import 'prompt_attachment.dart';
+import 'question_request.dart';
 import 'session_index.dart';
 
 /// Official OpenChamber / OpenCode calls used by mobile connect + home + chat.
@@ -259,7 +260,14 @@ class OpenChamberApi {
     } on OpenChamberHttpException {
       // Transcript still renders; missing permission list is not empty success.
     }
-    return parseTurnPageMessages(response.body, permissions: permissions);
+    List<QuestionRequest> questions = const [];
+    try {
+      final questionPayload = await getQuestions(base: base, bearer: bearer, directory: directory);
+      questions = parseQuestionList(questionPayload, sessionId: sessionId);
+    } on OpenChamberHttpException {
+      // Transcript still renders; missing question list is not empty success.
+    }
+    return parseTurnPageMessages(response.body, permissions: permissions, questions: questions);
   }
 
   Future<Object?> getPermissions({required Uri base, String? bearer, String? directory}) {
@@ -290,6 +298,60 @@ class OpenChamberApi {
         path: OpenChamberPaths.permissionReply(requestId),
         body: {
           'reply': reply,
+          if (directory != null && directory.isNotEmpty) 'directory': directory,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> getQuestions({required Uri base, String? bearer, String? directory}) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'GET',
+        path: OpenChamberPaths.questions,
+        query: {
+          if (directory != null && directory.isNotEmpty) 'directory': directory,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> replyToQuestion({
+    required Uri base,
+    String? bearer,
+    required String requestId,
+    required List<List<String>> answers,
+    String? directory,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.questionReply(requestId),
+        query: {
+          if (directory != null && directory.isNotEmpty) 'directory': directory,
+        },
+        body: {'answers': answers},
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> rejectQuestion({
+    required Uri base,
+    String? bearer,
+    required String requestId,
+    String? directory,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.questionReject(requestId),
+        query: {
           if (directory != null && directory.isNotEmpty) 'directory': directory,
         },
       ),
@@ -446,6 +508,10 @@ class OpenChamberApi {
     required String messageId,
     String text = '',
     List<PromptFilePart> files = const [],
+    String? providerId,
+    String? modelId,
+    String? agent,
+    String? variant,
   }) async {
     final path = OpenChamberPaths.sessionPromptAsync(sessionId);
     final parts = <Map<String, Object?>>[
@@ -469,6 +535,16 @@ class OpenChamberApi {
           'directory': directory,
           'messageID': messageId,
           'parts': parts,
+          if (providerId != null &&
+              providerId.isNotEmpty &&
+              modelId != null &&
+              modelId.isNotEmpty)
+            'model': {
+              'providerID': providerId,
+              'modelID': modelId,
+            },
+          if (agent != null && agent.isNotEmpty) 'agent': agent,
+          if (variant != null && variant.isNotEmpty) 'variant': variant,
         },
       ),
     );
@@ -1576,6 +1652,50 @@ class OpenChamberApi {
     );
   }
 
+  Future<Object?> unrevertSession({
+    required Uri base,
+    String? bearer,
+    required String sessionId,
+    String? directory,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.sessionUnrevert(sessionId),
+        query: {
+          if (directory != null && directory.isNotEmpty) 'directory': directory,
+        },
+      ),
+      bearer,
+    );
+  }
+
+  Future<Object?> summarizeSession({
+    required Uri base,
+    String? bearer,
+    required String sessionId,
+    required String providerId,
+    required String modelId,
+    String? directory,
+  }) {
+    return _requireOk(
+      base,
+      OpenChamberRequest(
+        method: 'POST',
+        path: OpenChamberPaths.sessionSummarize(sessionId),
+        query: {
+          if (directory != null && directory.isNotEmpty) 'directory': directory,
+        },
+        body: {
+          'providerID': providerId,
+          'modelID': modelId,
+        },
+      ),
+      bearer,
+    );
+  }
+
   /// Official DirectoryExplorer `POST /api/fs/clone`.
   Future<String> cloneRepository({
     required Uri base,
@@ -2263,6 +2383,8 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   final List<Map<String, Object?>> createdSessions = [];
   final List<Map<String, Object?>> oauthCalls = [];
   final List<Map<String, Object?>> permissionReplies = [];
+  final List<Map<String, Object?>> questionReplies = [];
+  List<Object?> questions = const [];
   final Map<String, Map<String, Object?>> mcpPending = {};
   final Map<String, Map<String, Object?>> pluginFiles = {
     'file-1': {
@@ -2840,6 +2962,10 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   static const Map<String, Object?> defaultTestCommands = {
     'commands': [
       {'name': 'review', 'description': 'Review the current diff', 'scope': 'user', 'isBuiltIn': false},
+      {'name': 'compact', 'description': 'Compact the session', 'scope': 'user', 'isBuiltIn': true},
+      {'name': 'undo', 'description': 'Undo the last turn', 'scope': 'user', 'isBuiltIn': true},
+      {'name': 'redo', 'description': 'Redo a revert', 'scope': 'user', 'isBuiltIn': true},
+      {'name': 'model', 'description': 'Open the model picker', 'scope': 'user', 'isBuiltIn': true},
     ],
   };
 
@@ -3800,6 +3926,21 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
         if (request.path == OpenChamberPaths.permissions) {
           return OpenChamberResponse(status: 200, body: permissions);
         }
+        if (request.path == OpenChamberPaths.questions) {
+          return OpenChamberResponse(status: 200, body: questions);
+        }
+        if (request.path.startsWith('/api/question/') && request.path.endsWith('/reply')) {
+          questionReplies.add({'path': request.path, ...?request.body});
+          final id = request.path.split('/')[3];
+          questions = questions.where((item) => item is! Map || item['id'] != id).toList();
+          return OpenChamberResponse(status: mutationStatus, body: const {'ok': true});
+        }
+        if (request.path.startsWith('/api/question/') && request.path.endsWith('/reject')) {
+          questionReplies.add({'path': request.path, 'reject': true, ...?request.body});
+          final id = request.path.split('/')[3];
+          questions = questions.where((item) => item is! Map || item['id'] != id).toList();
+          return OpenChamberResponse(status: mutationStatus, body: const {'ok': true});
+        }
         if (request.path.startsWith('/api/permission/') && request.path.endsWith('/reply')) {
           permissionReplies.add({'path': request.path, ...?request.body});
           final id = request.path.split('/')[3];
@@ -3911,7 +4052,8 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
             !request.path.contains('/messages') &&
             !request.path.endsWith('/fork') &&
             !request.path.endsWith('/revert') &&
-            !request.path.endsWith('/unrevert')) {
+            !request.path.endsWith('/unrevert') &&
+            !request.path.endsWith('/summarize')) {
           final shareId = _sessionIdFromSharePath(request.path);
           if (shareId != null) {
             if (sessionMutationStatus < 200 || sessionMutationStatus >= 300) {
@@ -4014,6 +4156,12 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
           final taskId = parts.isNotEmpty ? Uri.decodeComponent(parts.last) : '';
           _removeMemoryScheduledTask(projectId, taskId);
           return OpenChamberResponse(status: mutationStatus, body: {'ok': true, 'tasks': const <Object?>[]});
+        }
+        if (request.path.startsWith('/api/session/') && request.path.endsWith('/summarize')) {
+          return OpenChamberResponse(status: sessionMutationStatus, body: true);
+        }
+        if (request.path.startsWith('/api/session/') && request.path.endsWith('/unrevert')) {
+          return OpenChamberResponse(status: sessionMutationStatus, body: {'ok': true});
         }
         if (request.path.startsWith('/api/session/') && request.path.endsWith('/revert')) {
           if (sessionMutationStatus < 200 || sessionMutationStatus >= 300) {

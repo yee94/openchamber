@@ -22,6 +22,7 @@ import 'chat_timeline.dart';
 import 'connection_candidates.dart';
 import 'context_usage.dart';
 import 'composer_autocomplete.dart';
+import 'composer_session_pick.dart';
 import 'github_worktree.dart';
 import 'home_session.dart';
 import 'message_queue.dart';
@@ -142,6 +143,8 @@ class AppController extends ChangeNotifier {
   Map<String, List<String>> worktreeOrderByDirectory = {};
   Map<String, int> worktreeOrderRevisionByDirectory = {};
   Map<String, num> contextLimits = const {};
+  List<ComposerModelOption> composerModels = const [];
+  final Map<String, ComposerSessionPick> _sessionPicks = {};
   SettingsResource<AssistantSnapshotView> assistantSnapshot = const SettingsResource();
   SettingsResource<List<ScheduledTaskRecord>> scheduledTasks = const SettingsResource();
   SettingsResource<List<ScheduledRunRecord>> scheduledRuns = const SettingsResource();
@@ -378,6 +381,36 @@ class AppController extends ChangeNotifier {
       bearer: activeBearer,
       requestId: requestId,
       reply: reply,
+      directory: session.directory,
+    );
+  }
+
+  Future<void> replyToQuestion({
+    required HomeSessionRow session,
+    required String requestId,
+    required List<List<String>> answers,
+  }) async {
+    final base = activeBase;
+    if (base == null) throw const OpenChamberHttpException(0, OpenChamberPaths.questions, code: 'no_server');
+    await _api.replyToQuestion(
+      base: base,
+      bearer: activeBearer,
+      requestId: requestId,
+      answers: answers,
+      directory: session.directory,
+    );
+  }
+
+  Future<void> rejectQuestion({
+    required HomeSessionRow session,
+    required String requestId,
+  }) async {
+    final base = activeBase;
+    if (base == null) throw const OpenChamberHttpException(0, OpenChamberPaths.questions, code: 'no_server');
+    await _api.rejectQuestion(
+      base: base,
+      bearer: activeBearer,
+      requestId: requestId,
       directory: session.directory,
     );
   }
@@ -686,11 +719,21 @@ class AppController extends ChangeNotifier {
     return _api.loadTranscript(base: base, bearer: bearer ?? '', sessionId: session.id, directory: directory);
   }
 
+  ComposerSessionPick sessionPick(String sessionId) {
+    return _sessionPicks[sessionId] ?? ComposerSessionPick.fromSettings(remoteSettings.blob.value);
+  }
+
+  void setSessionPick(String sessionId, ComposerSessionPick pick) {
+    _sessionPicks[sessionId] = pick;
+    notifyListeners();
+  }
+
   Future<void> sendPrompt({
     required HomeSessionRow session,
     required String messageId,
     String text = '',
     List<AttachmentDraft> attachments = const [],
+    ComposerSessionPick? pick,
   }) async {
     final base = activeBase;
     final bearer = activeBearer;
@@ -710,6 +753,7 @@ class AppController extends ChangeNotifier {
       );
       files.add(PromptFilePart(mime: uploaded.mime, filename: draft.name, url: uploaded.url));
     }
+    final resolved = pick ?? sessionPick(session.id);
     await _api.promptAsync(
       base: base,
       bearer: bearer ?? '',
@@ -718,6 +762,10 @@ class AppController extends ChangeNotifier {
       messageId: messageId,
       text: text,
       files: files,
+      providerId: resolved.providerId,
+      modelId: resolved.modelId,
+      agent: resolved.agent,
+      variant: resolved.variant,
     );
     liveActivity.selectSession(session.id);
     liveActivity.markWorkStarted();
@@ -1820,6 +1868,59 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<bool> unrevertSession({required HomeSessionRow session}) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'projects.newChat.needsServer';
+      notifyListeners();
+      return false;
+    }
+    try {
+      await _api.unrevertSession(
+        base: base,
+        bearer: activeBearer,
+        sessionId: session.id,
+        directory: session.directory,
+      );
+      await refreshSessions();
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'chat.messageBody.actions.revertFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> summarizeSession({
+    required HomeSessionRow session,
+    required String providerId,
+    required String modelId,
+  }) async {
+    lastMutationErrorKey = null;
+    final base = activeBase;
+    if (base == null) {
+      lastMutationErrorKey = 'projects.newChat.needsServer';
+      notifyListeners();
+      return false;
+    }
+    try {
+      await _api.summarizeSession(
+        base: base,
+        bearer: activeBearer,
+        sessionId: session.id,
+        providerId: providerId,
+        modelId: modelId,
+        directory: session.directory,
+      );
+      return true;
+    } on OpenChamberHttpException {
+      lastMutationErrorKey = 'chat.chatInput.toast.compactFailed';
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<bool> deleteAssistantRecord(AssistantRecord assistant) async {
     lastMutationErrorKey = null;
     try {
@@ -2064,6 +2165,7 @@ class AppController extends ChangeNotifier {
     try {
       final catalog = await _api.getProviderCatalog(base: base, bearer: activeBearer);
       contextLimits = parseProviderContextLimits(catalog);
+      composerModels = parseComposerModelOptions(catalog);
     } on OpenChamberHttpException {
       // Keep the previous map; unknown limits hide the percentage instead of inventing 0 as authoritative empty.
     }

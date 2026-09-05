@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../data/local_chat_commands.dart';
 import '../../data/prompt_attachment.dart';
 import '../../l10n/app_strings.dart';
 import '../../native/platform_channels.dart';
@@ -81,7 +82,9 @@ class _IosComposerHostState extends State<IosComposerHost> {
         case 'autocompleteSelect':
           final label = call.arguments is String ? call.arguments as String : '';
           if (label.isNotEmpty) {
-            widget.onText(applyComposerSuggestion(widget.text, label));
+            final next = applyComposerSuggestion(widget.text, label);
+            widget.onText(next);
+            if (shouldSubmitCommandOnSelection(label)) widget.onSend(next);
           }
         case 'pickedFiles':
           final drafts = <AttachmentDraft>[];

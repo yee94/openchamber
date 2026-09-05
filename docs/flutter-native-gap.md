@@ -789,6 +789,33 @@ Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hoste
 
 Validated on Flutter **3.32.8 / Dart 3.8.1**: `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **241 passed**, including `flutter_remaining_gaps_test.dart`, `composer_occupancy_test.dart`, `flutter_deep_gap_test.dart`, and `slice7_oauth_tools_scheduled_test.dart`. Screenshot PNGs were **not** recaptured. Not 真机过.
 
+## Twenty-seventh-slice status (2026-09-05) — composer pick, questions, slash intercepts
+
+Stacked on `1c2514999` (`work/flutter-native` after the twenty-sixth queue/settings slice). Do **not** merge `main`. No 1.18 TanStack. No Flutter UI golden recapture. OpenChamber v2 `.debug` applicationId unchanged. Do **not** invent Flexoki, Finder, Capgo, plan/notes/Todo, Chat dock, `iosNativeUi`, Bonjour, Pierre, mermaid SVG, or Android launcher badge.
+
+### Landed this slice (code)
+
+| Surface | Official Cap mobile | Flutter | Notes |
+|---|---|---|---|
+| Composer model/agent pick | `MobileModelPickerPanel` + `prompt_async` `{model,agent,variant}` | Session-scoped chips + sheets | Catalogs: `GET /api/config/catalog/providers`, `GET /api/agent`. Last pick stays in session memory. Settings `defaultModel` / `defaultAgent` / `defaultVariant` seed the first send. |
+| Question reply / reject | `question.reply` / `question.reject` | Interactive card from `GET /api/question` | `POST /api/question/:id/reply` `{answers:string[][]}`; `POST /api/question/:id/reject`. Failed list is not empty success. |
+| Immediate slash | Cap `IMMEDIATE_LOCAL_CHAT_COMMANDS` + `/model` | Intercept on send / autocomplete tap | `/compact` → `POST /api/session/:id/summarize` `{providerID,modelID}`. `/undo` → existing revert. `/redo` → `POST /api/session/:id/unrevert`. `/model` opens the picker. `/new` `/fork` use existing session APIs. Tokens are not `prompt_async` text. |
+
+### Still code / will-not-port
+
+| Gap | Why leftover |
+|---|---|
+| Files search / copy / image preview extras | Cap `MobileFilesSurface` still richer; this slice stayed on composer/question/slash. |
+| Changes generate-message / revert / sync | Cap `MobileChangesSurface` extras; not this slice. |
+| Appearance Flexoki picker | **Do not invent.** Official **mobile** Appearance is language + Light/Dark/System. |
+| Finder | **Do not invent.** Cap `handleOpenInFinder` is desktop-only. |
+| Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` / Bonjour / Pierre / mermaid SVG / Android launcher badge | Will not port. |
+
+### 真机-only
+
+Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hosted OAuth; ActivityKit / Dynamic Island / widget tap; Impeller 16ms; FCM on `.debug` if Firebase init fails; share-extension → inbox POST. Code/plist may exist — do not fake 真机过.
+
+
 ## Twenty-fourth-slice status (2026-09-05) — Cap phone overflow + composer no-ops
 
 Stacked on `93d8aed4e` (`work/flutter-native` after the twenty-third slice). Draft PR **#5** track. Do **not** merge `main`. No 1.18 TanStack. No Flutter UI golden recapture. OpenChamber v2 `.debug` applicationId unchanged. Do **not** invent Flexoki / Finder / Capgo / Bonjour / `iosNativeUi` / Chat dock.

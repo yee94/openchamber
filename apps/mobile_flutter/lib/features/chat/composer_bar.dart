@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/local_chat_commands.dart';
 import '../../data/prompt_attachment.dart';
 import '../../l10n/app_strings.dart';
 import '../../motion/pressable.dart';
@@ -126,6 +127,7 @@ class ComposerBar extends StatelessWidget {
                             onTap: () {
                               controller.text = applyComposerSuggestion(controller.text, item.label);
                               controller.selection = TextSelection.collapsed(offset: controller.text.length);
+                              if (shouldSubmitCommandOnSelection(item.label)) onSend();
                             },
                           ),
                       ],

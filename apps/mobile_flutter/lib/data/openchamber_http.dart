@@ -150,6 +150,12 @@ abstract final class OpenChamberPaths {
   static String sessionFork(String sessionId) => '${session(sessionId)}/fork';
   static String sessionRevert(String sessionId) => '${session(sessionId)}/revert';
   static String sessionUnrevert(String sessionId) => '${session(sessionId)}/unrevert';
+  static String sessionSummarize(String sessionId) => '${session(sessionId)}/summarize';
+  static const questions = '/api/question';
+  static String questionReply(String requestId) =>
+      '$questions/${Uri.encodeComponent(requestId)}/reply';
+  static String questionReject(String requestId) =>
+      '$questions/${Uri.encodeComponent(requestId)}/reject';
   static String configSkill(String name) =>
       '/api/config/skills/${Uri.encodeComponent(name)}';
   static String configCommand(String name) =>

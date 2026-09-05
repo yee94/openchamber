@@ -60,6 +60,7 @@ class ChatPart {
     this.removed = const [],
     this.diffLines = const [],
     this.permissionId,
+    this.questionId,
     this.tokensPerSecond,
     this.patterns = const [],
     this.metadata = const {},
@@ -77,11 +78,14 @@ class ChatPart {
   final List<String> removed;
   final List<DiffLine> diffLines;
   final String? permissionId;
+  final String? questionId;
   final String? tokensPerSecond;
   final List<String> patterns;
   final Map<String, Object?> metadata;
 
   bool get isPendingPermission => kind == ChatPartKind.permission && permissionId != null;
+
+  bool get isPendingQuestion => questionId != null && questionId!.isNotEmpty;
 
   bool sameContent(ChatPart other) {
     return id == other.id &&
@@ -93,6 +97,7 @@ class ChatPart {
         toolName == other.toolName &&
         path == other.path &&
         permissionId == other.permissionId &&
+        questionId == other.questionId &&
         tokensPerSecond == other.tokensPerSecond &&
         added.length == other.added.length &&
         removed.length == other.removed.length &&

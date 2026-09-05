@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 
 import '../../data/app_controller.dart';
 import '../../data/chat_timeline.dart';
+import '../../data/composer_session_pick.dart';
 import '../../data/context_usage.dart';
 import '../../data/home_session.dart';
+import '../../data/local_chat_commands.dart';
 import '../../data/message_id.dart';
 import '../../data/message_queue.dart';
 import '../../data/openchamber_http.dart';
@@ -29,6 +31,7 @@ import '../shell/secondary_chrome.dart';
 import 'chat_transcript_row.dart';
 import 'composer_bar.dart';
 import 'composer_occupancy.dart';
+import 'composer_session_chips.dart';
 import 'ios_composer_host.dart';
 import 'queued_message_chips.dart';
 import 'reverse_chat_list.dart';
@@ -167,6 +170,8 @@ class _ChatScreenState extends State<ChatScreen> {
       _syncBusyFromController();
       unawaited(_refreshQueue());
       unawaited(_loadComposerCatalogs());
+      unawaited(controller.remoteSettings.loadAgents());
+      if (mounted) setState(() {});
     } on OpenChamberHttpException {
       if (!mounted) return;
       _errorKey.value = 'chat.error.loadFailed';
@@ -265,10 +270,19 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  ComposerSessionPick get _pick {
+    final controller = widget.appController;
+    if (controller == null) return ComposerSessionPick.fromSettings(null);
+    return controller.sessionPick(_session.id);
+  }
+
   Future<void> _send([String? raw]) async {
     final body = (raw ?? _composer.text).trim();
     if (body.isEmpty && _attachments.isEmpty) return;
     final controller = widget.appController;
+    if (controller != null && _attachments.isEmpty && await _handleSlashCommand(body)) {
+      return;
+    }
     final pending = List<AttachmentDraft>.from(_attachments);
     if (controller != null &&
         controller.followUpBehavior == 'queue' &&
@@ -339,6 +353,7 @@ class _ChatScreenState extends State<ChatScreen> {
         messageId: messageId,
         text: body,
         attachments: pending,
+        pick: _pick,
       );
       if (controller.liveEventsConnected) {
         _poll?.cancel();
@@ -381,6 +396,100 @@ class _ChatScreenState extends State<ChatScreen> {
         timer.cancel();
       }
     });
+  }
+
+  Future<bool> _handleSlashCommand(String body) async {
+    final controller = widget.appController;
+    if (controller == null) return false;
+    if (isModelSlashCommand(body)) {
+      _composer.clear();
+      if (!mounted) return true;
+      final selected = await showComposerModelPicker(
+        context: context,
+        models: controller.composerModels,
+        selectedId: _pick.modelKey,
+      );
+      if (selected != null) {
+        controller.setSessionPick(_session.id, _pick.copyWith(providerId: selected.providerId, modelId: selected.modelId));
+      }
+      return true;
+    }
+    if (!consumesImmediateCommandText(body)) return false;
+    final command = getLocalChatCommand(body);
+    _composer.clear();
+    _errorKey.value = null;
+    switch (command) {
+      case 'compact':
+        final ok = await controller.summarizeSession(
+          session: _session,
+          providerId: _pick.providerId,
+          modelId: _pick.modelId,
+        );
+        if (!ok && mounted) _errorKey.value = controller.lastMutationErrorKey ?? 'chat.chatInput.toast.compactFailed';
+        return true;
+      case 'undo':
+        ChatMessage? target;
+        for (final message in _timeline.oldestFirst.reversed) {
+          if (message.isUser) {
+            target = message;
+            break;
+          }
+        }
+        if (target == null) return true;
+        final ok = await controller.revertSession(session: _session, messageId: target.id);
+        if (!ok && mounted) _errorKey.value = controller.lastMutationErrorKey ?? 'chat.messageBody.actions.revertFailed';
+        if (ok) await _reloadFromLive();
+        return true;
+      case 'redo':
+        final restored = await controller.unrevertSession(session: _session);
+        if (!restored && mounted) _errorKey.value = controller.lastMutationErrorKey;
+        if (restored) await _reloadFromLive();
+        return true;
+      case 'fork':
+        final forked = await controller.forkSession(session: _session);
+        if (forked != null && mounted) {
+          await Navigator.of(context).pushReplacement(
+            platformRoute<void>(builder: (_) => ChatScreen(session: forked, appController: controller)),
+          );
+        } else if (mounted) {
+          _errorKey.value = controller.lastMutationErrorKey ?? 'chat.messageBody.actions.forkFailed';
+        }
+        return true;
+      case 'new':
+        final created = await controller.createSession(directory: _session.directory);
+        if (created != null && mounted) {
+          await Navigator.of(context).pushReplacement(
+            platformRoute<void>(builder: (_) => ChatScreen(session: created, appController: controller)),
+          );
+        } else if (mounted) {
+          _errorKey.value = controller.createSessionErrorKey ?? 'projects.newChat.needsServer';
+        }
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  Future<void> _replyQuestion(String requestId, List<List<String>> answers) async {
+    final controller = widget.appController;
+    if (controller == null) return;
+    try {
+      await controller.replyToQuestion(session: _session, requestId: requestId, answers: answers);
+      await _reloadFromLive();
+    } on OpenChamberHttpException {
+      if (mounted) _errorKey.value = 'chat.questionCard.submitFailed';
+    }
+  }
+
+  Future<void> _rejectQuestion(String requestId) async {
+    final controller = widget.appController;
+    if (controller == null) return;
+    try {
+      await controller.rejectQuestion(session: _session, requestId: requestId);
+      await _reloadFromLive();
+    } on OpenChamberHttpException {
+      if (mounted) _errorKey.value = 'chat.questionCard.dismissFailed';
+    }
   }
 
   Future<void> _replyPermission(String requestId, String reply) async {
@@ -758,6 +867,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       paddingBottom: padding.bottom,
                       showScrollToBottom: length >= 2,
                       queuedChipHeight: (_queue?.items.isNotEmpty ?? false) ? queuedMessageChipsOccupancy : 0,
+                      sessionChipHeight: widget.appController == null ? 0 : composerSessionChipHeight,
                     );
                     return EdgeInsets.fromLTRB(12, navH, 12, composerReserve + 12);
                   },
@@ -768,6 +878,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       reverseIndex: reverseIndex,
                       busy: _busy,
                       onPermission: widget.appController == null ? null : _replyPermission,
+                      onQuestionReply: widget.appController == null ? null : _replyQuestion,
+                      onQuestionReject: widget.appController == null ? null : _rejectQuestion,
                       onCopy: _copyMessage,
                       onShare: _copyMessage,
                       onFork: widget.appController == null ? null : _forkMessage,
@@ -837,6 +949,18 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (widget.appController != null)
+                      ListenableBuilder(
+                        listenable: widget.appController!,
+                        builder: (context, _) {
+                          return ComposerSessionChips(
+                            pick: widget.appController!.sessionPick(_session.id),
+                            models: widget.appController!.composerModels,
+                            agents: widget.appController!.remoteSettings.agents.value ?? const [],
+                            onChanged: (next) => widget.appController!.setSessionPick(_session.id, next),
+                          );
+                        },
+                      ),
                     if (_queue != null && _queue!.items.isNotEmpty)
                       QueuedMessageChips(
                         items: _queue!.items,
