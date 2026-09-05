@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.19.7-beta.5] - 2026-09-05
+
+### 会话
+
+- 修 Markstream 正文最后一段残留段距，避免「运行中」过程折叠上方多出一块空白。列表仍是 TanStack。关闭 Markstream：`localStorage.setItem('oc:markstream-react','0')` 后刷新。
+
 ## [1.19.7-beta.4] - 2026-09-05
 
 ### 会话
