@@ -8,6 +8,7 @@ import 'openchamber_http.dart';
 const transcriptDiagnosticsPreferenceKey = 'openchamber.client-diagnostics.enabled';
 const transcriptDiagnosticsLimit = 500;
 const transcriptDiagnosticsTailIds = 4;
+const transcriptDiagnosticsUserTextLimit = 400;
 const _sensitiveError = r'bearer|token|authorization|password|secret|cookie';
 
 String diagnosticsExportFileName([DateTime? now]) {
@@ -71,6 +72,112 @@ int countIdentityMissingMessages(List<ChatMessage> messages) {
   return missing;
 }
 
+String? extractDiagnosticsUserText(ChatMessage message) {
+  if (!message.isUser) return null;
+  final joined = message.body.trim();
+  if (joined.isEmpty) return null;
+  if (RegExp(_sensitiveError, caseSensitive: false).hasMatch(joined)) return 'redacted-text';
+  if (joined.length <= transcriptDiagnosticsUserTextLimit) return joined;
+  return '${joined.substring(0, transcriptDiagnosticsUserTextLimit)}…';
+}
+
+Map<String, Object?> captureTranscriptCanonicalSnapshot(
+  List<ChatMessage> messages, {
+  Set<String> optimisticIds = const {},
+}) {
+  return {
+    'messageIDs': [for (final message in messages) message.id],
+    'messages': [
+      for (final message in messages)
+        {
+          'id': message.id,
+          'partCount': message.parts.length,
+          'slimCount': 0,
+          'fullCount': message.parts.length,
+          'optimistic': optimisticIds.contains(message.id),
+          'completed': message.completedClock != null && message.completedClock!.isNotEmpty,
+          'role': message.isUser ? 'user' : 'assistant',
+          if (extractDiagnosticsUserText(message) != null) 'text': extractDiagnosticsUserText(message),
+          if (!message.isUser &&
+              ((message.agentRole?.trim().isEmpty ?? true) || (message.modelName?.trim().isEmpty ?? true)))
+            'identityMissing': true,
+        },
+    ],
+  };
+}
+
+Map<String, Object?> diffTranscriptCanonicalSnapshots(
+  Map<String, Object?> before,
+  Map<String, Object?> after,
+) {
+  final beforeMessages = [
+    for (final item in (before['messages'] as List? ?? const []))
+      if (item is Map) item.map((key, value) => MapEntry(key.toString(), value)),
+  ];
+  final afterMessages = [
+    for (final item in (after['messages'] as List? ?? const []))
+      if (item is Map) item.map((key, value) => MapEntry(key.toString(), value)),
+  ];
+  final beforeById = {for (final message in beforeMessages) message['id']?.toString() ?? '': message};
+  final afterById = {for (final message in afterMessages) message['id']?.toString() ?? '': message};
+  final beforeIds = [for (final id in (before['messageIDs'] as List? ?? const [])) id.toString()];
+  final afterIds = [for (final id in (after['messageIDs'] as List? ?? const [])) id.toString()];
+  final beforeSet = beforeIds.toSet();
+  final afterSet = afterIds.toSet();
+  final partsChanged = <Map<String, Object?>>[];
+  final downgraded = <String>[];
+  final optimisticLost = <String>[];
+  final identityLost = <String>[];
+  for (final id in beforeIds) {
+    final previous = beforeById[id];
+    if (previous == null) continue;
+    final next = afterById[id];
+    if (next == null) {
+      if (previous['optimistic'] == true) optimisticLost.add(id);
+      continue;
+    }
+    if (previous['partCount'] != next['partCount'] ||
+        previous['slimCount'] != next['slimCount'] ||
+        previous['fullCount'] != next['fullCount'] ||
+        previous['optimistic'] != next['optimistic']) {
+      partsChanged.add({
+        'id': id,
+        'before': {
+          'partCount': previous['partCount'],
+          'slimCount': previous['slimCount'],
+          'fullCount': previous['fullCount'],
+          'optimistic': previous['optimistic'],
+        },
+        'after': {
+          'partCount': next['partCount'],
+          'slimCount': next['slimCount'],
+          'fullCount': next['fullCount'],
+          'optimistic': next['optimistic'],
+        },
+      });
+    }
+    if ((previous['fullCount'] as num? ?? 0) > 0 &&
+        (next['fullCount'] as num? ?? 0) == 0 &&
+        (next['slimCount'] as num? ?? 0) > 0) {
+      downgraded.add(id);
+    }
+    if (previous['optimistic'] == true && next['optimistic'] != true && next['completed'] != true) {
+      optimisticLost.add(id);
+    }
+    if (previous['identityMissing'] != true && next['identityMissing'] == true) {
+      identityLost.add(id);
+    }
+  }
+  return {
+    'addedMessageIDs': [for (final id in afterIds) if (!beforeSet.contains(id)) id],
+    'removedMessageIDs': [for (final id in beforeIds) if (!afterSet.contains(id)) id],
+    'partsChanged': partsChanged,
+    'downgraded': downgraded,
+    'optimisticLost': optimisticLost,
+    'identityLost': identityLost,
+  };
+}
+
 int countFullParts(List<ChatMessage> messages) {
   var count = 0;
   for (final message in messages) {
@@ -97,6 +204,10 @@ class ClientDiagnosticsEvent {
     this.identityMissingCount,
     this.purpose,
     this.error,
+    this.trigger,
+    this.before,
+    this.after,
+    this.diff,
   });
 
   final int at;
@@ -115,6 +226,10 @@ class ClientDiagnosticsEvent {
   final int? identityMissingCount;
   final String? purpose;
   final String? error;
+  final String? trigger;
+  final Map<String, Object?>? before;
+  final Map<String, Object?>? after;
+  final Map<String, Object?>? diff;
 
   Map<String, Object?> toJson() {
     return {
@@ -134,6 +249,10 @@ class ClientDiagnosticsEvent {
       if (identityMissingCount != null) 'identityMissingCount': identityMissingCount,
       if (purpose != null) 'purpose': purpose,
       if (error != null) 'error': error,
+      if (trigger != null) 'trigger': trigger,
+      if (before != null) 'before': before,
+      if (after != null) 'after': after,
+      if (diff != null) 'diff': diff,
     };
   }
 }
@@ -266,4 +385,36 @@ void recordChatTranscriptDiagnostics({
       messages: messages,
     ),
   );
+}
+
+void recordTranscriptDiff({
+  required String trigger,
+  required String sessionID,
+  required List<ChatMessage> before,
+  required List<ChatMessage> after,
+  String? directory,
+  String? transport,
+  String? purpose,
+  Set<String> optimisticAfterIds = const {},
+  int? now,
+}) {
+  try {
+    final beforeSnap = captureTranscriptCanonicalSnapshot(before);
+    final afterSnap = captureTranscriptCanonicalSnapshot(after, optimisticIds: optimisticAfterIds);
+    clientDiagnosticsRecorder.record(
+      ClientDiagnosticsEvent(
+        at: now ?? DateTime.now().millisecondsSinceEpoch,
+        feat: 'transcript',
+        kind: 'transcript-diff',
+        sessionID: sessionID,
+        directory: directory,
+        transport: transport,
+        purpose: purpose,
+        trigger: trigger,
+        before: beforeSnap,
+        after: afterSnap,
+        diff: diffTranscriptCanonicalSnapshots(beforeSnap, afterSnap),
+      ),
+    );
+  } catch (_) {}
 }

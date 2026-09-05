@@ -969,6 +969,37 @@ Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hoste
 
 Validated on Flutter **3.32.8 / Dart 3.8.1**: `flutter analyze --no-fatal-infos` (pre-existing `theme_tokens_test` infos only) + `flutter test` **301 passed**, including `flutter_diagnostics_recorder_test.dart` and `flutter_share_about_test.dart`. Screenshot PNGs were **not** recaptured (`07-chat*.png` rewritten by the screenshot test and reverted). Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native`.
 
+## Thirty-second-slice status (2026-09-05) — official transcript-diff on send / edit / revert
+
+Stacked on `d58a12dba` (`work/flutter-native` after the thirty-first recorder slice). Do **not** merge `main`. No 1.18 TanStack. No Flutter UI golden recapture. OpenChamber v2 `.debug` applicationId unchanged. Do **not** invent Flexoki, Finder, Capgo, plan/notes/Todo, Chat dock, `iosNativeUi`, Bonjour, Pierre, mermaid SVG, or Android launcher badge.
+
+Read on this checkout: Cap `snapshotTranscriptDiff` / `captureTranscriptCanonicalSnapshot` (`user-send` / `user-edit` / `user-delete`). Flutter send, edit-send, overflow revert, and `/undo` are the matching mutation surfaces. Skip task-row / task-click / perf-window (no TanStack query-adapter or 30s JS probe). Skip Capgo About rows.
+
+### Landed this slice (code)
+
+| Surface | Official Cap mobile | Flutter | Notes |
+|---|---|---|---|
+| `transcript-diff` | before/after IDs + part counts + bounded user text | Same event shape on send / edit / revert | Assistant bodies stay out. Credential-shaped user text is `redacted-text`. Optimistic flag is only the just-appended send id. |
+| `/undo` + overflow revert | `user-delete` | Same trigger after reload | Failed revert does not record a fake success diff. |
+
+### Still code / will-not-port
+
+| Gap | Why leftover |
+|---|---|
+| task-row / task-click / perf-window | Cap Task lifecycle + 30s JS probe. Flutter task cards do not own child-session navigate facts or Impeller counters. |
+| IndexedDB persistence | Official fallback is the memory ring. |
+| Appearance Flexoki picker / Finder / Capgo / plan / notes / Todo / Chat dock / `iosNativeUi` / Bonjour / Pierre / mermaid SVG / Android launcher badge | Will not port. |
+
+### 真机-only
+
+Live `wss://` relay pair + LAN hot-switch + iOS Local Network; HEIC/album; hosted OAuth; ActivityKit / Dynamic Island / widget tap; Impeller 16ms; FCM on `.debug` if Firebase init fails; share-extension → inbox POST; system save-file picker on device. Code/plist may exist — do not fake 真机过.
+
+### EXHAUSTED
+
+**false.** `transcript-diff` on the Flutter mutation surfaces is landed. Residual CODE is task/perf feats plus 真机-only surfaces.
+
+Validated on Flutter **3.32.8 / Dart 3.8.1**: focused recorder tests + `flutter analyze --no-fatal-infos` + `flutter test`. Screenshot PNGs were **not** recaptured. Not 真机过. Flutter Mobile CI is push-only on `work/flutter-native`.
+
 
 
 ## Twenty-fourth-slice status (2026-09-05) — Cap phone overflow + composer no-ops

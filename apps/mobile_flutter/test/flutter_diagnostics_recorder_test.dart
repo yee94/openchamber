@@ -145,4 +145,60 @@ void main() {
     expect(store.snapshot[transcriptDiagnosticsPreferenceKey], 'false');
     expect(find.byKey(const Key('about-diagnostics-export')), findsNothing);
   });
+
+  test('transcript-diff snapshots keep bounded user text and never assistant bodies', () {
+    const before = [
+      ChatMessage(id: 'm1', body: 'hello token bearer secret', isUser: true),
+      ChatMessage(id: 'a1', body: 'assistant should stay out', isUser: false, modelName: 'sonnet', agentRole: 'build'),
+    ];
+    const after = [
+      ...before,
+      ChatMessage(id: 'm2', body: 'follow up', isUser: true),
+    ];
+    final beforeSnap = captureTranscriptCanonicalSnapshot(before);
+    final afterSnap = captureTranscriptCanonicalSnapshot(after, optimisticIds: {'m2'});
+    final diff = diffTranscriptCanonicalSnapshots(beforeSnap, afterSnap);
+    expect(diff['addedMessageIDs'], ['m2']);
+    expect((beforeSnap['messages'] as List).first, containsPair('text', 'redacted-text'));
+    expect(jsonEncode(afterSnap).contains('assistant should stay out'), isFalse);
+    recordTranscriptDiff(
+      trigger: 'user-send',
+      sessionID: 'sess-1',
+      before: before,
+      after: after,
+      optimisticAfterIds: {'m2'},
+      now: 1700000000000,
+    );
+    final event = clientDiagnosticsRecorder.events.single;
+    expect(event.kind, 'transcript-diff');
+    expect(event.trigger, 'user-send');
+    expect(event.diff?['addedMessageIDs'], ['m2']);
+    expect(event.exportJsonHasAssistantBody, isFalse);
+  });
+
+  testWidgets('composer send records user-send transcript-diff without assistant text', (tester) async {
+    final controller = AppController(store: MemorySecureStore(), api: OpenChamberApi(transport: MemoryOpenChamberTransport()));
+    await controller.bootstrap(skipDelay: true);
+    await controller.connect(url: 'http://192.168.1.74:2606');
+    await tester.pumpWidget(OpenChamberApp(controller: controller));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('home-session-sess-catalog')));
+    await tester.pumpAndSettle();
+    clientDiagnosticsRecorder.clear();
+    await tester.enterText(find.byKey(const Key('composer-field')), 'from flutter send');
+    await tester.tap(find.byKey(const Key('composer-send')));
+    await tester.pumpAndSettle();
+    final diffs = clientDiagnosticsRecorder.events.where((event) => event.kind == 'transcript-diff').toList();
+    expect(diffs, isNotEmpty);
+    expect(diffs.first.trigger, 'user-send');
+    expect(diffs.first.diff?['addedMessageIDs'], isNotEmpty);
+    final report = clientDiagnosticsRecorder.exportReport();
+    expect(report.contains('from flutter send'), isTrue);
+    expect(report.contains('This list is a reverse LegendList analogue'), isFalse);
+    expect(report.contains('oc_client'), isFalse);
+  });
+}
+
+extension on ClientDiagnosticsEvent {
+  bool get exportJsonHasAssistantBody => jsonEncode(toJson()).contains('assistant should stay out');
 }

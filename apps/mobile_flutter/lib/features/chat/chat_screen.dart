@@ -406,8 +406,19 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
     final messageId = ascendingId('msg');
+    final beforeSend = _timeline.oldestFirst;
+    final editId = _editingMessageId;
     _timeline.appendNewer(
       ChatMessage(id: messageId, body: body.isEmpty ? pending.map((item) => item.name).join(', ') : body, isUser: true),
+    );
+    recordTranscriptDiff(
+      trigger: editId != null ? 'user-edit' : 'user-send',
+      sessionID: _session.id,
+      directory: _session.directory,
+      transport: controller?.liveEventTransport,
+      before: beforeSend,
+      after: _timeline.oldestFirst,
+      optimisticAfterIds: {messageId},
     );
     _composer.clear();
     setState(() => _attachments.clear());
@@ -420,7 +431,6 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     try {
-      final editId = _editingMessageId;
       if (editId != null) {
         await controller.revertSession(session: _session, messageId: editId);
         _editingMessageId = null;
@@ -523,9 +533,13 @@ class _ChatScreenState extends State<ChatScreen> {
           }
         }
         if (target == null) return true;
+        final before = _timeline.oldestFirst;
         final ok = await controller.revertSession(session: _session, messageId: target.id);
         if (!ok && mounted) _errorKey.value = controller.lastMutationErrorKey ?? 'chat.messageBody.actions.revertFailed';
-        if (ok) await _reloadFromLive();
+        if (ok) {
+          await _reloadFromLive();
+          _recordUserDeleteDiff(before);
+        }
         return true;
       case 'redo':
         final restored = await controller.unrevertSession(session: _session);
@@ -686,6 +700,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _revertMessage(ChatMessage message) async {
     final controller = widget.appController;
     if (controller == null) return;
+    final before = _timeline.oldestFirst;
     final ok = await controller.revertSession(session: _session, messageId: message.id);
     if (!mounted) return;
     if (!ok) {
@@ -696,6 +711,18 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     await _reloadFromLive();
+    _recordUserDeleteDiff(before);
+  }
+
+  void _recordUserDeleteDiff(List<ChatMessage> before) {
+    recordTranscriptDiff(
+      trigger: 'user-delete',
+      sessionID: _session.id,
+      directory: _session.directory,
+      transport: widget.appController?.liveEventTransport,
+      before: before,
+      after: _timeline.oldestFirst,
+    );
   }
 
   void _editMessage(ChatMessage message) {
