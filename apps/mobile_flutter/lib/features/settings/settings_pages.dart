@@ -959,34 +959,30 @@ class BehaviorSettingsPage extends StatelessWidget {
             SettingsGroup(
               label: t(context, 'settings.behavior.agentsMd'),
               children: [
-                if (agentsMd.errorKey != null)
-                  ListTile(
-                    key: const Key('settings-resource-error'),
-                    title: Text(t(context, agentsMd.errorKey!)),
-                  )
-                else if (agentsMd.loading && !agentsMd.hasValue)
-                  const ListTile(title: LinearProgressIndicator())
-                else
-                  SettingsValueRow(
-                    key: const Key('settings-behavior-agents-md'),
-                    label: t(context, 'settings.behavior.agentsMd'),
-                    subtitle: (agentsMd.value == null || agentsMd.value!.trim().isEmpty)
-                        ? t(context, 'settings.behavior.agentsMdEmpty')
-                        : agentsMd.value,
-                    onTap: () => showSettingsFieldsDialog(
-                      context: context,
-                      titleKey: 'settings.behavior.agentsMd',
-                      fields: [
-                        SettingsFieldSpec(
-                          id: 'content',
-                          labelKey: 'settings.behavior.agentsMd',
-                          initial: agentsMd.value ?? '',
-                          maxLines: 10,
-                        ),
-                      ],
-                      onSave: (values) => controller.remoteSettings.saveAgentsMd(values['content'] ?? ''),
-                    ),
-                  ),
+                SettingsValueRow(
+                  key: const Key('settings-behavior-agents-md'),
+                  label: t(context, 'settings.behavior.agentsMd'),
+                  subtitle: agentsMd.errorKey != null
+                      ? t(context, agentsMd.errorKey!)
+                      : (agentsMd.value == null || agentsMd.value!.trim().isEmpty)
+                          ? t(context, 'settings.behavior.agentsMdEmpty')
+                          : agentsMd.value,
+                  onTap: agentsMd.errorKey != null
+                      ? null
+                      : () => showSettingsFieldsDialog(
+                            context: context,
+                            titleKey: 'settings.behavior.agentsMd',
+                            fields: [
+                              SettingsFieldSpec(
+                                id: 'content',
+                                labelKey: 'settings.behavior.agentsMd',
+                                initial: agentsMd.value ?? '',
+                                maxLines: 10,
+                              ),
+                            ],
+                            onSave: (values) => controller.remoteSettings.saveAgentsMd(values['content'] ?? ''),
+                          ),
+                ),
               ],
             ),
           ];
@@ -1094,7 +1090,10 @@ class _BlobSettingsBodyState extends State<_BlobSettingsBody> {
             child: Center(child: CircularProgressIndicator()),
           )
         else if (resource.value != null)
-          ...widget.builder(context, resource.value!),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: widget.builder(context, resource.value!),
+          ),
       ],
     );
   }

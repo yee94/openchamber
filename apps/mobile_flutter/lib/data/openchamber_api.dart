@@ -2909,9 +2909,11 @@ class MemoryOpenChamberTransport implements OpenChamberTransport {
   String _memoryQueueScopeId(String directory, String sessionID) => 'scope:$directory:$sessionID';
 
   List<Map<String, Object?>> _memoryQueueItemsFor(String directory, String sessionID) {
-    return messageQueueItems
+    final items = messageQueueItems
         .where((item) => item['directory'] == directory && item['sessionID'] == sessionID)
         .toList();
+    items.sort((a, b) => ((a['position'] as num?) ?? 0).compareTo((b['position'] as num?) ?? 0));
+    return items;
   }
 
   List<Map<String, Object?>> _asMutableObjectList(Object? value) {

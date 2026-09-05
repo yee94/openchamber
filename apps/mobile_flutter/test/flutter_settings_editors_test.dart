@@ -124,9 +124,25 @@ void main() {
     expect(env.transport.settings['summaryModelMode'], 'custom');
     await tester.tap(find.byKey(const Key('settings-back')));
     await tester.pumpAndSettle();
+  });
 
+  testWidgets('behavior page edits AGENTS.md and response-style preset', (tester) async {
+    final env = await connected();
+    await tester.pumpWidget(OpenChamberApp(controller: env.controller));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tab-settings')));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const Key('settings-slug-behavior')));
     await tester.tap(find.byKey(const Key('settings-slug-behavior')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('settings-behavior-preset-concise')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('settings-behavior-preset-detailed')));
+    await tester.pumpAndSettle();
+    expect(env.transport.settings['responseStylePreset'], 'detailed');
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('settings-behavior-agents-md')),
+      240,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('settings-behavior-agents-md')));
     await tester.pumpAndSettle();
